@@ -87,6 +87,36 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   onItemDropOnTarget,
 }) => {
   const kind = item.kind;
+  const [isDragOver, setIsDragOver] = React.useState(false);
+  const [isItemDragging, setIsItemDragging] = React.useState(false);
+  const [isUnlockedEffect, setIsUnlockedEffect] = React.useState(false);
+
+  React.useEffect(() => {
+    const onDragStart = () => setIsItemDragging(true);
+    const onDragEnd = () => {
+      setIsItemDragging(false);
+      setIsDragOver(false);
+    };
+    window.addEventListener('airp:item-drag-start', onDragStart);
+    window.addEventListener('airp:item-drag-end', onDragEnd);
+    return () => {
+      window.removeEventListener('airp:item-drag-start', onDragStart);
+      window.removeEventListener('airp:item-drag-end', onDragEnd);
+    };
+  }, []);
+
+  const handleSpriteDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const draggedPath = e.dataTransfer.getData('text/plain');
+    if (draggedPath) {
+      setIsUnlockedEffect(true);
+      setTimeout(() => setIsUnlockedEffect(false), 800);
+      onItemDropOnTarget?.(draggedPath, item.path);
+    }
+  };
+
+  const spritePuzzleClasses = `${isItemDragging ? 'puzzle-target-ready' : ''} ${isDragOver ? 'puzzle-target-hover' : ''} ${isUnlockedEffect ? 'puzzle-unlock-burst' : ''}`.trim();
 
   return (
     <div
@@ -111,7 +141,17 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
     >
         {kind === 'sprite' ? (
           <div
-            className={`sprite${chalkStyleOf(item.frontmatter).aged ? ' chalk--aged' : ''}`}
+            onClick={() => {
+              const charId = item.frontmatter?.id || item.frontmatter?.title || item.filename.replace('.md', '');
+              onOpenCharacterModal?.(charId);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragOver(true);
+            }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={handleSpriteDrop}
+            className={`sprite cursor-pointer transition-transform duration-200 ${chalkStyleOf(item.frontmatter).aged ? ' chalk--aged' : ''} ${spritePuzzleClasses}`}
           >
             <SpriteFig />
             <div className="sprite__name">

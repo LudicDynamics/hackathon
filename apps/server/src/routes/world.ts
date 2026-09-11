@@ -98,10 +98,8 @@ export function createWorldRouter(
       const manifest = await store.getManifest();
       eventBridge.watchWorld(resolvedPath);
 
-      // Start writer process
-      lifecycle.startWriter(resolvedPath, (evt) => {
-        eventBridge.broadcast({ type: 'agent_event', ...evt });
-      }).catch((err) => {
+      // Start writer process (reused when the same world is already loaded)
+      lifecycle.startWriter(resolvedPath).catch((err) => {
         console.warn('[Writer Startup Warning]', err);
       });
 

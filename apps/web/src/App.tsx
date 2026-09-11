@@ -146,6 +146,8 @@ export function App() {
 
   // Point-and-Click item drop puzzle: use_item_on
   const handleItemDropOnTarget = async (draggedItemPath: string, targetPath: string) => {
+    const itemName = draggedItemPath.split('/').pop()?.replace('.md', '') || 'item';
+    const targetName = targetPath.split('/').pop()?.replace('.md', '') || 'target';
     try {
       const res = await fetch('/api/use-item', {
         method: 'POST',
@@ -158,7 +160,8 @@ export function App() {
       });
       const data = await res.json();
       if (data.ok) {
-        showToast(`You present "${draggedItemPath.split('/').pop()}" to the target!`);
+        showToast(`✨ Interaction: Used [${itemName}] on [${targetName}]`);
+        refresh();
       }
     } catch (err) {
       console.error('Use item failed:', err);
@@ -192,7 +195,59 @@ export function App() {
     }
   };
 
-  // God Mode Create Entity
+  // World Studio Radial Creator — instantiate at exact clicked world coordinate
+  const handleCreateEntityAt = async (
+    type: 'gate' | 'character' | 'clue' | 'chalk',
+    title: string,
+    content: string,
+    wx: number,
+    wy: number
+  ) => {
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'creation';
+    const filename = `${slug}.md`;
+    const filePath = currentLayer === 'map' ? `world/${filename}` : `${currentLayer}/${filename}`;
+
+    let fileContent = '';
+    if (type === 'chalk') {
+      fileContent = `---\ntype: chalk\n---\n${content}`;
+    } else if (type === 'gate') {
+      fileContent = `---\ntype: gate\ntitle: "${title}"\n---\n${content}`;
+    } else if (type === 'character') {
+      fileContent = `---\ntype: sprite\ntitle: "${title}"\n---\n${content}`;
+    } else {
+      fileContent = `---\ntitle: "${title}"\n---\n${content}`;
+    }
+
+    try {
+      const res = await fetch('/api/god-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          filePath,
+          content: fileContent,
+        }),
+      });
+      if (res.ok) {
+        // Persist clicked position immediately so card lands right where right-clicked
+        await fetch('/api/card/position', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: filePath,
+            x: wx,
+            y: wy,
+          }),
+        });
+        showToast(`✨ World Studio: "${title}" formed on canvas!`);
+        refresh();
+      }
+    } catch (err) {
+      console.error('World studio creation failed:', err);
+    }
+  };
+
+  // God Mode Create Entity (Toolbar modal fallback)
   const handleCreateEntity = async (type: 'note' | 'chalk', title: string, content: string) => {
     const filename = `${title}.md`;
     const filePath = currentLayer === 'map' ? `world/${filename}` : `${currentLayer}/${filename}`;
@@ -293,6 +348,7 @@ export function App() {
             onOpenCharacterModal={openCharacterModal}
             onItemDropOnTarget={handleItemDropOnTarget}
             onDropItemToScene={handleDropItemToScene}
+            onCreateEntityAt={handleCreateEntityAt}
           />
 
           {/* Canvas chrome — the prototype's navigation + writing affordances */}

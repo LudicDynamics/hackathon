@@ -1,9 +1,11 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasObject, clearAllLifts, pruneLifts, raiseObject } from './CanvasObject.js';
 import { LinkLayer, highlightLinks, updateAllLinks } from './LinkLayer.js';
 import { SceneBackdrop } from './SceneBackdrop.js';
+import { ParticleLayer } from './ParticleLayer.js';
+import { RadialMenu, RadialItemType } from '../god/RadialMenu.js';
 import { useCamera } from '../../state/useCamera.js';
-import { clampZ, zoomAt } from '../../lib/camera.js';
+import { clampZ, zoomAt, screenToWorld } from '../../lib/camera.js';
 import { makeBox, pushFrom, relaxAll } from '../../lib/collide.js';
 import { unlock, playFoley } from '../../lib/audio.js';
 import type { LayerItem, LayerLink } from '../../state/useWorld.js';
@@ -20,6 +22,7 @@ interface CanvasProps {
   onOpenCharacterModal?: (charId: string) => void;
   onItemDropOnTarget?: (itemPath: string, targetPath: string) => void;
   onDropItemToScene?: (itemPath: string) => void;
+  onCreateEntityAt?: (type: RadialItemType, title: string, content: string, x: number, y: number) => Promise<void> | void;
 }
 
 /** Viewport blank-space pan/pinch session (cards never start one). */
@@ -81,8 +84,17 @@ export const Canvas: React.FC<CanvasProps> = ({
   onOpenCharacterModal,
   onItemDropOnTarget,
   onDropItemToScene,
+  onCreateEntityAt,
 }) => {
   const camera = useCamera();
+
+  const [parallax, setParallax] = useState({ x: 0, y: 0 });
+  const [radialState, setRadialState] = useState<{
+    x: number;
+    y: number;
+    worldX: number;
+    worldY: number;
+  } | null>(null);
 
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const pinchRef = useRef<{ d: number; z: number } | null>(null);
@@ -207,6 +219,17 @@ export const Canvas: React.FC<CanvasProps> = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    // 2.5D Parallax tracking: normalized coordinates [-1, 1] relative to viewport center
+    const vp = camera.viewportRef.current;
+    if (vp) {
+      const rect = vp.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        const nx = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+        const ny = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+        setParallax({ x: nx, y: ny });
+      }
+    }
+
     const s = cardDragRef.current;
     if (s && e.pointerId === s.pointerId) {
       const dx = e.clientX - s.sx;
@@ -368,6 +391,31 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   };
 
+  // World Studio: Right-click on blank canvas summons the Radial Creator Menu
+  const handleContextMenu = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('.object') || target.closest('button, a, input')) {
+      return; // Clicking on cards or interactive elements retains native/local behavior
+    }
+    e.preventDefault();
+    const el = camera.viewportRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    const { w, h } = camera.getViewport();
+    const cam = camera.getCam();
+    const worldCoord = screenToWorld(sx, sy, w, h, cam);
+
+    playFoley('paper-slide', 0.8);
+    setRadialState({
+      x: e.clientX,
+      y: e.clientY,
+      worldX: worldCoord.x,
+      worldY: worldCoord.y,
+    });
+  };
+
   return (
     <div
       ref={camera.viewportRef}
@@ -375,12 +423,14 @@ export const Canvas: React.FC<CanvasProps> = ({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerEnd}
       onPointerCancel={handlePointerCancel}
+      onContextMenu={handleContextMenu}
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
       className="relative w-full h-full overflow-hidden cursor-grab active:cursor-grabbing select-none touch-none"
+      style={{ perspective: '1200px' }}
     >
-      {/* Material sheet of the current layer — behind the world, viewport-fixed. */}
-      <SceneBackdrop bg={bg} />
+      {/* 2.5D Background sheet with 0.25x parallax drift & video support */}
+      <SceneBackdrop bg={bg} parallax={parallax} />
 
       {/* World Transform Layer — single transform layer, rAF writes transform.
           Must pin transform-origin to top-left: default is center, which would
@@ -405,6 +455,23 @@ export const Canvas: React.FC<CanvasProps> = ({
           />
         ))}
       </div>
+
+      {/* Atmospheric 1.35x foreground particle system: floating dust & rain overlay */}
+      <ParticleLayer tone={bg.tone} parallax={parallax} />
+
+      {/* Creator Studio Radial Menu */}
+      {radialState && (
+        <RadialMenu
+          x={radialState.x}
+          y={radialState.y}
+          worldX={radialState.worldX}
+          worldY={radialState.worldY}
+          onClose={() => setRadialState(null)}
+          onCreate={(type, title, content, wx, wy) => {
+            onCreateEntityAt?.(type, title, content, wx, wy);
+          }}
+        />
+      )}
     </div>
   );
 };

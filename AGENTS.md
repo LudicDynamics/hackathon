@@ -47,9 +47,9 @@ apps/
     index.ts            # Express + WS 入口（/api、静态托管 apps/web/dist、端口 3001）
     routes/world.ts     # /api/worlds/load, /move, /dice, /use-item, /freeze, /god-action
     engine/
-      rpc-client.ts     # 与 pi-rp CLI 的 JSONL 命令协议 over stdio（不是 JSON-RPC，见 docs/后端实现计划.md §0.1）
-      lifecycle.ts      # Agent 生命周期编排（spawn / --preset / 环境变量 / cwd）
-      event-bridge.ts   # 引擎事件 → WebSocket 广播
+      launch.ts         # spawn 参数单一来源（preset / --session-dir / --continue / env），服务端与探针共用
+      lifecycle.ts      # Agent 生命周期编排（单例复用 / spawn / warmup / 崩溃退避重启 / stopAll）
+      event-bridge.ts   # 引擎事件 → WebSocket 广播（mapEngineEvent 纯映射 + file_changed 单 watcher）
       brief-builder.ts  # buildSceneInitBrief / buildNookInitBrief（动态 brief）
       presets.ts        # preset 安装到 <worldRoot>/.airpworld/prompt-presets/；skillArgs 拼 --skill
   web/src/
@@ -83,7 +83,7 @@ graph LR
   W["apps/web<br/>React 无限画布"] -->|"HTTP /api/*"| S["apps/server<br/>Express + ws"]
   S -->|"WebSocket 事件流"| W
   S --> L["engine/lifecycle<br/>进程编排"]
-  L -->|"JSON-RPC / stdio"| P["vendor/pi-rp<br/>pi 引擎（作家 / 角色 agent）"]
+  L -->|"JSONL commands / stdio（pi-rp RpcClient）"| P["vendor/pi-rp<br/>pi 引擎（作家 / 角色 agent）"]
   P -->|"write / edit 工具写盘"| FS["世界目录<br/>*.md + world.json"]
   S --> FS
   S --> DB[".airpworld/<br/>canvas.db + history.db"]
@@ -149,6 +149,17 @@ pnpm pi status                                  # pi-rp 子模块 + dist 新鲜�
 node tools/scaffold.mjs --template holmes-world --out worlds/my-holmes
 pnpm --filter @airp/server dev                  # 只起后端
 ```
+
+---
+
+
+### 5.1 pi-rp agent 配置（`.pi/agent/`）
+
+引擎 spawn 时由 `launch.ts` 注入 `PI_CODING_AGENT_DIR=.pi/agent/`（与 worldlines-rivet 同款），**不用** `~/.pi/agent/`——否则每台机器跑的是各自的 provider，行为会漂。
+
+- `.pi/agent/models.json` = provider 与 API key；**不入库**（本仓是公开的黑客松产物，钥匙不能进 git）。从队友的 checkout 拷一份，或指向 wl 的 `~/.projects/worldlines-rivet/.pi/agent/`。
+- 缺这个文件不报错：pi-rp `ModelConfig.load` 对 `ENOENT` 静默回落内建 provider（只是没有自定义模型可选）。`pnpm probe` 走离线确定性 provider，**不需要**它。
+- 探针的真模型分支（`AIRP_PROBE_REAL=1`）与手工全链路演示才需要真 provider。
 
 ---
 

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChalkCard } from '../narrative/ChalkCard.js';
 import { MarkdownText, plainExcerpt, stripLeadingTitle, leadingTitleOf } from '../../lib/md.js';
+import { playFoley } from '../../lib/audio.js';
 
 interface CardRendererProps {
   item: {
@@ -89,6 +90,36 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
   const { frontmatter, body, filename, path } = item;
   const [letterOpen, setLetterOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isItemDragging, setIsItemDragging] = useState(false);
+  const [isUnlockedEffect, setIsUnlockedEffect] = useState(false);
+
+  useEffect(() => {
+    const onDragStart = () => setIsItemDragging(true);
+    const onDragEnd = () => {
+      setIsItemDragging(false);
+      setIsDragOver(false);
+    };
+    window.addEventListener('airp:item-drag-start', onDragStart);
+    window.addEventListener('airp:item-drag-end', onDragEnd);
+    return () => {
+      window.removeEventListener('airp:item-drag-start', onDragStart);
+      window.removeEventListener('airp:item-drag-end', onDragEnd);
+    };
+  }, []);
+
+  const handleTargetDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const draggedPath = e.dataTransfer.getData('text/plain');
+    if (draggedPath) {
+      playFoley('unlock');
+      setIsUnlockedEffect(true);
+      setTimeout(() => setIsUnlockedEffect(false), 800);
+      onItemDropOnTarget?.(draggedPath, path);
+    }
+  };
+
+  const puzzleClasses = `${isItemDragging ? 'puzzle-target-ready' : ''} ${isDragOver ? 'puzzle-target-hover' : ''} ${isUnlockedEffect ? 'puzzle-unlock-burst' : ''}`.trim();
 
   // 1. Chalk Card — ink on the canvas (bare by default).
   if (frontmatter?.type === 'chalk') {
@@ -137,18 +168,8 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
           setIsDragOver(true);
         }}
         onDragLeave={() => setIsDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDragOver(false);
-          const draggedPath = e.dataTransfer.getData('text/plain');
-          if (draggedPath) onItemDropOnTarget?.(draggedPath, path);
-        }}
-        className={`gate${isStub ? ' gate--stub' : ''}`}
-        style={
-          isDragOver
-            ? { outline: '2px solid var(--rust)', outlineOffset: '2px' }
-            : undefined
-        }
+        onDrop={handleTargetDrop}
+        className={`gate${isStub ? ' gate--stub' : ''} ${puzzleClasses}`}
       >
         <GateNum n={order} />
         <GatePin />
@@ -177,23 +198,13 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
       <>
         <div
           onClick={() => setLetterOpen(true)}
-          className="letter"
-          style={
-            isDragOver
-              ? { outline: '2px solid var(--rust)', outlineOffset: '2px' }
-              : undefined
-          }
+          className={`letter ${puzzleClasses}`}
           onDragOver={(e) => {
             e.preventDefault();
             setIsDragOver(true);
           }}
           onDragLeave={() => setIsDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setIsDragOver(false);
-            const draggedPath = e.dataTransfer.getData('text/plain');
-            if (draggedPath) onItemDropOnTarget?.(draggedPath, path);
-          }}
+          onDrop={handleTargetDrop}
         >
           <div className="letter__head">
             <span className="letter__seal" />
@@ -258,18 +269,8 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
         setIsDragOver(true);
       }}
       onDragLeave={() => setIsDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setIsDragOver(false);
-        const draggedPath = e.dataTransfer.getData('text/plain');
-        if (draggedPath) onItemDropOnTarget?.(draggedPath, path);
-      }}
-      className="note"
-      style={
-        isDragOver
-          ? { outline: '2px solid var(--rust)', outlineOffset: '2px' }
-          : undefined
-      }
+      onDrop={handleTargetDrop}
+      className={`note ${puzzleClasses}`}
     >
       <span className="note__clip" />
       <div className="note__title">{noteTitle}</div>

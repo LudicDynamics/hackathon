@@ -1470,3 +1470,58 @@ body:before {
   width: 120px; /* prototype COMPASS is 120x120; caller may override */
   height: 120px;
 }
+
+/* ============================================================
+   Point-and-Click Physical Puzzle feedback (doc-19 §3.1)
+   ============================================================ */
+
+/* While dragging an item from the backpack, valid puzzle targets gently pulse */
+.puzzle-target-ready {
+  outline: 2px dashed rgba(201, 111, 76, 0.45) !important;
+  outline-offset: 3px;
+  animation: puzzleReadyPulse 2s ease-in-out infinite;
+}
+
+@keyframes puzzleReadyPulse {
+  0%, 100% {
+    outline-color: rgba(201, 111, 76, 0.3);
+  }
+  50% {
+    outline-color: rgba(201, 111, 76, 0.85);
+  }
+}
+
+/* Hovering with an item: magnetic lift, rust border & glowing inset */
+.puzzle-target-hover {
+  outline: 2.5px solid var(--rust) !important;
+  outline-offset: 3px;
+  transform: translateY(-4px) scale(1.02) !important;
+  box-shadow: 0 16px 36px rgba(201, 111, 76, 0.28), 0 0 15px rgba(201, 111, 76, 0.2) !important;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease !important;
+}
+
+/* Unlock / Use Item success burst on the card */
+.puzzle-unlock-burst {
+  animation: puzzleUnlockShake 0.65s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@keyframes puzzleUnlockShake {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(201, 111, 76, 0.8);
+  }
+  20% {
+    transform: scale(1.05) rotate(1deg);
+    box-shadow: 0 0 35px rgba(201, 111, 76, 0.6);
+  }
+  40% {
+    transform: scale(0.98) rotate(-1deg);
+  }
+  60% {
+    transform: scale(1.02) rotate(0.5deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+    box-shadow: none;
+  }
+}

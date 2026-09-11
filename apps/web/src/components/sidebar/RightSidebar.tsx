@@ -79,6 +79,13 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                 draggable
                 onDragStart={(e) => {
                   e.dataTransfer.setData('text/plain', item.path);
+                  e.dataTransfer.effectAllowed = 'copyMove';
+                  document.body.classList.add('dragging-backpack-item');
+                  window.dispatchEvent(new CustomEvent('airp:item-drag-start', { detail: { path: item.path } }));
+                }}
+                onDragEnd={() => {
+                  document.body.classList.remove('dragging-backpack-item');
+                  window.dispatchEvent(new CustomEvent('airp:item-drag-end'));
                 }}
                 className="p-3.5 rounded-2xl bg-paper-wall/70 hover:bg-paper-wall border border-ink/10 shadow-sm cursor-grab active:cursor-grabbing hover:border-rust/40 transition-all flex items-start gap-2.5 group"
               >

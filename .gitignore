@@ -12,3 +12,12 @@ dist/
 worlds/
 # Runtime copies installed from presets/ by installPreset; not the source of truth
 **/.airpworld/prompt-presets/
+
+# pi-rp agent config (PI_CODING_AGENT_DIR -> .pi/agent). models.json holds real API keys
+# and settings.json holds per-machine prefs — this repo is a public hackathon artifact,
+# so neither is committed. Copy them from a teammate's checkout to run a real provider.
+.pi/agent/models.json
+.pi/agent/settings.json
+.pi/agent/auth.json
+.pi/agent/models-store.json
+.pi/agent/sessions/

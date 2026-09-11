@@ -1,7 +1,7 @@
 # doc-18 上下文盘点与 Nodesign 对照（待完善）
 
 > 状态：**待定（2026-09-11 登记）**。doc-08（上下文管理专题）的「盘点前置作业」：先把 AIRP 里**大概会有哪些上下文**列全、分好类，再拿 Nodesign 现成实现逐条对照，为 doc-08 的四个候选方向与三个待定问题提供输入。只盘点与分析，不定案。
-> 来源：doc-05（§4.2 骨架 / §5 单轮管线 / §5.1 事件注入 / §8 存储 / §9 工具）、doc-02（§3 上下文打包）、doc-06（演出）、doc-12（作家大脑）、doc-13（角色记忆）、doc-15（世界模板）；Nodesign 源码走读（`orchestrate.js` / `summarize.js` / `chat-log.js` / `turn-state.js` / `viewpoint-store.js` / `nodesign-prelude.md`）。
+> 来源：doc-05（§4.2 骨架 / §5 单轮管线 / §5.1 事件注入 / §8 存储 / §9 工具）、doc-02（§3 上下文打包）、doc-06（演出）、doc-12（作家大脑）、doc-15（世界模板）、doc-20（Agent 工具）；Nodesign 源码走读（`orchestrate.js` / `summarize.js` / `chat-log.js` / `turn-state.js` / `viewpoint-store.js` / `nodesign-prelude.md`）。
 
 ---
 
@@ -23,7 +23,7 @@
 | **① 进程启动即载（静态脑）** | preset 引用的身份/规则/设定 | 编译进 system，整场不变 | prelude（system 区，整区冻结） |
 | **② 每轮 Hook 动态注入** | 事件摘要、视点、当前场景变化、玩家输入 | 每轮拼进提示词 | turn-state 每轮状态块（指纹 diff） |
 | **③ 叙事历史（滚动区）** | chat history、journal、旧 chalk | 按预算/轮数截断 + 摘要折叠 | 历史区（预算挤压 + 滚动前情提要） |
-| **④ 按需懒加载** | 画布文件、截图、组件内容 | agent 自己调 read_canvas / read / view_canvas 拉取 | 参考页/素材 Read、browse 截图 |
+| **④ 按需懒加载** | 画布文件、截图、组件内容 | Agent 自己调 `look_at / read / view_canvas` 拉取 | 参考页/素材 Read、browse 截图 |
 
 > ⚠️ doc-08 的问题就在 ② + ③ 的交汇处：**作家每轮默认吃进的东西**（当前场景目录全部文件 + journal）会随叙事文件增殖线性变长，而 ④（按需懒加载）本来是治这个的药，没被写进纪律。
 
@@ -65,7 +65,7 @@
 
 | # | 上下文 | 内容 | 依据 |
 |---|---|---|---|
-| L1 | **read_canvas** | 以渲染视角读目录/物件：md 去 frontmatter 只展示正文、按目录顺序含子 README、含方位关系 | doc-05 §9.1 |
+| L1 | **look_at** | 以渲染视角读目录/物件：隐藏原始 frontmatter，保留正文并格式化 status/choice/dice，含子门牌与方位关系 | doc-20 §3 |
 | L2 | **view_canvas** | 画布截图（复用玩家同一渲染真相，眼睛模式） | doc-05 §9.1；doc-02 §3.3 |
 | L3 | **文件工具返回** | read/bash/edit/write/delete 的结果 | doc-05 §9.1 |
 | L4 | **subagent 委托回报** | world subagent 的摘要回报（路径清单 + 一句话摘要），作家过目 | doc-05 §4.3；doc-12 #3 |
@@ -77,12 +77,12 @@
 |---|---|---|---|
 | R1 | **preset 引用文件** | identity / appearance / personality（file slot 引用本目录 md） | doc-05 §4.1 |
 | R2 | **system slot** | 角色行为隐形提示词（怎么当角色、说话、行动） | doc-05 §4.1 |
-| R3 | **opening 开场播种** | 角色「出生记忆」，会话条目持久化，skipIfSeeded 防重播 | doc-07 §3.5；doc-13 #5 |
+| R3 | **opening 开场播种（可选）** | 角色初始设定，会话条目持久化，skipIfSeeded 防重播；不扩展成 AIRP 记忆系统 | doc-07 §3.5 |
 | R4 | **最近场景情况注入** | 遮罩 spawn 时注入：当前层描述、附近物件、最近板书——角色知道处境的最小集 | doc-06 §3；doc-07 风险表 |
-| R5 | **自己的会话/记忆** | `memory/` 目录 + 会话条目（跨遮罩连续） | doc-13 |
+| R5 | **自己的会话历史** | pi-rp chat history/session；现阶段无 `memory/` 目录协议和自动写回 | doc-13 |
 | R6 | **小天地内容** | 自己写下的作品/便签（`characters/<名>/` 根目录） | doc-05 §4.1 |
 | R7 | **玩家对话输入** | 遮罩内的聊天内容 | doc-06 §3 |
-| R8 | **手动 read_canvas / read** | 角色自己查画布 / 自己目录 | doc-05 §4.1 |
+| R8 | **手动 look_at / read** | 角色按需查整个画布或原始世界文件 | doc-20 §3 |
 
 ### 2.3 World subagent（委托）的上下文
 
@@ -153,7 +153,7 @@
 
 1. **journal 滚动摘要宏**（doc-12 #2 的最小实现）：参数照抄 `触发 N 篇 / 保留 M 篇 / 摘要 ≤X 字`，压缩六要素照抄，落成 `journal/.summary.md` 之类 + 边界指针——doc-08 待定问题 2（上下文预算模型）的最小正解。
 2. **Hook 注入三段式**：`[世界动态]`（D1 事件摘要）→ `[玩家视点]`（D2）→ `[当前场景变化]`（D3 指纹 diff，未变就一句"同上一轮"）——对应 Nodesign 状态块，直接把"整批吞文件"改造成"只报变化"。
-3. **最近板书注入**：每轮注入最近 3-5 条板书的「路径 + 首句」（limit 上限写死防膨胀），细节靠 read_canvas 拉——这是 D3 的降级替代，成本极低。
+3. **最近板书注入**：每轮注入最近 3-5 条板书的「路径 + 首句」（limit 上限写死防膨胀），细节靠 `look_at` 拉——这是 D3 的降级替代，成本极低。
 4. **compaction 后重置记忆**：作家上下文被摘要折叠或进程重启后，**必须重新全量注入**当前场景（否则"同上轮"没有所指），journal 摘要照旧。
 5. **系统区冻结 / 尾部只放可变形**：同一结构的缓存保护——玩家输入每轮在变，所以事件/视点/变化段只能放尾部，设定/规则放 system 冻结区。
 

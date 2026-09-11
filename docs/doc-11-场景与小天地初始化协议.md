@@ -3,7 +3,7 @@
 > 状态：**已定案（2026-09-11）**。原"待设计清单"五条已全部落定，本文取代 2026-09-11 立项版。
 > **2026-09-11 晚复核**：§2.3 的九条 pi-rp 源码级约束中，C1 / C3 / C5 / C7 已被上游修掉，§2.3 / §2.4 / §7.1 / §7.2 随之改写；新增 §2.3.1「vendored dist 的时间差」。
 > 展开：doc-05 §3.2（stub 层首次进入实例化）+ §4.1（角色小天地根目录为空触发初始化）。
-> 关联：doc-05 §1（懒加载：第一眼才存在）、§4.3（委托协议，profile `scene-init`）、§8.4（world.json 只写世界级事实，层级由目录派生）；doc-06 §2.1（幻影落地）、§4.2（小天地三分情境）；doc-07 §3.5；doc-13 §1（记忆写回）；doc-15（模板骨架）；doc-20 §2.9（关卡骨架 / 生成语法 / 持久事实）。
+> 关联：doc-05 §1（懒加载：第一眼才存在）、§4.3（委托协议，profile `scene-init`）、§8.4（world.json 只写世界级事实，层级由目录派生）；doc-06 §2.1（幻影落地）、§4.2（小天地三分情境）；doc-07 §3.5；doc-15（模板骨架）；doc-20（共享 Agent 工具）。
 
 ---
 
@@ -104,20 +104,6 @@ Three lines: list of paths / one-sentence scene summary / one sentence on "what 
 
 **回报格式要短**：subagent 输出经 `truncateTail`（默认 2000 行 / 50KB）截断后返回父会话；作家"摘要过目"和前端"生成完毕"提示都吃这三行。
 
-### 2.2.1 四世界体验对 brief 的新要求（2026-09-12，协议扩展待实现）
-
-上述 brief 已足够生成“第一眼”，但还不足以支撑 doc-20 所述的生成式关卡：新城镇不能只有氛围和两件物品，还必须继承玩家为什么来、已经改变了什么，以及该世界怎样生长。
-
-因此下一版 `SceneInitContext` / `buildSceneInitBrief` 需增加三类动态上下文：
-
-| 字段组 | 内容 | 作用 |
-|---|---|---|
-| **World Generation Grammar** | 新地点、角色、物件、危险升级和多模态风格的规则 | 防止生成结果只是同一引擎的换皮 |
-| **Story / Player State** | 当前篇章目标、玩家身份、持有物、关系、承诺与已发生的世界变化 | 让新地点承接因果，让角色真的认识玩家 |
-| **Entry / Continuation Contract** | 玩家为什么到达、入场时立即发生什么、新地点应向哪个未完目标提供下一步 | 生成的是可继续玩的一段，不是孤立设定集 |
-
-**实现现状**：当前代码仍只传入 `targetPath` / `manifest` / `parentLayerName` / `userPrompt` / `knownClues`；本节是已确认的体验缺口，不冒充已实现协议。具体字段形状需等 doc-20 的四世界语法经过真实试玩后再定案。
-
 ### 2.3 工程约束（pi-rp 源码级实测，2026-09-11）
 
 以下为通读 `subagent/{prepare,run,spawn}.ts` 与 `prompt-preset/{loader,policy,slot-renderers}.ts` 的**实测结论**，不是推测。写代码前必读。
@@ -163,7 +149,7 @@ options.path   "/w/{{who}}.md"            → file not found "/w/{{who}}.md"  �
 
 > **2026-09-12 复核（本节已因一次上游修复重写）**：C1 修好之后**内建工具**两边默认对齐（`spawnAgent` 不传 `tools` 时落到同一个 `DEFAULT_SUBAGENT_TOOLS`）。扩展工具原本**不**对齐——`spawnAgent` 把 `tools` 预填成"只有内建集"，于是显式传进去的 `customTools` 因为名字不在白名单里被 `AgentSession._refreshToolRegistry` 静默滤掉。这违背了 pi 自己的工具语义（`tools` 是**收窄用的白名单**，省略即"全开"），已在 pi-rp `dfebadcd3` 修掉。
 
-| 入口 | 内建工具 | **扩展工具**（`chalk` / `read_canvas` / `link` …） |
+| 入口 | 内建工具 | **扩展工具**（`chalk` / `look_at` / `link` …） |
 |---|---|---|
 | **R1 作家委托**（`subagent` 工具） | 默认集，什么都不用做 | **自动继承**：`inheritExtensionTools` 默认 true，父会话注册的工具并进 `effectiveTools`（`prepare.ts:180`） |
 | **R2 引擎直唤**（`ctx.spawnAgent`） | 不传 `tools` 即同一默认集 | **传 `customTools` 即可用**（`dfebadcd3` 起）：省略 `tools` 时默认集自动并上 `customTools` 的名字。仍**不继承**父会话里别的扩展工具——那是 `inheritExtensionTools: false` 的刻意设计 |
@@ -179,7 +165,7 @@ options.path   "/w/{{who}}.md"            → file not found "/w/{{who}}.md"  �
 > 需要收窄的场景（例如初始化子代理不该有 `bash`）仍然照 pi 的语义写：
 >
 > ```ts
-> tools: ['read', 'write', 'edit', 'grep', 'find', 'ls', 'chalk', 'read_canvas', 'link', 'arrange']
+> tools: ['read', 'write', 'edit', 'grep', 'find', 'ls', 'chalk', 'look_at', 'link', 'arrange']
 > ```
 
 > 另一处两入口不同、但对 AIRP 无影响的点：`spawnAgent` 把 `strict: true` 写死（无 schema 的命名空间写入会被拒）。AIRP 不用 pi-rp 的 state，碰不到。
@@ -298,7 +284,7 @@ characters/旅店老板/
 ### 4.4 初始化后
 
 - 目录不再为空 → **不会二次初始化**（判据同 §3.1）；
-- 角色第一次被点开 spawn 时，`read` 自己的目录 → 这些陈设成为它的记忆底座，**它天然认领**（doc-13 §4）；
+- 角色第一次被点开 spawn 时可 `look_at` / `read` 自己的目录，这些陈设成为它理解自身生活的现场材料；现阶段不把它们收编进角色记忆系统；
 - 之后角色"顺手写"的增量（doc-05 §4.1 情境一）叠加在上面，看不出接缝。
 
 ---
@@ -381,7 +367,7 @@ doc-05 §7.4 早先的 `.airpworld/agent/main/` + `.airpworld/agent/subagent/` �
 原文要求 AIRP 扩展注册一个 `write_world_file` 之类的写工具，理由是子代理的默认工具集不含 `write`/`edit`。**这个前提已经不成立**（C1，`402ccc59b`）：初始化器开箱就有 `write`/`edit`。
 
 - 落地时**不要**再造 `write_world_file`——多一层同义工具只会让模型犹豫用哪个；
-- AIRP 扩展该注册的是**引擎独有能力**（`chalk` / `read_canvas` / `link` / `arrange`），不是内建工具的替身；
+- AIRP 扩展该注册的是**引擎独有能力**（`chalk` / `look_at` / `move_to` / `move` / `choose` / `roll_dice` / `link` / `arrange`），不是内建工具的替身；
 - 这些扩展工具经 `inheritExtensionTools`（默认 true）进 R1；R2 经 `customTools` 交出定义即可，只在显式收窄 `tools` 时才要把名字一并带上（§2.4）。
 
 ---

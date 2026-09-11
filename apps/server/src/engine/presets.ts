@@ -45,6 +45,11 @@ export function installPreset(worldRoot: string, srcFile: string): string {
  * under the world's `.airpworld/`. `PI_OPENING` takes the **id of the opening preset** (not a
  * file path); it is set only when `<worldRoot>/.airpworld/openings/<id>.json` actually exists,
  * and left empty otherwise so the opening extension skips at zero cost.
+ *
+ * Callers pass `openingId` only for **character** spawns. An opening preset seeds chat
+ * history, and only a character's overlay dialogue is chat; the writer's narrative is
+ * chalk markdown on disk, so seeding the writer would burn a turn the player never sees
+ * (see `launch.ts::writerLaunch`).
  */
 export function airpEnv(worldRoot: string, openingId?: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { PI_PROJECT_CONFIG_DIR: AIRP_CONFIG_DIR };

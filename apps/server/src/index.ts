@@ -29,19 +29,24 @@ eventBridge.setWss(wss);
 const lifecycle = new AgentLifecycleManager({
   repoRoot: REPO_ROOT,
   vendorCliPath: VENDOR_CLI,
+  eventSink: (source, event) => eventBridge.emitEngine(source, event),
+  frameSink: (message) => eventBridge.broadcast(message),
 });
 
 // Auto-load default holmes-world if available
-(async () => {
-  const defaultWorld = path.join(REPO_ROOT, 'templates/holmes-world');
-  try {
-    activeStore = new LocalWorldStore(defaultWorld);
-    eventBridge.watchWorld(defaultWorld);
-    console.log(`[AIRP Server] Default world loaded: ${defaultWorld}`);
-  } catch (err) {
-    console.warn('[AIRP Server] No default world found, waiting for user selection.');
-  }
-})();
+const DEFAULT_WORLD = path.join(REPO_ROOT, 'templates/holmes-world');
+try {
+  activeStore = new LocalWorldStore(DEFAULT_WORLD);
+  eventBridge.watchWorld(DEFAULT_WORLD);
+  console.log(`[AIRP Server] Default world loaded: ${DEFAULT_WORLD}`);
+  // The frontend never calls /api/worlds/load, so without this the writer process
+  // simply would not exist on the default path.
+  lifecycle.startWriter(DEFAULT_WORLD).catch((err) => {
+    console.warn('[AIRP Server] writer start failed:', err);
+  });
+} catch (err) {
+  console.warn('[AIRP Server] No default world found, waiting for user selection.');
+}
 
 // API Routes
 app.use(
@@ -84,14 +89,11 @@ wss.on('connection', (ws: WebSocket) => {
         }
         await writer.prompt(data.message);
       } else if (data.type === 'character_start') {
-        const { characterId, worldPath, recentContext } = data;
-        await lifecycle.startCharacter(characterId, worldPath, recentContext, (evt) => {
-          ws.send(JSON.stringify(evt));
-        });
+        await lifecycle.startCharacter(data.characterId, data.worldPath);
       } else if (data.type === 'character_prompt') {
-        // Send message to character process
+        // TODO(B3): forward to character client + parse [emo:] tags
       } else if (data.type === 'character_stop') {
-        lifecycle.stopCharacter(data.characterId);
+        await lifecycle.stopCharacter(data.characterId);
       }
     } catch (err: any) {
       console.error('[AIRP WS Error]', err);
@@ -107,3 +109,10 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[AIRP Server] Listening on http://0.0.0.0:${PORT} and http://localhost:${PORT}`);
 });
+
+// Retire every spawned agent on shutdown — otherwise pi-rp processes outlive the server.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, () => {
+    void lifecycle.stopAll().finally(() => process.exit(0));
+  });
+}
