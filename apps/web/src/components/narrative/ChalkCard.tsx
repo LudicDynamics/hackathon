@@ -26,7 +26,7 @@ export const ChalkCard: React.FC<ChalkCardProps> = ({
   const rollDice = frontmatter?.roll_dice;
 
   return (
-    <div className="w-[480px] p-6 rounded-3xl bg-paper-card text-paper-ink shadow-halo border border-ink/5 backdrop-blur-sm transition-all hover:shadow-deep">
+    <div className="w-full p-6 rounded-3xl bg-paper-card text-paper-ink shadow-halo border border-ink/5 backdrop-blur-sm transition-all hover:shadow-deep">
       {/* Chalk narration body */}
       <div className="font-serif text-lg leading-relaxed text-ink/90 whitespace-pre-line tracking-wide">
         {body}

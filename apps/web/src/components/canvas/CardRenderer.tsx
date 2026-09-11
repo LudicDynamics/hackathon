@@ -60,7 +60,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
           const draggedPath = e.dataTransfer.getData('text/plain');
           if (draggedPath) onItemDropOnTarget?.(draggedPath, path);
         }}
-        className={`w-72 p-5 rounded-3xl cursor-pointer border transition-all hover:scale-[1.02] shadow-soft ${
+        className={`w-full p-5 rounded-3xl cursor-pointer border transition-all hover:scale-[1.02] shadow-soft ${
           isDragOver ? 'border-rust ring-2 ring-rust/30 bg-rust/5' : 'border-ink/10 bg-paper-card'
         }`}
       >
@@ -88,7 +88,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
       <>
         <div
           onClick={() => setLetterOpen(true)}
-          className="w-64 p-4 rounded-3xl bg-[#FCF8EC] border border-amber-900/10 shadow-soft cursor-pointer hover:shadow-deep transition-all hover:-translate-y-1"
+          className="w-full p-4 rounded-3xl bg-[#FCF8EC] border border-amber-900/10 shadow-soft cursor-pointer hover:shadow-deep transition-all hover:-translate-y-1"
         >
           <div className="flex items-center gap-2 text-rust mb-2">
             <Mail className="w-4 h-4" />
@@ -154,7 +154,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
         const draggedPath = e.dataTransfer.getData('text/plain');
         if (draggedPath) onItemDropOnTarget?.(draggedPath, path);
       }}
-      className={`w-64 p-4 rounded-3xl bg-paper-card border transition-all shadow-soft hover:shadow-deep ${
+      className={`w-full p-4 rounded-3xl bg-paper-card border transition-all shadow-soft hover:shadow-deep ${
         isDragOver ? 'border-rust ring-2 ring-rust/30 bg-rust/5' : 'border-ink/10'
       }`}
     >

@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Compass, Sparkles, Clock, Layers, ArrowLeft } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Compass, Clock, Layers, ArrowLeft } from 'lucide-react';
 import { Canvas } from './components/canvas/Canvas.js';
 import { RightSidebar } from './components/sidebar/RightSidebar.js';
 import { CharacterModal } from './components/overlay/CharacterModal.js';
 import { GodModeToolbar } from './components/god/GodModeToolbar.js';
+import { useCamera } from './state/useCamera.js';
+import { useWorld } from './state/useWorld.js';
 
 interface WorldManifest {
   id: string;
@@ -16,18 +18,29 @@ interface WorldManifest {
 
 export function App() {
   const [manifest, setManifest] = useState<WorldManifest | null>(null);
-  const [currentLayer, setCurrentLayer] = useState<string>('map');
-  const [items, setItems] = useState<any[]>([]);
   const [backpackItems, setBackpackItems] = useState<any[]>([]);
   const [characters, setCharacters] = useState<any[]>([]);
   const [followingCharacters, setFollowingCharacters] = useState<Record<string, boolean>>({});
-  const [worldFrozen, setWorldFrozen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Active Character Modal (Galgame Overlay)
   const [activeModalCharId, setActiveModalCharId] = useState<string | null>(null);
+  const camera = useCamera();
 
-  const wsRef = useRef<WebSocket | null>(null);
+  // Canvas world state (layer payload, WS events, card persistence).
+  const world = useWorld();
+  const { state: worldState, layer: currentLayer, enterLayer, refresh, moveCard, sendToWriter, sendMessage } = world;
+  const worldFrozen = worldState?.worldFrozen === true;
+
+  // Camera memory around the modal mask (P0: save before opening, restore after).
+  const openCharacterModal = (charId: string) => {
+    camera.save('modal');
+    setActiveModalCharId(charId);
+  };
+  const closeCharacterModal = () => {
+    setActiveModalCharId(null);
+    camera.restore('modal');
+  };
 
   // Toast helper
   const showToast = (msg: string) => {
@@ -35,44 +48,19 @@ export function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Connect WebSocket
-  useEffect(() => {
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'file_changed' || msg.type === 'item_moved' || msg.type === 'god_action') {
-          fetchLayer(currentLayer);
-          fetchBackpack();
-        } else if (msg.type === 'world_frozen') {
-          setWorldFrozen(true);
-          showToast('World frozen — nothing you change will disturb a soul');
-        } else if (msg.type === 'world_thawed') {
-          setWorldFrozen(false);
-          showToast('World thawed — time flows on');
-        }
-      } catch (err) {
-        console.error('WS parse error:', err);
-      }
-    };
-
-    return () => ws.close();
-  }, [currentLayer]);
-
-  // Initial Data Fetch
+  // Initial Data Fetch (layer itself is fetched by useWorld)
   useEffect(() => {
     fetchManifest();
     fetchBackpack();
     fetchCharacters();
   }, []);
 
+  // World events (WS lives in useWorld) can add/move backpack files.
   useEffect(() => {
-    fetchLayer(currentLayer);
-  }, [currentLayer]);
+    const onWorldEvent = () => fetchBackpack();
+    window.addEventListener('airp:world-event', onWorldEvent);
+    return () => window.removeEventListener('airp:world-event', onWorldEvent);
+  }, []);
 
   const fetchManifest = async () => {
     try {
@@ -83,19 +71,6 @@ export function App() {
       }
     } catch (err) {
       console.warn('Could not fetch manifest:', err);
-    }
-  };
-
-  const fetchLayer = async (layer: string) => {
-    try {
-      const res = await fetch(`/api/layer?layer=${encodeURIComponent(layer)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setItems(data.items || []);
-        if (data.worldFrozen !== undefined) setWorldFrozen(data.worldFrozen);
-      }
-    } catch (err) {
-      console.warn('Could not fetch layer:', err);
     }
   };
 
@@ -125,31 +100,26 @@ export function App() {
 
   // Switch Layer / Gate
   const handleEnterGate = (target: string) => {
-    setCurrentLayer(target);
+    enterLayer(target);
   };
 
   const handleReturnToParent = () => {
     if (currentLayer === 'map') return;
     const parts = currentLayer.split('/');
     if (parts.length <= 1) {
-      setCurrentLayer('map');
+      enterLayer('map');
     } else {
       parts.pop();
-      setCurrentLayer(parts.join('/'));
+      enterLayer(parts.join('/'));
     }
   };
 
   // Choice Selection
   const handleSelectChoice = async (choice: string) => {
     showToast(`You chose: "${choice}"`);
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(
-        JSON.stringify({
-          type: 'writer_prompt',
-          message: `The player, in scene "${currentLayer}", chose the advancing option: "${choice}".`,
-        })
-      );
-    }
+    sendToWriter(
+      `The player, in scene "${currentLayer}", chose the advancing option: "${choice}".`
+    );
   };
 
   // Point-and-Click item drop puzzle: use_item_on
@@ -184,19 +154,17 @@ export function App() {
         body: JSON.stringify({ from: itemPath, to: dest }),
       });
       showToast(`Returned "${filename}" to the scene`);
-      fetchLayer(currentLayer);
+      refresh();
       fetchBackpack();
     } catch (err) {
       console.error('Move item failed:', err);
     }
   };
 
-  // God Mode Toggle Freeze
+  // God Mode Toggle Freeze (flag flips via the world_frozen/thawed broadcast)
   const handleToggleFreeze = async () => {
     try {
-      const res = await fetch('/api/freeze', { method: 'POST' });
-      const data = await res.json();
-      setWorldFrozen(data.worldFrozen);
+      await fetch('/api/freeze', { method: 'POST' });
     } catch (err) {
       console.error('Toggle freeze failed:', err);
     }
@@ -222,7 +190,7 @@ export function App() {
         }),
       });
       showToast(`The God Hand has created "${title}"`);
-      fetchLayer(currentLayer);
+      refresh();
     } catch (err) {
       console.error('God action create failed:', err);
     }
@@ -292,12 +260,14 @@ export function App() {
         <div className="flex-1 h-full relative">
           <Canvas
             currentLayer={currentLayer}
-            items={items}
+            items={worldState?.items ?? []}
+            links={worldState?.links ?? []}
             characters={characters}
+            onMoveCard={moveCard}
             onSelectChoice={handleSelectChoice}
             onDiceRolled={(res, pass) => showToast(`Dice: ${res} (${pass ? 'Pass' : 'Fail'})`)}
             onEnterGate={handleEnterGate}
-            onOpenCharacterModal={(charId) => setActiveModalCharId(charId)}
+            onOpenCharacterModal={openCharacterModal}
             onItemDropOnTarget={handleItemDropOnTarget}
             onDropItemToScene={handleDropItemToScene}
           />
@@ -308,8 +278,8 @@ export function App() {
           backpackItems={backpackItems}
           characters={characters}
           followingCharacters={followingCharacters}
-          onNavigateToCharacter={(home) => setCurrentLayer(home)}
-          onChatWithCharacter={(charId) => setActiveModalCharId(charId)}
+          onNavigateToCharacter={(home) => enterLayer(home)}
+          onChatWithCharacter={openCharacterModal}
           onToggleFollow={(charId) => {
             setFollowingCharacters((prev) => ({
               ...prev,
@@ -326,17 +296,13 @@ export function App() {
           characterId={activeChar.id}
           avatar={activeChar.avatar}
           bio={activeChar.bio}
-          onClose={() => setActiveModalCharId(null)}
+          onClose={closeCharacterModal}
           onSendMessage={(msg) => {
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-              wsRef.current.send(
-                JSON.stringify({
-                  type: 'character_prompt',
-                  characterId: activeChar.id,
-                  message: msg,
-                })
-              );
-            }
+            sendMessage({
+              type: 'character_prompt',
+              characterId: activeChar.id,
+              message: msg,
+            });
           }}
         />
       )}
