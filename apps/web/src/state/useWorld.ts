@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export interface LayerItem {
   path: string;
   filename: string;
+  kind: string;
   frontmatter: Record<string, any> | null;
   body: string;
   x: number;

@@ -1,8 +1,9 @@
 # doc-11 场景与小天地初始化协议（2026-09-11 定案）
 
 > 状态：**已定案（2026-09-11）**。原"待设计清单"五条已全部落定，本文取代 2026-09-11 立项版。
+> **2026-09-11 晚复核**：§2.3 的九条 pi-rp 源码级约束中，C1 / C3 / C5 / C7 已被上游修掉，§2.3 / §2.4 / §7.1 / §7.2 随之改写；新增 §2.3.1「vendored dist 的时间差」。
 > 展开：doc-05 §3.2（stub 层首次进入实例化）+ §4.1（角色小天地根目录为空触发初始化）。
-> 关联：doc-05 §1（懒加载：第一眼才存在）、§4.3（委托协议，profile `scene-init`）、§8.4（manifest `layers.stub`）；doc-06 §2.1（幻影落地）、§4.2（小天地三分情境）；doc-07 §3.5；doc-13 §1（记忆写回）；doc-15（模板骨架）。
+> 关联：doc-05 §1（懒加载：第一眼才存在）、§4.3（委托协议，profile `scene-init`）、§8.4（world.json 只写世界级事实，层级由目录派生）；doc-06 §2.1（幻影落地）、§4.2（小天地三分情境）；doc-07 §3.5；doc-13 §1（记忆写回）；doc-15（模板骨架）。
 
 ---
 
@@ -105,21 +106,36 @@ Three lines: list of paths / one-sentence scene summary / one sentence on "what 
 
 ### 2.3 工程约束（pi-rp 源码级实测，2026-09-11）
 
-以下为 `bun` 直跑 `compileMessages` + 通读 `subagent/{prepare,run,spawn}.ts` 的**实测结论**，不是推测。写代码前必读。
+以下为通读 `subagent/{prepare,run,spawn}.ts` 与 `prompt-preset/{loader,policy,slot-renderers}.ts` 的**实测结论**，不是推测。写代码前必读。
 
-| # | 约束 | 证据 | 对 AIRP 的影响 |
-|---|---|---|---|
-| **C1** | **默认工具集不含 `write`/`edit`**：`effectiveTools = ["read","grep","find","ls","bash"] + 父会话扩展工具` | `prepare.ts:167` | 初始化要落盘，必须依赖 **AIRP 扩展注册的写工具**被继承，或走 `spawnAgent` 显式传 `tools` |
-| **C2** | **`preset.tools.allow` 加不出工具**——`allow` 是过滤器不是白名单扩展器 | `policy.ts:8` + `prepare.ts:171` | 别指望在 preset 里 `allow:["write"]` 解决问题；它只会把工具集过滤成空 |
-| **C3** | **slot 的 `options` 不展开宏**，`options.path:"{{x}}.md"` 原样传入 → `file not found` | 实测（见下） | **参数化只能走 task 文本**；preset 若要读世界文件，用固定相对路径或绝对路径 |
-| **C4** | **`onMissing:"error"` 是致命的**：prepare 把 error 级诊断当失败，整个 subagent 起不来 | `prepare.ts:244` | 初始化 preset 引用"可能不存在"的角色文件（如 `identity.md`）时必须 `skip`（默认）或 `placeholder` |
-| **C5** | **cwd 可能不一致**：prepare 用**父会话 cwd** 解析 file slot，子会话实际 `cwd: process.cwd()` | `prepare.ts:180` vs `run.ts:59` | 引擎必须保证 `process.cwd() === 世界根目录`，否则一律用绝对路径 |
-| **C6** | **`spawnAgent` 不校验 `delegatable`**；`subagent` 工具与 `/subagent` 命令才校验 | `spawn.ts` vs `extension.ts:93` | 两个入口都能用同一个 profile；`delegatable: true` 只为了让作家侧看得到 |
-| **C7** | **preset 目录不递归**：`loadPromptPresets` 只读 `<configDir>/prompt-presets` **顶层** `*.json` | `loader.ts:38` | **doc-05 §7.4 的 `.airpworld/agent/main` + `agent/subagent` 两个子目录发现不了**，必须改（见 §7.1） |
-| **C8** | **子会话无扩展运行时**：扩展工具的定义会继承，但事件 handler 不触发 | `prompt-presets.md:843` | 依赖 `agent_start`/`tool_result` 钩子的逻辑在 subagent 里不会跑；`move()` 的落账要写在工具实现**内部** |
-| **C9** | 输出被 `truncateTail` 截断（2000 行 / 50KB） | `run.ts:139` | 回报格式必须短（§2.2 三行） |
+> **2026-09-11 晚复核**：C1 / C3 / C5 / C7 四条**已被 pi-rp 上游修掉**（同一位作者当天提交），本表已按当前源码重写。
+> 对应提交：`402ccc59b`（默认工具集补全 write/edit）、`05893618c`（slot options 展开宏）、`ea310c9fc`（子会话用 prepare 的 cwd）、`6c693a7f3`（preset 目录递归），另有 `3ca27f746` 补了覆盖 C1/C2/C3/C5/C7 的 AIRP 式 e2e。
+> **踩坑提醒**：vendored 的 `dist/` 是构建产物且被 gitignore，源码修好了 **dist 不会自动跟上**——本仓库的 dist 曾停在 9/8，比源码落后四天（见 §2.3.1）。
 
-**C3 的实测记录**（`bun` 直跑 compiler，runtime.variables 带 `who: WORLDNAME`）：
+| # | 约束 | 状态 | 证据 | 对 AIRP 的影响 |
+|---|---|---|---|---|
+| **C1** | 默认工具集 = `["read","bash","edit","write","grep","find","ls"]` + 父会话扩展工具 | ✅ **已含写工具**（原"不含 write/edit"已失效） | `prepare.ts:27`（`DEFAULT_SUBAGENT_TOOLS`）+ `prepare.ts:180` | `scene-init` / `nook-init` **开箱就能落盘**，不必为此专门注册写工具。`spawnAgent` 不传 `tools` 时用同一个常量（`spawn.ts:90`），两个入口天然对齐 |
+| **C2** | **`preset.tools.allow` 加不出工具**——`allow` 是过滤器不是白名单扩展器 | ⚠️ **仍然成立** | `prompt-preset/policy.ts::applyResourcePolicy` | 别指望在 preset 里 `allow:["write"]` 添能力；它只会把现有工具集过滤成子集（写错了就过滤成空） |
+| **C3** | slot 的 `options` 展开宏（字符串叶子走宏展开，非字符串原样） | ✅ **已支持**（原"不展开"已失效） | `slot-renderers.ts`（`05893618c`） | `options.path:"{{who}}.md"` 现在可用。但 §2.1「preset 静态 / brief 动态」的分工**继续保留**——理由从"硬约束"降为"设计选择"：brief 才是每次不同的东西 |
+| **C4** | **`onMissing:"error"` 是致命的**：prepare 把 error 级诊断当失败，整个 subagent 起不来 | ⚠️ **仍然成立** | `prepare.ts:236` | 引用"可能不存在"的角色文件（如 `identity.md`）必须 `skip`（默认）或 `placeholder` |
+| **C5** | 子会话用 **prepare 记录的 cwd**（不再是 `process.cwd()`） | ✅ **已修**（原"cwd 可能不一致"已失效） | `run.ts:56/59`（`ea310c9fc`） | 相对 file slot 路径与相对写盘解析到同一个 cwd；引擎仍应保证 cwd = 世界根，但不再是踩雷点 |
+| **C6** | **`spawnAgent` 不校验 `delegatable`**；`subagent` 工具与 `/subagent` 命令才校验 | ⚠️ **仍然成立（且是有意的）** | `spawn.ts` 的函数注释明写 "not gated on the preset being delegatable" vs `extension.ts:92` | 两个入口都能用同一个 profile，正合我们的 R1/R2 共用设计；`delegatable: true` 只为了让作家侧看得到。**同一段注释还写了 `spawnAgent` 不继承父会话扩展工具**——这才是两入口真正的不对齐点，见 §2.4 |
+| **C7** | **preset 目录递归**：`collectPresetFiles` 深度优先收集子目录的 `*.json` | ✅ **已递归**（原"只读顶层"已失效） | `loader.ts::collectPresetFiles`（`6c693a7f3`） | 递归范围仍限于 `<configDir>/prompt-presets/` 内部。`characters/<id>/preset.json` **不在这棵树上**，所以引擎侧的"安装到 prompt-presets"动作依然需要（见 §7.1 修订） |
+| **C8** | **子会话无扩展运行时**：扩展工具的定义会继承，但事件 handler 不触发 | ⚠️ **仍然成立** | `run.ts:76`（"Omit extensions to fulfill no extensions"） | 依赖 `agent_start`/`tool_result` 钩子的逻辑在 subagent 里不会跑；落账要写在工具实现**内部** |
+| **C9** | 输出被 `truncateTail` 截断（2000 行 / 50KB） | ⚠️ **仍然成立** | `run.ts:136` | 回报格式必须短（§2.2 三行） |
+
+### 2.3.1 vendored dist 的时间差（复核时发现，务必记住）
+
+`vendor/pi-rp/packages/*/dist/` 被 pi-rp 的 `.gitignore` 排除——**它是每台机器本地构建的产物，不随 submodule 指针走**。2026-09-11 复核时实测：源码里 `DEFAULT_SUBAGENT_TOOLS` 已含 `write`/`edit`，而 `dist/core/subagent/prepare.js` 仍是 9/8 构建的旧版 `["read","grep","find","ls","bash"]`。我们的服务端与探针跑的是 `dist/cli.js`，**所以运行时行为一直是旧的**。
+
+> **纪律**：`git submodule update` 之后、或发现引擎行为与源码不符时，先重建：
+> ```bash
+> pnpm pi status   # 会直接报 dist 是 STALE 还是 up to date
+> pnpm pi build    # 重建（内含 hydrate:model-data，要联网）
+> ```
+> 子模块的拉取 / 提交 / 指针同步一律走 `pnpm pi`（`tools/pi-rp.mjs`），别手搓 submodule 命令——细节见 AGENTS.md §7.2。
+
+**C3 的旧实测记录**（`bun` 直跑 compiler，runtime.variables 带 `who: WORLDNAME`）——**保留作为历史，结论已被 `05893618c` 推翻**：
 
 ```
 block content  "BLOCK-MACRO=[{{who}}]"   → "BLOCK-MACRO=[WORLDNAME]"   ✅
@@ -127,16 +143,29 @@ block content  "BLOCK-MACRO=[{{who}}]"   → "BLOCK-MACRO=[WORLDNAME]"   ✅
 options.path   "/w/{{who}}.md"            → file not found "/w/{{who}}.md"  ❌
 ```
 
-即：**宏在渲染后的文本上展开，不在 slot 的入参上展开。** 这一条决定了 §2.1 的"preset 静态 / brief 动态"分工不是风格选择，是硬约束。
+当时的结论是"宏只在渲染后的文本上展开，不在 slot 的入参上展开"。**现在 slot options 的字符串叶子也会走宏展开**，上表第三行 ❌ 已变成 ✅。因此 §2.1 的"preset 静态 / brief 动态"分工**不再是硬约束，而是设计选择**——仍然照办，因为 brief 本来就是每次不同的那一半。
 
 ### 2.4 工具集对齐表（两个入口要给出相同的工具）
 
-| 入口 | 怎么给工具 | 建议值 |
-|---|---|---|
-| **R1 作家委托**（`subagent` 工具） | 无法显式传；= 默认集 + 父会话扩展工具 | AIRP 扩展须注册写工具（`write_world_file` 或让 `write`/`edit` 通过 `customTools` 可见） |
-| **R2 引擎直唤**（`ctx.spawnAgent`） | 显式 `tools` + `customTools` | `tools: ["read","write","edit","bash","grep","find","ls", ...AIRP扩展工具名]` |
+> **2026-09-11 复核**：C1 修好之后，**内建工具**两边默认对齐了（`spawnAgent` 不传 `tools` 时落到同一个 `DEFAULT_SUBAGENT_TOOLS`，`spawn.ts:90`），原来那套"扩展必须注册 `write_world_file`"的绕法可以删掉。**但扩展工具仍然不对齐**——见下表第三列，`INIT_TOOLS` 依然必需。
 
-> **对齐要求**：R2 传的 `tools` 必须与 R1 的 `effectiveTools` **逐项一致**，否则同一份 brief 在两个入口下产出能力不同（作家能生成、玩家触发不能）。引擎侧抽出 `INIT_TOOLS` 常量，`subagent` 工具路径的扩展工具清单从同一常量导出。
+| 入口 | 内建工具 | **扩展工具**（`chalk` / `read_canvas` / `link` …） |
+|---|---|---|
+| **R1 作家委托**（`subagent` 工具） | 默认集，什么都不用做 | **自动继承**：`inheritExtensionTools` 默认 true，父会话注册的工具并进 `effectiveTools`（`prepare.ts:178`） |
+| **R2 引擎直唤**（`ctx.spawnAgent`） | 不传 `tools` 即同一默认集 | **拿不到**：`spawnAgent` 把 `inheritExtensionTools` **硬编码为 false**（`spawn.ts`），必须显式传 `customTools: [...定义]`，**且工具名同时列进 `tools`**才可选中（`SpawnAgentOptions.customTools` 的 JSDoc 明写） |
+
+> **所以 `INIT_TOOLS` 依然要有**，只是职责收窄成一件事：**把 AIRP 扩展工具的名字与定义同时喂给 R2**。落地形状：
+>
+> ```ts
+> export const INIT_EXTENSION_TOOLS = ['chalk', 'read_canvas', 'link', 'arrange'];
+> // R2：spawnAgent({ profileId, task: brief,
+> //                  tools: [...DEFAULT_SUBAGENT_TOOLS, ...INIT_EXTENSION_TOOLS],
+> //                  customTools: airpToolDefs })
+> ```
+>
+> 忘了这一步的症状很隐蔽：**同一份 brief，作家委托时能用 `chalk` 落板书，玩家双击 stub 卡时只能用裸 `write`**——产物格式不一致，且没有任何报错。
+>
+> 另一处两入口不同、但对 AIRP 无影响的点：`spawnAgent` 把 `strict: true` 写死（无 schema 的命名空间写入会被拒）。AIRP 不用 pi-rp 的 state，碰不到。
 
 ---
 
@@ -146,11 +175,10 @@ options.path   "/w/{{who}}.md"            → file not found "/w/{{who}}.md"  �
 
 | 条件 | 动作 |
 |---|---|
-| 层 key 在 `world.json.layers` 里 `stub: true`，**且目录里没有 README.md** | 进入时初始化 |
+| 目录存在（是一个层），**但目录里没有 README.md** | stub 层——进入时初始化 |
 | 目录里已有 README.md（哪怕写过一次） | **不初始化**——已经存在了，叙事由作家现编 |
-| 非 stub 层 | 不初始化（模板预写，doc-15） |
 
-**判据是"目录有没有 README.md"，不是"有没有进过"** —— 路径即 id，文件即真相，不额外记"已初始化"标志。
+> 层的存在与 stub 与否**只由目录决定**（`world/**/` 每个目录是一个层，README 在不在 = 写没写），`world.json` 里**没有** `layers` 声明。判据是"目录有没有 README.md"，不是"有没有进过"——路径即 id，文件即真相，不额外记"已初始化"标志。派生逻辑 `packages/shared/src/store/layers.ts`。
 
 ### 3.2 两条路径
 
@@ -312,9 +340,11 @@ characters/旅店老板/
 
 ## 7. 落地需要的两处修正
 
-### 7.1 preset 目录：改为 `PI_PROJECT_CONFIG_DIR` + 平铺（C7）
+### 7.1 preset 目录：`PI_PROJECT_CONFIG_DIR` + 平铺
 
-doc-05 §7.4 现在的 `.airpworld/agent/main/` + `.airpworld/agent/subagent/` **发现不了**（`loadPromptPresets` 只读顶层）。改为：
+> **2026-09-11 复核**：C7 已修（`collectPresetFiles` 递归子目录），所以"必须平铺"从**硬约束降为约定**——`.airpworld/prompt-presets/` 下现在分不分子目录都能被发现。我们**继续平铺**，理由变成了"id 已经足够区分，目录分层只是多一层心智"。递归范围仍限于 `<configDir>/prompt-presets/` 这棵树，树外的文件照样发现不了（见下第三条）。
+
+doc-05 §7.4 早先的 `.airpworld/agent/main/` + `.airpworld/agent/subagent/` 两层写法已废弃，统一为：
 
 ```
 .airpworld/
@@ -326,18 +356,16 @@ doc-05 §7.4 现在的 `.airpworld/agent/main/` + `.airpworld/agent/subagent/` *
 ```
 
 - `CONFIG_DIR_NAME` 来自 `package.json` 的 `piConfig.configDir`（现为 `.pi`），可用 env `PI_PROJECT_CONFIG_DIR` 覆盖 → 引擎 spawn 作家/角色进程时设一次即可；
-- **平铺不分层**：作家/角色/子代理 profile 用 `id` 区分，目录不分子目录；
-- 角色目录里的 `preset.json`（doc-05 §4.1 的 `characters/<名>/preset.json`）**不在发现路径上**——它是角色自己的配置，由引擎读取后作为角色进程的 `--preset` 或经 `customTools`/`initialMessages` 注入。**这一条需要 doc-13/doc-07 §3.5 确认接法**（见 §8 遗留）。
+- **平铺不分层**：作家/角色/子代理 profile 用 `id` 区分（约定，非硬约束，见上）；
+- 角色目录里的 `preset.json`（doc-05 §4.1 的 `characters/<名>/preset.json`）**仍然不在发现路径上**——它在 `characters/<名>/` 下，不在 `<configDir>/prompt-presets/` 这棵树里，C7 修好也够不着。所以引擎侧"把它安装进 `prompt-presets/` 再按 id 启动"的动作**依然必需**（落地实现见 `apps/server/src/engine/presets.ts::installPreset`）。
 
-### 7.2 AIRP 扩展须暴露写工具（C1/C2）
+### 7.2 ~~AIRP 扩展须暴露写工具~~（已随 C1 修复作废，2026-09-11）
 
-`scene-init` / `nook-init` 要落盘，最干净的做法是让 AIRP 扩展注册写工具（如 `write_world_file`），这样：
+原文要求 AIRP 扩展注册一个 `write_world_file` 之类的写工具，理由是子代理的默认工具集不含 `write`/`edit`。**这个前提已经不成立**（C1，`402ccc59b`）：初始化器开箱就有 `write`/`edit`。
 
-- R1 路径：扩展工具自动并进 `effectiveTools`（`inheritExtensionTools` 默认 true）→ 作家委托可用；
-- R2 路径：`spawnAgent({ tools: INIT_TOOLS, customTools: [...扩展工具定义] })` 显式带上 → 玩家触发也可用；
-- 两处工具名来自同一个 `INIT_TOOLS`（§2.4 对齐）。
-
-> 若引擎侧直接暴露内置 `write`/`edit`：R1 路径拿不到（不在默认集、allow 加不进去，**C1+C2**），仍然必须走扩展工具或 R2 显式传。二选一，但**不能两个入口各用一套**。
+- 落地时**不要**再造 `write_world_file`——多一层同义工具只会让模型犹豫用哪个；
+- AIRP 扩展该注册的是**引擎独有能力**（`chalk` / `read_canvas` / `link` / `arrange`），不是内建工具的替身；
+- 这些扩展工具经 `inheritExtensionTools`（默认 true）进 R1；R2 若显式传 `tools` 要一并带上（§2.4）。
 
 ---
 

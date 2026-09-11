@@ -79,7 +79,7 @@ async function scaffold() {
   const store = new LocalWorldStore(targetDir);
   const manifest = await store.getManifest();
   console.log(`[AIRP Scaffold] World initialized: "${manifest.name}" (${manifest.id})`);
-  console.log(`Layers: ${Object.keys(manifest.layers || {}).join(', ')}`);
+  console.log(`Layers (scanned from directories): ${Object.keys(manifest.layers || {}).join(', ')}`);
   console.log(`Characters: ${(manifest.characters || []).map(c => c.id).join(', ')}`);
   store.close();
   console.log(`[AIRP Scaffold] Ready! Run server and point to: ${targetDir}`);

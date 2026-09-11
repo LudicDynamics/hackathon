@@ -1,6 +1,7 @@
 import React from 'react';
 import { CardRenderer } from './CardRenderer.js';
 import { highlightLinks } from './LinkLayer.js';
+import { chalkStyleOf } from '@airp/shared/forms';
 import type { LayerItem } from '../../state/useWorld.js';
 
 /**
@@ -42,10 +43,35 @@ export function pruneLifts(paths: Set<string>): void {
   }
 }
 
+/** Presence figure — the world's people. Ink sketch + a name strip (proto `.sprite`). */
+const SpriteFig: React.FC = () => (
+  <div className="sprite__halo">
+    <svg
+      viewBox="0 0 72 64"
+      width={72}
+      height={64}
+      fill="none"
+      stroke="#2B2117"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="36" cy="16" r="11" fill="#FFFEF6" />
+      <path d="M22 60 Q22 30 36 30 Q50 30 50 60 Z" fill="#FFFEF6" />
+      <path d="M28 44 L44 44" strokeDasharray="3 3" />
+      <circle cx="31" cy="15" r="1.2" fill="#2B2117" />
+      <circle cx="41" cy="15" r="1.2" fill="#2B2117" />
+      <path d="M33 20 q3 2.4 6 0" />
+    </svg>
+  </div>
+);
+
 export interface CanvasObjectProps {
   item: LayerItem;
   /** Path of the current layer's own README — that card is drag-locked (plan §6.3). */
   readmePath: string | null;
+  /** Ordinal of this gate among the layer's gates (fallback for the seal). */
+  index?: number;
   onSelectChoice?: (choice: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
   onEnterGate?: (targetLayer: string) => void;
@@ -56,6 +82,7 @@ export interface CanvasObjectProps {
 export const CanvasObject: React.FC<CanvasObjectProps> = ({
   item,
   readmePath,
+  index,
   onSelectChoice,
   onDiceRolled,
   onEnterGate,
@@ -63,13 +90,14 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   onItemDropOnTarget,
 }) => {
   const locked = item.path === readmePath;
+  const kind = item.kind;
 
   return (
     <div
       data-path={item.path}
       onPointerEnter={() => highlightLinks(item.path, true)}
       onPointerLeave={() => highlightLinks(item.path, false)}
-      className={`object${locked ? ' object-locked' : ''}`}
+      className={`object ink-form${locked ? ' object-locked' : ''}`}
       style={
         {
           left: item.x,
@@ -81,14 +109,27 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
         } as React.CSSProperties
       }
     >
-      <CardRenderer
-        item={item}
-        onSelectChoice={onSelectChoice}
-        onDiceRolled={onDiceRolled}
-        onEnterGate={onEnterGate}
-        onOpenCharacterModal={onOpenCharacterModal}
-        onItemDropOnTarget={onItemDropOnTarget}
-      />
+        {kind === 'sprite' ? (
+          <div
+            className={`sprite${chalkStyleOf(item.frontmatter).aged ? ' chalk--aged' : ''}`}
+          >
+            <SpriteFig />
+            <div className="sprite__name">
+              {item.frontmatter?.title || item.filename.replace('.md', '')}
+            </div>
+          </div>
+        ) : (
+          <CardRenderer
+            item={item}
+            index={index}
+            currentReadmePath={readmePath}
+            onSelectChoice={onSelectChoice}
+            onDiceRolled={onDiceRolled}
+            onEnterGate={onEnterGate}
+            onOpenCharacterModal={onOpenCharacterModal}
+            onItemDropOnTarget={onItemDropOnTarget}
+          />
+        )}
     </div>
   );
 };

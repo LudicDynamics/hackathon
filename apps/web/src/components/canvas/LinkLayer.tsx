@@ -10,6 +10,11 @@ import type { LayerLink } from '../../state/useWorld.js';
  * Endpoint elements are looked up by `data-path` from the DOM on each registry
  * rebuild (driven by the `links` prop), which keeps mount/unmount bookkeeping
  * entirely local to this layer — CanvasObject only needs to expose data-path.
+ *
+ * Geometry is hand-drawn, not a smooth bezier: the straight-line midpoint is
+ * pushed along the normal by a deterministic per-link offset (proto roadPath,
+ * L700-705). Jitter is handwriting, not noise — the same link bends the same
+ * way on every render and drag.
  */
 
 export const LINK_SVG_CLASS = 'links-svg';
@@ -18,10 +23,94 @@ interface RegisteredLink {
   a: HTMLElement;
   b: HTMLElement;
   pathEl: SVGPathElement;
+  dotA: SVGCircleElement;
+  dotB: SVGCircleElement;
+  seed: number;
   link: LayerLink;
 }
 
 const registry: Map<string, RegisteredLink> = new Map();
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** Stroke variable per link style; unknown styles fall back to ink. */
+const LINK_STROKES: Record<string, string> = {
+  solid: 'var(--ink)',
+  dashed: 'var(--rust)',
+  blue: 'var(--blue)',
+};
+
+/** FNV-1a string hash — stable 32-bit seed for the hand-drawn jitter. */
+function hash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/** mulberry32 PRNG — deterministic 0..1 stream from a 32-bit seed. */
+function mulberry32(a: number): () => number {
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Hand-drawn road (proto roadPath L700-705): offset the midpoint along the
+ * line normal by (rand*2-1) * min(70, len*0.22), then emit a quadratic curve.
+ * Deterministic for a given seed, so a link's bend never changes frame to frame.
+ */
+function roadPath(ax: number, ay: number, bx: number, by: number, seed: number): string {
+  const mx = (ax + bx) / 2;
+  const my = (ay + by) / 2;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len = Math.hypot(dx, dy) || 1;
+  const off = (mulberry32(seed)() * 2 - 1) * Math.min(70, len * 0.22);
+  const qx = mx - (dy / len) * off;
+  const qy = my + (dx / len) * off;
+  return `M ${ax} ${ay} Q ${qx} ${qy} ${bx} ${by}`;
+}
+
+interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Edge anchors for a link: right/left edges pointing at the other card, or
+ * top/bottom when the two cards are near-vertical neighbours. The proto joins
+ * gate circle centres; our cards need a visible edge anchor instead.
+ */
+function endpoints(A: Box, B: Box): { ax: number; ay: number; bx: number; by: number } {
+  const dCx = B.x + B.w / 2 - (A.x + A.w / 2);
+  const dCy = B.y + B.h / 2 - (A.y + A.h / 2);
+
+  if (Math.abs(dCx) < 80) {
+    // Near-vertical alignment: attach top/bottom edges.
+    return {
+      ax: A.x + A.w / 2,
+      ay: dCy >= 0 ? A.y + A.h : A.y,
+      bx: B.x + B.w / 2,
+      by: dCy >= 0 ? B.y : B.y + B.h,
+    };
+  }
+  // Horizontal attachment: right/left edges pointing at the other card.
+  return {
+    ax: dCx >= 0 ? A.x + A.w : A.x,
+    ay: A.y + A.h / 2,
+    bx: dCx >= 0 ? B.x : B.x + B.w,
+    by: B.y + B.h / 2,
+  };
+}
 
 function elForPath(path: string): HTMLElement | null {
   if (!path) return null;
@@ -32,7 +121,7 @@ function elForPath(path: string): HTMLElement | null {
   }
 }
 
-function readBox(el: HTMLElement): { x: number; y: number; w: number; h: number } {
+function readBox(el: HTMLElement): Box {
   const rawLeft = el.style.left ? parseFloat(el.style.left) : NaN;
   const rawTop = el.style.top ? parseFloat(el.style.top) : NaN;
   return {
@@ -43,38 +132,16 @@ function readBox(el: HTMLElement): { x: number; y: number; w: number; h: number 
   };
 }
 
-/** Recompute every registered link's bezier path from live DOM layout (v2 L263-271). */
+/** Recompute every registered link's hand-drawn path from live DOM layout. */
 export function updateAllLinks(): void {
   for (const r of registry.values()) {
     if (!r.a.isConnected || !r.b.isConnected) continue;
-    const A = readBox(r.a);
-    const B = readBox(r.b);
-    const dCx = B.x + B.w / 2 - (A.x + A.w / 2);
-    const dCy = B.y + B.h / 2 - (A.y + A.h / 2);
-
-    let sx: number;
-    let sy: number;
-    let ex: number;
-    let ey: number;
-    if (Math.abs(dCx) < 80) {
-      // Near-vertical alignment: attach top/bottom edges.
-      sx = A.x + A.w / 2;
-      ex = B.x + B.w / 2;
-      sy = dCy >= 0 ? A.y + A.h : A.y;
-      ey = dCy >= 0 ? B.y : B.y + B.h;
-    } else {
-      // Horizontal attachment: right/left edges pointing at the other card.
-      sx = dCx >= 0 ? A.x + A.w : A.x;
-      ex = dCx >= 0 ? B.x : B.x + B.w;
-      sy = A.y + A.h / 2;
-      ey = B.y + B.h / 2;
-    }
-    const dx = ex - sx;
-    const dy = ey - sy;
-    r.pathEl.setAttribute(
-      'd',
-      `M ${sx} ${sy} C ${sx + dx * 0.45} ${sy + dy * 0.1}, ${ex - dx * 0.45} ${ey - dy * 0.1}, ${ex} ${ey}`
-    );
+    const { ax, ay, bx, by } = endpoints(readBox(r.a), readBox(r.b));
+    r.pathEl.setAttribute('d', roadPath(ax, ay, bx, by, r.seed));
+    r.dotA.setAttribute('cx', String(ax));
+    r.dotA.setAttribute('cy', String(ay));
+    r.dotB.setAttribute('cx', String(bx));
+    r.dotB.setAttribute('cy', String(by));
   }
 }
 
@@ -105,24 +172,43 @@ export function refreshLinkArchives(): void {
 }
 
 function buildPaths(svg: SVGSVGElement, links: LayerLink[]): void {
-  for (const r of registry.values()) r.pathEl.remove();
+  for (const r of registry.values()) {
+    r.pathEl.remove();
+    r.dotA.remove();
+    r.dotB.remove();
+  }
   registry.clear();
 
   for (const link of links) {
     const a = elForPath(link.from);
     const b = elForPath(link.to);
     if (!a || !b) continue; // dangling link: DB row kept, nothing rendered
-    const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    pathEl.setAttribute('fill', 'none');
+
     // Inline style, not a presentation attribute: CSS custom properties only
     // resolve in real CSS, not in attribute values.
-    pathEl.style.stroke = link.style === 'solid' ? 'var(--ink)' : 'var(--rust)';
+    const stroke = LINK_STROKES[link.style] ?? 'var(--ink)';
+
+    const pathEl = document.createElementNS(SVG_NS, 'path');
+    pathEl.setAttribute('fill', 'none');
+    pathEl.style.stroke = stroke;
     pathEl.setAttribute('stroke-width', '1.6');
     pathEl.setAttribute('stroke-linecap', 'round');
     pathEl.classList.add('thread-line');
     if (link.style === 'dashed') pathEl.classList.add('thread-dashed');
+
+    const dotA = document.createElementNS(SVG_NS, 'circle');
+    const dotB = document.createElementNS(SVG_NS, 'circle');
+    for (const dot of [dotA, dotB]) {
+      dot.setAttribute('r', '3');
+      dot.style.fill = stroke;
+      dot.style.opacity = '0.45';
+    }
+
     svg.appendChild(pathEl);
-    registry.set(link.id, { a, b, pathEl, link });
+    svg.appendChild(dotA);
+    svg.appendChild(dotB);
+    // Seed from the link id: same link always bends at the same spot.
+    registry.set(link.id, { a, b, pathEl, dotA, dotB, seed: hash(link.id), link });
   }
 
   refreshLinkArchives();
@@ -137,7 +223,11 @@ export const LinkLayer: React.FC<{ links: LayerLink[] }> = ({ links }) => {
     if (!svg) return;
     buildPaths(svg, links);
     return () => {
-      for (const r of registry.values()) r.pathEl.remove();
+      for (const r of registry.values()) {
+        r.pathEl.remove();
+        r.dotA.remove();
+        r.dotB.remove();
+      }
       registry.clear();
     };
   }, [links]);

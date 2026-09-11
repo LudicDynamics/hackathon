@@ -35,7 +35,7 @@
 
 黑客松官方语言是 **英文 / 日语**。判断标准：**任何可能被评委或海外玩家看到的东西 → 英文**。日语只用于日式世界的专有名词，且用罗马字（`nanami`、`sakura-academy`）。
 
-命名一律 ASCII 小写 kebab-case（`baker-street`、`arcane-library`）；专有名词用标准英文或罗马字（`watson`、`baker-street`）。改世界内容时**目录名即 id**——`world.json` 的 `layers` key、`characters[].home`、preset 的 `options.baseDir`、`.airpworld/openings/<id>.json` 的文件名都要跟着改。
+命名一律 ASCII 小写 kebab-case（`baker-street`、`arcane-library`）；专有名词用标准英文或罗马字（`watson`、`baker-street`）。改世界内容时**目录名即 id**——**层不是声明出来的，是扫描出来的**：`world/**/` 下每个目录就是一个层，目录里的 `README.md` 是它的场景配置（有 README = 已写层；没有 = stub 懒加载层，见 doc-11 §3）。改层就是改目录名，`world.json` 里**没有** `layers`。`characters[].home`、preset 的 `options.baseDir`、`.airpworld/openings/<id>.json` 的文件名同样随目录名走。
 
 ---
 
@@ -47,7 +47,7 @@ apps/
     index.ts            # Express + WS 入口（/api、静态托管 apps/web/dist、端口 3001）
     routes/world.ts     # /api/worlds/load, /move, /dice, /use-item, /freeze, /god-action
     engine/
-      rpc-client.ts     # 与 pi-rp CLI 的 JSON-RPC over stdio
+      rpc-client.ts     # 与 pi-rp CLI 的 JSONL 命令协议 over stdio（不是 JSON-RPC，见 docs/后端实现计划.md §0.1）
       lifecycle.ts      # Agent 生命周期编排（spawn / --preset / 环境变量 / cwd）
       event-bridge.ts   # 引擎事件 → WebSocket 广播
       brief-builder.ts  # buildSceneInitBrief / buildNookInitBrief（动态 brief）
@@ -69,6 +69,7 @@ templates/              # 开箱世界模板：holmes-world, school-romance, mag
 worlds/                 # 脚手架产出的玩家世界（.gitignore）
 tools/scaffold.mjs      # 模板 → 新世界
 tools/probe-writer.mjs  # 全链路探针（pnpm probe）
+tools/pi-rp.mjs         # pi-rp 子模块工作流（pnpm pi status|build|update|commit，见 §7.2）
 docs/                   # 设计文档（真相源）
 vendor/pi-rp/           # 叙事引擎 submodule
 ```
@@ -103,6 +104,8 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 
 初始化只有一个可委托 profile（`scene-init`），作家委托（R1）与引擎直唤（R2）共用它，靠**动态 brief** 区分任务。详见 `docs/doc-11`。
 
+**层由目录树扫描得出**，不在 `world.json` 里声明：`world/**/` 的每个目录是一个层，目录里的 `README.md` 是它的场景配置。父层页面只显示自己目录的 md + **每个直接子层的门牌**（子层 README，或无 README 的 stub 门），绝不伸进子层内部——这是「子场景的卡全糊在基层上」那个 bug 的根因。派生逻辑在 `packages/shared/src/store/layers.ts`（纯函数，前后端共用）。
+
 ---
 
 ## 4. 文档导航
@@ -118,7 +121,15 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 | `docs/doc-04-视觉设计风格.md` | 前端视觉基准（**§10 为准**） |
 | `docs/doc-19-多模态与游戏性交互升级.md` | 视听动升级定案（评委导向） |
 | `docs/前端改造计划.md` | `apps/web/` 的施工单 |
+| `docs/后端实现计划.md` | `apps/server/` + `extensions/` 的施工单（引擎接通 / 工具面 / Hook 注入 / 角色上下文） |
 | `docs/doc-08~18` | 各专题（多为待完善），实现对应模块前再读 |
+
+**参考实现（都在本项目的兄弟目录，不进本仓库）**：
+
+| 项目 | 是什么 | 学什么 |
+|---|---|---|
+| `~/projects/worldlines-rivet` | 同构架构：世界包 + 多 agent + pi-rp 引擎，已跑生产 | **后端**：`services/gateway/` 的协议单一事实源 / WS 外壳 / 会话域三层切法、`launch.mjs` 启动参数单一来源、`docs/ARCHITECTURE.md` §3.3 角色上下文构造。逐条取舍见 `docs/后端实现计划.md` §2 |
+| `~/projects/infini-canvas` | 前端原型与旧设计文档（已退休） | **前端**视觉语汇与交互机制。它的 `worldlines-canvas/` 用的是另一套 harness + Python 后端，**引擎部分不迁移** |
 
 **前端原型不进本仓库**：`画布世界v1-yoshi.html`、`画布世界v2-niko.html`、`角色-yoshi.html`、`角色-世界v3.html/`、`assets/` 都在 `infini-canvas` 项目里——把它 clone 到本项目的兄弟目录即可对照。文档里出现的原型文件名一律指那里。
 
@@ -131,6 +142,7 @@ pnpm install                                    # 装依赖（含 submodule）
 pnpm build                                      # 编译全仓库
 pnpm probe                                      # 全链路探针，PASSED 才算地基没坏
 pnpm dev                                        # 全栈开发（web 5173 / server 3001）
+pnpm pi status                                  # pi-rp 子模块 + dist 新鲜度体检（见 §7.2）
 
 node tools/scaffold.mjs --template holmes-world --out worlds/my-holmes
 pnpm --filter @airp/server dev                  # 只起后端
@@ -147,6 +159,13 @@ pnpm --filter @airp/server dev                  # 只起后端
 - push 前先 `git fetch`，确认与远端的关系。
 - 远端有新提交 → **merge**，不要 rebase 别人已经拉过的分支。
 - **绝不 `force-push` `main`。**
+
+**并发下的暂存纪律**（工作区经常同时有多个 agent 在改，已实际发生过）：
+
+- 提交前先 `git status` 看清本次改动范围，**只 add 自己动过的文件/目录**——`git add .` / `git add -A` 会把别人没写完的改动一起卷走；
+- 提交前 `git diff --cached` 复核暂存内容，提交信息写清这次改了什么；
+- 双方改到同一文件：改动不重叠时用 `git add -p` 只暂存自己的 hunk；改在同一处拆不开时先协调归属，别擅自带走对方的改动；
+- 改完就提交，别攒大堆。
 
 ### 6.2 分支：可能多人多线并行
 
@@ -177,6 +196,18 @@ pnpm build && pnpm probe
 
 改动涉及引擎或 preset 时，额外确认探针里**没有 `not found` / `unknown slot` 警告**。
 
+### 6.5 Build 红线：改了 src 不 build，运行时会静悄悄跑旧代码
+
+**构建产物不入库，只对本机生效。** 类型检查过了 ≠ 运行时生效——这一条踩过，代价是一整天的错误结论。
+
+| 改了哪里 | 运行时实际读的是 | 提交前必须 |
+|---|---|---|
+| `vendor/pi-rp/**/src/` | `vendor/pi-rp/packages/*/dist/`（gitignored） | `pnpm pi build`（见 §7.2），或直接走 `pnpm pi commit` 的内置红线 |
+| `packages/shared/src/` | `packages/shared/dist/`（`tools/*.mjs` 与服务端都 import 它） | `pnpm build` |
+| `apps/web/src/` | 生产由服务端伺服 `apps/web/dist/` | `pnpm build`（vite dev 的 HMR 只证明 dev 模式对） |
+
+判据很简单：**`import` 的是 `dist` 就必须 build**。不确定时比对 `dist/` 的 mtime，或直接 grep 新逻辑在不在产物里。
+
 ---
 
 ## 7. 关键约定与坑
@@ -186,21 +217,38 @@ pnpm build && pnpm probe
 - **pi-rp** = 本项目的叙事引擎，源码在 `vendor/pi-rp`（submodule）或 `~/projects/pi-rp`。**查引擎行为一律查这里。**
 - **omp / oh-my-pi** = 部分人本地跑 agent 的 harness，与本项目无关，**绝不要拿它当 pi-rp 查源码**。
 
-### 7.2 pi-rp 是共享仓库（跨项目）
+### 7.2 pi-rp 子模块工作流（`pnpm pi`）
 
-`pi-rp` 被多个项目消费，多会话并发开发是常态：
+`pi-rp` 与本项目由同一批人开发、被多个项目消费，多会话并发是常态。**别手搓 submodule 命令**，一律走 `tools/pi-rp.mjs`（移植自 worldlines-rivet 的同名工具，同一个子模块、同样两个坑）：
 
-1. 改 pi-rp 优先在**当前项目的 vendored 副本**里改，不要另开独立克隆。
-2. push 前必须 `fetch`；分叉先 merge。**绝不 force-push `main`。**
-3. 核对 remote 确实是 pi-rp 再推——**绝不把本仓库的提交推到 pi-rp**。
-4. 子模块指针要同步提交（`git add vendor/pi-rp && git commit`）。
+```bash
+pnpm pi status                              # 两边状态 + dist 新鲜度一览；不一致先修再干别的
+pnpm pi build                               # 只重建 dist（HEAD 没动但产物旧了）
+pnpm pi update [--no-build] [--no-push]     # 拉 origin/main → build → 更新本仓指针
+pnpm pi commit "fix(...): …" [--no-build]   # build 红线 → 子模块 commit+push → 本仓指针 commit+push
+```
+
+两条它专门用来挡的不变量（**都已经咬过我们**）：
+
+1. **dist 是本地产物，不随指针走**。`vendor/pi-rp/packages/*/dist/` 被 pi-rp 自己的 `.gitignore` 排除，而服务端与探针跑的是 `dist/cli.js`。HEAD 一动而 dist 没动，运行时会**毫无告警地继续执行旧构建**——实测踩过：源码里子代理默认工具集已含 `write`/`edit`，本机 dist 还停在四天前，于是"改了源码没生效"。所以**凡是动 HEAD 的路径都会重建**，`pnpm pi status` 也会报 dist 是否 STALE。
+2. **指针必须等于子模块 HEAD**。HEAD 漂了（本地 main 落后、实验性 checkout 没恢复）还提交指针，等于把漂移洗白成一次正常的版本推进。`verifyPointerAligned` 直接拒绝并给出两种对齐命令。
+
+其余纪律：
+
+- 改 pi-rp 一律在**本项目的 vendored 副本**里改，不要另开独立克隆（`~/projects/pi-rp` 不当工作副本）；
+- 发现 pi-rp 有 bug 或缺能力，**直接在子模块里补掉再 `pnpm pi commit`**——两个项目同进退，不要在 AIRP 侧绕开引擎；
+- push 前必须 `fetch`；分叉先 merge；**绝不 force-push `main`**；
+- 核对 remote 确实是 pi-rp 再推——**绝不把本仓库的提交推到 pi-rp**；
+- `pnpm pi commit` 在子模块里是 `git add -A` 整体提交，跑之前先 `git -C vendor/pi-rp status` 确认里面没有别人的改动；
+- `--no-build` 只用于纯文档等不可能影响运行时的改动；
+- 新机器引导：`cd vendor/pi-rp && npm install`（**勿 `--ignore-scripts`**，否则 tsgo 等根级工具链不落地）→ `pnpm pi build`（内含 `hydrate:model-data`，要联网；跳过它 `build:offline` 会在 `check:model-data` 处失败）。
 
 ### 7.3 preset 格式铁律（实测，踩过坑）
 
 1. **顶层没有 `system` 字段**——提示词一律进 `items`。
 2. **不存在内建的 `system` slot**——但可通过扩展注册专属 instruction slot（AIRP 在 `extensions/instructions.ts` 注册了 `writer-char`、`system-char`、`scene-init-instruction`、`nook-init-instruction`，各 agent 职责隔离、slot id 与 name 互不混用）。
-3. **`--preset` 只认 id，不认文件路径**，且只扫 `<configDir>/prompt-presets/` 顶层；配置目录由 `PI_PROJECT_CONFIG_DIR=.airpworld` 指定。
-4. slot 的 `options` **不展开宏**（宏只在渲染后的文本上展开）。
-5. 加载器只读顶层，`onMissing: "error"` 是致命的，文件槽用 `onMissing: "skip"`。
+3. **`--preset` 只认 id，不认文件路径**；配置目录由 `PI_PROJECT_CONFIG_DIR=.airpworld` 指定。发现范围是 `<configDir>/prompt-presets/` **整棵树**（2026-09-11 起递归子目录），但**树外的文件够不着**——`characters/<名>/preset.json` 仍须由引擎安装进去（`presets.ts::installPreset`）。
+4. `onMissing: "error"` 是**致命的**（整个 subagent 起不来），文件槽一律用 `onMissing: "skip"`。
+5. `tools.allow` 是**过滤器不是扩展器**——写 `allow:["write"]` 加不出工具，只会把现有工具集过滤成子集。
 
-细节与全部 9 条源码级约束见 `docs/doc-11` §2.3。
+细节与全部 9 条源码级约束（含 2026-09-11 复核标注的"已失效"四条）见 `docs/doc-11` §2.3。

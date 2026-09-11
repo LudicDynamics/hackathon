@@ -1,8 +1,11 @@
 import fs from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { CardRecord, SeatFile, WorldStore } from './world-store.js';
-import { type WorldManifest, validateWorldManifest } from '../schemas/world.js';
+import { deriveLayers, layerOfPath, cardsOfLayer, childLayers, WORLD_DIR } from './layers.js';
+import { type WorldManifest, type LayerConfig, validateWorldManifest } from '../schemas/world.js';
+import { parseFrontmatter } from '../schemas/frontmatter.js';
 import type { MoveResult, WorldEvent } from '../schemas/events.js';
 import { initCanvasDatabase, initHistoryDatabase } from '../db/schema.js';
 
@@ -13,7 +16,7 @@ export const SEAT_STEP = 96;
 /** Collision padding around card bounds when judging seat overlap. */
 export const SEAT_PAD = 22;
 /** Max candidate cells tried before falling back to the anchor itself. */
-const SEAT_MAX_CANDIDATES = 100;
+const SEAT_MAX_CANDIDATES = 600;
 
 // Ulam spiral cells: R -> D -> L -> U, step lengths [1,1,2,2,3,3,...], starting at (0,0).
 function* spiralCells(): Generator<[number, number]> {
@@ -104,6 +107,30 @@ export class LocalWorldStore implements WorldStore {
     return results.map((abs) => path.relative(this.worldRoot, abs));
   }
 
+  /** Every directory under `world/` (relative paths, sorted) — the layer tree. */
+  async listDirs(): Promise<string[]> {
+    const root = this.resolvePath(WORLD_DIR);
+    const out: string[] = [];
+    async function walk(current: string) {
+      let entries: Dirent[];
+      try {
+        entries = await fs.readdir(current, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (entry.name.startsWith('.')) continue;
+        if (entry.isDirectory()) {
+          const full = path.join(current, entry.name);
+          out.push(full);
+          await walk(full);
+        }
+      }
+    }
+    await walk(root);
+    return [root, ...out].map((abs) => path.relative(this.worldRoot, abs));
+  }
+
   async move(from: string, to: string): Promise<MoveResult> {
     const absFrom = this.resolvePath(from);
     const absTo = this.resolvePath(to);
@@ -149,11 +176,31 @@ export class LocalWorldStore implements WorldStore {
     };
   }
 
+  /**
+   * The manifest. `layers` is ALWAYS derived from the directory tree — never
+   * read from world.json. Declaring the tree in two places let them drift, so
+   * the file carries only world-level facts (name/genre/characters/…).
+   */
   async getManifest(): Promise<WorldManifest> {
     const raw = await this.readFile('world.json');
     const parsed = JSON.parse(raw);
-    this.manifestCache = validateWorldManifest(parsed);
+    const layers = await this.scanLayers();
+    this.manifestCache = validateWorldManifest({ ...parsed, layers });
     return this.manifestCache;
+  }
+
+  /** Derive every layer from the directory tree (see store/layers.ts). */
+  private async scanLayers(): Promise<Record<string, LayerConfig>> {
+    const dirs = await this.listDirs();
+    const fmByDir = new Map<string, Record<string, any> | null>();
+    for (const d of dirs) {
+      try {
+        fmByDir.set(d, parseFrontmatter(await this.readFile(`${d}/README.md`)).frontmatter);
+      } catch {
+        fmByDir.set(d, null); // no README → stub layer
+      }
+    }
+    return deriveLayers(dirs, (d) => fmByDir.get(d) ?? null);
   }
 
   async updateManifest(updates: Partial<WorldManifest>): Promise<void> {
@@ -164,7 +211,10 @@ export class LocalWorldStore implements WorldStore {
       updatedAt: new Date().toISOString(),
     };
     const valid = validateWorldManifest(merged);
-    await this.writeFile('world.json', JSON.stringify(valid, null, 2));
+    // `layers` is derived, not declared — keep it out of the file so the tree
+    // stays the single source (a written map would drift again).
+    const { layers: _derived, ...persisted } = valid;
+    await this.writeFile('world.json', JSON.stringify(persisted, null, 2));
     this.manifestCache = valid;
   }
 
@@ -275,16 +325,19 @@ export class LocalWorldStore implements WorldStore {
         if (tries++ >= SEAT_MAX_CANDIDATES) break;
         const cx = SEAT_ANCHOR.x + gx * SEAT_STEP;
         const cy = SEAT_ANCHOR.y + gy * SEAT_STEP;
+        // Track every candidate so exhaustion falls back to the LAST one tried
+        // instead of the anchor — otherwise two overflowing cards stack on the
+        // same point and overlap (the spiral is a walk, always a valid-ish spot).
+        placedX = cx - w / 2;
+        placedY = cy - h / 2;
         if (!overlapsOccupied(occupied, cx, cy, w, h)) {
-          placedX = cx - w / 2;
-          placedY = cy - h / 2;
           found = true;
           break;
         }
       }
       if (!found) {
         console.warn(
-          `[seatUnplaced] no free cell within ${SEAT_MAX_CANDIDATES} candidates for "${file.path}"; placing at anchor`
+          `[seat] no free cell within ${SEAT_MAX_CANDIDATES} candidates for "${file.path}"; placing at last candidate`
         );
       }
 
@@ -299,6 +352,64 @@ export class LocalWorldStore implements WorldStore {
       nextZ++;
     }
     return seats;
+  }
+
+  /**
+   * Re-flow the seated x/y of every card whose stored footprint no longer
+   * matches the current form table. `w/h` are a pure function of kind (see
+   * shared/schemas/forms.ts), so when a kind is resized in code the persisted
+   * rows still carry the old box — cards then overlap on the next paint. This
+   * re-seats ONLY drifted cards (keeping spiral order and every card whose size
+   * is unchanged, so a player's own drags survive), writing x/y/w/h back.
+   */
+  async reseatLayer(layerId: string, files: SeatFile[]): Promise<CardRecord[]> {
+    if (files.length === 0) return [];
+    const rows = this.getLayerCards(files.map((f) => f.path));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const drifted = files
+      .filter((f) => {
+        const row = byId.get(f.path);
+        return row && f.w && f.h && (row.w !== f.w || row.h !== f.h);
+      })
+      .sort((a, b) => a.path.localeCompare(b.path));
+    if (drifted.length === 0) return [];
+
+    const driftedPaths = new Set(drifted.map((f) => f.path));
+    // Occupied = siblings at their CURRENT size, so drifters reflow around
+    // (never through) cards that did not move.
+    const occupied = files
+      .filter((f) => !driftedPaths.has(f.path))
+      .map((f) => {
+        const row = byId.get(f.path);
+        const w = row?.w ?? f.w ?? 280;
+        const h = row?.h ?? f.h ?? 180;
+        return { cx: (row?.x ?? 0) + w / 2, cy: (row?.y ?? 0) + h / 2, w, h };
+      });
+
+    const out: CardRecord[] = [];
+    for (const file of drifted) {
+      const w = file.w!;
+      const h = file.h!;
+      let placedX = SEAT_ANCHOR.x - w / 2;
+      let placedY = SEAT_ANCHOR.y - h / 2;
+      let tries = 0;
+      for (const [gx, gy] of spiralCells()) {
+        if (tries++ >= SEAT_MAX_CANDIDATES) break;
+        const cx = SEAT_ANCHOR.x + gx * SEAT_STEP;
+        const cy = SEAT_ANCHOR.y + gy * SEAT_STEP;
+        // Fall back to the last tried cell (never the anchor) — see seatUnplaced.
+        placedX = cx - w / 2;
+        placedY = cy - h / 2;
+        if (!overlapsOccupied(occupied, cx, cy, w, h)) break;
+      }
+      this.execCanvas('UPDATE cards SET x = ?, y = ?, width = ?, height = ? WHERE id = ?', [
+        placedX, placedY, w, h, file.path,
+      ]);
+      const prev = byId.get(file.path)!;
+      occupied.push({ cx: placedX + w / 2, cy: placedY + h / 2, w, h });
+      out.push({ ...prev, x: placedX, y: placedY, w, h });
+    }
+    return out;
   }
 
   async saveCardPosition(id: string, x: number, y: number): Promise<CardRecord> {
@@ -326,16 +437,22 @@ export class LocalWorldStore implements WorldStore {
       console.warn('[renameCardPosition] link migration skipped:', err);
     }
   }
+  /**
+   * A layer's page as `{ cards, doorIds }`: markdown directly in its directory,
+   * plus one door id per immediate child layer (README or stub). The route
+   * turns each door id into a door card. Never reaches into a child's contents.
+   */
+  async pageOfLayer(layerId: string): Promise<{ cards: string[]; doorIds: string[] }> {
+    const [allFiles, layers] = await Promise.all([this.listFiles(), this.scanLayers()]);
+    return {
+      cards: cardsOfLayer(layerId, allFiles),
+      doorIds: childLayers(layerId, layers),
+    };
+  }
 
-  /** Layer of a card path: longest manifest layer key that is a path prefix, else 'map'. */
+  /** Layer of a card path: longest derived layer id that fronts it, else 'map'. */
   private async deriveLayer(id: string): Promise<string> {
-    const manifest = await this.getManifest();
-    const keys = Object.keys(manifest.layers ?? {});
-    keys.sort((a, b) => b.length - a.length);
-    for (const key of keys) {
-      if (id.startsWith(`${key}/`)) return key;
-    }
-    return 'map';
+    return layerOfPath(id, await this.scanLayers());
   }
 
   private toCardRecord(row: Record<string, unknown>): CardRecord {

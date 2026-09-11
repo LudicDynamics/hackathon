@@ -6,20 +6,36 @@
   "description": "Salt-laden sea wind, crumbling wooden houses, and whispers from the abyss.",
   "author": "Mingyue",
   "genre": "cthulhu",
-  "tags": ["cthulhu", "mystery", "horror", "lovecraftian"],
+  "tags": [
+    "cthulhu",
+    "mystery",
+    "horror",
+    "lovecraftian"
+  ],
   "material": "dark-parchment",
   "extensions": [
-    { "id": "airp:letter", "version": ">=1.0.0", "optional": false },
-    { "id": "airp:note", "version": ">=1.0.0", "optional": false }
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
   ],
-  "layers": {
-    "map": { "name": "Innsmouth Station", "parent": null },
-    "world/abandoned-harbor": { "name": "Abandoned Harbor", "parent": "map" },
-    "world/lighthouse-hold": { "name": "Lighthouse Hold", "parent": "world/abandoned-harbor", "stub": true }
-  },
   "characters": [
-    { "id": "strange-innkeeper", "home": "map", "role": "npc" },
-    { "id": "old-sailor", "home": "world/abandoned-harbor", "role": "companion" }
+    {
+      "id": "strange-innkeeper",
+      "home": "map",
+      "role": "npc"
+    },
+    {
+      "id": "old-sailor",
+      "home": "world/abandoned-harbor",
+      "role": "companion"
+    }
   ],
   "createdAt": "2026-09-11T00:00:00Z",
   "updatedAt": "2026-09-11T00:00:00Z"

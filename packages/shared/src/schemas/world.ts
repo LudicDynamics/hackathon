@@ -7,7 +7,8 @@ export const WorldExtensionSchema = z.object({
 });
 
 export const LayerConfigSchema = z.object({
-  name: z.string(),
+  // Derived layers may have no README `name`; fall back to the id downstream.
+  name: z.string().optional(),
   parent: z.string().nullable(),
   material: z.string().optional(),
   stub: z.boolean().optional(),
@@ -33,7 +34,10 @@ export const WorldManifestSchema = z.object({
   genre: z.string(),
   material: z.string().default('parchment'),
   extensions: z.array(WorldExtensionSchema).default([]),
-  layers: z.record(z.string(), LayerConfigSchema),
+  // `layers` is DERIVED from the directory tree (see store/layers.ts), but the
+  // manifest type still carries it for consumers. Not required in world.json:
+  // declaring it created a second source that drifted.
+  layers: z.record(z.string(), LayerConfigSchema).default({}),
   characters: z.array(CharacterConfigSchema).default([]),
   createdAt: z.string(),
   updatedAt: z.string(),

@@ -564,9 +564,11 @@ interface WorldStore {
 
 > 教训来源："md link 自动连线"（§3.2）在物品被 mv 走之后会直接 404——**移动不是裸文件操作，是有引用图的世界操作**。统一由引擎处理后，任何新增移动入口（背包 / 重构 / 拖拽）都自动获得同一套行为，不再每次踩坑。
 
-### 8.4 世界 manifest（world.json）——世界唯一真相源
+### 8.4 世界 manifest（world.json）——世界级配置
 
-> **唯一 manifest 约定（2026-09-11 修正）**：世界级配置 `world.json` 是**唯一的 manifest 真相源**——层级拓扑、材质词汇、角色定义都在这里。**不存在** `world/config.json` 之类承载 manifest 职责的副本（旧样例 holmes-world 曾双写 world.json + world/config.json，已合并为一份，2026-09-11）。场景级 `config.json`（灯光/音乐/氛围）仍允许存在，但只作纯配置、不参与世界结构定义；系列材质身份由各层 README 的 frontmatter 声明（世界默认材质在顶层 `material`）。
+> **层级不在这里（2026-09-11 修正）**：`world.json` 只写**世界级**事实（名字、题材、角色清单、世界默认材质、扩展）。**层级拓扑由目录树扫描得出**——`world/**/` 下每个目录就是一个层，目录里的 `README.md` 是它的场景配置（有 README = 已写层；没有 = `stub` 懒加载层）。曾在 `world.json` 里声明 `layers`，那是第二个真相源，与目录漂移过（manifest 写 `world/baker-street/abandoned-orchard`、目录却是 `world/abandoned-orchard`），已删除。派生逻辑：`packages/shared/src/store/layers.ts`。
+>
+> **唯一 manifest 约定**：世界级配置 `world.json` 是唯一的 manifest 文件——**不存在** `world/config.json` 之类承载 manifest 职责的副本（旧样例 holmes-world 曾双写，已合并为一份）。场景级 `config.json`（灯光/音乐/氛围）仍允许，但只作纯配置、不参与世界结构定义；材质身份由各层 README 的 frontmatter 声明（世界默认材质在顶层 `material`）。
 
 ```json
 {
@@ -585,13 +587,6 @@ interface WorldStore {
     { "id": "airp:chess", "version": ">=1.0.0", "optional": true },
     { "id": "community:weather-effects", "version": "^2.1.0", "optional": true }
   ],
-  "layers": {
-    "map": { "name": "221B Baker Street", "parent": null },
-    "world/baker-street": { "name": "Baker Street", "parent": "map" },
-    "world/baker-street/crime-scene": { "name": "Crime Scene", "parent": "world/baker-street", "stub": true },
-    "world/baker-street/abandoned-orchard": { "name": "Abandoned Orchard", "parent": "world/baker-street", "stub": true },
-    "world/apartment": { "name": "Apartment", "parent": "map" }
-  },
   "characters": [
     { "id": "watson", "home": "world/baker-street", "role": "companion" },
     { "id": "constable", "home": "world/baker-street", "role": "npc" }
@@ -607,10 +602,9 @@ interface WorldStore {
 | `description` / `author` / `cover` / `tags` / `genre` | string / string[] | 世界元数据（启动器 / UGC 市场展示） | `description`/`tags` ✅ |
 | `material` | string | 世界默认材质（`doc-04 §6` 材质词汇表；各层 README 可覆盖） | 可选 |
 | `extensions[]` | `{ id, version, optional }` | 扩展声明（§7.3）：`optional: false` 开世界必须加载 | ✅ |
-| `layers` | `{ 层key: { name, parent, material?, stub? } }` | **层级拓扑预写**（§3.2）：层key = 目录相对路径（大地图约定为 `map`），`parent` = 父层 key，`stub: true` = 首次进入才实例化 | ✅（单层世界可只写 `map`） |
 | `characters[]` | `{ id, home, role? }` | 世界角色扫描清单（§4.1 / §4.1.1）：`id` = 角色目录名，`home` = 初始所在层 key（角色 tab 导航 / 跟随的起点），`role` = companion/npc 语义提示 | ✅ |
 
-> 落地校验：`holmes-world/world.json` 即按此 schema 合并（2026-09-11，来自原 `world.json` + `world/config.json`）。
+> **没有 `layers` 字段**：层级从目录树派生（见上）。`holmes-world/world.json` 即按此 schema（2026-09-11 起不再声明 layers）。
 
 ### 8.5 状态的两分法（DB vs 文件的判定准则）
 
@@ -755,7 +749,7 @@ chalk   // 角色写板书（场景内单聊/小天地内聊天时落盘）
 - 角色目录结构规范（`characters/<角色>/`：README.md + preset.json + 被引用的 md 文件，memory/小天地内容的处理方式）——**doc-13**
 - 新玩家引导流程（模板开局 → 角色创建 → 第一幕叙事）——**doc-15**
 - 上帝模式与角色模式的切换交互细节（快捷键/按钮/过渡）——**doc-14**
-- ~~world.json manifest schema 设计~~（见 §8.4）——**已定案（2026-09-11）**：单一 manifest，含 layers/characters/stub/home
+- ~~world.json manifest schema 设计~~（见 §8.4）——**已定案（2026-09-11，2026-09-11 修订）**：单一 manifest，含 characters/home/mystery；**层级不再声明**，由目录树扫描派生
 - **角色遮罩对话的 spawn 细节**（最近场景情况怎么注入、进程生命周期、记忆连续性）——见 doc-06 §3、**doc-13**
 - **叙事 frontmatter 的完整 schema**（choice/status/roll_dice 字段定义、折叠交互）——见 doc-06 §2、**doc-09**
 - ~~stub 层首次进入的实例化细节~~——**doc-11 已定案（2026-09-11）**：初始化 = 外包（作家委托 R1 / 玩家直唤 R2）+ 模板兜底 W2；一套 delegatable preset + 动态 brief；**角色小天地走玩家直唤，角色 agent 永不参与初始化**

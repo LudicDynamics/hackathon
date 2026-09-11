@@ -6,20 +6,36 @@
   "description": "A sunlit private academy, falling cherry blossoms, and the breeze on the rooftop after school.",
   "author": "Mingyue",
   "genre": "school-romance",
-  "tags": ["school", "romance", "slice-of-life", "youth"],
+  "tags": [
+    "school",
+    "romance",
+    "slice-of-life",
+    "youth"
+  ],
   "material": "paper",
   "extensions": [
-    { "id": "airp:letter", "version": ">=1.0.0", "optional": false },
-    { "id": "airp:note", "version": ">=1.0.0", "optional": false }
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
   ],
-  "layers": {
-    "map": { "name": "Academy Front Gate", "parent": null },
-    "world/courtyard": { "name": "Courtyard", "parent": "map" },
-    "world/rooftop": { "name": "Rooftop", "parent": "map", "stub": true }
-  },
   "characters": [
-    { "id": "nanami", "home": "world/courtyard", "role": "companion" },
-    { "id": "hall-monitor", "home": "map", "role": "npc" }
+    {
+      "id": "nanami",
+      "home": "world/courtyard",
+      "role": "companion"
+    },
+    {
+      "id": "hall-monitor",
+      "home": "map",
+      "role": "npc"
+    }
   ],
   "createdAt": "2026-09-11T00:00:00Z",
   "updatedAt": "2026-09-11T00:00:00Z"

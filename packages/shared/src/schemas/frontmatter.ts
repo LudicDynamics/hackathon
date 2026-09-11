@@ -62,7 +62,23 @@ export function parseFrontmatter(rawContent: string): { frontmatter: Record<stri
         } else if (key === 'roll_dice') {
           frontmatter.roll_dice = {};
         } else if (val) {
-          frontmatter[key] = val.replace(/^["']|["']$/g, '');
+          // YAML-lite scalars. Quoted → always a string; otherwise true/false/
+          // null and bare numbers get their real type (the same rule status.data
+          // already applies). Without this `big: true` reaches the client as the
+          // string "true" and every boolean flag renders as false.
+          const quoted = /^["']/.test(val);
+          const bare = val.replace(/^["']|["']$/g, '');
+          frontmatter[key] = quoted
+            ? bare
+            : bare === 'true'
+              ? true
+              : bare === 'false'
+                ? false
+                : bare === 'null'
+                  ? null
+                  : bare !== '' && !isNaN(Number(bare))
+                    ? Number(bare)
+                    : bare;
         }
       }
       continue;

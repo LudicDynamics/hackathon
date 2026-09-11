@@ -37,7 +37,7 @@ The player takes on the role of **Sherlock Holmes**, investigating **the disappe
 | File | Type | Description |
 |------|------|-------------|
 | `README.md` | type: readme | World introduction |
-| `world.json` | manifest | World configuration (layers, characters, mystery) |
+| `world.json` | manifest | World configuration (characters, mystery — layers are scanned from directories, not declared) |
 | `world/README.md` | type: readme | World map description |
 | `world/baker-street/README.md` | type: readme | Baker Street scene description |
 | `world/baker-street/evening.md` | type: chalk + frontmatter | Photograph-clue narrative |

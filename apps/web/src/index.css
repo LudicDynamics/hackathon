@@ -30,16 +30,22 @@ body {
   overflow: hidden;
 }
 
-/* 2.5D Canvas Grid Background — v2 ink canvas: warm radial base +
-   80px hairline grid (hearth #viewport + .canvas), both on the one
-   .canvas-grid element so the base survives any Tailwind class churn. */
+/* 2.5D world grid — v2 ink canvas. The material base (radial paper) now lives
+   on .scene-backdrop (the viewport-fixed sheet the world sits on), so this
+   element carries ONLY the 80px hairlines. It is a large fixed sheet parked
+   inside the world transform layer, so the grid pans and zooms with the cards
+   (hearth .canvas) instead of sitting still under a moving world. */
 .canvas-grid {
-  background-color: #d9d0bf; /* wall fallback (same as body) */
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 6000px;
+  height: 6000px;
+  pointer-events: none;
   background-image:
-    radial-gradient(ellipse at 48% 42%, #eee8dc 0%, #d4c9b6 70%),
     linear-gradient(rgba(41, 40, 32, 0.035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(41, 40, 32, 0.035) 1px, transparent 1px);
-  background-size: 100% 100%, 80px 80px, 80px 80px;
+  background-size: 80px 80px, 80px 80px;
 }
 
 /* Smooth physics transition */
@@ -751,3 +757,638 @@ body:before {
   }
 }
 
+
+
+/* ============================================================
+   Paper-object material system — ported from the prototype
+   (canvas-stack-mingyue.html object CSS L74-191, chrome L327-407;
+   hearth.html chalk/note family L48-65). Append-only: every block
+   above keeps its cascade position, this layer only adds the NEW
+   form/chrome classes and re-paints the two thread-line values at
+   the very bottom. Class names are a frozen contract — see
+   packages/shared/src/schemas/forms.ts (cardKindOf / cardFormOf /
+   chalkStyleOf / materialSkinOf).
+   ============================================================ */
+
+/* ---- object tokens ----
+   Values named by the prototype but absent from the v2 :root above.
+   Each maps 1:1 onto a prototype token (canvas-stack-mingyue L15-32,
+   hearth L14-15) — nothing invented. --paper/--ink/--line/--rust/
+   --sage/--blue/--muted/--cream already exist and are reused as-is. */
+:root {
+  --kai: 'LXGW WenKai', 'Kaiti SC', 'KaiTi', serif; /* hearth --kai */
+  --ink-2: #5f5142; /* prototype --ink-2: soft ink (no pure black) */
+  --pencil: #a39882; /* prototype --pencil: pencil grey */
+  --red: #a8362b; /* prototype --red: red pen, the one accent */
+  --hair: rgba(41, 40, 32, 0.15); /* prototype --hair == --line */
+  --legal: #faf0c6; /* prototype --legal: legal paper */
+  --kraft: #e2d3b4; /* prototype --kraft: kraft paper */
+  --note-yellow: #fbf3cf; /* prototype --note-yellow: memo pad */
+  --shadow-far: -1px 1px 3px rgba(43, 33, 23, 0.1);
+  --shadow-mid: -2px 3px 6px rgba(43, 33, 23, 0.14), -4px 7px 14px rgba(43, 33, 23, 0.09);
+  --shadow-near: -3px 5px 9px rgba(43, 33, 23, 0.18), -8px 13px 26px rgba(43, 33, 23, 0.12);
+  --chalk-size: 19px; /* chalk base size; a form may inline-override */
+}
+
+.ink-form {
+  box-sizing: border-box;
+  color: var(--ink);
+}
+
+/* Base chalk root (prototype `.chalk` L112). CardForms may emit the
+   bare root plus modifiers, or the `.chalk--bare` bundle directly. */
+.chalk {
+  font-family: var(--kai);
+  font-size: var(--chalk-size);
+  line-height: 1.7;
+  color: var(--ink);
+  text-shadow: -1px 1px 0 rgba(255, 252, 240, 0.8);
+}
+/* ============================================================
+   1. chalk — words that LIVE on the canvas (no paper, no card).
+   Prototype `.chalk` L112-116 + hearth `.note` family L48-57.
+   The text sits straight on the world grid: transparent surface,
+   kai hand for CJK, Caveat for latin, and a warm paper glow that
+   lets it survive the grain overlay.
+   ============================================================ */
+.chalk--bare {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  font-family: var(--kai);
+  font-size: var(--chalk-size);
+  line-height: 1.7;
+  color: var(--ink);
+  text-shadow: -1px 1px 0 rgba(255, 252, 240, 0.8); /* warm paper glow */
+  white-space: pre-wrap;
+}
+
+/* latin hand — Caveat first, kai as the CJK fallback (hearth L48) */
+.chalk--hand {
+  font-family: 'Caveat', var(--kai);
+}
+
+/* oversized chalk line. Prototype is 64px/.12em; the AIRP canvas runs
+   smaller so the tone scale keeps one step between normal and big. */
+.chalk--big {
+  font-size: 44px;
+  letter-spacing: 0.08em;
+}
+
+/* tone set — hearth `.note.rust/.blue` + prototype --sage shade */
+.chalk--rust {
+  color: #a9573b;
+}
+
+.chalk--blue {
+  color: #3f606c;
+}
+
+.chalk--sage {
+  color: #6d7d6b;
+}
+
+/* the ONE chalk special case: a card becomes real paper.
+   Everything else in the chalk family stays surface-less. */
+.chalk--card {
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  box-shadow: var(--shadow-mid);
+  padding: 20px 24px;
+}
+
+/* one-line summary form (hearth `.object.collapsed .summary-text` L54) */
+.chalk--collapsed {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 210px;
+}
+
+/* aged layer: the world dims but stays legible; hover wakes it */
+.chalk--aged {
+  opacity: 0.42;
+  filter: grayscale(25%) brightness(0.96);
+  transition: opacity 0.35s ease, filter 0.35s ease;
+}
+
+.chalk--aged:hover {
+  opacity: 0.85;
+  filter: none;
+}
+
+/* ============================================================
+   2. gate — the scene card, a directory made into a door
+   (prototype `.gate` L82-109).
+   ============================================================ */
+.gate {
+  position: relative; /* anchors .gate__pin / .gate__num (and later children) */
+  width: 288px;
+  height: 240px;
+  background: var(--paper);
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  box-shadow: var(--shadow-mid);
+  cursor: pointer;
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.gate:hover {
+  box-shadow: var(--shadow-near);
+  transform: translateY(-3px) rotate(-0.4deg);
+}
+
+/* the cover plate carries the material gradient; the icon is centred
+   on it, and a hairline seals it off from the body. */
+.gate__cover {
+  position: relative;
+  height: 158px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-bottom: 1px solid var(--hair);
+  border-radius: 2px 2px 0 0;
+}
+
+.gate__cover svg {
+  width: 72px;
+  height: 72px;
+  opacity: 0.85; /* hand-drawn cover icon, never flat black */
+}
+
+.gate__body {
+  padding: 12px 16px 10px;
+}
+
+.gate__title {
+  font-size: 19px;
+  letter-spacing: 0.06em;
+}
+
+.gate__desc {
+  margin-top: 5px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.gate__meta {
+  margin-top: 8px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+/* pin: tacked onto the top edge, a touch off-square */
+.gate__pin {
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 18px;
+  height: 24px;
+  transform: translateX(-50%) rotate(-3deg);
+}
+
+/* number ring: red-pen index in the cover's top-left corner */
+.gate__num {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+}
+
+/* un-instantiated layer: still a sketch, not yet built */
+.gate--stub {
+  border: 1px dashed rgba(41, 40, 32, 0.28);
+  background: rgba(244, 240, 232, 0.55);
+  box-shadow: none;
+}
+
+.gate--stub:hover {
+  box-shadow: var(--shadow-far);
+}
+
+/* ============================================================
+   3. note — memo pad (prototype `.note` L119-131)
+   ============================================================ */
+.note {
+  position: relative; /* anchors .note__clip */
+  width: 200px;
+  padding: 14px 16px 18px;
+  background: var(--note-yellow);
+  border-radius: 2px;
+  box-shadow: var(--shadow-mid);
+  font-size: 13.5px;
+  line-height: 1.8;
+  color: var(--ink-2);
+  transform: rotate(-1.2deg);
+  /* ruled paper: one hairline every 27px */
+  background-image: repeating-linear-gradient(0deg, transparent 0 27px, rgba(43, 33, 23, 0.05) 27px 28px);
+}
+
+/* paper clip straddling the top edge */
+.note__clip {
+  position: absolute;
+  top: -8px;
+  right: 14px;
+  width: 15px;
+  height: 26px;
+  background: transparent;
+  border: 2px solid var(--pencil);
+  border-bottom-color: transparent;
+  border-radius: 8px;
+  transform: rotate(6deg);
+}
+
+.note__title {
+  font-weight: 700;
+  color: var(--ink);
+  border-bottom: 1px solid #a8362b; /* red pen underline */
+  padding-bottom: 1px;
+}
+
+.note__body {
+  font-size: 13.5px;
+  line-height: 1.8;
+}
+
+/* ============================================================
+   4. letter — the file-as-correspondence (prototype `.letter` L134-145)
+   ============================================================ */
+.letter {
+  position: relative;
+  width: 224px;
+  padding: 16px 18px;
+  background: var(--paper);
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+  box-shadow: var(--shadow-mid);
+  cursor: pointer;
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.letter:hover {
+  box-shadow: var(--shadow-near);
+  transform: translateY(-2px) rotate(0.4deg);
+}
+
+/* wax seal: a rust dot, pressed not printed */
+.letter__seal {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--rust);
+  box-shadow: inset -1px 1px 2px rgba(43, 33, 23, 0.35);
+}
+
+.letter__head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 16px;
+  letter-spacing: 0.05em;
+}
+
+.letter__preview {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.letter__meta {
+  margin-top: 10px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* ============================================================
+   5. sprite — a person present in the world (prototype `.sprite` L148-169)
+   ============================================================ */
+.sprite {
+  position: relative;
+  cursor: pointer;
+}
+
+/* idle breathing — 4px, slow enough to read as living, not animating */
+.sprite__fig {
+  animation: spriteIdle 3.2s ease-in-out infinite;
+}
+
+@keyframes spriteIdle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* halo: radial light behind the figure, breathing on its own clock
+   (hearth .presence .halo L68 + @keyframes breathe L76) */
+.sprite__halo {
+  width: 104px;
+  height: 104px;
+  margin: auto;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 28%, #e3b685, #9b6555 48%, #465864 50%, #222e33);
+  box-shadow: 0 0 0 14px rgba(255, 255, 255, 0.3), 0 18px 40px rgba(44, 37, 30, 0.25);
+  animation: spriteBreathe 5s ease-in-out infinite;
+}
+
+@keyframes spriteBreathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+/* name tag: a paper slip, slightly crooked, never centred flat */
+.sprite__name {
+  width: max-content;
+  max-width: 140px;
+  margin: 6px auto 0;
+  padding: 2px 10px 3px;
+  text-align: center;
+  background: var(--paper);
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+  box-shadow: var(--shadow-far);
+  font-size: 13px;
+  transform: rotate(-1deg);
+}
+
+/* ============================================================
+   6. material skins — every layer has its own paper
+   (prototype L56-66). Standalone modifiers: background only, no
+   layout, border or shadow, so they drop onto `.scene-backdrop`.
+   ============================================================ */
+.mat-parchment {
+  background:
+    radial-gradient(120% 90% at 50% 40%, rgba(255, 250, 235, 0) 55%, rgba(43, 33, 23, 0.14) 100%),
+    radial-gradient(80% 70% at 78% 18%, rgba(255, 248, 225, 0.55), rgba(226, 211, 180, 0) 60%),
+    var(--kraft);
+}
+
+.mat-warm {
+  background:
+    radial-gradient(70% 60% at 82% 8%, rgba(255, 249, 225, 0.8), rgba(255, 254, 246, 0) 55%),
+    var(--paper);
+}
+
+.mat-stub {
+  background:
+    radial-gradient(110% 85% at 50% 45%, rgba(255, 250, 230, 0) 55%, rgba(43, 33, 23, 0.08) 100%),
+    var(--legal);
+}
+
+/* kraft cover material — COVER_MATS.kraft (prototype L712) */
+.mat-kraft {
+  background: linear-gradient(160deg, #e5d6b8, #d9c69f 70%, #ceb98d);
+}
+
+/* backdrop screen: the skin lives on this box, which sits under the
+   world transform layer and never eats pointer events. */
+.scene-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.scene-backdrop__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.92;
+}
+
+/* warm-ink edge falloff — keeps the flat material from going plastic */
+.scene-backdrop__vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(115% 95% at 50% 42%, rgba(41, 40, 32, 0) 55%, rgba(41, 40, 32, 0.15) 100%);
+}
+
+/* ============================================================
+   7. hand-drawn links (prototype `.roads path` L187 + hearth L30-35)
+   Later in the cascade on purpose: this re-paints the dot spacing the
+   v2 layer above shipped (7 6 -> 2 9) and keeps dashFlow running.
+   `.thread-latest` stays at .75 via its own rule above.
+   ============================================================ */
+.thread-line {
+  stroke-linecap: round;
+}
+
+.thread-dashed {
+  stroke-dasharray: 2 9; /* dotted pen, not dashed */
+  opacity: 0.5;
+}
+
+/* State modifiers must outrank the dotted default for opacity, since
+   this block sits below the v2 layer. `.thread-active` is already
+   !important above; `.thread-latest` needs re-asserting here. */
+.thread-line.thread-latest {
+  opacity: 0.75;
+}
+
+/* ============================================================
+   8. chrome — minimap / writer bar / hint / layer badge / compass
+   (prototype L327-407, L191). All fixed-position furniture that
+   floats above the grain (z 10) and under the modals (z 50+).
+   ============================================================ */
+
+/* minimap: a navigation control, not a second view */
+.minimap-wrap {
+  /* absolute (not fixed): the chrome lives inside the canvas area, so it
+     clears the app header and the right sidebar that the prototype lacks. */
+  position: absolute;
+  right: 20px;
+  bottom: 18px;
+  z-index: 50;
+  width: 176px;
+  height: 132px;
+  overflow: hidden;
+  background-color: var(--paper);
+  /* 12px dot grid — the surface reads as graph paper */
+  background-image: radial-gradient(rgba(43, 33, 23, 0.1) 1px, transparent 1px);
+  background-size: 12px 12px;
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+  box-shadow: var(--shadow-mid);
+  cursor: pointer;
+}
+
+.minimap__title {
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+/* writer bar: the paper strip you hand notes to the author */
+.writer-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(560px, 70vw);
+  padding: 8px 10px 8px 16px;
+  background: var(--paper);
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  box-shadow: var(--shadow-mid);
+  transform: translateX(-50%) rotate(-0.3deg);
+  transition: box-shadow 0.25s ease, opacity 0.25s ease;
+}
+
+.writer-bar:focus-within {
+  box-shadow: var(--shadow-near);
+}
+
+/* Chrome sets data-disabled="true" on the bar; `disabled` on the
+   input/button is styled per-control below. */
+.writer-bar[data-disabled="true"] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* 176x132 CSS box, filled by the canvas; DPR width/height attributes
+   must not upscale it. */
+.minimap__canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 176px;
+  height: 132px;
+}
+
+.writer-bar__input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: 'Caveat', var(--kai);
+  font-size: 20px;
+  line-height: 1.4;
+  color: var(--ink);
+  caret-color: var(--rust);
+}
+
+.writer-bar__input::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+/* while the author is writing: red pen in the placeholder */
+.writer-bar__input.busy::placeholder {
+  color: #a8362b;
+}
+
+.writer-bar__send {
+  flex: none;
+  padding: 4px 14px 5px;
+  background: var(--ink);
+  color: var(--paper);
+  border: 1px solid var(--hair);
+  border-radius: 9999px;
+  font-family: var(--kai);
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: var(--shadow-far);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.writer-bar__send:hover {
+  box-shadow: var(--shadow-mid);
+  transform: translateY(-1px);
+}
+
+.writer-bar__send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* hint bar: the one line of instructions, bottom-left */
+.hint-bar {
+  position: absolute;
+  left: 20px;
+  bottom: 18px;
+  z-index: 50;
+  padding: 6px 12px;
+  background: rgba(255, 254, 246, 0.7);
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--ink-2);
+  opacity: 0.78;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.hint-bar b {
+  color: #a8362b;
+  font-weight: 400;
+}
+
+/* layer badge: which world am I standing in */
+.layer-badge {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  z-index: 50;
+  padding: 9px 16px 10px;
+  text-align: right;
+  background: var(--paper);
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+  box-shadow: var(--shadow-mid);
+  transform: rotate(0.8deg);
+}
+
+.layer-badge__name {
+  font-size: 14px;
+  letter-spacing: 0.06em;
+}
+
+.layer-badge__mat {
+  margin-top: 3px;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+/* compass rose: orientation, never a focal point */
+.compass-rose {
+  opacity: 0.55;
+  pointer-events: none;
+  width: 120px; /* prototype COMPASS is 120x120; caller may override */
+  height: 120px;
+}

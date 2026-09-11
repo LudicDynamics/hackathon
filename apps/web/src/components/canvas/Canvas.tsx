@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { CanvasObject, clearAllLifts, pruneLifts, raiseObject } from './CanvasObject.js';
 import { LinkLayer, highlightLinks, updateAllLinks } from './LinkLayer.js';
+import { SceneBackdrop } from './SceneBackdrop.js';
 import { useCamera } from '../../state/useCamera.js';
 import { clampZ, zoomAt } from '../../lib/camera.js';
 import { makeBox, pushFrom, relaxAll } from '../../lib/collide.js';
@@ -11,6 +12,7 @@ interface CanvasProps {
   currentLayer: string;
   items: LayerItem[];
   links: LayerLink[];
+  bg: { src: string | null; tone: string; grain: string };
   characters: Array<{
     id: string;
     avatar?: string;
@@ -76,6 +78,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   currentLayer,
   items,
   links,
+  bg,
   characters,
   onMoveCard,
   onSelectChoice,
@@ -93,9 +96,18 @@ export const Canvas: React.FC<CanvasProps> = ({
   const cardDragRef = useRef<CardDragSession | null>(null);
   const paperSlideRef = useRef<{ t: number; x: number; y: number } | null>(null);
   const prevLayerRef = useRef<string | null>(null);
-
   const readmePath = currentLayer === 'map' ? 'world/README.md' : `${currentLayer}/README.md`;
   const itemsByPath = useMemo(() => new Map(items.map((it) => [it.path, it])), [items]);
+  // Ordinal seal number per gate (01, 02, …) — the scene's position among the
+  // gates of THIS layer, derived from server order so it is stable across
+  // refreshes. CardRenderer falls back to this when frontmatter has no order/n.
+  const gateOrdinal = useMemo(() => {
+    const map = new Map<string, number>();
+    let n = 0;
+    for (const it of items) if (it.kind === 'gate') map.set(it.path, ++n);
+    return map;
+  }, [items]);
+
 
   // Camera follows the layer: remember where we leave one, return to the other.
   useEffect(() => {
@@ -376,8 +388,11 @@ export const Canvas: React.FC<CanvasProps> = ({
       onPointerCancel={handlePointerCancel}
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
-      className="relative w-full h-full overflow-hidden canvas-grid cursor-grab active:cursor-grabbing select-none touch-none"
+      className="relative w-full h-full overflow-hidden cursor-grab active:cursor-grabbing select-none touch-none"
     >
+      {/* Material sheet of the current layer — behind the world, viewport-fixed. */}
+      <SceneBackdrop bg={bg} />
+
       {/* Character pill row — pinned to the viewport (not scaled by the world
           transform) so the role entries keep working at any zoom (T1.5
           replaces this with spatial presence halos). */}
@@ -407,22 +422,18 @@ export const Canvas: React.FC<CanvasProps> = ({
           Must pin transform-origin to top-left: default is center, which would
           offset every screen↔world mapping by half the content size. */}
       <div ref={camera.worldRef} className="absolute left-0 top-0 origin-top-left">
+        {/* 80px hairlines pan/zoom with the world (hearth .canvas). */}
+        <div className="canvas-grid" />
         <LinkLayer links={links} />
 
-        {/* Layer Header Tag */}
-        <div className="mb-8 inline-block px-4 py-1.5 rounded-full bg-paper-card/80 border border-ink/10 shadow-soft backdrop-blur-md">
-          <span className="font-mono text-xs text-ink/50 uppercase tracking-widest">
-            ACTIVE LAYER:
-          </span>{' '}
-          <span className="font-sans font-bold text-ink text-xs">{currentLayer}</span>
-        </div>
-
-        {/* Cards — absolutely positioned at server-seated coords (no flex wrapper). */}
+        {/* Cards — absolutely positioned at server-seated coords (no flex wrapper).
+            `index` is the gate's ordinal among this layer's gates (01, 02, …). */}
         {items.map((item) => (
           <CanvasObject
             key={item.path}
             item={item}
             readmePath={readmePath}
+            index={gateOrdinal.get(item.path)}
             onSelectChoice={onSelectChoice}
             onDiceRolled={onDiceRolled}
             onEnterGate={onEnterGate}

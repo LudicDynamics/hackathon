@@ -1,6 +1,6 @@
 ---
 type: readme
-name: Baker Street
+name: Fog Over Baker Street
 material: warm
 bg: "assets/scenes/map/map-parchment.png"   # world-map backdrop (README = scene config, see doc-10 E0)
 bgStyle:

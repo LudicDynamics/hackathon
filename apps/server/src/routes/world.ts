@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { LocalWorldStore, SEAT_ANCHOR, parseFrontmatter, stringifyChalk } from '@airp/shared';
+import { LocalWorldStore, SEAT_ANCHOR, parseFrontmatter, stringifyChalk, cardFormOf, cardKindOf } from '@airp/shared';
 import type { AgentLifecycleManager } from '../engine/lifecycle.js';
 import type { EventBridge } from '../engine/event-bridge.js';
 
@@ -24,20 +24,12 @@ function rotOf(cardPath: string): number {
   return (hashInt(cardPath) % 7) - 3;
 }
 
-/** W/H per card kind; the route computes these from parsed frontmatter and passes them into seating. */
-const KIND_SIZES: Record<string, { w: number; h: number }> = {
-  chalk: { w: 480, h: 220 },
-  gate: { w: 288, h: 150 },
-  letter: { w: 264, h: 180 },
-  default: { w: 280, h: 180 },
-};
-
+/** Card footprint — the shared CARD_FORMS table is the single source
+ *  (packages/shared/src/schemas/forms.ts), so the seated box and the painted
+ *  box can never drift. */
 function cardSize(item: LayerItem): { w: number; h: number } {
-  const fm = item.frontmatter ?? {};
-  if (fm.type === 'chalk') return KIND_SIZES.chalk;
-  if (item.filename === 'README.md' || fm.type === 'gate') return KIND_SIZES.gate;
-  if (fm.component === 'letter' || fm.type === 'letter') return KIND_SIZES.letter;
-  return KIND_SIZES.default;
+  const { w, h } = cardFormOf(item.frontmatter, item.filename);
+  return { w, h };
 }
 
 /**
@@ -137,33 +129,31 @@ export function createWorldRouter(
     if (!store) return res.status(400).json({ error: 'No active world' });
     try {
       const layer = (req.query.layer as string) || 'map';
-      const allFiles = await store.listFiles();
-      
-      const layerPrefix = layer === 'map' ? 'world/' : `${layer}/`;
-      // Find files directly inside layer
-      const layerFiles = allFiles.filter((f) => {
-        if (layer === 'map') {
-          // In map, include world/README.md or items directly in world/
-          return f.startsWith('world/') && f.split('/').length <= 3;
-        }
-        return f.startsWith(layerPrefix) && f.split('/').length <= layerPrefix.split('/').length + 1;
-      });
-
-      // Only .md files become cards (images/videos must not occupy a card slot)
-      const mdFiles = layerFiles.filter((f) => f.endsWith('.md'));
-
-      const items = await Promise.all(
-        mdFiles.map(async (file): Promise<LayerItem> => {
+      const { cards: cardFiles, doorIds } = await store.pageOfLayer(layer);
+      // Each door = the child layer's README if it exists (a written scene), or
+      // a synthesised stub door when the child has no README yet (doc-11 §3).
+      const items: LayerItem[] = await Promise.all([
+        ...cardFiles.map(async (file): Promise<LayerItem> => {
           const raw = await store.readFile(file);
           const { frontmatter, body } = parseFrontmatter(raw);
-          return {
-            path: file,
-            filename: path.basename(file),
-            frontmatter,
-            body,
-          };
-        })
-      );
+          return { path: file, filename: path.basename(file), frontmatter, body };
+        }),
+        ...doorIds.map(async (id): Promise<LayerItem> => {
+          const readme = `${id}/README.md`;
+          try {
+            const { frontmatter, body } = parseFrontmatter(await store.readFile(readme));
+            return { path: readme, filename: 'README.md', frontmatter, body };
+          } catch {
+            return {
+              path: readme,
+              filename: 'README.md',
+              frontmatter: { type: 'readme', stub: true, name: id.split('/').pop() },
+              body: 'This scene has not been written yet.',
+            };
+          }
+        }),
+      ]);
+      const mdFiles = items.map((it) => it.path);
 
       // Card rows keyed by path (never by layer column - a nested layer README
       // appears in both its parent layer list and its own list).
@@ -179,15 +169,28 @@ export function createWorldRouter(
         }
       }
 
+      // Re-flow any card whose stored box drifted from the current form table
+      // (a kind was resized in code). Without this the old seats overlap.
+      for (const row of await store.reseatLayer(
+        layer,
+        items.map((it) => ({ path: it.path, ...cardSize(it) }))
+      )) {
+        rowByPath.set(row.id, row);
+      }
+
       const enriched = items.map((it) => {
         const row = rowByPath.get(it.path);
-        const size = cardSize(it);
+        const form = cardFormOf(it.frontmatter, it.filename);
         return {
           ...it,
+          kind: cardKindOf(it.frontmatter, it.filename),
           x: row ? row.x : SEAT_ANCHOR.x,
           y: row ? row.y : SEAT_ANCHOR.y,
-          w: row ? row.w : size.w,
-          h: row ? row.h : size.h,
+          // w/h are a pure function of kind, so they always come from the form
+          // table — never from the stored row. Resizing a kind re-flows every
+          // card of that kind on the next paint (rows only persist x/y).
+          w: form.w,
+          h: form.h,
           z: row ? row.z : 1,
           rot: rotOf(it.path), // derived, never persisted
         };
@@ -457,6 +460,29 @@ export function createWorldRouter(
       res.json({ ok: true, event });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  /**
+   * Serve a world asset (scene backdrop, portrait, …) from the active world root.
+   * The frontend requests `/api/asset?path=<world-relative>`; the store path
+   * resolver strips any `../` traversal, and we refuse anything outside the
+   * world root as a second belt. Assets are frequently absent in templates, so
+   * a miss is a plain 404 — the client degrades to the material skin.
+   */
+  router.get('/asset', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const rel = String(req.query.path || '').replace(/^\/+/, '');
+    if (!rel) return res.status(400).json({ error: 'path required' });
+    try {
+      const abs = path.resolve(store.worldRoot, rel);
+      if (!abs.startsWith(store.worldRoot + path.sep)) {
+        return res.status(403).json({ error: 'path escapes world root' });
+      }
+      res.sendFile(abs);
+    } catch (err: any) {
+      res.status(404).json({ error: err.message });
     }
   });
 

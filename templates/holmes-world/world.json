@@ -6,27 +6,45 @@
   "description": "The Disappearance of Lady Adler — an open-ended mystery world held together by clues alone",
   "author": "Sherlock Holmes",
   "genre": "mystery",
-  "tags": ["mystery", "suspense", "open world"],
+  "tags": [
+    "mystery",
+    "suspense",
+    "open world"
+  ],
   "material": "parchment",
   "extensions": [
-    { "id": "airp:letter", "version": ">=1.0.0", "optional": false },
-    { "id": "airp:note", "version": ">=1.0.0", "optional": false }
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
   ],
-  "layers": {
-    "map": { "name": "221B Baker Street", "parent": null },
-    "world/baker-street": { "name": "Baker Street", "parent": "map" },
-    "world/baker-street/crime-scene": { "name": "Crime Scene", "parent": "world/baker-street", "stub": true },
-    "world/baker-street/abandoned-orchard": { "name": "Abandoned Orchard", "parent": "world/baker-street", "stub": true },
-    "world/apartment": { "name": "Apartment", "parent": "map" }
-  },
   "characters": [
-    { "id": "watson", "home": "world/baker-street", "role": "companion" },
-    { "id": "constable", "home": "world/baker-street", "role": "npc" }
+    {
+      "id": "watson",
+      "home": "world/baker-street",
+      "role": "companion"
+    },
+    {
+      "id": "constable",
+      "home": "world/baker-street",
+      "role": "npc"
+    }
   ],
   "mystery": {
     "victim": "Lady Adler",
     "status": "Missing — Day 3",
-    "clues": ["a blurred photograph", "an anonymous note", "a rusted key", "a mud-stained letter"],
+    "clues": [
+      "a blurred photograph",
+      "an anonymous note",
+      "a rusted key",
+      "a mud-stained letter"
+    ],
     "open_ended": true,
     "no_predetermined_killer": true
   },

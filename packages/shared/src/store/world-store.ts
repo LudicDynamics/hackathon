@@ -35,7 +35,10 @@ export interface WorldStore {
   getEvents(limit?: number): Promise<WorldEvent[]>;
   getLayerCards(paths: string[]): CardRecord[];
   seatUnplaced(layerId: string, files: SeatFile[]): Promise<CardRecord[]>;
+  reseatLayer(layerId: string, files: SeatFile[]): Promise<CardRecord[]>;
   saveCardPosition(id: string, x: number, y: number): Promise<CardRecord>;
   renameCardPosition(from: string, to: string): Promise<void>;
+  /** Markdown + child-door ids for a layer's page (see store/layers.ts). */
+  pageOfLayer(layerId: string): Promise<{ cards: string[]; doorIds: string[] }>;
   close(): void;
 }

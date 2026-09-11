@@ -4,4 +4,6 @@ export * from './schemas/components.js';
 export * from './schemas/events.js';
 export * from './store/world-store.js';
 export * from './store/local-store.js';
+export * from './schemas/forms.js';
+export * from './store/layers.js';
 export * from './db/schema.js';

@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./forms": {
+      "types": "./dist/schemas/forms.d.ts",
+      "import": "./dist/schemas/forms.js"
     }
   },
   "scripts": {

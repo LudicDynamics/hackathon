@@ -5,6 +5,10 @@ import { RightSidebar } from './components/sidebar/RightSidebar.js';
 import { CharacterModal } from './components/overlay/CharacterModal.js';
 import { GodModeToolbar } from './components/god/GodModeToolbar.js';
 import { MuteButton } from './components/chrome/MuteButton.js';
+import { Minimap } from './components/chrome/Minimap.js';
+import { WriterBar } from './components/chrome/WriterBar.js';
+import { HintBar } from './components/chrome/HintBar.js';
+import { LayerBadge } from './components/chrome/LayerBadge.js';
 import { useAudio } from './state/useAudio.js';
 import { useCamera } from './state/useCamera.js';
 import { useWorld } from './state/useWorld.js';
@@ -271,6 +275,7 @@ export function App() {
             currentLayer={currentLayer}
             items={worldState?.items ?? []}
             links={worldState?.links ?? []}
+            bg={worldState?.bg ?? { src: null, tone: 'warm', grain: 'parchment' }}
             characters={characters}
             onMoveCard={moveCard}
             onSelectChoice={handleSelectChoice}
@@ -279,6 +284,26 @@ export function App() {
             onOpenCharacterModal={openCharacterModal}
             onItemDropOnTarget={handleItemDropOnTarget}
             onDropItemToScene={handleDropItemToScene}
+          />
+
+          {/* Canvas chrome — the prototype's navigation + writing affordances */}
+          <LayerBadge
+            name={manifest?.layers?.[currentLayer]?.name || currentLayer}
+            material={worldState?.bg?.grain ?? 'parchment'}
+          />
+          <HintBar />
+          <WriterBar
+            disabled={worldFrozen}
+            onSend={(text) => {
+              sendToWriter(text);
+              showToast('Sent to the writer');
+            }}
+          />
+          <Minimap
+            items={worldState?.items ?? []}
+            cam={camera.cam}
+            viewport={camera.getViewport()}
+            onJump={(x, y) => camera.flyTo(x, y)}
           />
         </div>
 
