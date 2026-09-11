@@ -67,7 +67,7 @@ title（卡面标题） → preview（卡面摘要，画布上可见）
 ### E7. holmes-world 证据（文件即真相）
 
 - `world/baker-street/evening.md` = chalk + choice + status + roll_dice 四件套同文件——frontmatter 收编的活样例；
-- `journal/*.md` 用的是 `type: chalk`（暂代，无独立 scenario type——正好印证 doc-08 定案 2 的"新增 type 留位"还没做）；
+- `journal/*.md` 用的是 `type: chalk`（暂代，无独立 scenario type——正好印证 doc-08 定案 2 的"新增 type 留位"还没做）。**2026-09-12 注**：`journal/` 这个目录本身已撤销（doc-12 文末），holmes-world 这几篇是历史遗留，将来并进它们所属的场景层；
 - watson `preset.json` 有 `chat-history` slot——角色连续性目前靠会话文件；AIRP 角色记忆系统已暂缓（doc-13）；
 - **2026-09-11 修正示范**：各场景 README frontmatter 已加 `bg`（+ 大地图 `compass: true`），落实"README = 场景 config、bg = README 字段、compass = bg 样式"（见 E0）——示例世界不再把 bg 当独立 asset。
 

@@ -58,7 +58,7 @@
 - [ ] 空仓库 `git init`，pnpm workspace monorepo（apps/web + apps/server + packages/shared）
 - [ ] `git submodule add` pi-rp → `vendor/pi-rp`；跑通 `npm run build`
 - [ ] 拉起脚本：`tools/scaffold.mjs`——从模板世界目录拷贝出玩家世界（"拷目录即开世界"是 doc-05 §8 的 UGC 生态设计）
-- [ ] 世界模板 3 个（doc-05 §11：校园恋爱/魔法学院/克苏鲁各一）：`README.md` + `world.json` + `characters/` + `journal/` 骨架 + 初始场景目录。**模板内容质量 = 演示成败的一半**，赛前可在"提前准备"里把内容写好（§4.1 A1）
+- [ ] 世界模板 3 个（doc-05 §11：校园恋爱/魔法学院/克苏鲁各一）：`README.md` + `world.json` + `characters/` + 初始场景目录（**2026-09-12：不再预置 `journal/` 骨架**，剧情一律落在场景目录，见 doc-12 文末）。**模板内容质量 = 演示成败的一半**，赛前可在"提前准备"里把内容写好（§4.1 A1）
 - [ ] 世界目录扫描器（worldStore 最薄版）：`readFile/writeFile/listFiles` + manifest 读写。**接口形状按 doc-05 §8.3 WorldStore 定死**，云端版 S3 只换实现不换接口
 
 **下午（主攻：明月）**
@@ -85,7 +85,7 @@
 - [ ] 事件表前端可视化（可选，时间允许才做）：功能区"世界历史"面板
 
 **D2 验收（睡眠线）**：完整叙事循环（玩家输入 → 作家 chalk + frontmatter → 选项 → 下一轮）+ 进层/出层 + 角色遮罩对话一轮 + 上帝模式新增一件物品并看到世界回应。
-**D2 尾部收束**：同 D1。**若 D2 未达验收线，D3 计划自动降级**——砍掉演出层，把 D2 内容打磨到演示级（一场完整的"进酒馆→对话→拿走物品→写进 journal"的戏）。
+**D2 尾部收束**：同 D1。**若 D2 未达验收线，D3 计划自动降级**——砍掉演出层，把 D2 内容打磨到演示级（一场完整的"进酒馆→对话→拿走物品→作家落板书回应"的戏）。
 
 ### D3：演出日（体验层 + 稳定性 + 演示准备）
 
@@ -179,7 +179,7 @@ flowchart TB
 
 | # | 物料 | 产出物 | 说明 |
 |---|---|---|---|
-| A1 | **世界模板 ×3**（校园恋爱/魔法学院/克苏鲁） | 每个一整套目录：README + world.json + 3-4 个初始场景 + 2-3 个角色卡（identity/personality/relations md）+ journal 骨架 + 第一幕（各层的开场 chalk + choice + 物件） | **演示质量的 50%**。AI 写的世界模板容易"有设定没戏感"，需要明月亲自写第一幕。赛前一周开始 |
+| A1 | **世界模板 ×3**（校园恋爱/魔法学院/克苏鲁） | 每个一整套目录：README + world.json + 3-4 个初始场景 + 2-3 个角色卡（identity/personality/relations md）+ 第一幕（各层的开场 chalk + choice + 物件）。**无 journal 目录**（2026-09-12） | **演示质量的 50%**。AI 写的世界模板容易"有设定没戏感"，需要明月亲自写第一幕。赛前一周开始 |
 | A2 | **四个 preset 骨架** | `writer.json`（作家·主）/ `character.json`（角色）/ `scene-init.json`（场景初始化，`delegatable: true`）/ `nook-init.json`（小天地初始化，`delegatable: true`），后两者见 doc-11 | doc-05 §4.2 骨架已定稿，直接转成 pi-rp preset JSON。**格式铁律（2026-09-11 实测）**：① 顶层**没有 `system` 字段**，提示词一律进 `items`；② 不存在内建 `system` 这个 slot，但可通过扩展注册专属 instruction slot（AIRP 在 `extensions/instructions.ts` 注册了 `writer-char`、`system-char`、`scene-init-instruction`、`nook-init-instruction`，各 agent 职责隔离、slot id 与 name 互不混用）；③ `--preset` 只认 **id** 不认文件路径，且只扫 `<configDir>/prompt-presets/` 顶层。~~`world-subagent.json`~~ 与 `scene-init` 职责重叠，已合并删除（2026-09-11） |
 | A2b | **平台统一的 Agent 行为规则扩展** | 各 Agent 专用 instruction slots（`extensions/instructions.ts`），提供角色演出与情绪差分规范、作家单轮管线、场景与小天地初始化交付规约 | **无信息边界/守密内容**：角色有完整世界创作能力；prompt 只约束其行动时机和人物视角，不约束写入范围 |
 | A2c | **world.json manifest schema** | TypeScript 类型 + JSON schema + 校验函数（纯函数可单测） | doc-05 §8.4 定稿，直接转代码。zod 写完可以单测 |
@@ -206,7 +206,7 @@ flowchart TB
 | C2 | WS 事件桥 + 前端渲染管线 | 依赖后端事件形状定型 |
 | C2b | 角色遮罩 spawn 胶水（spawn 参数可赛前写好，遮罩 UI 壳可先画，**进程路由实现不能**） | 进程生命周期依赖最终 spawn 验证结果 |
 | C3 | 层级切换（穿越动画可降级为淡入淡出） | 依赖画布底座定型 |
-| C3b | **世界重载/恢复流程** | 依赖最终事件表形状。**特别注意**：演示中重启进程后，journal 需要正确恢复（作家预设里注入 journal 摘要的宏） |
+| C3b | **世界重载/恢复流程** | 依赖最终事件表形状（doc-21）。**2026-09-12 简化**：不再有 journal 要恢复；重启后作家靠 doc-22 状态块全量重注 + 事件段续读游标接上（doc-16 #4） |
 | C4 | 快照打点（zip 打包可以赛前写好，触发时机赛时定） | 触发时机依赖演示节奏 |
 
 ### 4.4 演示资产（赛前备好，赛时零成本使用）
