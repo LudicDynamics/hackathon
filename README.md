@@ -1,7 +1,7 @@
 # AIRP (AI Role-Playing Narrative Canvas)
 
 > 一个让玩家像角色一样活在“活的无限画布世界”里的 AI 互动叙事游戏。
-> 基于 `~/projects/infini-canvas` 设计方案与黑客松作战计划（2026-09-10 架构简化 + 2026-09-11 评委导向视听动升级）。
+> 设计文档见 **[`docs/`](docs/)**（入口 [`docs/00-文档骨架.md`](docs/00-文档骨架.md)；2026-09-11 从已退休的 `infini-canvas` 项目迁入）。开发手册见 **[`AGENTS.md`](AGENTS.md)**。
 
 ---
 
@@ -38,17 +38,19 @@
 │           └── components/god/        # 上帝模式工具栏 (世界冻结 + 造物)
 ├── packages/
 │   └── shared/            # WorldManifest (Zod), ChalkFrontmatter, WorldStore, SQLite Schema
-├── presets/               # 提示词预设 (writer, character, world-subagent, scene-init, nook-init)
+├── presets/               # 提示词预设 (writer, character, scene-init, nook-init)
 ├── templates/             # 预设世界模板
 │   ├── holmes-world/      # 悬疑推理：贝克街的迷雾
 │   ├── school-romance/    # 校园恋爱：樱花学园物语
 │   ├── cultivation/       # 东方仙侠：青云问道录
 │   └── cthulhu/           # 诡异惊悚：印斯茅斯迷雾
+├── docs/                  # 设计文档（真相源，入口 docs/00-文档骨架.md）
 ├── tools/
 │   ├── scaffold.mjs       # 脚手架：模板拷贝即开世界
 │   └── probe-writer.mjs   # Gate 探针：验证引擎与 RPC 全链路
-└── vendor/
-    └── pi-rp/             # Git submodule 引入的 pi-rp 运行时
+├── vendor/
+│   └── pi-rp/             # Git submodule 引入的 pi-rp 运行时
+└── AGENTS.md              # 开发手册（架构、文档导航、开发纪律）
 ```
 
 ---
