@@ -31,10 +31,16 @@ export const CARD_FORMS: Record<string, CardForm> = {
   letter: { label: 'Letter', w: 224, h: 176, chrome: 'paper' },
   note: { label: 'Note', w: 200, h: 168, chrome: 'note' },
   sprite: { label: 'Presence', w: 176, h: 196, chrome: 'bare' },
+  /** Defensive fallback only; every real kind is matched above. */
   default: { label: 'File', w: 240, h: 168, chrome: 'paper' },
 };
 
-/** Resolve a card's kind from parsed frontmatter + filename. Order matters. */
+/**
+ * Resolve a card's kind from parsed frontmatter + filename. Order matters.
+ * A bare markdown file with no `type` is a sticky note (the prototype's
+ * `<b>title</b>\nbody` memo), never an "unknown" default card — the default
+ * form is a last-ditch fallback, not a real kind.
+ */
 export function cardKindOf(
   frontmatter: Record<string, any> | null | undefined,
   filename: string
@@ -45,7 +51,7 @@ export function cardKindOf(
   if (fm.component === 'letter' || fm.type === 'letter') return 'letter';
   if (fm.type === 'note') return 'note';
   if (fm.type === 'sprite' || fm.type === 'character') return 'sprite';
-  return 'default';
+  return 'note';
 }
 
 /** Footprint for a card. Server seating and the web box BOTH call this. */

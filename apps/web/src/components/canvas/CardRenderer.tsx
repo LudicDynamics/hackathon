@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChalkCard } from '../narrative/ChalkCard.js';
-import { MarkdownText } from '../../lib/md.js';
+import { MarkdownText, plainExcerpt, stripLeadingTitle, leadingTitleOf } from '../../lib/md.js';
 
 interface CardRendererProps {
   item: {
@@ -123,6 +123,9 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
       ? String(orderNum).padStart(2, '0')
       : orderNum;
     const meta = isStub ? 'UNWRITTEN · walk in, and it will be written →' : 'SCENE · ENTRANCE';
+    // The card face shows a clean one-line excerpt; the raw README markdown
+    // (# heading, line breaks) stays in the hover sheet. Never spill source.
+    const excerpt = plainExcerpt(body);
     return (
       <div
         onClick={() => {
@@ -152,11 +155,18 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
         <div className="gate__cover">
           <GateIcon />
         </div>
+        {/* The card face keeps a two-line teaser; the full README detail lives
+            in a floating sheet on hover (never spills past the card). */}
         <div className="gate__body">
           <div className="gate__title">{title}</div>
-          <div className="gate__desc">{body}</div>
+          <div className="gate__desc">{excerpt}</div>
           <div className="gate__meta">{meta}</div>
         </div>
+        {excerpt !== '' && (
+          <div className="gate__detail">
+            <MarkdownText text={stripLeadingTitle(body)} />
+          </div>
+        )}
       </div>
     );
   }
@@ -190,7 +200,9 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
             {frontmatter.title || 'Letter'}
           </div>
           <div className="letter__preview">
-            {frontmatter.preview || body}
+            {/* frontmatter.preview is authored copy; the body fallback is raw
+                markdown, so flatten it — a card face never shows source. */}
+            {frontmatter.preview || plainExcerpt(body)}
           </div>
           <div className="letter__meta">
             <span>{frontmatter.sign || 'Click to open and read'}</span>
@@ -235,6 +247,8 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
       </>
     );
   }
+  const noteTitle =
+    frontmatter?.title || leadingTitleOf(body) || filename.replace('.md', '');
 
   // 4. Note / clue (default) — a sticky sheet, no white rounded card.
   return (
@@ -258,10 +272,8 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
       }
     >
       <span className="note__clip" />
-      <div className="note__title">
-        {frontmatter?.title || filename.replace('.md', '')}
-      </div>
-      <MarkdownText text={body} className="note__body" />
+      <div className="note__title">{noteTitle}</div>
+      <MarkdownText text={stripLeadingTitle(body)} className="note__body" />
     </div>
   );
 };

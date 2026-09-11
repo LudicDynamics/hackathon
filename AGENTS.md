@@ -97,7 +97,7 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 
 ### 3.2 文件即真相
 
-世界目录本身就是真相源，**没有独立状态文件**。状态收编在叙事 frontmatter 里（`status.data` / `choice` / `roll_dice`）。
+世界目录本身就是真相源，**没有独立状态文件**。`status.data` / `choice` / `roll_dice` 是实体通用 frontmatter，不局限于 chalk；玩家 UI、作家与角色通过同一个引擎动作层触发互动。
 分层存储：**内容走文件系统，架构状态与历史走 SQLite**（`canvas.db` / `history.db`）。
 
 ### 3.3 preset 即 Agent 人格
@@ -118,6 +118,7 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 | `docs/doc-06-演出与交互设计.md` | 动交互 / 演出层 |
 | `docs/doc-07-AIRP黑客松作战计划.md` | 排期、可提前准备清单、风险登记册 |
 | `docs/doc-11-场景与小天地初始化协议.md` | 初始化协议（**已定案**，含 preset 骨架与 pi-rp 源码级约束） |
+| `docs/doc-20-agent工具与互动字段协议.md` | 作家/角色共享工具、互动字段、移动/选择/骰子/跟随协议（**已定案**） |
 | `docs/doc-04-视觉设计风格.md` | 前端视觉基准（**§10 为准**） |
 | `docs/doc-19-多模态与游戏性交互升级.md` | 视听动升级定案（评委导向） |
 | `docs/前端改造计划.md` | `apps/web/` 的施工单 |
@@ -252,3 +253,19 @@ pnpm pi commit "fix(...): …" [--no-build]   # build 红线 → 子模块 commi
 5. `tools.allow` 是**过滤器不是扩展器**——写 `allow:["write"]` 加不出工具，只会把现有工具集过滤成子集。
 
 细节与全部 9 条源码级约束（含 2026-09-11 复核标注的"已失效"四条）见 `docs/doc-11` §2.3。
+
+
+### 7.4 画布卡片的尺寸与旋转契约（实测，踩过坑）
+
+**一张卡片的可见框，必须等于它的声明框。** 踩过的坑是三个尺寸来源互不协商：外壳 `.object` 用 form 表写死 `w/h`、内层组件 CSS 各自硬编码宽度（`.note` 200 / `.gate` 288 / `.letter` 224）、内容再自然撑高（chalk 声明 190px、实际 578px），于是拖拽时露出空壳、文字溢出、两张纸叠在一起。
+
+规则（改卡片渲染前先读）：
+
+1. **宽度只有一个真相源**：`packages/shared/src/schemas/forms.ts` 的 `CARD_FORMS`。`.object` 外壳吃 `item.w`，内层形态一律 `width: 100%`——**内层禁止写死宽度**。
+2. **外壳不写死高度**：`CanvasObject` 只给 `width`，高度由内容撑开，外壳（和拖拽碰撞读到的 `offsetHeight`）自然贴合。form 表的 `h` 只服务座位排布，不是渲染高度。
+3. **旋转只归外壳**：`--target-rot`（`rotOf` 派生）只写在外壳上。内层形态**禁止自带 `rotate`**（`.note` 曾自带 `-1.2deg`，与外壳叠加成 -4.2°）。**`chalk` 与 `sprite` 恒为 `0deg`**——叙事板正是"板正的板书"，不倾斜。
+4. **文字不溢出**：卡面摘要走 `plainExcerpt`（剥掉 `#`/`<b>`/换行等 markdown 原文），多行用 `-webkit-line-clamp` 截断；正文绝不会以裸 markdown 源码出现在卡面。
+5. **第二层阅读 = hover 浮层**：`gate` 的 README 全文走 `.gate__detail`（绝对定位浮在卡片上沿、`z-index` 盖过邻卡、`pointer-events` 默认 none），**不是**把全文塞进卡片撑破布局。
+6. **z 序**：`.object` 的 `z-index` 是内联写的（服务端行序），所以交互态抬升必须 `!important`——hover `.object{z-index:30}`、拖拽 `.object.dragging-item{z-index:40}`（拖拽值必须更高，否则被邻卡 hover 盖住）。
+
+**已知缺口**：座位排布仍按 form 表的 `h` 算碰撞，与实际渲染高度（chalk 可远超 190）不一致，多张长 chalk 可能轻微重叠。这是排列算法的独立问题，改动会触及 `local-store` 螺旋排布与已持久化座位，尚未处理。

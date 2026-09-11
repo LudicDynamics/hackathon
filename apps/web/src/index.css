@@ -123,7 +123,10 @@ body {
   transform: rotate(var(--target-rot, 0deg));
 }
 .object:hover {
-  z-index: 8; /* hover pops the card above siblings; inline zIndex wins after a drag */
+  /* the shell's z-index is written inline (server row order), so a plain
+     declaration here would never win. !important lets hover/drag lift the
+     card above its neighbours — needed for the gate's floating detail sheet. */
+  z-index: 30 !important;
 }
 .object:active {
   cursor: grabbing;
@@ -134,6 +137,9 @@ body {
 .object.dragging-item {
   cursor: grabbing;
   box-shadow: 0 22px 50px rgba(35, 28, 20, 0.32);
+  /* must beat the hover lift below (both !important); the dragged card is also
+     :hover, so without a higher value a neighbour's hover could cover it. */
+  z-index: 40 !important;
 }
 /* Smooth slide when a neighbour pushes this card (v2 L51). */
 .object.pushed {
@@ -213,10 +219,8 @@ body:before {
 }
 
 .object:hover {
-  z-index: 8; /* hover pops the card above siblings (kept from v1) */
   filter: brightness(1.03); /* hearth .object:hover — soft lift */
 }
-
 /* ---- v2 interaction spec (doc-04 §10.2 交互态) ----
    hover = ink-background / paper-text reversal is the SINGLE strong
    feedback (replaces the v1 red-pen accent). Utility below is for
@@ -821,6 +825,9 @@ body:before {
   color: var(--ink);
   text-shadow: -1px 1px 0 rgba(255, 252, 240, 0.8); /* warm paper glow */
   white-space: pre-wrap;
+  /* Narration hugs its shell: the shell has no fixed height, so long chalk is
+     never cropped — but it can never bleed past the declared box either. */
+  overflow-wrap: anywhere;
 }
 
 /* latin hand — Caveat first, kai as the CJK fallback (hearth L48) */
@@ -884,8 +891,7 @@ body:before {
    ============================================================ */
 .gate {
   position: relative; /* anchors .gate__pin / .gate__num (and later children) */
-  width: 288px;
-  height: 240px;
+  width: 100%; /* the shell owns the width (form table); the card fills it */
   background: var(--paper);
   border: 1px solid var(--hair);
   border-radius: 3px;
@@ -925,6 +931,9 @@ body:before {
 .gate__title {
   font-size: 19px;
   letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .gate__desc {
@@ -932,6 +941,52 @@ body:before {
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* the full README detail — a floating sheet on hover, never spilling out of
+   the card. It overlaps the card's top edge by 2px (no gap) so the pointer can
+   travel from card to sheet without the hover ever breaking. */
+.gate__detail {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - 2px);
+  transform: translateX(-50%) translateY(-4px);
+  z-index: 20;
+  width: 300px;
+  max-height: 340px;
+  overflow: auto;
+  padding: 14px 16px;
+  background: var(--paper);
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  box-shadow: var(--shadow-near);
+  font-family: var(--kai);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-2);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+}
+.gate:hover .gate__detail {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+/* heading inside the detail would just repeat the card title */
+.gate__detail h1,
+.gate__detail h2,
+.gate__detail h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  color: var(--ink);
 }
 
 .gate__meta {
@@ -977,7 +1032,7 @@ body:before {
    ============================================================ */
 .note {
   position: relative; /* anchors .note__clip */
-  width: 200px;
+  width: 100%; /* fills the shell; the form table is the one width source */
   padding: 14px 16px 18px;
   background: var(--note-yellow);
   border-radius: 2px;
@@ -985,7 +1040,6 @@ body:before {
   font-size: 13.5px;
   line-height: 1.8;
   color: var(--ink-2);
-  transform: rotate(-1.2deg);
   /* ruled paper: one hairline every 27px */
   background-image: repeating-linear-gradient(0deg, transparent 0 27px, rgba(43, 33, 23, 0.05) 27px 28px);
 }
@@ -1021,7 +1075,7 @@ body:before {
    ============================================================ */
 .letter {
   position: relative;
-  width: 224px;
+  width: 100%;
   padding: 16px 18px;
   background: var(--paper);
   border: 1px solid var(--hair);

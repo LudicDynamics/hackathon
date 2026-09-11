@@ -99,9 +99,13 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
           left: item.x,
           top: item.y,
           width: item.w,
-          height: item.h,
+          // No height: the shell hugs its card, so the painted box IS the real
+          // box (chalk runs far past form.h and used to overflow the shell).
           zIndex: liftFor(item.path, item.z),
-          ['--target-rot' as any]: `${item.rot}deg`,
+          // Rotation belongs to the shell alone. Narration (chalk) and the
+          // presence figure stay level; every paper form keeps its hand tilt.
+          ['--target-rot' as any]:
+            kind === 'chalk' || kind === 'sprite' ? '0deg' : `${item.rot}deg`,
         } as React.CSSProperties
       }
     >
