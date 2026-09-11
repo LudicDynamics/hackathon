@@ -3,29 +3,43 @@
 @tailwind utilities;
 
 :root {
-  --canvas-bg: #d9d0bf;
-  --card-cream: #FFFEF6;
-  --ink: #2B2117;
-  --ink-secondary: #5F5142;
-  --rust: #A8362B;
-  --sage: #5C6B57;
-  --blue: #49626A;
+  /* v2 ink-canvas tokens — authoritative values from hearth.html L14 (doc-04 §10.2) */
+  --ink: #292820;
+  --muted: #777468;
+  --paper: #f4f0e8;
+  --cream: #fbf8f1;
+  --wall: #d9d0bf;
+  --rust: #c96f4c;
+  --sage: #899b87;
+  --blue: #7893a2;
+  --line: rgba(41, 40, 32, 0.15);
+
+  /* legacy compat names — values synced to v2 (keep until JSX waves migrate) */
+  --canvas-bg: #d9d0bf; /* == --wall */
+  --card-cream: #fbf8f1; /* == --cream */
+  --ink-secondary: #777468; /* == --muted */
 }
 
 body {
   margin: 0;
   padding: 0;
   font-family: 'Manrope', system-ui, -apple-system, sans-serif;
-  background-color: var(--canvas-bg);
+  background-color: var(--wall);
   color: var(--ink);
   user-select: none;
   overflow: hidden;
 }
 
-/* 2.5D Canvas Grid Background */
+/* 2.5D Canvas Grid Background — v2 ink canvas: warm radial base +
+   80px hairline grid (hearth #viewport + .canvas), both on the one
+   .canvas-grid element so the base survives any Tailwind class churn. */
 .canvas-grid {
-  background-image: radial-gradient(circle, rgba(43, 33, 23, 0.12) 1.2px, transparent 1.2px);
-  background-size: 28px 28px;
+  background-color: #d9d0bf; /* wall fallback (same as body) */
+  background-image:
+    radial-gradient(ellipse at 48% 42%, #eee8dc 0%, #d4c9b6 70%),
+    linear-gradient(rgba(41, 40, 32, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(41, 40, 32, 0.035) 1px, transparent 1px);
+  background-size: 100% 100%, 80px 80px, 80px 80px;
 }
 
 /* Smooth physics transition */
@@ -153,5 +167,101 @@ body {
 /* Zero-size world-coordinate SVG; never intercepts pointer events. */
 .links-svg {
   pointer-events: none;
+}
+
+/* ============================================================
+   v2 visual layer — ink-canvas material system (doc-04 §10.2;
+   authoritative values copied verbatim from hearth.html).
+   Appended at the end of the cascade so every rule above is
+   re-painted. JSX/class names are untouched — this layer is the
+   whole re-skin.
+   ============================================================ */
+
+/* ---- grain: fractalNoise paper texture over the whole canvas ----
+   Hearth body:before verbatim (viewBox 180, feTurbulence .8/3/stitch,
+   rect opacity .22, layer opacity .18). z-index 10 covers the canvas
+   and cards (z ≤ 9) and stays under modal/toast chrome (z-50, both
+   position:fixed). Note: header/sidebar are position:static so their
+   z-30 is inert and they also get textured — a one-line z:5 change
+   drops the grain below them if the chrome needs to be grain-free. */
+body:before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.18;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.22'/%3E%3C/svg%3E");
+  z-index: 10;
+}
+
+/* ---- ink animation: paperForm mount entrance ----
+   scale .92→1 over 1.25s cubic-bezier(.16,1,.3,1). Safe against
+   drag: drag writes left/top inline styles only (never transform),
+   and it never re-mounts, so the animation plays exactly once at
+   mount. Deliberately NO `forwards`: the 100% keyframe equals the
+   base rotate(var(--target-rot,0deg)) scale(1), and a fill would pin
+   the transform and shadow future inline writes. */
+.object {
+  animation: paperForm 1.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: filter 0.3s ease, box-shadow 0.2s ease;
+}
+
+.object:hover {
+  z-index: 8; /* hover pops the card above siblings (kept from v1) */
+  filter: brightness(1.03); /* hearth .object:hover — soft lift */
+}
+
+/* ---- v2 interaction spec (doc-04 §10.2 交互态) ----
+   hover = ink-background / paper-text reversal is the SINGLE strong
+   feedback (replaces the v1 red-pen accent). Utility below is for
+   waves B/C/D to apply on pills/buttons: add `.ink-reverse` and the
+   existing `hover:bg-ink hover:text-white` pattern already flips to
+   the ink surface. Cards get the soft brightness lift above; dragged
+   objects get the big soft shadow (.dragging-item, already v2). */
+.ink-reverse {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* ---- ink-seep text reveal (hearth textInkSpread) ----
+   blur 3.2px→0, opacity .18→1 over 1.35s — text that seeps into the
+   paper like ink. Apply as a class for card bodies in later waves. */
+.ink-spread {
+  animation: textInkSpread 1.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---- paper form — standalone mount-entrance utility ---- */
+.paper-form {
+  animation: paperForm 1.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes paperForm {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--target-rot, 0deg)) scale(0.92);
+  }
+  45% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(var(--target-rot, 0deg)) scale(1);
+  }
+}
+
+@keyframes textInkSpread {
+  0% {
+    filter: blur(3.2px);
+    opacity: 0.18;
+    color: #93887d;
+  }
+  45% {
+    filter: blur(1px);
+    opacity: 0.8;
+  }
+  100% {
+    filter: blur(0);
+    opacity: 1;
+  }
 }
 

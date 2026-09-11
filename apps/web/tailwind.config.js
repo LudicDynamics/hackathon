@@ -8,27 +8,27 @@ export default {
     extend: {
       colors: {
         paper: {
-          bg: '#d9d0bf',
-          card: '#FFFEF6',
-          wall: '#F0EADB',
-          dark: '#2B2117',
-          ink: '#3D2E1E',
-          muted: '#8C7E6D',
+          bg: '#d9d0bf',    // wall — canvas/page backdrop (hearth body #d9d0bf)
+          card: '#fbf8f1',  // cream — every card surface (hearth --cream)
+          wall: '#d9d0bf',  // wall — mid-tone surface on cream
+          dark: '#292820',  // legacy key, synced to ink
+          ink: '#292820',   // ink (hearth --ink)
+          muted: '#777468', // muted (hearth --muted)
         },
         rust: {
-          DEFAULT: '#A8362B',
-          light: '#C74A3D',
-          dark: '#872B22',
+          DEFAULT: '#c96f4c', // hearth --rust
+          light: '#d8896a',   // derived tint
+          dark: '#a9573b',    // hearth .note.rust
         },
         sage: {
-          DEFAULT: '#5C6B57',
-          light: '#72856C',
-          dark: '#465342',
+          DEFAULT: '#899b87', // hearth --sage
+          light: '#a2b1a0',   // derived tint
+          dark: '#6d7d6b',    // derived shade
         },
-        inkblue: {
-          DEFAULT: '#49626A',
-          light: '#5E7B84',
-          dark: '#35484E',
+        blue: {               // renamed from inkblue → hearth --blue
+          DEFAULT: '#7893a2',
+          light: '#91aab7',   // derived tint
+          dark: '#3f606c',    // hearth .note.blue
         },
       },
       fontFamily: {
@@ -38,9 +38,9 @@ export default {
         hand: ['Caveat', 'cursive'],
       },
       boxShadow: {
-        soft: '0 10px 30px -5px rgba(43, 33, 23, 0.12), 0 4px 10px -2px rgba(43, 33, 23, 0.06)',
-        halo: '0 0 25px rgba(255, 254, 246, 0.8), 0 12px 35px rgba(43, 33, 23, 0.15)',
-        deep: '0 20px 45px -10px rgba(43, 33, 23, 0.25)',
+        soft: '0 8px 30px rgba(45, 38, 28, 0.13)', // hearth .toolbar — resting surfaces
+        halo: '0 14px 40px rgba(45, 38, 28, 0.18)', // hearth .compose — floating panels
+        deep: '0 22px 50px rgba(35, 28, 20, 0.32)', // hearth drag shadow — hover/drag lift
       },
       borderRadius: {
         '2xl': '20px',

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Backpack, Users, Navigation, MessageCircle, UserCheck, GripVertical } from 'lucide-react';
+import { MarkdownText } from '../../lib/md.js';
 
 interface RightSidebarProps {
   backpackItems: Array<{
@@ -86,9 +87,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                   <div className="font-sans font-bold text-xs text-ink truncate">
                     {item.frontmatter?.title || item.filename.replace('.md', '')}
                   </div>
-                  <div
+                  <MarkdownText
+                    text={item.body}
                     className="text-[11px] text-ink/60 line-clamp-2 mt-1 font-serif leading-snug"
-                    dangerouslySetInnerHTML={{ __html: item.body }}
                   />
                 </div>
               </div>

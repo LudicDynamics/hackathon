@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DoorOpen, Mail, FileText, User } from 'lucide-react';
 import { ChalkCard } from '../narrative/ChalkCard.js';
+import { MarkdownText } from '../../lib/md.js';
 
 interface CardRendererProps {
   item: {
@@ -159,14 +160,14 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
       }`}
     >
       <div className="flex items-center gap-2 mb-2">
-        <FileText className="w-4 h-4 text-inkblue" />
+        <FileText className="w-4 h-4 text-blue" />
         <span className="font-sans font-semibold text-xs text-ink truncate">
           {frontmatter?.title || filename.replace('.md', '')}
         </span>
       </div>
-      <div
+      <MarkdownText
+        text={body}
         className="text-xs text-ink/80 font-sans leading-relaxed line-clamp-4"
-        dangerouslySetInnerHTML={{ __html: body }}
       />
     </div>
   );
