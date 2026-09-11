@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { airpEnv, installPreset } from '../apps/server/dist/engine/presets.js';
+import { airpEnv, installPreset, skillArgs } from '../apps/server/dist/engine/presets.js';
 import { PiRpcClient } from '../apps/server/dist/engine/rpc-client.js';
 import { LocalWorldStore } from '../packages/shared/dist/index.js';
 
@@ -50,12 +50,19 @@ async function runProbe() {
   // the wiring cannot silently regress again.
   const presetWarnings = [];
   client.on('stderr', (err) => {
-    if (err.includes('not found')) presetWarnings.push(err.trim());
+    // "not found" catches a missing preset; "unknown slot" catches a preset item this
+    // pi-rp build does not implement (e.g. a slot renamed upstream).
+    if (err.includes('not found') || err.includes('unknown slot')) presetWarnings.push(err.trim());
   });
+
+  // Spawn with the same skill args the server uses, so a broken --skill path or an
+  // unimplemented `skills` slot fails the probe instead of degrading silently at runtime.
+  const skills = skillArgs(REPO_ROOT, TEST_WORLD);
+  console.log(`Skill dirs: ${skills.filter((a) => a !== '--skill').join(', ') || '(none)'}`);
 
   client.start({
     cwd: TEST_WORLD,
-    args: ['--preset', presetId, '--offline'],
+    args: ['--preset', presetId, '--offline', ...skills],
     env: airpEnv(TEST_WORLD),
   });
 

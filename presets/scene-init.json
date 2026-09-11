@@ -35,6 +35,11 @@
       "id": "report",
       "role": "system",
       "content": "When done, return a short three-line report: list of paths / one-sentence summary / the single detail most worth noticing."
+    },
+    {
+      "kind": "slot",
+      "id": "skills",
+      "slot": "skills"
     }
   ]
 }

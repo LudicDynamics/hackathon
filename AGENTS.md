@@ -51,16 +51,20 @@ apps/
       lifecycle.ts      # Agent 生命周期编排（spawn / --preset / 环境变量 / cwd）
       event-bridge.ts   # 引擎事件 → WebSocket 广播
       brief-builder.ts  # buildSceneInitBrief / buildNookInitBrief（动态 brief）
-      presets.ts        # preset 安装到 <worldRoot>/.airpworld/prompt-presets/
+      presets.ts        # preset 安装到 <worldRoot>/.airpworld/prompt-presets/；skillArgs 拼 --skill
   web/src/
-    components/canvas/     # 无限画布（相机 / 卡片渲染）
+    lib/                   # camera（插值相机）/ collide（软碰撞）/ seat（排座镜像）
+    state/                 # useCamera（相机与层级记忆）/ useWorld（层数据 + WS + 落库）
+    components/canvas/     # 无限画布（相机 / 卡片渲染 / 关系线）
     components/narrative/  # chalk 叙事卡、骰子
     components/overlay/    # 角色特写遮罩
     components/sidebar/    # 右侧边栏（背包 + 角色）
     components/god/        # 上帝模式工具栏
 packages/shared/src/    # world / frontmatter / components / events schema + store + sqlite
 presets/                # 提示词预设：writer, character, scene-init, nook-init
+skills/                 # 项目级 skills：跨世界通用手艺（生图 / 组件叙事 / 节奏 / 玩法咬合）
 templates/              # 开箱世界模板：holmes-world, school-romance, magic-academy, cthulhu
+  <world>/skills/       # 世界级 skills：该世界自己的文风与剧情，与 world/ 同级、随包分发
 worlds/                 # 脚手架产出的玩家世界（.gitignore）
 tools/scaffold.mjs      # 模板 → 新世界
 tools/probe-writer.mjs  # 全链路探针（pnpm probe）

@@ -54,3 +54,30 @@ export function airpEnv(worldRoot: string, openingId?: string): NodeJS.ProcessEn
   }
   return env;
 }
+
+/**
+ * Skill directories handed to pi-rp via `--skill` (accepts a file or a directory, repeatable;
+ * see `vendor/pi-rp/packages/coding-agent/src/cli/args.ts`).
+ *
+ * Two tiers, loaded together:
+ *  - project level `<repoRoot>/skills/` — craft that applies to every world: how to generate
+ *    images, how to narrate with components, how to pace a reveal, how to mesh narrative
+ *    with gameplay;
+ *  - world level `<worldRoot>/skills/` — this world's own voice and plot, shipped inside the
+ *    world package, sitting next to `world/`.
+ *
+ * We pass paths explicitly rather than relying on pi-rp's `.pi/skills` discovery because a
+ * scaffolded world can live outside this repo, where ancestor discovery would never reach
+ * the project-level tier.
+ *
+ * Only directories that exist are passed, so a world without `skills/` costs nothing.
+ * Subagents delegated from the writer (scene-init / nook-init) run in the same process and
+ * inherit these skills; their preset only needs the `skills` slot to see them listed.
+ */
+export function skillArgs(repoRoot: string, worldRoot: string): string[] {
+  const args: string[] = [];
+  for (const dir of [path.join(repoRoot, 'skills'), path.join(worldRoot, 'skills')]) {
+    if (fs.existsSync(dir)) args.push('--skill', dir);
+  }
+  return args;
+}
