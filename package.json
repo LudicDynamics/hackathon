@@ -9,7 +9,8 @@
     "dev:web": "pnpm --filter @airp/web dev",
     "build": "pnpm --filter @airp/shared build && pnpm --filter @airp/server build && pnpm --filter @airp/web build",
     "scaffold": "node tools/scaffold.mjs",
-    "probe": "node tools/probe-writer.mjs"
+    "probe": "node tools/probe-writer.mjs",
+    "pi": "node tools/pi-rp.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",

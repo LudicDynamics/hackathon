@@ -25,9 +25,9 @@ export function readPresetId(file: string): string | undefined {
  * Why we must "install" it rather than hand the file path straight to the engine:
  *  - pi-rp's `--preset` accepts only the preset's **id**; passing an absolute path yields
  *    `Warning: Prompt preset "…" not found` and silently falls back to the default preset;
- *  - preset discovery scans only the **top level** `*.json` of `<configDir>/prompt-presets/`
- *    and does not recurse into subdirectories, so `characters/<name>/preset.json` inside a
- *    character directory can never be discovered on its own.
+ *  - discovery walks `<configDir>/prompt-presets/` recursively (pi-rp 6c693a7f3), but only
+ *    that tree — `characters/<name>/preset.json` lives outside it and is never seen, so a
+ *    character preset has to be copied in before it can be named by id.
  */
 export function installPreset(worldRoot: string, srcFile: string): string {
   const id = readPresetId(srcFile);
