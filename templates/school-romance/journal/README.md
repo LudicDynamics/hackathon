@@ -1,2 +1,2 @@
-# 学园物语 日志
-记录每一天的青春日常。
+# Academy Story Journal
+Recording the everyday moments of youth, one day at a time.

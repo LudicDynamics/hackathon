@@ -1,2 +1,2 @@
-# 学园世界场景
-包含了学园主干道、中庭花坛与屋顶天台。
+# Academy World Scenes
+Includes the academy's main avenue, the courtyard flowerbed, and the rooftop.

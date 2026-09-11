@@ -1,2 +1,2 @@
-# 印斯茅斯迷雾
-永远不要在退潮时凝视恶魔礁。
+# Mists of Innsmouth
+Never stare at Devil Reef when the tide is out.

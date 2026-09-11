@@ -1,2 +1,2 @@
-# 玩家行囊
-存放学生证与日常小物件。
+# Player's Satchel
+Holds your student ID and everyday small items.

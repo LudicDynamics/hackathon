@@ -2,14 +2,14 @@
 type: chalk
 roll_dice:
   type: 1d100
-  desc: 意志抵抗（SAN Check）
+  desc: Willpower save (SAN Check)
   expect: ">55"
 choice:
-  - "掩鼻靠近被腐海藻缠绕的石桩"
-  - "退回马车旁避开怪异的腥味"
+  - "Cover your nose and step closer to the stone post tangled in rotting kelp"
+  - "Fall back to the carriage and avoid the strange brine-smell"
 status:
   data:
     Sanity: "65/80"
-    天气: "腐雨连绵"
+    Weather: "Endless rotting rain"
 ---
-海水是浓稠的灰绿色，像沉滞的沥青。破烂的渔网和死鱼在烂木桩边起伏，远处礁石群中隐约浮现出不合常理的鳞甲反光。
+The seawater is a thick gray-green, like stagnant tar. Ragged fishing nets and dead fish rise and fall around the rotting pilings, and far off among the reefs something glints with an unnatural, scaly sheen.

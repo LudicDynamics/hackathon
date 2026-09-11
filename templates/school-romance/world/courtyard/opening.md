@@ -1,11 +1,11 @@
 ---
 type: chalk
 choice:
-  - "走向坐在花坛旁的七海"
-  - "拾起木长椅上的遗落画册"
+  - "Walk over to Nanami, who is sitting by the flowerbed"
+  - "Pick up the forgotten sketchbook on the wooden bench"
 status:
   data:
-    时间: "放学后 16:30"
-    好感度: "初识"
+    Time: "After school, 16:30"
+    Affinity: "First meeting"
 ---
-铃声响过之后，走廊上的喧嚣渐渐远去。暖洋洋的斜阳穿过樱树枝桠，在中庭的鹅卵石径上投下斑驳光斑。七海正捧着便当盒发呆。
+After the bell rings, the clamor in the hallway slowly fades. Warm slanting sunlight threads through the cherry branches, scattering dappled shadows across the cobblestone path in the courtyard. Nanami sits gazing into space, her lunch box held in both hands.

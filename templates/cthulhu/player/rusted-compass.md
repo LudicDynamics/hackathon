@@ -1,6 +1,6 @@
 ---
 type: note
-title: "生锈的黄铜指南针"
+title: "Rusted Brass Compass"
 ---
-<b>生锈的黄铜指南针</b>
-指针浸在一层浑浊的煤油里，偶尔会疯狂自转，即使周围没有任何磁铁。
+<b>Rusted Brass Compass</b>
+The needle lies submerged in a layer of cloudy kerosene and now and then spins wildly, even with no magnet anywhere nearby.

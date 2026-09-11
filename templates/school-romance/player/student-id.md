@@ -1,6 +1,6 @@
 ---
 type: note
-title: "私立秀峰学园学生证"
+title: "Sakura Academy Student ID"
 ---
-<b>私立秀峰学园学生证</b>
-学号：2026-0417。贴着你略显青涩的一寸照片。
+<b>Sakura Academy Student ID</b>
+Student No. 2026-0417. A slightly awkward one-inch photo of you is pasted inside.

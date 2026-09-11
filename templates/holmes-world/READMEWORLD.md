@@ -94,7 +94,7 @@ cd holmes-world && zip -r holmes-world.airpworld.zip .
 
 ## Relationship to the Front-End Prototype
 
-`../canvas-world-v1-yoshi.html` is this world's **front-end rendering prototype** (paper-textured canvas, layer traversal, streaming chalk writing, character dialogue overlay, inventory drag-and-drop).
+The **v1 canvas prototype** is this world's **front-end rendering prototype** (paper-textured canvas, layer traversal, streaming chalk writing, character dialogue overlay, inventory drag-and-drop). It lives in the retired **`infini-canvas`** project — clone that repository as a sibling directory to compare.
 - The map data, narrative scripts, and character configuration are written into this directory
 - The front-end HTML's LAYERS / WRITER_SCRIPTS / DLG_ASSETS map one-to-one to this directory
 - This directory is the **source of truth** (files are the world state); the HTML is the **projection** (the canvas as rendered)

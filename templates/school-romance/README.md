@@ -1,3 +1,3 @@
-# 樱花学园物语
+# Sakura Academy
 
-春季新学期伊始，坂道两旁的樱树盛开。你在林荫道下停下脚步，风吹起制服的衣角。
+The spring term has just begun, and the cherry trees along the slope are in full bloom. You pause beneath the tree-lined path as the wind lifts the hem of your uniform.

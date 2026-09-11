@@ -1,5 +1,5 @@
 ---
-title: "春日初逢"
-date: "4月12日"
+title: "First Meeting in Spring"
+date: "April 12"
 ---
-转学到秀峰学园的第一天，同桌是个叫七海的女孩子。
+On my first day after transferring to Sakura Academy, my deskmate turned out to be a girl named Nanami.
