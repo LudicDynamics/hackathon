@@ -41,7 +41,7 @@ export const ChalkCard: React.FC<ChalkCardProps> = ({
           >
             {statusOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             <Activity className="w-3.5 h-3.5" />
-            <span>世界状态快照 ({Object.keys(statusData).length})</span>
+            <span>World State Snapshot ({Object.keys(statusData).length})</span>
           </button>
 
           {statusOpen && (
@@ -70,7 +70,7 @@ export const ChalkCard: React.FC<ChalkCardProps> = ({
       {choices && choices.length > 0 && (
         <div className="mt-5 space-y-2">
           <div className="text-xs font-mono text-ink/40 uppercase tracking-wider mb-1">
-            推进选择
+            Advance the Story
           </div>
           {choices.map((choice: string, idx: number) => (
             <button

@@ -24,7 +24,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string; emo?: Emotion }>>([
     {
       role: 'assistant',
-      text: '（注视着你）有什么我可以告诉你的吗？',
+      text: '(Watching you) Is there something you would like to know?',
       emo: 'normal',
     },
   ]);
@@ -48,9 +48,9 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     // Simulated character response with emotion tags if offline
     setTimeout(() => {
       const sampleReplies: Array<{ text: string; emo: Emotion }> = [
-        { text: '[emo: thinking] 让我想想……这件事情其实比看起来更复杂。', emo: 'thinking' },
-        { text: '[emo: smile] 很高兴能与你谈论这些，请务必小心。', emo: 'smile' },
-        { text: '[emo: shock] 什么？！你是在哪里发现那个东西的？！', emo: 'shock' },
+        { text: '[emo: thinking] Let me think... this is more complicated than it looks.', emo: 'thinking' },
+        { text: '[emo: smile] I am glad we can speak of this. Please, do be careful.', emo: 'smile' },
+        { text: '[emo: shock] What?! Where did you find that thing?!', emo: 'shock' },
       ];
       const reply = sampleReplies[Math.floor(Math.random() * sampleReplies.length)];
       setCurrentEmo(reply.emo);
@@ -95,7 +95,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
           <div className="text-center mt-2 z-10">
             <h2 className="font-serif text-2xl font-bold text-ink">{characterId}</h2>
             <p className="text-xs text-ink/60 font-sans mt-1 max-w-xs line-clamp-2">
-              {bio || '世界中的独立人物'}
+              {bio || 'A character in this world'}
             </p>
           </div>
         </div>
@@ -133,7 +133,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder={`对 ${characterId} 说点什么... (按 Enter 发送)`}
+              placeholder={`Say something to ${characterId}... (Enter to send)`}
               className="flex-1 px-4 py-3 rounded-2xl bg-paper-wall/60 border border-ink/15 text-sm text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-rust/40 transition-all"
             />
             <button

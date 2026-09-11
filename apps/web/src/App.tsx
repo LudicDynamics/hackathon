@@ -50,10 +50,10 @@ export function App() {
           fetchBackpack();
         } else if (msg.type === 'world_frozen') {
           setWorldFrozen(true);
-          showToast('世界已冻结 —— 你改动的一切不会惊动任何人');
+          showToast('World frozen — nothing you change will disturb a soul');
         } else if (msg.type === 'world_thawed') {
           setWorldFrozen(false);
-          showToast('世界已解冻 —— 时间继续流淌');
+          showToast('World thawed — time flows on');
         }
       } catch (err) {
         console.error('WS parse error:', err);
@@ -141,12 +141,12 @@ export function App() {
 
   // Choice Selection
   const handleSelectChoice = async (choice: string) => {
-    showToast(`你选择了：「${choice}」`);
+    showToast(`You chose: "${choice}"`);
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(
         JSON.stringify({
           type: 'writer_prompt',
-          message: `玩家在场景「${currentLayer}」中选择了推进选项：「${choice}」。`,
+          message: `The player, in scene "${currentLayer}", chose the advancing option: "${choice}".`,
         })
       );
     }
@@ -166,7 +166,7 @@ export function App() {
       });
       const data = await res.json();
       if (data.ok) {
-        showToast(`你对目标出示/使用了「${draggedItemPath.split('/').pop()}」！`);
+        showToast(`You present "${draggedItemPath.split('/').pop()}" to the target!`);
       }
     } catch (err) {
       console.error('Use item failed:', err);
@@ -183,7 +183,7 @@ export function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ from: itemPath, to: dest }),
       });
-      showToast(`已将「${filename}」放回场景`);
+      showToast(`Returned "${filename}" to the scene`);
       fetchLayer(currentLayer);
       fetchBackpack();
     } catch (err) {
@@ -221,7 +221,7 @@ export function App() {
           content: fileContent,
         }),
       });
-      showToast(`上帝之手已创造：「${title}」`);
+      showToast(`The God Hand has created "${title}"`);
       fetchLayer(currentLayer);
     } catch (err) {
       console.error('God action create failed:', err);
@@ -245,7 +245,7 @@ export function App() {
           <div className="flex items-center gap-2">
             <Compass className="w-5 h-5 text-rust" />
             <h1 className="font-serif text-lg font-bold tracking-wide text-ink">
-              {manifest?.name || 'AIRP · 无限画布世界'}
+              {manifest?.name || 'AIRP · Infinite Canvas World'}
             </h1>
           </div>
 
@@ -259,7 +259,7 @@ export function App() {
               <button
                 onClick={handleReturnToParent}
                 className="p-1 rounded-lg bg-paper-wall hover:bg-ink hover:text-white transition-all text-xs"
-                title="返回上一层"
+                title="Back one layer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
               </button>
@@ -274,7 +274,7 @@ export function App() {
         {/* Center Minimalist World Timestamp Seal */}
         <div className="flex items-center gap-2 px-3.5 py-1 rounded-full bg-paper-wall/60 border border-ink/5 font-mono text-xs text-ink/70">
           <Clock className="w-3.5 h-3.5 text-rust" />
-          <span>第 1 天 · 暴雨初歇 17:40</span>
+          <span>Day 1 · Rain Subsides 17:40</span>
         </div>
 
         {/* Right God Mode Controls */}
@@ -295,7 +295,7 @@ export function App() {
             items={items}
             characters={characters}
             onSelectChoice={handleSelectChoice}
-            onDiceRolled={(res, pass) => showToast(`掷骰结果：${res}（${pass ? '通过' : '未通过'}）`)}
+            onDiceRolled={(res, pass) => showToast(`Dice: ${res} (${pass ? 'Pass' : 'Fail'})`)}
             onEnterGate={handleEnterGate}
             onOpenCharacterModal={(charId) => setActiveModalCharId(charId)}
             onItemDropOnTarget={handleItemDropOnTarget}
@@ -315,7 +315,7 @@ export function App() {
               ...prev,
               [charId]: !prev[charId],
             }));
-            showToast(`${charId} 随行状态已切换`);
+            showToast(`${charId} follow status toggled`);
           }}
         />
       </div>

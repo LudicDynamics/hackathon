@@ -44,7 +44,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
           }`}
         >
           <Backpack className="w-4 h-4" />
-          <span>行囊背包 ({backpackItems.length})</span>
+          <span>Backpack ({backpackItems.length})</span>
         </button>
 
         <button
@@ -56,7 +56,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>世界角色 ({characters.length})</span>
+          <span>Characters ({characters.length})</span>
         </button>
       </div>
 
@@ -64,12 +64,12 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
       {activeTab === 'backpack' && (
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           <div className="text-[11px] font-mono text-ink/40 uppercase tracking-wider mb-2">
-            拖拽道具到场景卡片或角色以解谜 / 拖入画布放回
+            Drag items onto cards or characters to solve puzzles · drop on the canvas to put them back
           </div>
 
           {backpackItems.length === 0 ? (
             <div className="text-center py-12 text-ink/40 font-sans text-xs">
-              行囊空空如也，可在场景中拾取物件。
+              Your backpack is empty. Pick up items out in the scene.
             </div>
           ) : (
             backpackItems.map((item) => (
@@ -118,7 +118,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                       {char.id}
                     </div>
                     <div className="text-[10px] font-mono text-ink/50 truncate">
-                      所在: {char.home || '未知'}
+                      At: {char.home || 'Unknown'}
                     </div>
                   </div>
                 </div>
@@ -128,19 +128,19 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                   <button
                     onClick={() => char.home && onNavigateToCharacter?.(char.home)}
                     className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl bg-paper-card hover:bg-ink hover:text-white transition-all text-ink/70"
-                    title="跳到角色所在场景"
+                    title="Jump to the character's scene"
                   >
                     <Navigation className="w-3.5 h-3.5" />
-                    <span>寻道</span>
+                    <span>Locate</span>
                   </button>
 
                   <button
                     onClick={() => onChatWithCharacter?.(char.id)}
                     className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl bg-rust text-white hover:bg-rust-light transition-all shadow-sm"
-                    title="进入对话特写"
+                    title="Enter close-up dialogue"
                   >
                     <MessageCircle className="w-3.5 h-3.5" />
-                    <span>交谈</span>
+                    <span>Talk</span>
                   </button>
 
                   <button
@@ -150,10 +150,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                         ? 'bg-sage text-white font-medium shadow-sm'
                         : 'bg-paper-card text-ink/70 hover:bg-ink hover:text-white'
                     }`}
-                    title="设置角色跟随玩家"
+                    title="Toggle whether this character follows you"
                   >
                     <UserCheck className="w-3.5 h-3.5" />
-                    <span>{isFollowing ? '随行中' : '跟随'}</span>
+                    <span>{isFollowing ? 'Following' : 'Follow'}</span>
                   </button>
                 </div>
               </div>

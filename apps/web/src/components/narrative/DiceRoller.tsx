@@ -67,7 +67,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
           </span>
         </div>
         <span className="font-mono text-xs px-2 py-0.5 rounded bg-ink/5 text-ink/70">
-          通过要求：{rollDice.expect}
+          Requires: {rollDice.expect}
         </span>
       </div>
 
@@ -95,13 +95,13 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                 onClick={handleRoll}
                 className="px-4 py-1.5 rounded-full bg-rust hover:bg-rust-light text-white text-xs font-medium tracking-wide shadow-sm transition-all"
               >
-                点击掷骰
+                Roll the Dice
               </button>
             )}
 
             {rolling && (
               <span className="font-mono text-xs text-ink/60 animate-pulse">
-                命运骰子翻滚中...
+                The dice of fate are spinning...
               </span>
             )}
 
@@ -112,11 +112,11 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                 </span>
                 {localPassed ? (
                   <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> 检定通过
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Check Passed
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full">
-                    <AlertCircle className="w-3.5 h-3.5" /> 检定失败
+                    <AlertCircle className="w-3.5 h-3.5" /> Check Failed
                   </span>
                 )}
               </div>

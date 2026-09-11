@@ -71,7 +71,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
           <div>
             <h4 className="font-sans font-bold text-ink text-sm">{title}</h4>
             <span className="font-mono text-[10px] text-ink/40 uppercase tracking-widest">
-              {isStub ? 'UNWRITTEN · 存根' : 'SCENE · 场景入口'}
+              {isStub ? 'UNWRITTEN · STUB' : 'SCENE · ENTRANCE'}
             </span>
           </div>
         </div>
@@ -93,14 +93,14 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
           <div className="flex items-center gap-2 text-rust mb-2">
             <Mail className="w-4 h-4" />
             <span className="font-sans font-semibold text-xs tracking-wider">
-              {frontmatter.title || '信函'}
+              {frontmatter.title || 'Letter'}
             </span>
           </div>
           <p className="text-xs text-ink/70 font-serif italic line-clamp-2">
             {frontmatter.preview || body}
           </p>
           <div className="mt-3 flex justify-between items-center text-[10px] font-mono text-ink/40">
-            <span>点击展信阅读</span>
+            <span>Click to open and read</span>
             {frontmatter.sign && <span>{frontmatter.sign}</span>}
           </div>
         </div>
@@ -130,7 +130,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
                   onClick={() => setLetterOpen(false)}
                   className="px-6 py-2 rounded-full bg-paper-wall hover:bg-ink hover:text-white text-xs font-mono transition-all"
                 >
-                  折好收起 (Esc)
+                  Fold & Put Away (Esc)
                 </button>
               </div>
             </div>
