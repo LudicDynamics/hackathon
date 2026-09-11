@@ -83,18 +83,22 @@ doc-05 §4.3 已定案的分工：全新内容的从零→100（新城镇/新区
 ### 2.2 brief 文本协议（两种初始化共用）
 
 ```text
-[任务] 实例化场景层
-[目标路径] world/贝克街/犯罪现场
-[世界] 贝克街的迷雾（题材：推理；基调：雾、克制、冷；默认材质：parchment）
-[上级层] world/贝克街 —— 贝克街（巡警分局墙上贴着失踪案告示）
-[玩家诉求] 我想看看她最后待的地方。
-[已知线索] 模糊的照片 / 匿名纸条（"她去废弃果园了"）
-[约束]
-- 不预设凶手，不预设这是第几现场
-- 不重复玩家已经知道的事（告示、失踪三日）
-- 只给"世界的第一眼"，不留待解开的结论
-[产出] README.md（material: scene）+ 2~4 个物件 md + 1 段开场白 chalk（≤200 字，可带 status / initial choice）
-[回报] 三行：路径清单 / 一句话摘要 / 一句话"这里最让人在意的是什么"
+[Task] Instantiate a scene layer
+[Target Path] world/baker-street/crime-scene
+[World] Fog Over Baker Street (genre: mystery; description: The Disappearance of Lady Adler — an open-ended mystery world held together by clues alone; default material: parchment)
+[Parent Layer] Baker Street
+[Player Request] 我想看看她最后待的地方。
+[Known Clues] a blurred photograph / an anonymous note ("She went to the abandoned orchard")
+[Constraints]
+- Do not presuppose a final answer or impose a definitive conclusion
+- Focus on the scene's atmosphere, object staging, and sensory detail (sight, sound, touch, smell)
+- Give only the "first sight", leaving blank space for the player to explore and interact with
+[Deliverables]
+1. README.md: scene title, furnishing overview, and background material declaration
+2. 2–4 object markdown files (props or letters the player can pick up or investigate)
+3. 1 opening narration (a md file with type: chalk, <=200 words, including status/choice/roll_dice)
+[Report]
+Three lines: list of paths / one-sentence scene summary / one sentence on "what is the most striking detail here"
 ```
 
 **回报格式要短**：subagent 输出经 `truncateTail`（默认 2000 行 / 50KB）截断后返回父会话；作家"摘要过目"和前端"生成完毕"提示都吃这三行。
@@ -150,7 +154,7 @@ options.path   "/w/{{who}}.md"            → file not found "/w/{{who}}.md"  �
 
 ### 3.2 两条路径
 
-**R1（作家委托）**：玩家在**父层**说出意图（"我要去废弃果园看看"）→ 作家判断这是从零→100 → 委托 `scene-init` → subagent 写盘 → 作家摘要过目 → 玩家再进门时东西已经在那儿。
+**R1（作家委托）**：玩家在**父层**说出意图（"我要去 Abandoned Orchard 看看"）→ 作家判断这是从零→100 → 委托 `scene-init` → subagent 写盘 → 作家摘要过目 → 玩家再进门时东西已经在那儿。
 
 **R2（玩家直唤）**：玩家**直接双击** stub 卡 → 穿越动画里给一行输入机会（"这里是……"，可跳过）→ 引擎拼 brief → spawn → 玩家**已经在场**，看着它长出来。
 
@@ -159,10 +163,10 @@ options.path   "/w/{{who}}.md"            → file not found "/w/{{who}}.md"  �
 ### 3.3 产出规范
 
 ```
-world/贝克街/犯罪现场/
+world/baker-street/crime-scene/
 ├── README.md          # type: readme，material: scene，含 name + bg/bgStyle
-├── 傍晚.md             # type: chalk —— 开场白（≤200 字，可带 status / initial choice）
-└── 生锈的钥匙.md        # 物件（chalk / component，2~4 个）
+├── evening.md         # type: chalk —— 开场白（≤200 字，可带 status / initial choice）
+└── rusted-key.md      # 物件（chalk / component，2~4 个）
 ```
 
 | 产出 | 要求 |
@@ -237,7 +241,7 @@ characters/旅店老板/
 └── 一张旧照片.md        # 沉默细节（1~3 个）
 ```
 
-**"若缺则补"很关键**：holmes-world 的 `characters/华生/` 至今只有 `README.md` + `preset.json`，而 preset 引用了 `identity.md` / `personality.md`（**两个文件都不存在**）。按 C4，只要 slot 用默认的 `onMissing: skip`，这不会报错——但角色 spawn 时就少了履历。**初始化顺带补齐 preset 引用的缺失文件**，正好打通 doc-13 §5 与 doc-05 §4.1 的遗留问题。
+**"若缺则补"很关键**：holmes-world 的 `characters/watson/` 至今只有 `README.md` + `preset.json`，而 preset 引用了 `identity.md` / `personality.md`（**两个文件都不存在**）。按 C4，只要 slot 用默认的 `onMissing: skip`，这不会报错——但角色 spawn 时就少了履历。**初始化顺带补齐 preset 引用的缺失文件**，正好打通 doc-13 §5 与 doc-05 §4.1 的遗留问题。
 
 **内容纪律**：写"痕迹"不写"设定"。
 
@@ -281,14 +285,14 @@ characters/旅店老板/
 
 | type | detail | 谁消费 |
 |---|---|---|
-| `layer_initialized` | `{ path, by: "writer"\|"player"\|"engine", files: [...] }` | 作家下一轮感知（"废弃果园已经在那儿了"） |
+| `layer_initialized` | `{ path, by: "writer"\|"player"\|"engine", files: [...] }` | 作家下一轮感知（"Abandoned Orchard 已经在那儿了"） |
 | `layer_init_failed` | `{ path, by, reason, fallback: "template"\|"none" }` | 前端降级提示 + 作家（可重试/现编） |
 
 **作家感知示例**：
 
 ```
 [世界动态]
-- 「废弃果园」第一次被走出来了（玩家进的，他想要"她最后待的地方"）。
+- 「Abandoned Orchard」第一次被走出来了（玩家进的，他想要"她最后待的地方"）。
 ```
 
 ### 6.2 中断语义（生成一半玩家切走）
@@ -349,21 +353,41 @@ doc-05 §7.4 现在的 `.airpworld/agent/main/` + `.airpworld/agent/subagent/` *
 {
   "schemaVersion": 1,
   "id": "scene-init",
-  "name": "场景初始化器",
-  "description": "为世界空白或存根层生成场景骨架、物件卡与开场白；作家委托与引擎直唤共用此 profile",
+  "name": "Scene Initializer",
+  "description": "Generates the scene skeleton, object cards, and opening for a blank or stub layer of the world; shared by writer delegation and direct engine invocation",
   "delegatable": true,
   "inheritHistory": 0,
   "items": [
-    { "kind": "block", "id": "role", "role": "system",
-      "content": "你是 AIRP 场景初始化器（Scene Init）。你接受作家或引擎的 brief 委托，负责在指定场景目录里创建这一层的\"第一眼\"。\n\n玩家第一次走进一个地方时，这里还什么都没有——你负责让它第一眼就存在。" },
-    { "kind": "block", "id": "output", "role": "system",
-      "content": "【产出】\n1. README.md —— 场景封面：标题、氛围、material 皮肤声明（与 brief 给的上级层与题材基调保持一致）\n2. 2~4 个物件 markdown 文件（道具 / 线索 / 观察点，其中最多 1 个是可拿走的）\n3. 1 段开场白 chalk.md（<=200 字）" },
-    { "kind": "block", "id": "opening", "role": "system",
-      "content": "【开场白（可选，但强烈建议写）】\n开场白是这一层\"被玩家看见\"的那一下，缺了它入戏效果会差很多。它可以带 status 快照，或给一组 initial choice 作为玩家起步的抓手。\n但它只负责\"此刻站在这里，看到什么\"——不预设剧情结论、不剧透、不揭示真相。" },
-    { "kind": "block", "id": "discipline", "role": "system",
-      "content": "【纪律】\n1. 严格遵守 brief 中给定的题材基调、上级层关系与约束。\n2. 保持留白与悬念，不擅自下绝对结论或预定剧透。\n3. 沉默细节优先于设定罗列：一个没洗的杯子比一段背景介绍有用。\n4. 不重复 brief 里\"已知线索\"已经写过的事。\n5. 写文件用引擎的写工具，路径用 brief 给的目标路径。" },
-    { "kind": "block", "id": "report", "role": "system",
-      "content": "完成后返回三行简短回报：路径清单 / 一句话摘要 / 最值得在意的一处细节。" }
+    {
+      "kind": "block",
+      "id": "role",
+      "role": "system",
+      "content": "You are the AIRP Scene Init. You take a brief from the Writer or the engine, and your job is to create this layer's \"first look\" inside the given scene directory.\n\nWhen the player first walks into a place, there is nothing here yet—you are the one who makes it exist at first sight."
+    },
+    {
+      "kind": "block",
+      "id": "output",
+      "role": "system",
+      "content": "[Deliverables]\n1. README.md — the scene cover: title, mood, and material skin declaration (consistent with the parent layer and genre tone given in the brief)\n2. 2–4 object markdown files (props / clues / observation points, of which at most 1 is takeable)\n3. 1 opening passage chalk.md (<=200 words)"
+    },
+    {
+      "kind": "block",
+      "id": "opening",
+      "role": "system",
+      "content": "[Opening (Optional, but Strongly Recommended)]\nThe opening is the moment this layer is \"seen by the player\"; without it, the immersion suffers a great deal. It may carry a status snapshot, or give a set of initial choices as a foothold for the player to start from.\nBut it is responsible only for \"what you see, standing here right now\"—do not presuppose plot conclusions, do not spoil, do not reveal the truth."
+    },
+    {
+      "kind": "block",
+      "id": "discipline",
+      "role": "system",
+      "content": "[Discipline]\n1. Strictly follow the genre tone, parent-layer relationships, and constraints given in the brief.\n2. Preserve omission and suspense; never impose absolute conclusions or pre-ordain spoilers.\n3. Silent detail over listed worldbuilding: an unwashed cup is more useful than a paragraph of background.\n4. Do not repeat what the brief's \"known clues\" have already covered.\n5. Write files with the engine's write tool, using the target path given in the brief."
+    },
+    {
+      "kind": "block",
+      "id": "report",
+      "role": "system",
+      "content": "When done, return a short three-line report: list of paths / one-sentence summary / the single detail most worth noticing."
+    }
   ]
 }
 ```
@@ -376,15 +400,23 @@ doc-05 §7.4 现在的 `.airpworld/agent/main/` + `.airpworld/agent/subagent/` *
 {
   "schemaVersion": 1,
   "id": "nook-init",
-  "name": "小天地初始化器",
-  "description": "为角色或玩家私人小天地生成具有生活痕迹的初始陈设",
+  "name": "Nook Initializer",
+  "description": "Generates the initial furnishings, bearing traces of a life, for a character's or the player's private nook",
   "delegatable": true,
   "inheritHistory": 0,
   "items": [
-    { "kind": "block", "id": "role", "role": "system",
-      "content": "你是 AIRP 私人小天地初始化器。这里是角色的私密空间或玩家的个人据点。\n你的任务是根据角色设定或玩家身份，生成代表其生活痕迹、过往经历的信件、日记残页、私人物品卡片。\n这些物品应该是带有历史与情感重量的，让人一眼窥探出其性格与过往秘密。" },
-    { "kind": "block", "id": "discipline", "role": "system",
-      "content": "【纪律】\n1. 写痕迹不写评语：「一把修过三次的椅子」，不要「他念旧」——不写他是什么样的人（那是身份文件的事），只写能看出他过日子的东西。\n2. 这些东西不是刚买来的，是他这些年用旧了的。\n3. 留白：可以有没解释的东西、有矛盾、有空。不要完整履历。\n4. 不写角色此刻在做什么——只写空间的陈设。\n5. 若 brief 指出 preset 引用的身份文件缺失（identity / appearance / personality），顺带补齐；补的是事实，不是评价。\n6. 内容文件 2~4 个，放角色根目录。\n7. 回报三行：路径清单 / 一句话摘要 / 最值得在意的一处细节。" }
+    {
+      "kind": "block",
+      "id": "role",
+      "role": "system",
+      "content": "You are the AIRP private nook initializer. This is a character's intimate space or the player's personal stronghold.\nYour job is to generate letters, diary fragments, and personal item cards that stand for their traces of living and their past experiences, based on the character's profile or the player's identity.\nThese items should carry historical and emotional weight, letting one glimpse their personality and past secrets at a glance."
+    },
+    {
+      "kind": "block",
+      "id": "discipline",
+      "role": "system",
+      "content": "[Discipline]\n1. Write traces, not verdicts: \"a chair repaired three times\", not \"he is nostalgic\"—do not write what kind of person he is (that is the identity files' job), only the things that show how he lives.\n2. These things were not just bought; they are worn from his years of use.\n3. Leave blanks: there can be unexplained things, contradictions, empty space. No complete résumé.\n4. Do not write what the character is doing right now—only the furnishings of the space.\n5. If the brief notes that identity files referenced by the preset are missing (identity / appearance / personality), fill them in along the way; fill in facts, not judgments.\n6. 2–4 content files, placed in the character's root directory.\n7. Report in three lines: list of paths / one-sentence summary / the single detail most worth noticing."
+    }
   ]
 }
 ```

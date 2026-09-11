@@ -40,10 +40,10 @@
 │   └── shared/            # WorldManifest (Zod), ChalkFrontmatter, WorldStore, SQLite Schema
 ├── presets/               # 提示词预设 (writer, character, scene-init, nook-init)
 ├── templates/             # 预设世界模板
-│   ├── holmes-world/      # 悬疑推理：贝克街的迷雾
-│   ├── school-romance/    # 校园恋爱：樱花学园物语
-│   ├── cultivation/       # 东方仙侠：青云问道录
-│   └── cthulhu/           # 诡异惊悚：印斯茅斯迷雾
+│   ├── holmes-world/      # 悬疑推理：Fog Over Baker Street
+│   ├── school-romance/    # 校园恋爱：Sakura Academy
+│   ├── magic-academy/     # 魔法学院：Emberglass Academy
+│   └── cthulhu/           # 诡异惊悚：Mists of Innsmouth
 ├── docs/                  # 设计文档（真相源，入口 docs/00-文档骨架.md）
 ├── tools/
 │   ├── scaffold.mjs       # 脚手架：模板拷贝即开世界
@@ -73,7 +73,7 @@ pnpm probe
 ```bash
 # 从模板创建玩家专属世界
 node tools/scaffold.mjs --template holmes-world --out worlds/my-holmes
-# 可选模板: holmes-world, school-romance, cultivation, cthulhu
+# 可选模板: holmes-world, school-romance, magic-academy, cthulhu
 ```
 
 ### 4. 启动本地全栈开发

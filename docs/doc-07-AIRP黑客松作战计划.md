@@ -58,7 +58,7 @@
 - [ ] 空仓库 `git init`，pnpm workspace monorepo（apps/web + apps/server + packages/shared）
 - [ ] `git submodule add` pi-rp → `vendor/pi-rp`；跑通 `npm run build`
 - [ ] 拉起脚本：`tools/scaffold.mjs`——从模板世界目录拷贝出玩家世界（"拷目录即开世界"是 doc-05 §8 的 UGC 生态设计）
-- [ ] 世界模板 3 个（doc-05 §11：校园恋爱/修仙/克苏鲁各一）：`README.md` + `world.json` + `characters/` + `journal/` 骨架 + 初始场景目录。**模板内容质量 = 演示成败的一半**，赛前可在"提前准备"里把内容写好（§4.1 A1）
+- [ ] 世界模板 3 个（doc-05 §11：校园恋爱/魔法学院/克苏鲁各一）：`README.md` + `world.json` + `characters/` + `journal/` 骨架 + 初始场景目录。**模板内容质量 = 演示成败的一半**，赛前可在"提前准备"里把内容写好（§4.1 A1）
 - [ ] 世界目录扫描器（worldStore 最薄版）：`readFile/writeFile/listFiles` + manifest 读写。**接口形状按 doc-05 §8.3 WorldStore 定死**，云端版 S3 只换实现不换接口
 
 **下午（主攻：明月）**
@@ -180,7 +180,7 @@ flowchart TB
 
 | # | 物料 | 产出物 | 说明 |
 |---|---|---|---|
-| A1 | **世界模板 ×3**（校园恋爱/修仙/克苏鲁） | 每个一整套目录：README + world.json + 3-4 个初始场景 + 2-3 个角色卡（identity/personality/relations md）+ journal 骨架 + 第一幕剧本（作家预设的开场演出） | **演示质量的 50%**。AI 写的世界模板容易"有设定没戏感"，需要明月亲自写第一幕。赛前一周开始 |
+| A1 | **世界模板 ×3**（校园恋爱/魔法学院/克苏鲁） | 每个一整套目录：README + world.json + 3-4 个初始场景 + 2-3 个角色卡（identity/personality/relations md）+ journal 骨架 + 第一幕剧本（作家预设的开场演出） | **演示质量的 50%**。AI 写的世界模板容易"有设定没戏感"，需要明月亲自写第一幕。赛前一周开始 |
 | A2 | **四个 preset 骨架** | `writer.json`（作家·主）/ `character.json`（角色）/ `scene-init.json`（场景初始化，`delegatable: true`）/ `nook-init.json`（小天地初始化，`delegatable: true`），后两者见 doc-11 | doc-05 §4.2 骨架已定稿，直接转成 pi-rp preset JSON。**格式铁律（2026-09-11 实测）**：① 顶层**没有 `system` 字段**，提示词一律进 `items`；② 不存在 `system` 这个 slot，平台隐形提示词用 `block` 写文本；③ `--preset` 只认 **id** 不认文件路径，且只扫 `<configDir>/prompt-presets/` 顶层。~~`world-subagent.json`~~ 与 `scene-init` 职责重叠，已合并删除（2026-09-11） |
 | A2b | **平台统一的角色行为规则文本** | 怎么当角色/怎么说话/怎么行动/出戏纪律（doc-05 §4.1）。**当前直接写进 preset 的 `block`**，不为它注册自定义 slot | **无信息边界/守密内容**：AIRP 不做防备机制——角色知道什么 = preset 引用 + 最近场景情况注入 + 自己 read_canvas |
 | A2c | **world.json manifest schema** | TypeScript 类型 + JSON schema + 校验函数（纯函数可单测） | doc-05 §8.4 定稿，直接转代码。zod 写完可以单测 |

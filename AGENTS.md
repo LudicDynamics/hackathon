@@ -20,6 +20,23 @@
 | 叙事引擎 | **pi-rp** —— `vendor/pi-rp` git submodule，独立仓库 |
 | 包管理 | pnpm workspace |
 
+### 1.1 语言规范（硬要求）
+
+**产品一律英文，沟通与文档一律中文。**
+
+| 范围 | 语言 | 理由 |
+|---|---|---|
+| 前端 UI 文案、演示内容、世界素材 | **英文** | 玩家与评委看到的一切 |
+| `presets/**` 提示词、`templates/**` 世界内容 | **英文** | 喂给 AI 的 prompt 与世界内容，**连目录名与文件名一起** |
+| 立绘 / 资源 / 图标等资产的文件名与说明 | **英文** | 资产清单 |
+| 代码注释、报错文案、日志 | **英文** | 仓库是公开的黑客松产物，评审会直接读代码 |
+| commit message、与队友/用户沟通 | **中文** | 开发者都是中国人 |
+| `docs/**`、本文件、根 `README.md` | **中文** | 内部设计文档 |
+
+黑客松官方语言是 **英文 / 日语**。判断标准：**任何可能被评委或海外玩家看到的东西 → 英文**。日语只用于日式世界的专有名词，且用罗马字（`nanami`、`sakura-academy`）。
+
+命名一律 ASCII 小写 kebab-case（`baker-street`、`arcane-library`）；专有名词用标准英文或罗马字（`watson`、`baker-street`）。改世界内容时**目录名即 id**——`world.json` 的 `layers` key、`characters[].home`、preset 的 `options.baseDir`、`.airpworld/openings/<id>.json` 的文件名都要跟着改。
+
 ---
 
 ## 2. 目录
@@ -43,7 +60,7 @@ apps/
     components/god/        # 上帝模式工具栏
 packages/shared/src/    # world / frontmatter / components / events schema + store + sqlite
 presets/                # 提示词预设：writer, character, scene-init, nook-init
-templates/              # 开箱世界模板：holmes-world, school-romance, cultivation, cthulhu
+templates/              # 开箱世界模板：holmes-world, school-romance, magic-academy, cthulhu
 worlds/                 # 脚手架产出的玩家世界（.gitignore）
 tools/scaffold.mjs      # 模板 → 新世界
 tools/probe-writer.mjs  # 全链路探针（pnpm probe）

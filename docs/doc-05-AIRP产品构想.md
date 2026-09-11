@@ -365,7 +365,7 @@ player/
 [世界动态]
 - 玩家把「铜钥匙.md」从柜台拿到了自己的背包里。
 - 玩家掷骰：检定「推理检定」掷出 62（>50 通过）。
-- 玩家刚切到「废弃果园」层。
+- 玩家刚切到「Abandoned Orchard」层。
 - 老周还在柜台边（跟随中）。
 ```
 
@@ -586,15 +586,15 @@ interface WorldStore {
     { "id": "community:weather-effects", "version": "^2.1.0", "optional": true }
   ],
   "layers": {
-    "map": { "name": "贝克街221B", "parent": null },
-    "world/贝克街": { "name": "贝克街", "parent": "map" },
-    "world/贝克街/犯罪现场": { "name": "犯罪现场", "parent": "world/贝克街", "stub": true },
-    "world/贝克街/废弃果园": { "name": "废弃果园", "parent": "world/贝克街", "stub": true },
-    "world/公寓": { "name": "公寓", "parent": "map" }
+    "map": { "name": "221B Baker Street", "parent": null },
+    "world/baker-street": { "name": "Baker Street", "parent": "map" },
+    "world/baker-street/crime-scene": { "name": "Crime Scene", "parent": "world/baker-street", "stub": true },
+    "world/baker-street/abandoned-orchard": { "name": "Abandoned Orchard", "parent": "world/baker-street", "stub": true },
+    "world/apartment": { "name": "Apartment", "parent": "map" }
   },
   "characters": [
-    { "id": "华生", "home": "world/贝克街", "role": "companion" },
-    { "id": "巡警", "home": "world/贝克街", "role": "npc" }
+    { "id": "watson", "home": "world/baker-street", "role": "companion" },
+    { "id": "constable", "home": "world/baker-street", "role": "npc" }
   ],
   "createdAt": "2026-09-11T00:00:00Z",
   "updatedAt": "2026-09-11T00:00:00Z"
@@ -749,7 +749,7 @@ chalk   // 角色写板书（场景内单聊/小天地内聊天时落盘）
 
 > 2026-09-11 更新：以下大部分已立项为独立专题（doc-09~17），"待展开"降为导航指针；`world.json manifest schema` 已定案（见 §8.4）。
 
-- 世界模板的题材清单（校园恋爱/修仙/克苏鲁/科幻…）与"模板 = 预写骨架"的内容规范——**doc-15**
+- 世界模板的题材清单（校园恋爱/魔法学院/克苏鲁/科幻…）与"模板 = 预写骨架"的内容规范——**doc-15**
 - 预设互动组件库的 10-20 个**叙事补充组件**清单（信/书/谜题/机关/乐器/棋盘/天气/装置…——装饰/沉默细节，不承载玩法推进）——**doc-10**
 - 作家提示词骨架 v1 细化（§4.2 的字段注入机制：场景上下文从哪查、journal 怎么摘要进上下文、委托 brief 的参考通道）——**doc-12**
 - 角色目录结构规范（`characters/<角色>/`：README.md + preset.json + 被引用的 md 文件，memory/小天地内容的处理方式）——**doc-13**
