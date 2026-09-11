@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { mkdirSync } from 'node:fs';
 import type { Dirent } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -53,6 +54,7 @@ export class LocalWorldStore implements WorldStore {
   constructor(worldRoot: string) {
     this.worldRoot = path.resolve(worldRoot);
     const airpDir = path.join(this.worldRoot, '.airpworld');
+    mkdirSync(airpDir, { recursive: true });
 
     this.canvasDb = new DatabaseSync(path.join(airpDir, 'canvas.db'));
     this.historyDb = new DatabaseSync(path.join(airpDir, 'history.db'));
@@ -104,7 +106,7 @@ export class LocalWorldStore implements WorldStore {
     }
 
     await walk(rootDir);
-    return results.map((abs) => path.relative(this.worldRoot, abs));
+    return results.map((abs) => path.relative(this.worldRoot, abs).split(path.sep).join('/'));
   }
 
   /** Every directory under `world/` (relative paths, sorted) — the layer tree. */
@@ -128,7 +130,7 @@ export class LocalWorldStore implements WorldStore {
       }
     }
     await walk(root);
-    return [root, ...out].map((abs) => path.relative(this.worldRoot, abs));
+    return [root, ...out].map((abs) => path.relative(this.worldRoot, abs).split(path.sep).join('/'));
   }
 
   async move(from: string, to: string): Promise<MoveResult> {
