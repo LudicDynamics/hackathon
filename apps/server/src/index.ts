@@ -13,6 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const VENDOR_CLI = path.join(REPO_ROOT, 'vendor/pi-rp/packages/coding-agent/dist/cli.js');
+const WEB_DIST = path.join(REPO_ROOT, 'apps/web/dist');
 
 const app = express();
 const server = http.createServer(app);
@@ -42,6 +43,7 @@ const lifecycle = new AgentLifecycleManager({
   }
 })();
 
+// API Routes
 app.use(
   '/api',
   createWorldRouter(
@@ -52,6 +54,17 @@ app.use(
     (s) => { activeStore = s; }
   )
 );
+
+// Serve static frontend files from apps/web/dist
+app.use(express.static(WEB_DIST));
+
+// SPA fallback for frontend client routing
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/ws')) {
+    return next();
+  }
+  res.sendFile(path.join(WEB_DIST, 'index.html'));
+});
 
 // WebSocket client connection handling
 wss.on('connection', (ws: WebSocket) => {
@@ -77,7 +90,6 @@ wss.on('connection', (ws: WebSocket) => {
         });
       } else if (data.type === 'character_prompt') {
         // Send message to character process
-        // Lifecycle can route to character client
       } else if (data.type === 'character_stop') {
         lifecycle.stopCharacter(data.characterId);
       }
@@ -92,6 +104,6 @@ wss.on('connection', (ws: WebSocket) => {
 });
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
-server.listen(PORT, () => {
-  console.log(`[AIRP Server] Listening on http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`[AIRP Server] Listening on http://0.0.0.0:${PORT} and http://localhost:${PORT}`);
 });
