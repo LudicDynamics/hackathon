@@ -11,8 +11,6 @@ interface CardRendererProps {
   };
   /** Ordinal of this gate among the layer's gates (Main computes it). */
   index?: number;
-  /** The current layer's own README path — it renders as a placard, not a door. */
-  currentReadmePath?: string | null;
   onSelectChoice?: (choice: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
   onEnterGate?: (targetLayer: string) => void;
@@ -82,7 +80,6 @@ const GatePin: React.FC = () => (
 export const CardRenderer: React.FC<CardRendererProps> = ({
   item,
   index = 1,
-  currentReadmePath,
   onSelectChoice,
   onDiceRolled,
   onEnterGate,
@@ -104,13 +101,11 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
     );
   }
 
-  // 2. Gate Card (sub-scene portal) — the directory made into a door.
-  //    The CURRENT layer's own README is not a door: it is the scene's own
-  //    placard, so it renders as a scene card with no navigation (clicking a
-  //    card that pointed at itself would land on the pseudo-layer 'world').
+  // 2. Gate Card (sub-scene portal) — a sub-directory's README, the door that
+  //    walks into that scene. The current layer's own README is never a card
+  //    (see cardsOfLayer), so every gate here genuinely navigates somewhere.
   if (frontmatter?.type === 'gate' || filename === 'README.md') {
     const isStub = frontmatter?.stub || false;
-    const isCurrent = path === currentReadmePath;
     // Title: frontmatter title, else the scene name, else the parent directory
     // name — never the literal filename "README".
     const title =
@@ -127,15 +122,10 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
     const order = /^\d+$/.test(String(orderNum))
       ? String(orderNum).padStart(2, '0')
       : orderNum;
-    const meta = isCurrent
-      ? 'CURRENT SCENE'
-      : isStub
-        ? 'UNWRITTEN · walk in, and it will be written →'
-        : 'SCENE · ENTRANCE';
+    const meta = isStub ? 'UNWRITTEN · walk in, and it will be written →' : 'SCENE · ENTRANCE';
     return (
       <div
         onClick={() => {
-          if (isCurrent) return; // the scene placard does not walk into itself
           const target = frontmatter?.target || path.replace('/README.md', '');
           onEnterGate?.(target);
         }}

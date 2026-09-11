@@ -90,7 +90,6 @@ export const Canvas: React.FC<CanvasProps> = ({
   const cardDragRef = useRef<CardDragSession | null>(null);
   const paperSlideRef = useRef<{ t: number; x: number; y: number } | null>(null);
   const prevLayerRef = useRef<string | null>(null);
-  const readmePath = currentLayer === 'map' ? 'world/README.md' : `${currentLayer}/README.md`;
   const itemsByPath = useMemo(() => new Map(items.map((it) => [it.path, it])), [items]);
   // Ordinal seal number per gate (01, 02, …) — the scene's position among the
   // gates of THIS layer, derived from server order so it is stable across
@@ -157,7 +156,6 @@ export const Canvas: React.FC<CanvasProps> = ({
       const el = obj as HTMLElement;
       if (cardDragRef.current) return; // one drag at a time
       const path = el.dataset.path ?? '';
-      if (path === readmePath) return; // the layer's own README is drag-locked
       if (target.closest('button, a, input, select, textarea, [data-no-drag]')) {
         return; // interactive child: plain click, no drag session
       }
@@ -398,7 +396,6 @@ export const Canvas: React.FC<CanvasProps> = ({
           <CanvasObject
             key={item.path}
             item={item}
-            readmePath={readmePath}
             index={gateOrdinal.get(item.path)}
             onSelectChoice={onSelectChoice}
             onDiceRolled={onDiceRolled}

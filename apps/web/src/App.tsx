@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Compass, Clock, Layers, ArrowLeft } from 'lucide-react';
 import { Canvas } from './components/canvas/Canvas.js';
 import { RightSidebar } from './components/sidebar/RightSidebar.js';
@@ -115,16 +115,26 @@ export function App() {
     enterLayer(target);
   };
 
-  const handleReturnToParent = () => {
+  // Back one level: follow the DERIVED parent (manifest layer graph), never
+  // string surgery on the id. Slicing `world/crime-scene` to `world` landed on
+  // a non-existent pseudo-layer whose page held no children — the map's doors
+  // vanished, leaving only the world README. `map` is the root (parent null).
+  const handleReturnToParent = useCallback(() => {
     if (currentLayer === 'map') return;
-    const parts = currentLayer.split('/');
-    if (parts.length <= 1) {
-      enterLayer('map');
-    } else {
-      parts.pop();
-      enterLayer(parts.join('/'));
-    }
-  };
+    const parent = manifest?.layers?.[currentLayer]?.parent;
+    enterLayer(typeof parent === 'string' && parent ? parent : 'map');
+  }, [currentLayer, manifest, enterLayer]);
+
+  // Esc / Alt+← return to the parent layer (the hint bar promises both).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || (e.altKey && e.key === 'ArrowLeft')) {
+        handleReturnToParent();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleReturnToParent]);
 
   // Choice Selection
   const handleSelectChoice = async (choice: string) => {

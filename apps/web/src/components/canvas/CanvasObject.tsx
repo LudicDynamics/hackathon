@@ -68,8 +68,6 @@ const SpriteFig: React.FC = () => (
 
 export interface CanvasObjectProps {
   item: LayerItem;
-  /** Path of the current layer's own README — that card is drag-locked (plan §6.3). */
-  readmePath: string | null;
   /** Ordinal of this gate among the layer's gates (fallback for the seal). */
   index?: number;
   onSelectChoice?: (choice: string) => void;
@@ -81,7 +79,6 @@ export interface CanvasObjectProps {
 
 export const CanvasObject: React.FC<CanvasObjectProps> = ({
   item,
-  readmePath,
   index,
   onSelectChoice,
   onDiceRolled,
@@ -89,7 +86,6 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   onOpenCharacterModal,
   onItemDropOnTarget,
 }) => {
-  const locked = item.path === readmePath;
   const kind = item.kind;
 
   return (
@@ -97,7 +93,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
       data-path={item.path}
       onPointerEnter={() => highlightLinks(item.path, true)}
       onPointerLeave={() => highlightLinks(item.path, false)}
-      className={`object ink-form${locked ? ' object-locked' : ''}`}
+      className="object ink-form"
       style={
         {
           left: item.x,
@@ -122,7 +118,6 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
           <CardRenderer
             item={item}
             index={index}
-            currentReadmePath={readmePath}
             onSelectChoice={onSelectChoice}
             onDiceRolled={onDiceRolled}
             onEnterGate={onEnterGate}
