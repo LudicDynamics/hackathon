@@ -63,10 +63,8 @@ export function hasExistingSession(worldRoot: string): boolean {
  * Session handling: `--session-dir` pins storage to the world; a world that already
  * has a `.jsonl` resumes it with `--continue` (pi-rp `SessionManager.continueRecent`).
  *
- * Deliberately **no `PI_OPENING`**: pi-rp's opening seeder writes into chat history,
- * but in AIRP chat history never reaches the canvas — narrative *is* the chalk markdown
- * on disk, and each layer ships its opening as a `type: chalk` file (doc-05 §5).
- * Seeding an opening here would burn a turn and show the player nothing.
+ * No opening seeding: the player-facing opening is a `type: chalk` file already
+ * shipped in the layer directory, and chat history never reaches the canvas (doc-05 §7.4).
  */
 export function writerLaunch(repoRoot: string, worldRoot: string, vendorCliPath: string): LaunchSpec {
   const presetId = installPreset(worldRoot, path.join(repoRoot, 'presets', 'writer.json'));
@@ -87,7 +85,7 @@ export function writerLaunch(repoRoot: string, worldRoot: string, vendorCliPath:
     cliPath: vendorCliPath,
     cwd: worldRoot,
     args,
-    env: toEnv(airpEnv(worldRoot), agentDirEnv(repoRoot), { PI_CODING_AGENT_SESSION_DIR: sessionsDir }),
+    env: toEnv(airpEnv(), agentDirEnv(repoRoot), { PI_CODING_AGENT_SESSION_DIR: sessionsDir }),
   };
 }
 
@@ -125,10 +123,7 @@ export function characterLaunch(
       path.join(sessionsDir, `char-${characterId}.jsonl`),
       ...extensionArgs(repoRoot, worldRoot),
     ],
-    // A character's opening *is* chat: the overlay renders the dialogue transcript, so
-    // pi-rp's `session_start` seeding is exactly right here (doc-07 §3.5). The writer
-    // gets no opening — its narrative is chalk on disk, not chat.
-    env: toEnv(airpEnv(worldRoot, characterId), agentDirEnv(repoRoot), {
+    env: toEnv(airpEnv(), agentDirEnv(repoRoot), {
       PI_CODING_AGENT_SESSION_DIR: sessionsDir,
     }),
   };

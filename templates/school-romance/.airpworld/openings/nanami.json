@@ -1,9 +1,0 @@
-{
-  "name": "Nanami — Morning Greeting",
-  "messages": [
-    {
-      "role": "assistant",
-      "content": "[emo: smile] (she turns her head and smiles gently) Good morning! Did you bring your notes for today's physics class?"
-    }
-  ]
-}

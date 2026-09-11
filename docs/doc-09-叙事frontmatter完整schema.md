@@ -6,7 +6,7 @@
 ## 背景与现状（已定案，不重谈）
 
 - 三者（choice / status / roll_dice）是**所有落盘实体通用的互动字段**，不局限于 chalk；类 md 表格渲染、可折叠、随所属实体走；
-- **无独立状态文件、无状态栏**（doc-00 变更记录 #4）；
+- **无独立状态文件、无状态栏、无 state 工具**（doc-00 变更记录 #4）：`status` 只是**该实体（含 chalk）的一份快照**，读它 = 读那个文件。`get_state / set_state / state_update / watch_state` **绝对不做**（doc-20 §2.3）；
 - roll_dice **骰子协议已定稿**（doc-05 §3.1）：作者写 `type`/`desc`/`expect`（不写 `result`）；玩家点击或 Agent 调用 `roll_dice` → 引擎真随机掷出并按 expect 判定 → 回写 result/passed → 落定显示 + `roll_resolved` 事件；
 - 前端渲染管线（解析 frontmatter → 渲染 → 交互回写）在 doc-06 §2.6 给出了原则，缺完整协议。
 - Agent 的 `look_at` 剥离原始 frontmatter，但必须把三种互动字段格式化成可读、可继续调用的文本块（doc-20 §3）。
@@ -24,7 +24,7 @@
 
 ## 边界
 
-- 不引入独立状态文件/状态栏（doc-00 变更 #4）；
+- 不引入独立状态文件/状态栏，也不引入任何 state 读写工具（绝对不做，非暂缓；doc-20 §2.3）；
 - 骰子判定由引擎做（按 expect 比较）；前端与 Agent 工具只是两个触发入口；
 - 剧情判定不写骰子，直接写正文（doc-05 §3.1）。
 
