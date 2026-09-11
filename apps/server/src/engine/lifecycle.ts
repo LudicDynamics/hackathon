@@ -25,11 +25,12 @@ const WARMUP_DELAY_MS = { continued: 800 } as const;
 const RESTART_BACKOFF_MS = [1000, 2000, 4000, 8000, 16000];
 const MAX_RESTART_ATTEMPTS = 5;
 const LIVENESS_PROBE_MS = 5000;
+const DEFAULT_TURN_TIMEOUT_MS = 90000;
 
 /**
  * Owns pi-rp agent processes: one writer per world (reused), one character per id,
- * plus liveness probing, backoff restart, and warmup replay of the custom entries
- * emitted before our event subscription existed.
+ * plus liveness probing, backoff restart, turn timeout safeguards, and warmup replay
+ * of the custom entries emitted before our event subscription existed.
  *
  * Everything protocol-level lives in the vendored `RpcClient` — this class never
  * touches stdio or JSONL framing.
@@ -45,6 +46,7 @@ export class AgentLifecycleManager {
   private writerPing: NodeJS.Timeout | null = null;
   private writerRestarts = 0;
   private characterClients = new Map<string, RpcClient>();
+  private turnTimeouts = new Map<string, NodeJS.Timeout>();
 
   constructor(options: AgentLifecycleManagerOptions) {
     this.repoRoot = options.repoRoot;
@@ -72,7 +74,7 @@ export class AgentLifecycleManager {
       args: spec.args,
       env: spec.env,
     });
-    client.onEvent((event) => this.eventSink?.('writer', event));
+    client.onEvent((event) => this.handleEngineEvent('writer', event, 'writer', client));
 
     await client.start();
     this.writer = client;
@@ -90,7 +92,7 @@ export class AgentLifecycleManager {
 
   /** Starts a character agent. No context injection (removed in B0 — B3 rebuilds it via `appendMessage`). */
   async startCharacter(characterId: string, worldRoot: string): Promise<RpcClient> {
-    this.stopCharacter(characterId);
+    await this.stopCharacter(characterId);
 
     const spec = characterLaunch(this.repoRoot, worldRoot, this.vendorCliPath, characterId);
     const client = new RpcClient({
@@ -99,7 +101,9 @@ export class AgentLifecycleManager {
       args: spec.args,
       env: spec.env,
     });
-    client.onEvent((event) => this.eventSink?.('character', event));
+    client.onEvent((event) =>
+      this.handleEngineEvent('character', event, `character:${characterId}`, client)
+    );
 
     await client.start();
     this.characterClients.set(characterId, client);
@@ -111,13 +115,21 @@ export class AgentLifecycleManager {
   }
 
   async stopCharacter(characterId: string): Promise<void> {
+    this.clearTurnTimeout(`character:${characterId}`);
     const client = this.characterClients.get(characterId);
     if (!client) return;
     this.characterClients.delete(characterId);
-    await client.stop();
+    await client.stop().catch(() => {});
+  }
+
+  /** Stops all active character agents (e.g. on world change). */
+  async stopCharacters(): Promise<void> {
+    const characters = [...this.characterClients.keys()];
+    await Promise.all(characters.map((id) => this.stopCharacter(id)));
   }
 
   async stopWriter(): Promise<void> {
+    this.clearTurnTimeout('writer');
     if (this.writerPing) {
       clearInterval(this.writerPing);
       this.writerPing = null;
@@ -125,12 +137,51 @@ export class AgentLifecycleManager {
     const client = this.writer;
     this.writer = null;
     this.writerWorld = null;
-    if (client) await client.stop();
+    if (client) await client.stop().catch(() => {});
   }
 
   async stopAll(): Promise<void> {
-    const characters = [...this.characterClients.keys()];
-    await Promise.all([this.stopWriter(), ...characters.map((id) => this.stopCharacter(id))]);
+    await Promise.all([this.stopWriter(), this.stopCharacters()]);
+  }
+
+  private handleEngineEvent(
+    source: 'writer' | 'character',
+    event: JsonAgentSessionEvent,
+    clientKey: string,
+    client: RpcClient
+  ): void {
+    if (event.type === 'agent_start') {
+      this.armTurnTimeout(clientKey, client, source);
+    } else if (event.type === 'agent_settled') {
+      this.clearTurnTimeout(clientKey);
+    }
+    this.eventSink?.(source, event);
+  }
+
+  private armTurnTimeout(clientKey: string, client: RpcClient, source: 'writer' | 'character'): void {
+    this.clearTurnTimeout(clientKey);
+    const timer = setTimeout(() => {
+      console.warn(
+        `[AIRP Lifecycle] ${clientKey} turn exceeded ${DEFAULT_TURN_TIMEOUT_MS}ms; aborting runaway turn`
+      );
+      client.abort().catch(() => {});
+      this.frameSink?.({
+        type: 'turn_aborted',
+        source,
+        reason: 'timeout',
+        timestamp: new Date().toISOString(),
+      });
+    }, DEFAULT_TURN_TIMEOUT_MS);
+    timer.unref?.();
+    this.turnTimeouts.set(clientKey, timer);
+  }
+
+  private clearTurnTimeout(clientKey: string): void {
+    const existing = this.turnTimeouts.get(clientKey);
+    if (existing) {
+      clearTimeout(existing);
+      this.turnTimeouts.delete(clientKey);
+    }
   }
 
   /**

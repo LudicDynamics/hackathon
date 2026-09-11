@@ -80,7 +80,9 @@ export function mapEngineEvent(
       });
       if (event.toolName === 'chalk' || event.toolName === 'write') {
         const landed: Record<string, any> = { type: 'chalk_landed', source };
-        if (args?.path) landed.path = args.path;
+        const resultPath = typeof event.result === 'object' && event.result !== null ? (event.result as Record<string, any>).path : undefined;
+        const targetPath = args?.path ?? resultPath;
+        if (targetPath) landed.path = targetPath;
         push(landed);
       }
       if (event.toolName === 'link' || event.toolName === 'arrange') {

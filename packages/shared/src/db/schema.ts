@@ -2,6 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 
 export function initCanvasDatabase(db: DatabaseSync): void {
   db.exec(`
+    PRAGMA journal_mode = WAL;
+    PRAGMA busy_timeout = 5000;
+
     CREATE TABLE IF NOT EXISTS cards (
       id TEXT PRIMARY KEY,
       layer TEXT NOT NULL,
@@ -36,6 +39,9 @@ export function initCanvasDatabase(db: DatabaseSync): void {
 
 export function initHistoryDatabase(db: DatabaseSync): void {
   db.exec(`
+    PRAGMA journal_mode = WAL;
+    PRAGMA busy_timeout = 5000;
+
     CREATE TABLE IF NOT EXISTS entries (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,

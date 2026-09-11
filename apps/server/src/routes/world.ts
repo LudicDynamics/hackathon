@@ -89,6 +89,9 @@ export function createWorldRouter(
       const { worldPath } = req.body;
       const resolvedPath = path.isAbsolute(worldPath) ? worldPath : path.join(repoRoot, worldPath);
 
+      worldFrozen = false;
+      await lifecycle.stopCharacters();
+
       const current = getActiveStore();
       if (current) current.close();
 
@@ -386,12 +389,7 @@ export function createWorldRouter(
 
       eventBridge.broadcast({ type: 'roll_resolved', event, result: rollResult, passed });
 
-      // Notify writer
-      const writer = lifecycle.getWriter();
-      if (writer) {
-        writer.prompt(`[System notice: the player made a check "${expect}" and rolled ${rollResult} (${passed ? 'success' : 'failure'}). Continue the story and respond in narration accordingly.]`).catch(console.error);
-      }
-
+      // Event is recorded in history.db and injected via Hook on next player turn (doc-05 §5.1)
       res.json({ ok: true, result: rollResult, passed });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -412,12 +410,7 @@ export function createWorldRouter(
 
       eventBridge.broadcast({ type: 'use_item_on', event });
 
-      // Inform writer agent
-      const writer = lifecycle.getWriter();
-      if (writer) {
-        writer.prompt(`[System notice: the player used the item "${path.basename(itemPath)}" on "${path.basename(targetPath)}". Advance the scene's evolution and write a narrative response according to the item-interaction logic.]`).catch(console.error);
-      }
-
+      // Event is recorded in history.db and injected via Hook on next player turn (doc-05 §5.1)
       res.json({ ok: true, event });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -449,12 +442,7 @@ export function createWorldRouter(
       const event = await store.appendWorldEvent('god_action', { action, filePath });
       eventBridge.broadcast({ type: 'god_action', event });
 
-      // If thawed, inform writer
-      if (!worldFrozen) {
-        const writer = lifecycle.getWriter();
-        writer?.prompt(`[System notice: the god hand modified the world object "${filePath}" (action: ${action}). Please stitch it into the narrative.]`).catch(console.error);
-      }
-
+      // Event is recorded in history.db and perceived via Hook on next player turn (doc-05 §5.1)
       res.json({ ok: true, event });
     } catch (err: any) {
       res.status(500).json({ error: err.message });

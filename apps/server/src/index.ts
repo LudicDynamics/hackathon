@@ -84,14 +84,56 @@ wss.on('connection', (ws: WebSocket) => {
       if (data.type === 'writer_prompt') {
         const writer = lifecycle.getWriter();
         if (!writer) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Writer agent is not running' }));
+          ws.send(JSON.stringify({ type: 'error', source: 'writer', message: 'Writer agent is not running' }));
           return;
         }
-        await writer.prompt(data.message);
+        try {
+          if (data.mode === 'steer') {
+            await writer.steer(data.message);
+          } else if (data.mode === 'followUp') {
+            await writer.followUp(data.message);
+          } else {
+            await writer.prompt(data.message);
+          }
+        } catch (err: any) {
+          console.error('[AIRP WS] Writer prompt failed:', err);
+          ws.send(JSON.stringify({ type: 'error', source: 'writer', message: err?.message || String(err) }));
+        }
+      } else if (data.type === 'writer_abort' || data.type === 'abort') {
+        const writer = lifecycle.getWriter();
+        if (writer) {
+          await writer.abort().catch((err) => console.warn('[AIRP WS] Writer abort failed:', err));
+        }
       } else if (data.type === 'character_start') {
-        await lifecycle.startCharacter(data.characterId, data.worldPath);
+        try {
+          await lifecycle.startCharacter(data.characterId, data.worldPath);
+        } catch (err: any) {
+          console.error('[AIRP WS] Character start failed:', err);
+          ws.send(JSON.stringify({ type: 'error', source: 'character', characterId: data.characterId, message: err?.message || String(err) }));
+        }
       } else if (data.type === 'character_prompt') {
-        // TODO(B3): forward to character client + parse [emo:] tags
+        const character = lifecycle.getCharacter(data.characterId);
+        if (!character) {
+          ws.send(JSON.stringify({ type: 'error', source: 'character', characterId: data.characterId, message: `Character agent "${data.characterId}" is not running` }));
+          return;
+        }
+        try {
+          if (data.mode === 'steer') {
+            await character.steer(data.message);
+          } else if (data.mode === 'followUp') {
+            await character.followUp(data.message);
+          } else {
+            await character.prompt(data.message);
+          }
+        } catch (err: any) {
+          console.error('[AIRP WS] Character prompt failed:', err);
+          ws.send(JSON.stringify({ type: 'error', source: 'character', characterId: data.characterId, message: err?.message || String(err) }));
+        }
+      } else if (data.type === 'character_abort') {
+        const character = lifecycle.getCharacter(data.characterId);
+        if (character) {
+          await character.abort().catch((err) => console.warn('[AIRP WS] Character abort failed:', err));
+        }
       } else if (data.type === 'character_stop') {
         await lifecycle.stopCharacter(data.characterId);
       }
