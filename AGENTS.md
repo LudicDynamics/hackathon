@@ -266,7 +266,7 @@ pnpm pi commit "fix(...): …" [--no-build]   # build 红线 → 子模块 commi
 2. **外壳不写死高度**：`CanvasObject` 只给 `width`，高度由内容撑开，外壳（和拖拽碰撞读到的 `offsetHeight`）自然贴合。form 表的 `h` 只服务座位排布，不是渲染高度。
 3. **旋转只归外壳**：`--target-rot`（`rotOf` 派生）只写在外壳上。内层形态**禁止自带 `rotate`**（`.note` 曾自带 `-1.2deg`，与外壳叠加成 -4.2°）。**`chalk` 与 `sprite` 恒为 `0deg`**——叙事板正是"板正的板书"，不倾斜。
 4. **文字不溢出**：卡面摘要走 `plainExcerpt`（剥掉 `#`/`<b>`/换行等 markdown 原文），多行用 `-webkit-line-clamp` 截断；正文绝不会以裸 markdown 源码出现在卡面。
-5. **第二层阅读 = hover 浮层**：`gate` 的 README 全文走 `.gate__detail`（绝对定位浮在卡片上沿、`z-index` 盖过邻卡、`pointer-events` 默认 none），**不是**把全文塞进卡片撑破布局。
+5. **第二层阅读的标准形态 = 模态框**（`letter` 的 `letterFocus`、v3 `DetailPanel`：类型章 + 全文 + 回跳 + 续写；见 doc-10 E2/E9 与 §E11 对照表）。**点击展开是默认**，hover 只是它的替代——当卡片的**单击语义已被占用**（`gate` 单击 = 进门，不能再抢去开阅读），或形态上不适合弹模态框的组件，才改走 hover 浮层。`gate` 的 README 全文即此例：`.gate__detail` 绝对定位浮在卡片上沿、`z-index` 盖过邻卡、`pointer-events` 默认 none。**无论走哪种，"全文绝不塞进卡片撑破布局"这条不变。**
 6. **z 序**：`.object` 的 `z-index` 是内联写的（服务端行序），所以交互态抬升必须 `!important`——hover `.object{z-index:30}`、拖拽 `.object.dragging-item{z-index:40}`（拖拽值必须更高，否则被邻卡 hover 盖住）。
 
 **已知缺口**：座位排布仍按 form 表的 `h` 算碰撞，与实际渲染高度（chalk 可远超 190）不一致，多张长 chalk 可能轻微重叠。这是排列算法的独立问题，改动会触及 `local-store` 螺旋排布与已持久化座位，尚未处理。
