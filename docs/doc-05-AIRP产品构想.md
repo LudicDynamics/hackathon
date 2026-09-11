@@ -205,7 +205,7 @@ characters/
     { "kind": "slot", "id": "character-instruction", "slot": "system-char" },
     { "kind": "slot", "id": "profile", "slot": "file",
       "options": { "path": ["identity.md", "appearance.md", "personality.md"],
-                   "baseDir": "characters/旅店老板", "onMissing": "skip" } },
+                   "baseDir": "characters/旅店老板", "stripFrontmatter": true, "onMissing": "skip" } },
     { "kind": "slot", "id": "chat-history", "slot": "chat-history" }
   ]
 }

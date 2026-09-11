@@ -16,6 +16,7 @@
       "options": {
         "path": ["README.md", "identity.md", "personality.md"],
         "baseDir": "characters/watson",
+        "stripFrontmatter": true,
         "onMissing": "skip"
       }
     },

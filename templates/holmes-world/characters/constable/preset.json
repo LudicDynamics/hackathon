@@ -16,6 +16,7 @@
       "options": {
         "path": ["README.md", "identity.md", "personality.md"],
         "baseDir": "characters/constable",
+        "stripFrontmatter": true,
         "onMissing": "skip"
       }
     },

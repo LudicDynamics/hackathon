@@ -22,6 +22,7 @@
       "options": {
         "path": ["README.md", "identity.md", "personality.md"],
         "baseDir": "characters/old-sailor",
+        "stripFrontmatter": true,
         "onMissing": "skip"
       }
     },
