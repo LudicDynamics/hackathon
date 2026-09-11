@@ -94,7 +94,7 @@ cd holmes-world && zip -r holmes-world.airpworld.zip .
 
 ## 与前端原型的关系
 
-`../画布世界v1-yoshi.html` 是此世界的**前端渲染原型**（纸质感画布、层级穿越、chalk流式书写、角色对话遮罩、背包拖拽）。
+前端渲染原型 `画布世界v1-yoshi.html` 在 **`infini-canvas` 项目**里（纸质感画布、层级穿越、chalk流式书写、角色对话遮罩、背包拖拽）；克隆该项目到本项目的兄弟目录即可对照。
 - 地图数据、叙事脚本、角色配置已写入此文件目录
 - 前端 HTML 中的 LAYERS / WRITER_SCRIPTS / DLG_ASSETS 与此目录一一对应
 - 此目录是**真相源**（文件即世界状态），HTML 是**投影**（画布即渲染）
