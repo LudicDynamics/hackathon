@@ -4,6 +4,8 @@ import { Canvas } from './components/canvas/Canvas.js';
 import { RightSidebar } from './components/sidebar/RightSidebar.js';
 import { CharacterModal } from './components/overlay/CharacterModal.js';
 import { GodModeToolbar } from './components/god/GodModeToolbar.js';
+import { MuteButton } from './components/chrome/MuteButton.js';
+import { useAudio } from './state/useAudio.js';
 import { useCamera } from './state/useCamera.js';
 import { useWorld } from './state/useWorld.js';
 
@@ -26,11 +28,17 @@ export function App() {
   // Active Character Modal (Galgame Overlay)
   const [activeModalCharId, setActiveModalCharId] = useState<string | null>(null);
   const camera = useCamera();
+  const { setAmbient } = useAudio();
 
   // Canvas world state (layer payload, WS events, card persistence).
   const world = useWorld();
   const { state: worldState, layer: currentLayer, enterLayer, refresh, moveCard, sendToWriter, sendMessage } = world;
   const worldFrozen = worldState?.worldFrozen === true;
+
+  // Ambient bed follows the layer's material tone (T2.1): warm → fireplace, else rain.
+  useEffect(() => {
+    setAmbient(worldState?.bg?.tone || 'rain');
+  }, [currentLayer]);
 
   // Camera memory around the modal mask (P0: save before opening, restore after).
   const openCharacterModal = (charId: string) => {
@@ -202,7 +210,7 @@ export function App() {
     <div className="flex flex-col w-screen h-screen overflow-hidden bg-paper-bg text-ink">
       {/* Toast Alert Banner */}
       {toastMessage && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-2.5 rounded-full bg-ink text-white font-sans text-xs font-semibold shadow-deep border border-white/20 animate-in slide-in-from-top-4 duration-300">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-2.5 rounded-full bg-ink text-white font-sans text-xs font-semibold shadow-deep border border-white/20">
           {toastMessage}
         </div>
       )}
@@ -245,8 +253,9 @@ export function App() {
           <span>Day 1 · Rain Subsides 17:40</span>
         </div>
 
-        {/* Right God Mode Controls */}
+        {/* Right God Mode + Mute */}
         <div className="flex items-center gap-3">
+          <MuteButton />
           <GodModeToolbar
             frozen={worldFrozen}
             onToggleFreeze={handleToggleFreeze}

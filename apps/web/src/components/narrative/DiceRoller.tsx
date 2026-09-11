@@ -1,5 +1,26 @@
-import React, { useState } from 'react';
+/**
+ * DiceRoller.tsx — fullscreen dice ceremony (T2.3).
+ *
+ * The server contract is untouched: POST {filePath, rollType, expect} →
+ * {result, passed}, posted the moment the roll releases (authoritative first,
+ * doc-06 §roll order). The 3D tween is purely visual. Pipeline:
+ * overlay opens (warm-black dim) → hold a charge bar (~1.2s, rising tone)
+ * → release → 1.2s cube tumble + dice-roll foley → settled result with
+ * crit bloom / fumble crack effects. A plain tap auto-fills the bar instead
+ * of rolling instantly.
+ */
+import React, { useEffect, useRef, useState } from 'react';
 import { Dices, CheckCircle2, AlertCircle } from 'lucide-react';
+import { unlock, playFoley, playCharge, endCharge } from '../../lib/audio.js';
+
+const CHARGE_MS = 1200; // hold time for a full bar
+const TAP_MS = 300; // presses shorter than this are taps → auto-fill
+const AUTO_FILL_MS = 600; // tap auto-fill duration
+const ROLL_MS = 1200; // cube tween length (also the animation gate)
+const SETTLE_MS = 1300; // result lingers before the overlay auto-closes
+const IDLE_TILT = { x: 12, y: 20 }; // resting pose before the roll
+
+const FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 
 interface DiceRollerProps {
   filePath: string;
@@ -13,117 +34,316 @@ interface DiceRollerProps {
   onRollComplete?: (result: number, passed: boolean) => void;
 }
 
+type Phase = 'charging' | 'rolling' | 'settled';
+type Effect = 'crit' | 'fumble' | null;
+
+interface DiceVerdict {
+  result: number;
+  passed: boolean;
+}
+
+/** Boundary guard for the authoritative /api/dice response (untrusted JSON). */
+function parseDiceVerdict(raw: unknown): DiceVerdict | null {
+  if (!raw || typeof raw !== 'object' || !('result' in raw) || !('passed' in raw)) return null;
+  const { result, passed } = raw;
+  if (typeof result !== 'number' || typeof passed !== 'boolean') return null;
+  return { result, passed };
+}
+
 export const DiceRoller: React.FC<DiceRollerProps> = ({
   filePath,
   rollDice,
   onRollComplete,
 }) => {
-  const [rolling, setRolling] = useState(false);
-  const [cubeRotation, setCubeRotation] = useState({ x: 0, y: 0 });
-  const [localResult, setLocalResult] = useState<number | undefined>(rollDice.result);
-  const [localPassed, setLocalPassed] = useState<boolean | undefined>(rollDice.passed);
+  // Pre-rolled checks (server already resolved) just show the result card.
+  const [rolled, setRolled] = useState<DiceVerdict | null>(() => {
+    const r = rollDice.result;
+    const p = rollDice.passed;
+    return r !== undefined && p !== undefined ? { result: r, passed: p } : null;
+  });
+  const [open, setOpen] = useState(false);
+  const [phase, setPhase] = useState<Phase>('charging');
+  const [effect, setEffect] = useState<Effect>(null);
+  const [charge, setCharge] = useState(0);
+  const [rotation, setRotation] = useState(IDLE_TILT);
 
-  const handleRoll = async () => {
-    if (rolling) return;
-    setRolling(true);
+  const heldRef = useRef(false);
+  const chargeStartRef = useRef(0);
+  const rafRef = useRef<number | null>(null);
+  const timersRef = useRef<number[]>([]);
+  const pendingRef = useRef<{ anim: boolean; verdict: DiceVerdict | null }>({
+    anim: false,
+    verdict: null,
+  });
+  const completeRef = useRef(false);
 
-    // Dynamic 3D tumbling rotation
-    const rx = 360 * 3 + Math.floor(Math.random() * 4) * 90;
-    const ry = 360 * 3 + Math.floor(Math.random() * 4) * 90;
-    setCubeRotation({ x: rx, y: ry });
+  const clearTimers = () => {
+    timersRef.current.forEach((t) => clearTimeout(t));
+    timersRef.current = [];
+  };
+  const cancelRaf = () => {
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+  };
 
-    try {
-      const res = await fetch('/api/dice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filePath,
-          rollType: rollDice.type || '1d100',
-          expect: rollDice.expect,
-        }),
-      });
-      const data = await res.json();
-      setTimeout(() => {
-        setLocalResult(data.result);
-        setLocalPassed(data.passed);
-        setRolling(false);
-        onRollComplete?.(data.result, data.passed);
-      }, 1200);
-    } catch (err) {
-      console.error('Failed to roll dice:', err);
-      setRolling(false);
+  useEffect(
+    () => () => {
+      cancelRaf();
+      clearTimers();
+      endCharge();
+    },
+    []
+  );
+
+  const closeOverlay = () => {
+    clearTimers();
+    cancelRaf();
+    endCharge();
+    setOpen(false);
+    setPhase('charging');
+    setCharge(0);
+    setEffect(null);
+    setRotation(IDLE_TILT);
+    completeRef.current = false;
+    pendingRef.current = { anim: false, verdict: null };
+  };
+
+  /** Called when both the cube tween has finished AND the server verdict
+   *  landed — whichever comes last settles the roll. */
+  const settleIfReady = () => {
+    const { anim, verdict } = pendingRef.current;
+    if (!anim || !verdict || completeRef.current) return;
+    completeRef.current = true;
+    setRolled(verdict);
+    setPhase('settled');
+
+    // Effects fire once, at settlement, per the doc order.
+    if (verdict.passed && verdict.result >= 95) {
+      setEffect('crit');
+      playFoley('crit-chime');
+    } else if (!verdict.passed && verdict.result <= 5) {
+      setEffect('fumble');
+      playFoley('fumble-break');
+    } else {
+      setEffect(null);
+    }
+
+    timersRef.current.push(window.setTimeout(closeOverlay, SETTLE_MS));
+  };
+
+  const rollDie = () => {
+    setPhase('rolling');
+    endCharge();
+    // Random 1080°+ tumble that always lands on a 90°-multiple face.
+    setRotation({
+      x: 1080 + Math.floor(Math.random() * 4) * 90,
+      y: 1080 + Math.floor(Math.random() * 4) * 90,
+    });
+    playFoley('dice-roll');
+    pendingRef.current = { anim: false, verdict: null };
+
+    // Verdict is posted immediately — the tween is pure theater.
+    void (async () => {
+      try {
+        const res = await fetch('/api/dice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filePath,
+            rollType: rollDice.type || '1d100',
+            expect: rollDice.expect,
+          }),
+        });
+        const verdict = parseDiceVerdict(await res.json());
+        if (!verdict) throw new Error('Malformed /api/dice response');
+        pendingRef.current.verdict = verdict;
+        settleIfReady();
+      } catch (err) {
+        console.error('Failed to roll dice:', err);
+        // No verdict → back to the card so the player can retry.
+        closeOverlay();
+      }
+    })();
+
+    timersRef.current.push(
+      window.setTimeout(() => {
+        pendingRef.current.anim = true;
+        settleIfReady();
+      }, ROLL_MS)
+    );
+  };
+
+  const startCharge = (e: React.PointerEvent) => {
+    if (phase !== 'charging') return;
+    void unlock(); // the ceremony surface is a gesture — resume audio here
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    heldRef.current = true;
+    chargeStartRef.current = performance.now();
+    cancelRaf();
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - chargeStartRef.current) / CHARGE_MS);
+      setCharge(p);
+      playCharge(p);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  };
+
+  const releaseCharge = () => {
+    if (phase !== 'charging' || !heldRef.current) return;
+    heldRef.current = false;
+    cancelRaf();
+    const holdMs = performance.now() - chargeStartRef.current;
+    if (holdMs < TAP_MS) {
+      // A plain tap: auto-fill the bar for drama, then release the roll.
+      // The charge tone keeps riding up through the fill (rollDie ends it).
+      const fillStart = performance.now();
+      const fill = (now: number) => {
+        const p = Math.min(1, (now - fillStart) / AUTO_FILL_MS);
+        setCharge(p);
+        playCharge(p);
+        if (p < 1) rafRef.current = requestAnimationFrame(fill);
+        else rollDie();
+      };
+      rafRef.current = requestAnimationFrame(fill);
+    } else {
+      rollDie();
     }
   };
 
-  const hasRolled = localResult !== undefined;
+  const cancelCharge = () => {
+    if (phase !== 'charging' || !heldRef.current) return;
+    heldRef.current = false;
+    cancelRaf();
+    endCharge();
+    setCharge(0);
+  };
+
+  const openOverlay = () => {
+    if (open || rolled) return;
+    void unlock();
+    completeRef.current = false;
+    pendingRef.current = { anim: false, verdict: null };
+    setOpen(true);
+    setPhase('charging');
+    setCharge(0);
+  };
+
+  const badge = (pass: boolean) =>
+    pass ? (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+        <CheckCircle2 className="w-3.5 h-3.5" /> Check Passed
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full">
+        <AlertCircle className="w-3.5 h-3.5" /> Check Failed
+      </span>
+    );
+
+  const cube = (cubeClass: string, sceneClass: string) => (
+    <div className={sceneClass}>
+      <div className={cubeClass} style={{ transform: `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)` }}>
+        {FACES.map((p, i) => (
+          <div key={i} className={`dice-face face-${i + 1}`}>
+            {p}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div className="mt-4 p-4 rounded-2xl bg-paper-wall/60 border border-ink/10 shadow-sm">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Dices className="w-5 h-5 text-rust" />
-          <span className="text-sm font-semibold tracking-wide text-ink">
-            {rollDice.desc}
-          </span>
+          <span className="text-sm font-semibold tracking-wide text-ink">{rollDice.desc}</span>
         </div>
         <span className="font-mono text-xs px-2 py-0.5 rounded bg-ink/5 text-ink/70">
           Requires: {rollDice.expect}
         </span>
       </div>
 
-      <div className="flex items-center justify-between">
+      {rolled ? (
+        /* Already resolved — show the result card, never re-enter the ceremony. */
         <div className="flex items-center gap-4">
-          <div className="dice-scene cursor-pointer" onClick={handleRoll}>
-            <div
-              className="dice-cube"
-              style={{
-                transform: `rotateX(${cubeRotation.x}deg) rotateY(${cubeRotation.y}deg)`,
-              }}
-            >
-              <div className="dice-face face-1">⚀</div>
-              <div className="dice-face face-2">⚁</div>
-              <div className="dice-face face-3">⚂</div>
-              <div className="dice-face face-4">⚃</div>
-              <div className="dice-face face-5">⚄</div>
-              <div className="dice-face face-6">⚅</div>
-            </div>
+          {cube('dice-cube', 'dice-scene')}
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-xl font-bold text-ink">{rolled.result}</span>
+            {badge(rolled.passed)}
           </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={openOverlay}
+              className="px-4 py-1.5 rounded-full bg-rust hover:bg-rust-light text-white text-xs font-medium tracking-wide shadow-sm transition-all"
+            >
+              Roll the Dice
+            </button>
+            <span className="text-xs text-ink/50">Hold the die to charge the roll</span>
+          </div>
+        </div>
+      )}
 
-          <div>
-            {!hasRolled && !rolling && (
-              <button
-                onClick={handleRoll}
-                className="px-4 py-1.5 rounded-full bg-rust hover:bg-rust-light text-white text-xs font-medium tracking-wide shadow-sm transition-all"
-              >
-                Roll the Dice
-              </button>
+      {open && (
+        <div className="fixed inset-0 z-50 bg-[rgba(41,40,32,0.55)] backdrop-blur-sm flex items-center justify-center">
+          {effect === 'fumble' && <div className="fumble-crack" />}
+          <div
+            className={`relative flex flex-col items-center gap-8 py-10 px-16 rounded-3xl bg-paper-card/95 border border-ink/10 shadow-deep ${
+              effect === 'fumble' ? 'dice-shake' : ''
+            }`}
+            onPointerDown={phase === 'charging' ? startCharge : undefined}
+            onPointerUp={phase === 'charging' ? releaseCharge : undefined}
+            onPointerCancel={phase === 'charging' ? cancelCharge : undefined}
+          >
+            {effect === 'crit' && <div className="crit-glow" />}
+
+            {cube('dice-cube-ceremony', 'dice-scene-ceremony')}
+
+            {phase === 'charging' && (
+              <div className="w-64 flex flex-col items-center gap-3 select-none">
+                <span className="font-mono text-xs tracking-[0.25em] text-ink/60 uppercase">
+                  Hold to Roll
+                </span>
+                <div className="charge-bar">
+                  <div className="charge-fill" style={{ width: `${charge * 100}%` }} />
+                </div>
+              </div>
             )}
 
-            {rolling && (
-              <span className="font-mono text-xs text-ink/60 animate-pulse">
+            {phase === 'rolling' && (
+              <span className="font-mono text-xs text-ink/60 animate-pulse tracking-widest uppercase">
                 The dice of fate are spinning...
               </span>
             )}
 
-            {hasRolled && !rolling && (
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xl font-bold text-ink">
-                  {localResult}
-                </span>
-                {localPassed ? (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Check Passed
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full">
-                    <AlertCircle className="w-3.5 h-3.5" /> Check Failed
-                  </span>
-                )}
+            {phase === 'settled' && rolled && (
+              <div className="flex flex-col items-center gap-4">
+                <div
+                  className={`dice-result-number ${
+                    effect === 'crit'
+                      ? 'dice-result-crit'
+                      : effect === 'fumble'
+                        ? 'dice-result-fumble'
+                        : 'text-ink'
+                  }`}
+                >
+                  {rolled.result}
+                </div>
+                {badge(rolled.passed)}
+                <button
+                  onClick={closeOverlay}
+                  className="px-5 py-2 rounded-full bg-ink text-white text-xs font-semibold tracking-wide shadow-sm hover:opacity-80 transition-opacity"
+                >
+                  DONE
+                </button>
               </div>
             )}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

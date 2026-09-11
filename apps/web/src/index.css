@@ -265,3 +265,489 @@ body:before {
   }
 }
 
+/* ============================================================
+   Character modal — galgame overlay (T3.3, wave 2 Task D)
+   Appended at the end of the cascade on purpose. Uses the v2
+   ink-canvas tokens (--ink/--rust/--sage/--blue/--paper/--cream/
+   --wall/--muted/--line) declared in :root above. Layout spec in
+   doc-06 §3: dimmed canvas behind, split portrait stage, tilted
+   paper dialog, streaming line — no bubbles, no scroll history.
+   ============================================================ */
+
+/* ---- full-screen layer: the canvas itself dims + blurs behind a
+   warm-ink tint (brightness(.35) blur(6px) + rgba tint). Not a
+   black sheet — the fireplace notes stay faintly visible. ---- */
+.character-modal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 50; /* above canvas + grain (z ≤ 10) */
+  overflow: hidden;
+  backdrop-filter: brightness(0.35) blur(6px);
+  -webkit-backdrop-filter: brightness(0.35) blur(6px);
+  background: rgba(41, 40, 32, 0.25); /* warm-ink tint over the dimmed canvas */
+  animation: modalEnter 0.3s ease-out;
+}
+
+.modal-closing {
+  animation: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+@keyframes modalEnter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- portrait stage: two bottom-pinned slots, lit vs dimmed ---- */
+.portrait-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 6vw 20vh;
+  z-index: 1;
+}
+
+.portrait-slot {
+  flex: none;
+  width: min(40vh, 26vw, 360px);
+  height: min(64vh, 560px);
+  filter: saturate(0.35) brightness(0.6); /* non-speaking default */
+  transform: translateY(12px);
+  transition: filter 0.35s ease, transform 0.35s ease;
+}
+
+.portrait-slot.lit {
+  filter: none;
+  transform: none; /* the speaker returns to full light */
+}
+
+/* Breathing scale lives on the inner wrapper (its animation owns the
+   transform), so slot-level lit/dim transforms never conflict. */
+.portrait-breathe {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  transform-origin: 50% 100%;
+  animation: portraitBreathe 5s ease-in-out infinite;
+}
+
+@keyframes portraitBreathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+/* Emotion diffs — CSS-only until sprite-sheet assets land (T3.2/T3.8).
+   Once emo sheets arrive, replace these filter rules with background-position
+   sprite switching on .portrait-emo. */
+.portrait-emo {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: filter 0.35s ease, transform 0.35s ease;
+}
+
+.portrait-emo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* portraits are vertical PNGs — crop to the slot */
+  object-position: center top;
+}
+
+.emo-smile {
+  /* warm lift */
+  filter: brightness(1.08) saturate(1.18) sepia(0.12) hue-rotate(-8deg);
+}
+
+.emo-shock {
+  /* brighter + high contrast */
+  filter: brightness(1.15) saturate(1.1) contrast(1.06);
+}
+
+.emo-sad {
+  /* grey, dimmed */
+  filter: grayscale(0.85) brightness(0.78);
+}
+
+.emo-angry {
+  /* red tint + slight slant */
+  filter: sepia(0.35) saturate(1.6) hue-rotate(-15deg) brightness(1.02);
+  transform: rotate(-2deg);
+}
+
+.emo-thinking {
+  /* desaturated + slightly receded */
+  filter: saturate(0.55) brightness(0.92);
+  transform: scale(0.97);
+}
+
+.emo-shock-shake {
+  animation: emoShockShake 0.35s linear infinite;
+}
+
+@keyframes emoShockShake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-1.5px);
+  }
+  75% {
+    transform: translateX(1.5px);
+  }
+}
+
+/* ---- portrait fallback: first-letter monogram on a v2 gradient
+   when the avatar asset is missing or fails to load (T3.8) ---- */
+.portrait-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'LXGW WenKai', 'KaiTi', serif;
+  font-weight: 700;
+  font-size: clamp(4rem, 14vh, 9rem);
+  color: var(--rust);
+  background: linear-gradient(165deg, var(--cream) 0%, var(--paper) 58%, var(--sage) 175%);
+  border: 1px solid var(--line);
+}
+
+/* ---- bottom tilted paper dialog ---- */
+.speech-paper {
+  position: absolute;
+  left: 50%;
+  bottom: 5.5vh;
+  z-index: 2;
+  width: min(720px, 78vw);
+  padding: 1.2rem 1.6rem 0.9rem;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid rgba(41, 40, 32, 0.35);
+  box-shadow: 0 18px 42px rgba(41, 40, 32, 0.32), 0 4px 10px rgba(41, 40, 32, 0.2);
+  transform: translateX(-50%) rotate(-0.4deg);
+  animation: speechRise 0.6s cubic-bezier(0.16, 1, 0.3, 1); /* rises from below */
+}
+
+.speech-paper-closing {
+  animation: none;
+  opacity: 0;
+  transform: translateX(-50%) translateY(60px) rotate(-0.4deg);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+@keyframes speechRise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 60px) rotate(-0.4deg);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) rotate(-0.4deg);
+  }
+}
+
+/* name plate — overlaps the paper's top-left edge, rust-outlined */
+.name-plate {
+  position: absolute;
+  top: -0.95em;
+  left: 1.6em;
+  padding: 0.16em 0.9em 0.2em;
+  background: var(--cream);
+  border: 1.5px solid var(--rust);
+  color: var(--ink);
+  font-family: 'LXGW WenKai', 'KaiTi', serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  transform: rotate(-1.2deg);
+  box-shadow: 2px 2px 0 rgba(41, 40, 32, 0.18);
+}
+
+/* quadrille narration line — italic small type, never mixed with lines */
+.narr-line {
+  margin: 0.55rem 0 0.4rem;
+  font-style: italic;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.4;
+  min-height: 1.1em;
+}
+
+/* fixed streaming stage: min-height 3.2em with line-height 2, per spec */
+.line-stage {
+  min-height: 3.2em;
+  line-height: 2;
+  font-family: 'LXGW WenKai', 'KaiTi', serif;
+  font-size: 1.12rem;
+  color: var(--ink);
+}
+
+.speech-line {
+  display: block; /* the streamed character line sits under the player echo */
+}
+
+.player-echo {
+  display: block;
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-style: italic;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.thinking-hint {
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+/* typewriter caret for the streaming line */
+.type-caret {
+  display: inline-block;
+  width: 1px;
+  height: 1.1em;
+  margin-left: 3px;
+  vertical-align: -0.12em;
+  background: var(--rust);
+  animation: caretBlink 1s steps(1) infinite;
+}
+
+@keyframes caretBlink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* player input — one bare bottom row inside the paper, no separate box */
+.speech-input {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+  padding: 0.3rem 0.1rem 0.25rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(41, 40, 32, 0.2);
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 0.95rem;
+  color: var(--ink);
+  caret-color: var(--rust);
+  outline: none;
+  user-select: text;
+  transition: border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.speech-input:focus {
+  border-bottom-color: var(--rust);
+}
+
+.speech-input::placeholder {
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+.speech-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* minimal top-right close affordance (Esc also closes) */
+.modal-close {
+  position: absolute;
+  top: 1.4rem;
+  right: 1.6rem;
+  z-index: 60;
+  width: 2.2rem;
+  height: 2.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--paper);
+  background: rgba(41, 40, 32, 0.55);
+  border: 1px solid rgba(244, 240, 232, 0.35);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.modal-close:hover {
+  background: var(--rust);
+  border-color: var(--rust);
+  color: #ffffff;
+}
+
+/* ============================================================
+   Dice ceremony (T2.3, wave 2 Task C) — fullscreen roll overlay,
+   charge bar, crit bloom / fumble crack / screen shake. Appended
+   after Task D's modal section; these classes are dice-only and
+   reuse the .dice-cube/.dice-face mechanics from above.
+   ============================================================ */
+
+/* 160px ceremonial die — same 3D mechanics as the card mini-cube,
+   just larger; the 1.2s roll tween lives on this transition. */
+.dice-cube-ceremony {
+  width: 160px;
+  height: 160px;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dice-scene-ceremony {
+  perspective: 1000px;
+}
+
+/* faces climb to the ceremony scale — translateZ = half the edge (80px). */
+.dice-cube-ceremony .dice-face {
+  width: 160px;
+  height: 160px;
+  border-radius: 24px;
+  font-size: 48px;
+}
+.dice-cube-ceremony .face-1 {
+  transform: rotateY(0deg) translateZ(80px);
+}
+.dice-cube-ceremony .face-2 {
+  transform: rotateY(90deg) translateZ(80px);
+}
+.dice-cube-ceremony .face-3 {
+  transform: rotateY(180deg) translateZ(80px);
+}
+.dice-cube-ceremony .face-4 {
+  transform: rotateY(-90deg) translateZ(80px);
+}
+.dice-cube-ceremony .face-5 {
+  transform: rotateX(90deg) translateZ(80px);
+}
+.dice-cube-ceremony .face-6 {
+  transform: rotateX(-90deg) translateZ(80px);
+}
+
+/* charge bar — sage→rust fill under "HOLD TO ROLL". */
+.charge-bar {
+  width: 260px;
+  height: 10px;
+  border-radius: 9999px;
+  background: rgba(41, 40, 32, 0.16);
+  border: 1px solid rgba(41, 40, 32, 0.28);
+  overflow: hidden;
+}
+
+.charge-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, var(--sage), var(--rust));
+  transition: width 0.05s linear;
+}
+
+/* settled result — oversized mono figure. */
+.dice-result-number {
+  font-family: 'DM Mono', monospace;
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* crit: gold bloom — one radial expansion behind the die, plus a warm
+   cast on the number. */
+.crit-glow {
+  position: absolute;
+  inset: -60px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 196, 92, 0.5) 0%, rgba(255, 196, 92, 0) 65%);
+  animation: critBloom 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.dice-result-crit {
+  color: #b8860b;
+  text-shadow: 0 0 28px rgba(255, 196, 92, 0.85);
+}
+
+@keyframes critBloom {
+  0% {
+    opacity: 0;
+    transform: scale(0.45);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+
+/* fumble: scarlet fissure layer over the whole viewport + tremor on the
+   panel. The cracks are three offset diagonal strokes + a red vignette. */
+.fumble-crack {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 46%, rgba(176, 32, 32, 0.3) 0%, rgba(176, 32, 32, 0) 62%),
+    linear-gradient(104deg, transparent 43.5%, rgba(190, 40, 40, 0.8) 45.5%, rgba(120, 22, 22, 0.7) 47%, transparent 49%),
+    linear-gradient(74deg, transparent 55%, rgba(190, 40, 40, 0.65) 57%, transparent 59.5%),
+    linear-gradient(162deg, transparent 31%, rgba(150, 30, 30, 0.6) 32.5%, transparent 34%);
+  animation: crackIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.dice-result-fumble {
+  color: #a32929;
+  text-shadow: 0 0 24px rgba(190, 40, 40, 0.7);
+}
+
+@keyframes crackIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 2–3px tremor, 0.4s — applied to the ceremony panel on a big failure. */
+.dice-shake {
+  animation: diceShake 0.4s linear;
+}
+
+@keyframes diceShake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-3px, 2px);
+  }
+  40% {
+    transform: translate(3px, -2px);
+  }
+  60% {
+    transform: translate(-2px, -3px);
+  }
+  80% {
+    transform: translate(2px, 3px);
+  }
+}
+

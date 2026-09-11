@@ -4,6 +4,7 @@ import { LinkLayer, highlightLinks, updateAllLinks } from './LinkLayer.js';
 import { useCamera } from '../../state/useCamera.js';
 import { clampZ, zoomAt } from '../../lib/camera.js';
 import { makeBox, pushFrom, relaxAll } from '../../lib/collide.js';
+import { unlock, playFoley } from '../../lib/audio.js';
 import type { LayerItem, LayerLink } from '../../state/useWorld.js';
 
 interface CanvasProps {
@@ -90,6 +91,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   const pinchRef = useRef<{ d: number; z: number } | null>(null);
   const dragRef = useRef<PanDragState | null>(null);
   const cardDragRef = useRef<CardDragSession | null>(null);
+  const paperSlideRef = useRef<{ t: number; x: number; y: number } | null>(null);
   const prevLayerRef = useRef<string | null>(null);
 
   const readmePath = currentLayer === 'map' ? 'world/README.md' : `${currentLayer}/README.md`;
@@ -142,6 +144,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   // ---- Card drag (T0.3) ----
   const handlePointerDown = (e: React.PointerEvent) => {
+    void unlock(); // idempotent: any interaction start resumes the audio context
     const target = e.target as HTMLElement;
     const obj = target.closest('.object');
     if (obj) {
@@ -224,6 +227,19 @@ export const Canvas: React.FC<CanvasProps> = ({
       s.el.style.left = `${x}px`;
       s.el.style.top = `${y}px`;
 
+      // Paper-slide foley while dragging: ~80ms throttle, intensity follows
+      // the instantaneous pointer speed (a slow scoot is a soft whisper).
+      const now = performance.now();
+      const slide = paperSlideRef.current;
+      if (!slide) {
+        paperSlideRef.current = { t: now, x: e.clientX, y: e.clientY };
+      } else if (now - slide.t >= 80) {
+        const dt = Math.max(1, now - slide.t);
+        const spd = Math.hypot(e.clientX - slide.x, e.clientY - slide.y) / dt;
+        playFoley('paper-slide', Math.min(1, spd / 2));
+        paperSlideRef.current = { t: now, x: e.clientX, y: e.clientY };
+      }
+
       // Soft push of neighbours (pure math, direct DOM writes).
       const view = camera.viewportRef.current;
       if (view) {
@@ -274,6 +290,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   /** Finish a card drag: relax residual overlap, persist moved cards, clean up. */
   const settleDrag = (s: CardDragSession, persist: boolean) => {
     if (persist && s.moved) {
+      playFoley('bag-pack'); // drop thud once the card settles
       const view = camera.viewportRef.current;
       if (view) {
         const els: HTMLElement[] = [];
