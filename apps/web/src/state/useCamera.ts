@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   clampZ,
   lerpCam,
@@ -16,10 +16,20 @@ import {
  * - The rAF loop only starts on the instance whose worldRef is attached, so an
  *   App-level useCamera() never spawns a second loop (no double-speed easing).
  * - transform is written straight to the DOM every frame — never via setState.
- *   `cam` is only a 12-tick UI echo.
+ *   Consumers that draw from the camera (the minimap) subscribe with
+ *   `subscribe`; nothing about camera motion re-renders React.
  * - StrictMode-safe: the effect cleanup cancels the loop on the simulated
  *   unmount, so the dev double-mount does not double the easing rate.
  */
+
+/** A camera view snapshot handed to subscribers (displayed camera + viewport). */
+export interface CamView {
+  x: number;
+  y: number;
+  z: number;
+  vw: number;
+  vh: number;
+}
 
 /** Default view used when a layer has no memory (matches server seat anchor). */
 const DEFAULT_VIEW: Cam = { x: 960, y: 540, z: 0.95 };
@@ -44,8 +54,6 @@ export interface CameraApi {
   save(name: string): void;
   /** Return to the remembered target, or the default view when absent. */
   restore(name: string): void;
-  /** UI echo of the current (displayed) camera, synced every 12 ticks. */
-  cam: Cam;
   /** Live snapshot of the displayed camera — for pointer→world math. */
   getCam(): Cam;
   /** Live snapshot of the commanded target — wheel zoom anchors off this so
@@ -53,24 +61,50 @@ export interface CameraApi {
   getTarget(): Cam;
   /** Live viewport size (ResizeObserver-maintained). */
   getViewport(): { w: number; h: number };
+  /** Push a view on every camera tick; returns an unsubscribe. Used by the
+   *  minimap so following the camera costs no React render. */
+  subscribe(fn: (view: CamView) => void): () => void;
   /** Attach to the viewport div (wheel/pinch math + size observation). */
   viewportRef: React.RefObject<HTMLDivElement | null>;
   /** Attach to the single transform layer; rAF writes its transform. */
   worldRef: React.RefObject<HTMLDivElement | null>;
 }
 
+/**
+ * Shared camera view state. The rAF loop and the viewport element live in
+ * Canvas, while the minimap is drawn in App — so the observed size and the
+ * tick feed MUST be module-scope, or an App-side consumer would read a
+ * snapshot frozen at mount (stale while dragging, blind to zoom).
+ */
+let sharedSize = { w: 1200, h: 800 };
+const viewListeners = new Set<(view: CamView) => void>();
+
+function currentView(): CamView {
+  return {
+    x: sharedCurrent.x,
+    y: sharedCurrent.y,
+    z: sharedCurrent.z,
+    vw: sharedSize.w,
+    vh: sharedSize.h,
+  };
+}
+
+function publishView(): void {
+  const view = currentView();
+  for (const fn of viewListeners) fn(view);
+}
+
 export function useCamera(): CameraApi {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const worldRef = useRef<HTMLDivElement | null>(null);
-  const [cam, setCam] = useState<Cam>({ ...sharedCurrent });
-  const sizeRef = useRef({ w: 1200, h: 800 });
 
-  /* ---------- viewport size ---------- */
+  /* ---------- viewport size (observed on the instance owning the div) ---------- */
   useEffect(() => {
     const el = viewportRef.current;
-    if (!el) return;
+    if (!el) return; // App-level instance: Canvas publishes the size
     const update = () => {
-      sizeRef.current = { w: el.clientWidth, h: el.clientHeight };
+      sharedSize = { w: el.clientWidth, h: el.clientHeight };
+      publishView();
     };
     update();
     const ro = new ResizeObserver(update);
@@ -84,13 +118,20 @@ export function useCamera(): CameraApi {
     if (!world) return; // App-level instance: nothing to drive
     let raf = 0;
     let tick = 0;
+    let wasRest = true;
     const loop = () => {
       const c = sharedCurrent;
       lerpCam(c, sharedTarget);
-      const { w, h } = sizeRef.current;
-      world.style.transform = worldTransform(w, h, c);
+      world.style.transform = worldTransform(sharedSize.w, sharedSize.h, c);
       tick++;
-      if (tick % 12 === 0) setCam({ x: c.x, y: c.y, z: c.z });
+      const atRest =
+        c.x === sharedTarget.x && c.y === sharedTarget.y && c.z === sharedTarget.z;
+      // Publish on a ~20fps cadence while animating — the minimap's viewport
+      // rect must follow a pan/zoom smoothly — plus one final tick when the
+      // camera settles, so the rect lands exactly on the resting view. Idle
+      // frames publish nothing.
+      if (atRest ? !wasRest : tick % 3 === 0) publishView();
+      wasRest = atRest;
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -117,20 +158,27 @@ export function useCamera(): CameraApi {
 
   const getCam = useCallback(() => ({ ...sharedCurrent }), []);
   const getTarget = useCallback(() => ({ ...sharedTarget }), []);
-  const getViewport = useCallback(() => ({ ...sizeRef.current }), []);
+  const getViewport = useCallback(() => ({ ...sharedSize }), []);
+  const subscribe = useCallback((fn: (view: CamView) => void) => {
+    viewListeners.add(fn);
+    fn(currentView()); // paint immediately with the current view
+    return () => {
+      viewListeners.delete(fn);
+    };
+  }, []);
 
   return useMemo(
     () => ({
       flyTo,
       save,
       restore,
-      cam,
       getCam,
       getTarget,
       getViewport,
+      subscribe,
       viewportRef,
       worldRef,
     }),
-    [cam, flyTo, save, restore, getCam, getTarget, getViewport]
+    [flyTo, save, restore, getCam, getTarget, getViewport, subscribe]
   );
 }

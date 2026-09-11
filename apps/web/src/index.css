@@ -1335,22 +1335,46 @@ body:before {
   transform: none;
 }
 
-/* hint bar: the one line of instructions, bottom-left */
+/* hint bar: the key cheat sheet, bottom-left.
+   Collapsed (default) it is a bare "?" chip that cannot overlap the centered
+   writer bar; expanded it lifts above the writer strip and wraps within a
+   bounded width, so the two bottom-edge controls never fight for space. */
 .hint-bar {
   position: absolute;
   left: 20px;
   bottom: 18px;
   z-index: 50;
+  max-width: min(420px, calc(100% - 40px));
   padding: 6px 12px;
+  text-align: left;
   background: rgba(255, 254, 246, 0.7);
   border: 1px solid var(--hair);
   border-radius: 2px;
   font-family: 'DM Mono', monospace;
   font-size: 11px;
+  line-height: 1.6;
   color: var(--ink-2);
   opacity: 0.78;
+  cursor: pointer;
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
+}
+
+/* Collapsed chip: a compact square, out of the writer bar's lane. */
+.hint-bar--chip {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  border-radius: 9999px;
+}
+
+/* Expanded: clear the writer strip (bottom 24px + ~48px tall). */
+.hint-bar:not(.hint-bar--chip) {
+  bottom: 84px;
 }
 
 .hint-bar b {

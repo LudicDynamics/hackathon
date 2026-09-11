@@ -13,11 +13,6 @@ interface CanvasProps {
   items: LayerItem[];
   links: LayerLink[];
   bg: { src: string | null; tone: string; grain: string };
-  characters: Array<{
-    id: string;
-    avatar?: string;
-    bio?: string;
-  }>;
   onMoveCard?: (path: string, x: number, y: number) => Promise<void> | void;
   onSelectChoice?: (choice: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
@@ -79,7 +74,6 @@ export const Canvas: React.FC<CanvasProps> = ({
   items,
   links,
   bg,
-  characters,
   onMoveCard,
   onSelectChoice,
   onDiceRolled,
@@ -188,9 +182,6 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
 
     // Blank viewport → pan + pinch (unchanged from T0.2).
-    // Viewport-level interactive UI (character pills) must never start a pan
-    // nor be capture-retargeted — capture would swallow their click.
-    if (target.closest('.viewport-ui')) return;
     try {
       e.currentTarget.setPointerCapture?.(e.pointerId);
     } catch {
@@ -392,31 +383,6 @@ export const Canvas: React.FC<CanvasProps> = ({
     >
       {/* Material sheet of the current layer — behind the world, viewport-fixed. */}
       <SceneBackdrop bg={bg} />
-
-      {/* Character pill row — pinned to the viewport (not scaled by the world
-          transform) so the role entries keep working at any zoom (T1.5
-          replaces this with spatial presence halos). */}
-      {characters && characters.length > 0 && (
-        <div className="viewport-ui absolute top-4 left-1/2 -translate-x-1/2 z-30 flex gap-4">
-          {characters.map((char) => (
-            <div
-              key={char.id}
-              onClick={() => onOpenCharacterModal?.(char.id)}
-              className="group cursor-pointer flex items-center gap-2.5 px-3.5 py-2 rounded-full bg-paper-card border border-ink/10 shadow-halo hover:scale-105 transition-all"
-            >
-              <img
-                src={char.avatar || '/assets/characters/portraits/lady_1.png'}
-                alt={char.id}
-                className="w-8 h-8 rounded-full object-cover border border-rust/20"
-              />
-              <span className="text-xs font-bold text-ink group-hover:text-rust transition-colors">
-                {char.id}
-              </span>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* World Transform Layer — single transform layer, rAF writes transform.
           Must pin transform-origin to top-left: default is center, which would

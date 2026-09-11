@@ -276,7 +276,6 @@ export function App() {
             items={worldState?.items ?? []}
             links={worldState?.links ?? []}
             bg={worldState?.bg ?? { src: null, tone: 'warm', grain: 'parchment' }}
-            characters={characters}
             onMoveCard={moveCard}
             onSelectChoice={handleSelectChoice}
             onDiceRolled={(res, pass) => showToast(`Dice: ${res} (${pass ? 'Pass' : 'Fail'})`)}
@@ -299,13 +298,9 @@ export function App() {
               showToast('Sent to the writer');
             }}
           />
-          <Minimap
-            items={worldState?.items ?? []}
-            cam={camera.cam}
-            viewport={camera.getViewport()}
-            onJump={(x, y) => camera.flyTo(x, y)}
-          />
+          <Minimap items={worldState?.items ?? []} camera={camera} />
         </div>
+
 
         {/* Right Sidebar (Backpack & Characters) */}
         <RightSidebar
