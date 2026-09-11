@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "porter",
+  "name": "Ned Porter",
+  "description": "A crime reporter who trades access for the promise of an exclusive.",
+  "items": [
+    {
+      "kind": "slot",
+      "id": "character-instruction",
+      "slot": "system-char"
+    },
+    {
+      "kind": "slot",
+      "id": "profile",
+      "slot": "file",
+      "options": {
+        "path": [
+          "README.md",
+          "identity.md",
+          "personality.md",
+          "memory.md"
+        ],
+        "baseDir": "characters/porter",
+        "stripFrontmatter": true,
+        "onMissing": "skip"
+      }
+    },
+    {
+      "kind": "slot",
+      "id": "chat-history",
+      "slot": "chat-history"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "watson",
+  "name": "Dr. John Watson",
+  "description": "Holmes’s physician, chronicler, and humane counterweight.",
+  "items": [
+    {
+      "kind": "slot",
+      "id": "character-instruction",
+      "slot": "system-char"
+    },
+    {
+      "kind": "slot",
+      "id": "profile",
+      "slot": "file",
+      "options": {
+        "path": [
+          "README.md",
+          "identity.md",
+          "personality.md",
+          "memory.md"
+        ],
+        "baseDir": "characters/watson",
+        "stripFrontmatter": true,
+        "onMissing": "skip"
+      }
+    },
+    {
+      "kind": "slot",
+      "id": "chat-history",
+      "slot": "chat-history"
+    }
+  ]
+}

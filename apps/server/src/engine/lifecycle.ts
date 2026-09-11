@@ -105,6 +105,13 @@ export class AgentLifecycleManager {
     }
   }
 
+  async promptCharacter(characterId: string, message: string): Promise<boolean> {
+    const client = this.characterClients.get(characterId);
+    if (!client) return false;
+    await client.prompt(message);
+    return true;
+  }
+
   stopAll(): void {
     if (this.writerClient) {
       this.writerClient.stop();

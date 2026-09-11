@@ -12,3 +12,5 @@ dist/
 worlds/
 # Runtime copies installed from presets/ by installPreset; not the source of truth
 **/.airpworld/prompt-presets/
+# pi-rp session memory is runtime state, never template content truth
+**/.pi/*.db*

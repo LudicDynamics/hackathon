@@ -1,0 +1,69 @@
+{
+  "id": "whitechapel",
+  "name": "Letters from Whitechapel",
+  "version": "1.0.0",
+  "schema": 1,
+  "description": "An original 1888 detective case in which murders repeat illustrations from a serialized novel before the next chapter appears.",
+  "author": "Worldlines Canvas / AIRP",
+  "genre": "detective mystery",
+  "tags": [
+    "detective",
+    "evidence",
+    "victorian london"
+  ],
+  "material": "kraft",
+  "cover": "assets/characters/watson.webp",
+  "extensions": [
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
+  ],
+  "characters": [
+    {
+      "id": "watson",
+      "home": "world/case-board",
+      "role": "companion",
+      "avatar": "assets/characters/watson.webp",
+      "description": "Holmes’s physician, chronicler, and humane counterweight."
+    },
+    {
+      "id": "edith",
+      "home": "world/case-board",
+      "role": "npc",
+      "description": "The frightened novelist who changed the fourth chapter’s address."
+    },
+    {
+      "id": "wayne",
+      "home": "world/case-board/fleet-street-press",
+      "role": "npc",
+      "description": "The illustrator whose ultramarine cuff and injured right wrist connect art to the crimes."
+    },
+    {
+      "id": "blackburn",
+      "home": "world/case-board/fleet-street-press",
+      "role": "npc",
+      "description": "The editor who controls manuscript circulation and locks proofs in his desk."
+    },
+    {
+      "id": "tom",
+      "home": "world/case-board/fleet-street-press",
+      "role": "npc",
+      "description": "A typesetter with blackened hands and a complete night-shift ledger."
+    },
+    {
+      "id": "porter",
+      "home": "world/case-board/fleet-street-press",
+      "role": "npc",
+      "description": "A crime reporter who trades access for the promise of an exclusive."
+    }
+  ],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z"
+}

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "ryo-child",
+  "name": "Ryo Tokiwa · Age 7",
+  "description": "The shopkeeper’s seven-year-old daughter, doing homework at the counter in 1994.",
+  "items": [
+    {
+      "kind": "slot",
+      "id": "character-instruction",
+      "slot": "system-char"
+    },
+    {
+      "kind": "slot",
+      "id": "profile",
+      "slot": "file",
+      "options": {
+        "path": [
+          "README.md",
+          "identity.md",
+          "personality.md",
+          "memory.md"
+        ],
+        "baseDir": "characters/ryo-child",
+        "stripFrontmatter": true,
+        "onMissing": "skip"
+      }
+    },
+    {
+      "kind": "slot",
+      "id": "chat-history",
+      "slot": "chat-history"
+    }
+  ]
+}

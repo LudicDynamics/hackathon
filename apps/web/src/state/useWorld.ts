@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { airpGateway, openAirpSocket, sendSocket } from '../lib/airp-gateway.js';
 
 export interface LayerItem {
   path: string;
@@ -76,12 +77,7 @@ export function useWorld(): UseWorldApi {
     const seq = ++reqSeqRef.current;
     setLoading(true);
     try {
-      const res = await fetch(`/api/layer?layer=${encodeURIComponent(target)}`);
-      if (!res.ok) {
-        console.warn('Could not fetch layer:', res.status);
-        return;
-      }
-      const data = await res.json();
+      const data = await airpGateway.layer<any>(target);
       if (seq !== reqSeqRef.current) return; // stale response (layer switched meanwhile)
       const next: LayerState = {
         layer: data.layer,
@@ -130,14 +126,7 @@ export function useWorld(): UseWorldApi {
         : s
     );
     try {
-      const res = await fetch('/api/card/position', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path, x, y }),
-      });
-      if (!res.ok) {
-        throw new Error(`POST /api/card/position -> ${res.status} ${await res.text()}`);
-      }
+      await airpGateway.moveCard(path, x, y);
     } catch (err) {
       console.warn('moveCard failed, rolling back:', err);
       if (prev) setState(prev);
@@ -145,75 +134,80 @@ export function useWorld(): UseWorldApi {
   }, []);
 
   const sendToWriter = useCallback((text: string) => {
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'writer_prompt', message: text }));
-    }
+    sendSocket(wsRef.current, { type: 'writer_prompt', message: text });
   }, []);
 
   const sendMessage = useCallback((payload: Record<string, unknown>) => {
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(payload));
-    }
+    sendSocket(wsRef.current, payload);
   }, []);
 
   // WebSocket: world event → refresh; freeze flag → state; card_position → merge.
   useEffect(() => {
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
-    wsRef.current = ws;
+    let stopped = false;
+    let retryTimer: number | null = null;
+    let ws: WebSocket | null = null;
 
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (
-          msg.type === 'file_changed' ||
-          msg.type === 'item_moved' ||
-          msg.type === 'god_action'
-        ) {
-          // App listens for this to keep its backpack/character views in sync.
-          window.dispatchEvent(new CustomEvent('airp:world-event', { detail: msg }));
-        }
-        switch (msg.type) {
-          case 'file_changed':
-          case 'item_moved':
-          case 'god_action':
-            void fetchLayer(layerRef.current);
-            break;
-          case 'world_frozen':
-            setState((s) => (s ? { ...s, worldFrozen: true } : s));
-            break;
-          case 'world_thawed':
-            setState((s) => (s ? { ...s, worldFrozen: false } : s));
-            break;
-          case 'card_position':
-            if (
-              typeof msg.path === 'string' &&
-              typeof msg.x === 'number' &&
-              typeof msg.y === 'number'
-            ) {
-              setState((s) =>
-                s
-                  ? {
-                      ...s,
-                      items: s.items.map((it) =>
-                        it.path === msg.path ? { ...it, x: msg.x, y: msg.y } : it
-                      ),
-                    }
-                  : s
-              );
-            }
-            break;
-          default:
-            break; // agent_event / roll_resolved / use_item_on ignored here
-        }
-      } catch (err) {
-        console.error('WS parse error:', err);
+    const onMessage = (msg: Record<string, unknown>) => {
+      if (
+        msg.type === 'file_changed' ||
+        msg.type === 'item_moved' ||
+        msg.type === 'god_action'
+      ) {
+        window.dispatchEvent(new CustomEvent('airp:world-event', { detail: msg }));
+      }
+      switch (msg.type) {
+        case 'file_changed':
+        case 'item_moved':
+        case 'god_action':
+          void fetchLayer(layerRef.current);
+          break;
+        case 'world_frozen':
+          setState((s) => (s ? { ...s, worldFrozen: true } : s));
+          break;
+        case 'world_thawed':
+          setState((s) => (s ? { ...s, worldFrozen: false } : s));
+          break;
+        case 'card_position':
+          if (
+            typeof msg.path === 'string' &&
+            typeof msg.x === 'number' &&
+            typeof msg.y === 'number'
+          ) {
+            setState((s) =>
+              s
+                ? {
+                    ...s,
+                    items: s.items.map((it) =>
+                      it.path === msg.path ? { ...it, x: msg.x as number, y: msg.y as number } : it
+                    ),
+                  }
+                : s
+            );
+          }
+          break;
+        default:
+          break;
       }
     };
 
-    return () => ws.close();
+    const connect = () => {
+      if (stopped) return;
+      ws = openAirpSocket(onMessage);
+      wsRef.current = ws;
+      ws.onopen = () => void fetchLayer(layerRef.current);
+      ws.onclose = () => {
+        if (wsRef.current === ws) wsRef.current = null;
+        if (!stopped) retryTimer = window.setTimeout(connect, 1200);
+      };
+    };
+
+    connect();
+
+    return () => {
+      stopped = true;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      ws?.close();
+    };
   }, [fetchLayer]);
 
   // Initial load of the default layer.

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "blackburn",
+  "name": "Mr. Blackburn",
+  "description": "The editor who controls manuscript circulation and locks proofs in his desk.",
+  "items": [
+    {
+      "kind": "slot",
+      "id": "character-instruction",
+      "slot": "system-char"
+    },
+    {
+      "kind": "slot",
+      "id": "profile",
+      "slot": "file",
+      "options": {
+        "path": [
+          "README.md",
+          "identity.md",
+          "personality.md",
+          "memory.md"
+        ],
+        "baseDir": "characters/blackburn",
+        "stripFrontmatter": true,
+        "onMissing": "skip"
+      }
+    },
+    {
+      "kind": "slot",
+      "id": "chat-history",
+      "slot": "chat-history"
+    }
+  ]
+}

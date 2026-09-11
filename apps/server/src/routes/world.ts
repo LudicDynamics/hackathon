@@ -50,8 +50,10 @@ function readLayerBg(raw: string): { src: string | null; tone: string; grain: st
   } catch {
     src = null;
   }
-  const tone = raw.match(/^\s*tone:\s*(\S+)/m)?.[1] ?? 'warm';
-  const grain = raw.match(/^\s*grain:\s*(\S+)/m)?.[1] ?? 'parchment';
+  const yamlScalar = (value: string | undefined, fallback: string) =>
+    value?.trim().replace(/^['"]|['"]$/g, '') || fallback;
+  const tone = yamlScalar(raw.match(/^\s*tone:\s*(\S+)/m)?.[1], 'warm');
+  const grain = yamlScalar(raw.match(/^\s*grain:\s*(\S+)/m)?.[1], 'parchment');
   return { src, tone, grain };
 }
 

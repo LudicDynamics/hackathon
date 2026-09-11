@@ -64,10 +64,11 @@ packages/shared/src/    # world / frontmatter / components / events schema + sto
 presets/                # 提示词预设：writer, character, scene-init, nook-init
 extensions/             # 项目级 pi-rp 扩展：注册专用指令槽（writer-char, system-char, scene-init-instruction 等）
 skills/                 # 项目级 skills：跨世界通用手艺（生图 / 组件叙事 / 节奏 / 玩法咬合）
-templates/              # 开箱世界模板：holmes-world, school-romance, magic-academy, cthulhu
+templates/              # 开箱世界模板；含 wuwu / whitechapel / divergence / firstsnow 四个素材版世界
   <world>/skills/       # 世界级 skills：该世界自己的文风与剧情，与 world/ 同级、随包分发
 worlds/                 # 脚手架产出的玩家世界（.gitignore）
 tools/scaffold.mjs      # 模板 → 新世界
+tools/migrate-canvas-worlds.mjs # worldlines-canvas 四世界 → AIRP 文件系统模板 + WebP 素材
 tools/probe-writer.mjs  # 全链路探针（pnpm probe）
 tools/pi-rp.mjs         # pi-rp 子模块工作流（pnpm pi status|build|update|commit，见 §7.2）
 docs/                   # 设计文档（真相源）

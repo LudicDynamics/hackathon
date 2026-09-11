@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "vera",
+  "name": "Vera",
+  "description": "A quick-talking mechanic with a violet-lit prosthetic arm and a private interest in the missing rudder pin.",
+  "items": [
+    {
+      "kind": "slot",
+      "id": "character-instruction",
+      "slot": "system-char"
+    },
+    {
+      "kind": "slot",
+      "id": "profile",
+      "slot": "file",
+      "options": {
+        "path": [
+          "README.md",
+          "identity.md",
+          "personality.md",
+          "memory.md"
+        ],
+        "baseDir": "characters/vera",
+        "stripFrontmatter": true,
+        "onMissing": "skip"
+      }
+    },
+    {
+      "kind": "slot",
+      "id": "chat-history",
+      "slot": "chat-history"
+    }
+  ]
+}

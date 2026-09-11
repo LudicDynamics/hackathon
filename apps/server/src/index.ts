@@ -84,12 +84,19 @@ wss.on('connection', (ws: WebSocket) => {
         }
         await writer.prompt(data.message);
       } else if (data.type === 'character_start') {
-        const { characterId, worldPath, recentContext } = data;
-        await lifecycle.startCharacter(characterId, worldPath, recentContext, (evt) => {
+        const { characterId, recentContext } = data;
+        if (!activeStore) {
+          ws.send(JSON.stringify({ type: 'error', message: 'No active world' }));
+          return;
+        }
+        await lifecycle.startCharacter(characterId, activeStore.worldRoot, String(recentContext || ''), (evt) => {
           ws.send(JSON.stringify(evt));
         });
       } else if (data.type === 'character_prompt') {
-        // Send message to character process
+        const running = await lifecycle.promptCharacter(data.characterId, data.message);
+        if (!running) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Character agent is not running' }));
+        }
       } else if (data.type === 'character_stop') {
         lifecycle.stopCharacter(data.characterId);
       }

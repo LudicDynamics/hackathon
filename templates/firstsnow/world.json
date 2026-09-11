@@ -1,0 +1,45 @@
+{
+  "id": "firstsnow",
+  "name": "First Snow Radio",
+  "version": "1.0.0",
+  "schema": 1,
+  "description": "A final university winter where two promises compete, and every small choice remains visible in places, objects, and memory.",
+  "author": "Worldlines Canvas / AIRP",
+  "genre": "romantic drama",
+  "tags": [
+    "romance",
+    "winter",
+    "relationship memory"
+  ],
+  "material": "warm",
+  "cover": "assets/characters/nanami.webp",
+  "extensions": [
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
+  ],
+  "characters": [
+    {
+      "id": "nanami",
+      "home": "world/winter-schedule/radio-studio",
+      "role": "companion",
+      "avatar": "assets/characters/nanami.webp",
+      "description": "The host of First Snow Hour and your friend of ten years."
+    },
+    {
+      "id": "sumi-yukimura",
+      "home": "world/winter-schedule/amber-cafe",
+      "role": "npc",
+      "description": "A newly debuted singer who asks for forty minutes without work."
+    }
+  ],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z"
+}

@@ -1,0 +1,53 @@
+{
+  "id": "wuwu",
+  "name": "Fogwharf",
+  "version": "1.0.0",
+  "schema": 1,
+  "description": "A medieval harbor mystery about a crewless ship, three incomplete testimonies, and a second vessel hidden by the fog.",
+  "author": "Worldlines Canvas / AIRP",
+  "genre": "medieval mystery",
+  "tags": [
+    "adventure",
+    "mystery",
+    "spatial exploration"
+  ],
+  "material": "parchment",
+  "cover": "assets/scenes/intro.webp",
+  "extensions": [
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
+  ],
+  "characters": [
+    {
+      "id": "vera",
+      "home": "world/harbor-chart/workshop",
+      "role": "companion",
+      "avatar": "assets/characters/vera.webp",
+      "description": "A quick-talking mechanic with a violet-lit prosthetic arm and a private interest in the missing rudder pin."
+    },
+    {
+      "id": "silver-kite",
+      "home": "world/harbor-chart/seventh-berth",
+      "role": "npc",
+      "avatar": "assets/characters/silver-kite.webp",
+      "description": "An elven knight guarding the gangplank and an empty case."
+    },
+    {
+      "id": "old-mo",
+      "home": "world/harbor-chart/old-lighthouse",
+      "role": "npc",
+      "avatar": "assets/characters/old-mo.webp",
+      "description": "The scarred lighthouse keeper who left twelve minutes blank in the log."
+    }
+  ],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z"
+}
