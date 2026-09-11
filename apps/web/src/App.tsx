@@ -9,6 +9,7 @@ import { Minimap } from './components/chrome/Minimap.js';
 import { WriterBar } from './components/chrome/WriterBar.js';
 import { HintBar } from './components/chrome/HintBar.js';
 import { LayerBadge } from './components/chrome/LayerBadge.js';
+import { RadialMenu, RadialItemType } from './components/god/RadialMenu.js';
 import { useAudio } from './state/useAudio.js';
 import { useCamera } from './state/useCamera.js';
 import { useWorld } from './state/useWorld.js';
@@ -31,6 +32,14 @@ export function App() {
 
   // Active Character Modal (Galgame Overlay)
   const [activeModalCharId, setActiveModalCharId] = useState<string | null>(null);
+
+  // World Studio Creator Radial Menu
+  const [radialState, setRadialState] = useState<{
+    x: number;
+    y: number;
+    worldX: number;
+    worldY: number;
+  } | null>(null);
   const camera = useCamera();
   const { setAmbient } = useAudio();
 
@@ -197,24 +206,35 @@ export function App() {
 
   // World Studio Radial Creator — instantiate at exact clicked world coordinate
   const handleCreateEntityAt = async (
-    type: 'gate' | 'character' | 'clue' | 'chalk',
+    type: RadialItemType,
     title: string,
     content: string,
     wx: number,
     wy: number
   ) => {
-    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'creation';
-    const filename = `${slug}.md`;
-    const filePath = currentLayer === 'map' ? `world/${filename}` : `${currentLayer}/${filename}`;
+    const cleanSlug =
+      title
+        .toLowerCase()
+        .trim()
+        .replace(/[\s\t\r\n]+/g, '-')
+        .replace(/[/\\?%*:|"<>]/g, '')
+        .slice(0, 32) || `creation-${Date.now().toString(36)}`;
 
+    const parentDir = currentLayer === 'map' ? 'world' : currentLayer;
+    let filePath = '';
     let fileContent = '';
-    if (type === 'chalk') {
-      fileContent = `---\ntype: chalk\n---\n${content}`;
-    } else if (type === 'gate') {
+
+    if (type === 'gate') {
+      filePath = `${parentDir}/${cleanSlug}/README.md`;
       fileContent = `---\ntype: gate\ntitle: "${title}"\n---\n${content}`;
     } else if (type === 'character') {
+      filePath = `${parentDir}/${cleanSlug}.md`;
       fileContent = `---\ntype: sprite\ntitle: "${title}"\n---\n${content}`;
+    } else if (type === 'chalk') {
+      filePath = `${parentDir}/chalk-${cleanSlug}.md`;
+      fileContent = `---\ntype: chalk\n---\n${content}`;
     } else {
+      filePath = `${parentDir}/${cleanSlug}.md`;
       fileContent = `---\ntitle: "${title}"\n---\n${content}`;
     }
 
@@ -229,7 +249,7 @@ export function App() {
         }),
       });
       if (res.ok) {
-        // Persist clicked position immediately so card lands right where right-clicked
+        // Persist clicked position immediately so card forms right where right-clicked
         await fetch('/api/card/position', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -244,32 +264,6 @@ export function App() {
       }
     } catch (err) {
       console.error('World studio creation failed:', err);
-    }
-  };
-
-  // God Mode Create Entity (Toolbar modal fallback)
-  const handleCreateEntity = async (type: 'note' | 'chalk', title: string, content: string) => {
-    const filename = `${title}.md`;
-    const filePath = currentLayer === 'map' ? `world/${filename}` : `${currentLayer}/${filename}`;
-    const fileContent =
-      type === 'chalk'
-        ? `---\ntype: chalk\n---\n${content}`
-        : `<b>${title}</b>\n${content}`;
-
-    try {
-      await fetch('/api/god-action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'create',
-          filePath,
-          content: fileContent,
-        }),
-      });
-      showToast(`The God Hand has created "${title}"`);
-      refresh();
-    } catch (err) {
-      console.error('God action create failed:', err);
     }
   };
 
@@ -328,7 +322,6 @@ export function App() {
           <GodModeToolbar
             frozen={worldFrozen}
             onToggleFreeze={handleToggleFreeze}
-            onCreateEntity={handleCreateEntity}
           />
         </div>
       </header>
@@ -348,7 +341,7 @@ export function App() {
             onOpenCharacterModal={openCharacterModal}
             onItemDropOnTarget={handleItemDropOnTarget}
             onDropItemToScene={handleDropItemToScene}
-            onCreateEntityAt={handleCreateEntityAt}
+            onOpenRadialMenu={(x, y, wx, wy) => setRadialState({ x, y, worldX: wx, worldY: wy })}
           />
 
           {/* Canvas chrome — the prototype's navigation + writing affordances */}
@@ -399,6 +392,18 @@ export function App() {
               message: msg,
             });
           }}
+        />
+      )}
+
+      {/* World Studio Radial Creation Menu */}
+      {radialState && (
+        <RadialMenu
+          x={radialState.x}
+          y={radialState.y}
+          worldX={radialState.worldX}
+          worldY={radialState.worldY}
+          onClose={() => setRadialState(null)}
+          onCreate={handleCreateEntityAt}
         />
       )}
     </div>

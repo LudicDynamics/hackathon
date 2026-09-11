@@ -77,14 +77,19 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
   const [prompt, setPrompt] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Close on Escape
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
+  // Focus input on form entry
   useEffect(() => {
     if (selectedType && inputRef.current) {
       inputRef.current.focus();
@@ -93,7 +98,8 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
 
   const activeOption = MENU_OPTIONS.find((o) => o.type === selectedType);
 
-  const handleSubmit = () => {
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const text = prompt.trim();
     if (!text || !selectedType) return;
     playFoley('pen-scratch');
@@ -103,26 +109,44 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
   };
 
   // Keep menu within viewport bounds
-  const menuLeft = Math.min(Math.max(x, 160), window.innerWidth - 160);
-  const menuTop = Math.min(Math.max(y, 160), window.innerHeight - 160);
+  const menuLeft = Math.min(Math.max(x, 170), window.innerWidth - 170);
+  const menuTop = Math.min(Math.max(y, 170), window.innerHeight - 170);
 
   return (
     <div
       className="fixed inset-0 z-50 overflow-hidden select-none"
-      onClick={onClose}
+      onPointerDown={(e) => {
+        // Prevent viewport capture from stealing gestures
+        e.stopPropagation();
+      }}
+      onMouseDown={(e) => {
+        e.stopPropagation();
+      }}
+      onClick={(e) => {
+        // Click on backdrop closes
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
+        e.stopPropagation();
         onClose();
       }}
     >
       {/* Background dimmer */}
-      <div className="absolute inset-0 bg-ink/20 backdrop-blur-[2px] transition-opacity duration-200" />
+      <div
+        className="absolute inset-0 bg-ink/35 backdrop-blur-[3px] transition-opacity duration-200"
+        onClick={onClose}
+      />
 
       {/* Radial Hub Container */}
       <div
-        className="absolute -translate-x-1/2 -translate-y-1/2"
+        className="absolute -translate-x-1/2 -translate-y-1/2 z-10"
         style={{ left: menuLeft, top: menuTop }}
         onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
       >
         {!selectedType ? (
           /* Wheel mode: 4 satellites around central seal */
@@ -147,7 +171,11 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                 <button
                   key={opt.type}
                   type="button"
-                  onClick={() => {
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
                     playFoley('paper-slide', 0.6);
                     setSelectedType(opt.type);
                   }}
@@ -167,6 +195,16 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                 </button>
               );
             })}
+
+            {/* Quick close hint */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-paper-card border border-ink/20 shadow-sm flex items-center justify-center text-ink/60 hover:text-ink hover:bg-ink/10 text-xs font-mono transition-all"
+              title="Close (Esc)"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         ) : (
           /* Form mode: Tilted paper prompt bar to describe creation */
@@ -175,47 +213,44 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
               <div className="flex items-center gap-2">
                 {activeOption && <activeOption.icon className={`w-4 h-4 ${activeOption.color}`} />}
                 <span className="font-serif text-sm font-bold text-ink">
-                  {activeOption?.label} · Creation
+                  {activeOption?.label} · Creator Mode
                 </span>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedType(null)}
-                className="p-1 rounded-full hover:bg-ink/10 text-ink/60"
+                className="p-1 rounded-full hover:bg-ink/10 text-ink/60 cursor-pointer"
+                title="Back to wheel"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
             <p className="font-mono text-[10px] text-ink/50 mb-3">
-              Describe the entity. The author pipeline will instantiate and stitch it into the world.
+              Describe the entity. It will materialize at your clicked location with instant narrative feedback.
             </p>
 
-            <div className="relative">
+            <form onSubmit={handleSubmit} className="relative">
               <input
                 ref={inputRef}
                 type="text"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSubmit();
-                }}
                 placeholder={activeOption?.placeholder}
                 className="w-full pl-3 pr-10 py-2.5 rounded-xl bg-paper-wall/70 border border-ink/15 text-xs text-ink placeholder:text-ink/40 focus:outline-none focus:border-rust font-sans"
               />
               <button
-                type="button"
-                onClick={handleSubmit}
+                type="submit"
                 disabled={!prompt.trim()}
                 className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-rust hover:bg-rust-light text-white disabled:opacity-30 transition-all cursor-pointer"
                 title="Bring to life"
               >
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
-            </div>
+            </form>
 
             <div className="mt-2.5 flex items-center justify-between text-[10px] font-mono text-ink/40">
-              <span>Location: ({Math.round(worldX)}, {Math.round(worldY)})</span>
+              <span>Seated: ({Math.round(worldX)}, {Math.round(worldY)})</span>
               <span>Press Enter ↵ to form</span>
             </div>
           </div>

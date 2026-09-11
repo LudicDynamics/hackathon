@@ -3,7 +3,6 @@ import { CanvasObject, clearAllLifts, pruneLifts, raiseObject } from './CanvasOb
 import { LinkLayer, highlightLinks, updateAllLinks } from './LinkLayer.js';
 import { SceneBackdrop } from './SceneBackdrop.js';
 import { ParticleLayer } from './ParticleLayer.js';
-import { RadialMenu, RadialItemType } from '../god/RadialMenu.js';
 import { useCamera } from '../../state/useCamera.js';
 import { clampZ, zoomAt, screenToWorld } from '../../lib/camera.js';
 import { makeBox, pushFrom, relaxAll } from '../../lib/collide.js';
@@ -22,7 +21,7 @@ interface CanvasProps {
   onOpenCharacterModal?: (charId: string) => void;
   onItemDropOnTarget?: (itemPath: string, targetPath: string) => void;
   onDropItemToScene?: (itemPath: string) => void;
-  onCreateEntityAt?: (type: RadialItemType, title: string, content: string, x: number, y: number) => Promise<void> | void;
+  onOpenRadialMenu?: (x: number, y: number, worldX: number, worldY: number) => void;
 }
 
 /** Viewport blank-space pan/pinch session (cards never start one). */
@@ -84,17 +83,11 @@ export const Canvas: React.FC<CanvasProps> = ({
   onOpenCharacterModal,
   onItemDropOnTarget,
   onDropItemToScene,
-  onCreateEntityAt,
+  onOpenRadialMenu,
 }) => {
   const camera = useCamera();
 
   const [parallax, setParallax] = useState({ x: 0, y: 0 });
-  const [radialState, setRadialState] = useState<{
-    x: number;
-    y: number;
-    worldX: number;
-    worldY: number;
-  } | null>(null);
 
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const pinchRef = useRef<{ d: number; z: number } | null>(null);
@@ -408,12 +401,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     const worldCoord = screenToWorld(sx, sy, w, h, cam);
 
     playFoley('paper-slide', 0.8);
-    setRadialState({
-      x: e.clientX,
-      y: e.clientY,
-      worldX: worldCoord.x,
-      worldY: worldCoord.y,
-    });
+    onOpenRadialMenu?.(e.clientX, e.clientY, worldCoord.x, worldCoord.y);
   };
 
   return (
@@ -458,20 +446,6 @@ export const Canvas: React.FC<CanvasProps> = ({
 
       {/* Atmospheric 1.35x foreground particle system: floating dust & rain overlay */}
       <ParticleLayer tone={bg.tone} parallax={parallax} />
-
-      {/* Creator Studio Radial Menu */}
-      {radialState && (
-        <RadialMenu
-          x={radialState.x}
-          y={radialState.y}
-          worldX={radialState.worldX}
-          worldY={radialState.worldY}
-          onClose={() => setRadialState(null)}
-          onCreate={(type, title, content, wx, wy) => {
-            onCreateEntityAt?.(type, title, content, wx, wy);
-          }}
-        />
-      )}
     </div>
   );
 };
