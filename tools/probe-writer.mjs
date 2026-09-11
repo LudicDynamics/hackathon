@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { airpEnv, installPreset } from '../apps/server/dist/engine/presets.js';
 import { PiRpcClient } from '../apps/server/dist/engine/rpc-client.js';
 import { LocalWorldStore } from '../packages/shared/dist/index.js';
 
@@ -41,17 +42,29 @@ async function runProbe() {
     receivedEvent = true;
   });
 
-  const presetPath = path.join(REPO_ROOT, 'presets/writer.json');
-  console.log(`Spawning pi-rp with preset: ${presetPath}`);
+  const presetId = installPreset(TEST_WORLD, path.join(REPO_ROOT, 'presets/writer.json'));
+  console.log(`Installed preset "${presetId}" into ${TEST_WORLD}/.airpworld/prompt-presets/`);
+
+  // pi-rp 的 --preset 只认 id；传文件路径会打 "not found" 并静默回退到默认预设。
+  // 把这条警告升格为探针失败，防止接线再退化。
+  const presetWarnings = [];
+  client.on('stderr', (err) => {
+    if (err.includes('not found')) presetWarnings.push(err.trim());
+  });
 
   client.start({
     cwd: TEST_WORLD,
-    args: ['--preset', presetPath, '--offline'],
+    args: ['--preset', presetId, '--offline'],
+    env: airpEnv(TEST_WORLD),
   });
 
   // Wait 1.5s for initialization
   await new Promise((r) => setTimeout(r, 1500));
   console.log('✓ PiRpcClient process spawned and responsive.');
+  if (presetWarnings.length > 0) {
+    throw new Error(`preset "${presetId}" 未被加载：\n${presetWarnings.join('\n')}`);
+  }
+  console.log(`✓ Preset "${presetId}" resolved (no "not found" warning).`);
 
   client.stop();
   console.log('✓ PiRpcClient successfully stopped.');

@@ -1,4 +1,6 @@
+import fs from 'node:fs';
 import path from 'node:path';
+import { airpEnv, installPreset } from './presets.js';
 import { PiRpcClient } from './rpc-client.js';
 
 export interface AgentLifecycleManagerOptions {
@@ -24,7 +26,7 @@ export class AgentLifecycleManager {
     }
 
     const client = new PiRpcClient(this.vendorCliPath);
-    const presetPath = path.join(this.repoRoot, 'presets', 'writer.json');
+    const presetId = installPreset(worldRoot, path.join(this.repoRoot, 'presets', 'writer.json'));
 
     client.on('event', (evt) => {
       onEvent?.({ source: 'writer', ...evt });
@@ -36,7 +38,8 @@ export class AgentLifecycleManager {
 
     client.start({
       cwd: worldRoot,
-      args: ['--preset', presetPath],
+      args: ['--preset', presetId],
+      env: airpEnv(worldRoot),
     });
 
     this.writerClient = client;
@@ -58,24 +61,21 @@ export class AgentLifecycleManager {
     }
 
     const client = new PiRpcClient(this.vendorCliPath);
-    const presetPath = path.join(worldRoot, 'characters', characterId, 'preset.json');
-    const openingFile = path.join(worldRoot, '.airpworld', 'openings', `${characterId}.json`);
+    // 角色自己的 preset 优先；没有就退回仓库里的通用角色 preset。
+    const characterPreset = path.join(worldRoot, 'characters', characterId, 'preset.json');
+    const presetId = installPreset(
+      worldRoot,
+      fs.existsSync(characterPreset) ? characterPreset : path.join(this.repoRoot, 'presets', 'character.json')
+    );
 
     client.on('event', (evt) => {
       onEvent?.({ source: 'character', characterId, ...evt });
     });
 
-    const env: NodeJS.ProcessEnv = {};
-    try {
-      env.PI_OPENING = openingFile;
-    } catch {
-      // Ignore if opening file absent
-    }
-
     client.start({
       cwd: worldRoot,
-      args: ['--preset', presetPath],
-      env,
+      args: ['--preset', presetId],
+      env: airpEnv(worldRoot, characterId),
     });
 
     this.characterClients.set(characterId, client);

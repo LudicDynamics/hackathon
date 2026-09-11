@@ -10,3 +10,5 @@ dist/
 .env.*.local
 .artifacts/
 worlds/
+# 运行时由 installPreset 从 presets/ 拷入的副本，不是真相源
+**/.airpworld/prompt-presets/
