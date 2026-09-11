@@ -121,7 +121,7 @@ Three lines: list of paths / one-sentence scene summary / one sentence on "what 
 | **C5** | 子会话用 **prepare 记录的 cwd**（不再是 `process.cwd()`） | ✅ **已修**（原"cwd 可能不一致"已失效） | `run.ts:56/59`（`ea310c9fc`） | 相对 file slot 路径与相对写盘解析到同一个 cwd；引擎仍应保证 cwd = 世界根，但不再是踩雷点 |
 | **C6** | **`spawnAgent` 不校验 `delegatable`**；`subagent` 工具与 `/subagent` 命令才校验 | ⚠️ **仍然成立（且是有意的）** | `spawn.ts` 的函数注释明写 "not gated on the preset being delegatable" vs `extension.ts:92` | 两个入口都能用同一个 profile，正合我们的 R1/R2 共用设计；`delegatable: true` 只为了让作家侧看得到。**同一段注释还写了 `spawnAgent` 不继承父会话扩展工具**——这一条留着（刻意隔离），但由它派生的那个静默坑（`tools` 预填导致 `customTools` 被滤掉）已在 `dfebadcd3` 修掉，见 §2.4 |
 | **C7** | **preset 目录递归**：`collectPresetFiles` 深度优先收集子目录的 `*.json` | ✅ **已递归**（原"只读顶层"已失效） | `loader.ts::collectPresetFiles`（`6c693a7f3`） | 递归范围仍限于 `<configDir>/prompt-presets/` 内部。`characters/<id>/preset.json` **不在这棵树上**，所以引擎侧的"安装到 prompt-presets"动作依然需要（见 §7.1 修订） |
-| **C8** | **子会话无扩展运行时**：扩展工具的定义会继承，但事件 handler 不触发 | ⚠️ **仍然成立** | `run.ts:76`（"Omit extensions to fulfill no extensions"） | 依赖 `agent_start`/`tool_result` 钩子的逻辑在 subagent 里不会跑；落账要写在工具实现**内部** |
+| **C8** | **子会话工具事件与 UI 透传**：工具事件转发，UI 上下文透传；会话级生命周期仍隔离 | ✅ **已升级**（原"完全无扩展运行时"已修） | `run.ts:100`（`5361105c3`） | 子代理现已继承父会话 `uiContext`（`ctx.ui.notify` 直通前端）并转发 5 项工具级事件（`tool_call`/`tool_result`/`tool_execution_*`）；会话级事件（`agent_start`/`session_start`）与 commands 保持隔离不污染。工具落账既可在工具 `execute` 内自闭环，也可被 `tool_result` 监听捕获 |
 | **C9** | 输出被 `truncateTail` 截断（2000 行 / 50KB） | ⚠️ **仍然成立** | `run.ts:136` | 回报格式必须短（§2.2 三行） |
 
 ### 2.3.1 vendored dist 的时间差（复核时发现，务必记住）
