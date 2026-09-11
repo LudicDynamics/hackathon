@@ -9,6 +9,7 @@
 - **无独立状态文件、无状态栏**（doc-00 变更记录 #4）；
 - roll_dice **骰子协议已定稿**（doc-05 §3.1）：作家写 `type`/`desc`/`expect`（不写 `result`），玩家点击骰子 → 特效 → 引擎真随机掷出并按 expect 判定 → 回写 result → 落定显示 + `roll_resolved` 事件；
 - 前端渲染管线（解析 frontmatter → 渲染 → 交互回写）在 doc-06 §2.6 给出了原则，缺完整协议。
+- 导言中的第一个可操作入口就是 Chalk，不新增 `type: chunk`；Chalk frontmatter 承载 RP / Choice / Dice 与移动机会，具体拿物 / 使用 / 切层继续走 note/item、component、gate 协议。
 
 ## 待设计清单
 
@@ -25,5 +26,6 @@
 - 不引入独立状态文件/状态栏（doc-00 变更 #4）；
 - 骰子判定由引擎做（按 expect 比较），前端只负责演出与回写展示；
 - 剧情判定不写骰子，直接写正文（doc-05 §3.1）。
+- `choice` 点击可以作为下一轮玩家行动输入，但不得隐式冒充空间移动；需要进入地点时，选择结果应显式解锁 / 指向一个 gate，再由玩家执行跨层动作（doc-20 §2.3）。
 
 > **标记：待办**。MVP 只实现最小集：choice 单选卡 + status 折叠表 + roll_dice 骰子卡（协议已就绪），chart 化与条件选项赛后再补。
