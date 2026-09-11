@@ -50,6 +50,12 @@
 
 **Chalk 边界**：导言的第一个可操作入口就是 `type: chalk`，不存在另一个 Chunk 类型或中间层。Chalk 可以被点开、展开和回应，并用 frontmatter 给出 RP / Choice / Dice 或移动机会；拿物和真正切层仍由 note/item 与 gate 执行，结果再回到 Chalk 中落定。
 
+### 1.6 玩家 avatar：把“我是谁”落到空间里
+
+角色模式下，当前画布始终有一个独立 avatar 代表玩家自己。它承担两件事：让玩家一眼确认“我在这里”，以及为点选移动、进入场景、面对角色等行为提供明确的行动原点。它不是世界里的 NPC，不出现在角色列表，也不因点击而启动 Character Agent；世界角色从 `player/` 与 opening 读取并记住玩家身份。
+
+具体世界可以为 avatar 指定形象。福尔摩斯世界中，玩家就是 Sherlock Holmes，avatar 就是 Holmes 在画布上的自我化身；Watson 等 Character Agent 必须把 avatar 背后的玩家持续识别为 Holmes。avatar 的资源字段与运行时位置 schema 尚未定案，实现前不得借用 `characters[]` 伪装。
+
 ---
 
 ## 2. 单轮管线的呈现（doc-05 §5 的交互细化）
