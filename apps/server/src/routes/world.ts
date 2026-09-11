@@ -1,9 +1,67 @@
 import { Router } from 'express';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { LocalWorldStore, parseFrontmatter, stringifyChalk } from '@airp/shared';
+import { LocalWorldStore, SEAT_ANCHOR, parseFrontmatter, stringifyChalk } from '@airp/shared';
 import type { AgentLifecycleManager } from '../engine/lifecycle.js';
 import type { EventBridge } from '../engine/event-bridge.js';
+
+interface LayerItem {
+  path: string;
+  filename: string;
+  frontmatter: Record<string, unknown> | null;
+  body: string;
+}
+
+/** Deterministic pseudorandom hash (doc-04 §4) - mirror of the frontend lib/camera hashInt. */
+function hashInt(s: string): number {
+  let h = 0;
+  for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0;
+  return Math.abs(h);
+}
+
+/** Integer degrees in [-3, 3], derived per card path, never persisted. */
+function rotOf(cardPath: string): number {
+  return (hashInt(cardPath) % 7) - 3;
+}
+
+/** W/H per card kind; the route computes these from parsed frontmatter and passes them into seating. */
+const KIND_SIZES: Record<string, { w: number; h: number }> = {
+  chalk: { w: 480, h: 220 },
+  gate: { w: 288, h: 150 },
+  letter: { w: 264, h: 180 },
+  default: { w: 280, h: 180 },
+};
+
+function cardSize(item: LayerItem): { w: number; h: number } {
+  const fm = item.frontmatter ?? {};
+  if (fm.type === 'chalk') return KIND_SIZES.chalk;
+  if (item.filename === 'README.md' || fm.type === 'gate') return KIND_SIZES.gate;
+  if (fm.component === 'letter' || fm.type === 'letter') return KIND_SIZES.letter;
+  return KIND_SIZES.default;
+}
+
+/**
+ * Layer background config from the layer README (doc-10 E0: bg is a README field).
+ * shared's parseFrontmatter only resolves status/choice/roll_dice, so tone/grain are
+ * extracted with a light regex from the raw text (plan §6.11).
+ */
+function readLayerBg(raw: string): { src: string | null; tone: string; grain: string } {
+  let src: string | null = null;
+  try {
+    const parsed = parseFrontmatter(raw);
+    const bgValue = parsed.frontmatter?.bg;
+    if (typeof bgValue === 'string' && bgValue.trim() !== '') {
+      // Strip trailing inline comments and quotes (parser keeps them verbatim).
+      const cleaned = bgValue.replace(/\s+#.*$/, '').trim().replace(/^["']|["']$/g, '').trim();
+      src = cleaned === '' ? null : cleaned;
+    }
+  } catch {
+    src = null;
+  }
+  const tone = raw.match(/^\s*tone:\s*(\S+)/m)?.[1] ?? 'warm';
+  const grain = raw.match(/^\s*grain:\s*(\S+)/m)?.[1] ?? 'parchment';
+  return { src, tone, grain };
+}
 
 export function createWorldRouter(
   repoRoot: string,
@@ -91,8 +149,11 @@ export function createWorldRouter(
         return f.startsWith(layerPrefix) && f.split('/').length <= layerPrefix.split('/').length + 1;
       });
 
+      // Only .md files become cards (images/videos must not occupy a card slot)
+      const mdFiles = layerFiles.filter((f) => f.endsWith('.md'));
+
       const items = await Promise.all(
-        layerFiles.map(async (file) => {
+        mdFiles.map(async (file): Promise<LayerItem> => {
           const raw = await store.readFile(file);
           const { frontmatter, body } = parseFrontmatter(raw);
           return {
@@ -104,9 +165,68 @@ export function createWorldRouter(
         })
       );
 
-      res.json({ layer, items, worldFrozen });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      // Card rows keyed by path (never by layer column - a nested layer README
+      // appears in both its parent layer list and its own list).
+      const rowByPath = new Map(store.getLayerCards(mdFiles).map((r) => [r.id, r]));
+
+      // Seat and persist any card that has no row yet (placed cards never re-seat).
+      const unseated = items
+        .filter((it) => !rowByPath.has(it.path))
+        .map((it) => ({ path: it.path, ...cardSize(it) }));
+      if (unseated.length > 0) {
+        for (const row of await store.seatUnplaced(layer, unseated)) {
+          rowByPath.set(row.id, row);
+        }
+      }
+
+      const enriched = items.map((it) => {
+        const row = rowByPath.get(it.path);
+        const size = cardSize(it);
+        return {
+          ...it,
+          x: row ? row.x : SEAT_ANCHOR.x,
+          y: row ? row.y : SEAT_ANCHOR.y,
+          w: row ? row.w : size.w,
+          h: row ? row.h : size.h,
+          z: row ? row.z : 1,
+          rot: rotOf(it.path), // derived, never persisted
+        };
+      });
+
+      // bg from the layer README frontmatter (doc-10 E0); tone/grain via light regex
+      let bg: { src: string | null; tone: string; grain: string } = { src: null, tone: 'warm', grain: 'parchment' };
+      try {
+        const readmePath = layer === 'map' ? 'world/README.md' : `${layer}/README.md`;
+        const raw = await store.readFile(readmePath);
+        bg = readLayerBg(raw);
+      } catch {
+        // README missing -> defaults
+      }
+
+      const links = (store.queryCanvas(
+        'SELECT id, from_id, to_id, style, label FROM links WHERE layer = ?',
+        [layer]
+      ) as Array<Record<string, unknown>>).map((row) => ({
+        id: String(row.id),
+        from: String(row.from_id),
+        to: String(row.to_id),
+        style: row.style ? String(row.style) : 'solid',
+        label: row.label == null ? null : String(row.label),
+      }));
+
+      const presence = (store.queryCanvas(
+        'SELECT character_id, x, y, following FROM presence WHERE layer = ?',
+        [layer]
+      ) as Array<Record<string, unknown>>).map((row) => ({
+        characterId: String(row.character_id),
+        x: Number(row.x),
+        y: Number(row.y),
+        following: Number(row.following) === 1,
+      }));
+
+      res.json({ layer, bg, items: enriched, links, presence, worldFrozen });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -170,10 +290,49 @@ export function createWorldRouter(
     try {
       const { from, to } = req.body;
       const result = await store.move(from, to);
+      // Migrate canvas state so the new path doesn't spawn a second seat (plan §6.4).
+      try {
+        await store.renameCardPosition(from, to);
+      } catch (err) {
+        console.warn('[move] card position migration skipped:', err);
+      }
       eventBridge.broadcast({ type: 'item_moved', result });
       res.json(result);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Persist a card's dropped position (UPSERT; z/w/h untouched)
+  router.post('/card/position', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    try {
+      const body = req.body as { path?: unknown; x?: unknown; y?: unknown };
+      const { path: cardPath, x, y } = body;
+      if (typeof cardPath !== 'string' || cardPath === '') {
+        return res.status(400).json({ error: 'Invalid path' });
+      }
+      if (
+        typeof x !== 'number' || !Number.isFinite(x) ||
+        typeof y !== 'number' || !Number.isFinite(y)
+      ) {
+        return res.status(400).json({ error: 'Invalid x/y' });
+      }
+      // Reject zombie rows: the file must actually exist
+      try {
+        await store.readFile(cardPath);
+      } catch {
+        return res.status(404).json({ error: `File not found: ${cardPath}` });
+      }
+      const card = await store.saveCardPosition(cardPath, x, y);
+      eventBridge.broadcast({ type: 'card_position', path: cardPath, x, y });
+      res.json({
+        ok: true,
+        card: { path: card.id, layer: card.layer, x: card.x, y: card.y, w: card.w, h: card.h, z: card.z },
+      });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 

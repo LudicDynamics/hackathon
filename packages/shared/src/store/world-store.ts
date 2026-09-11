@@ -1,6 +1,24 @@
 import type { WorldManifest } from '../schemas/world.js';
 import type { MoveResult, WorldEvent } from '../schemas/events.js';
 
+/** Canvas card state row (id == repository-relative path of the card file). */
+export interface CardRecord {
+  id: string;
+  layer: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  z: number;
+}
+
+/** A card file pending seating; w/h defaults applied at seat time when absent. */
+export interface SeatFile {
+  path: string;
+  w?: number;
+  h?: number;
+}
+
 export interface WorldStore {
   worldRoot: string;
   readFile(relPath: string): Promise<string>;
@@ -15,5 +33,9 @@ export interface WorldStore {
   appendHistoryEntry(sessionId: string, type: string, content: string): Promise<void>;
   appendWorldEvent(type: string, payload: Record<string, any>): Promise<WorldEvent>;
   getEvents(limit?: number): Promise<WorldEvent[]>;
+  getLayerCards(paths: string[]): CardRecord[];
+  seatUnplaced(layerId: string, files: SeatFile[]): Promise<CardRecord[]>;
+  saveCardPosition(id: string, x: number, y: number): Promise<CardRecord>;
+  renameCardPosition(from: string, to: string): Promise<void>;
   close(): void;
 }
