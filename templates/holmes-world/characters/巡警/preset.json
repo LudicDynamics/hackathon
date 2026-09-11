@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "patrol",
+  "items": [
+    { "kind": "slot", "id": "system", "slot": "system" },
+    { "kind": "slot", "id": "identity", "slot": "file", "options": { "path": "identity.md" } },
+    { "kind": "slot", "id": "personality", "slot": "file", "options": { "path": "personality.md" } },
+    { "kind": "slot", "id": "chat-history", "slot": "chat-history" }
+  ]
+}

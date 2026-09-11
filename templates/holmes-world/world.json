@@ -1,0 +1,35 @@
+{
+  "id": "holmes-beckstreet",
+  "name": "贝克街的迷雾",
+  "version": "1.0.0",
+  "schema": 1,
+  "description": "艾德勒女士失踪案——一个开放性的推理世界，只靠线索串联",
+  "author": "福尔摩斯",
+  "genre": "mystery",
+  "tags": ["推理", "悬疑", "开放世界"],
+  "material": "parchment",
+  "extensions": [
+    { "id": "airp:letter", "version": ">=1.0.0", "optional": false },
+    { "id": "airp:note", "version": ">=1.0.0", "optional": false }
+  ],
+  "layers": {
+    "map": { "name": "贝克街221B", "parent": null },
+    "world/贝克街": { "name": "贝克街", "parent": "map" },
+    "world/贝克街/犯罪现场": { "name": "犯罪现场", "parent": "world/贝克街", "stub": true },
+    "world/贝克街/废弃果园": { "name": "废弃果园", "parent": "world/贝克街", "stub": true },
+    "world/公寓": { "name": "公寓", "parent": "map" }
+  },
+  "characters": [
+    { "id": "华生", "home": "world/贝克街", "role": "companion" },
+    { "id": "巡警", "home": "world/贝克街", "role": "npc" }
+  ],
+  "mystery": {
+    "victim": "艾德勒女士",
+    "status": "失踪第3日",
+    "clues": ["模糊的照片", "匿名纸条", "生锈的钥匙", "沾泥的信"],
+    "open_ended": true,
+    "no_predetermined_killer": true
+  },
+  "createdAt": "2026-09-11T00:00:00Z",
+  "updatedAt": "2026-09-11T00:00:00Z"
+}

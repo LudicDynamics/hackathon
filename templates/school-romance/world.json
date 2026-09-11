@@ -1,0 +1,26 @@
+{
+  "id": "sakura-academy",
+  "name": "樱花学园物语",
+  "version": "1.0.0",
+  "schema": 1,
+  "description": "阳光明媚的私立学园，落樱与放学后的天台微风。",
+  "author": "明月",
+  "genre": "school-romance",
+  "tags": ["校园", "恋爱", "日常", "青春"],
+  "material": "paper",
+  "extensions": [
+    { "id": "airp:letter", "version": ">=1.0.0", "optional": false },
+    { "id": "airp:note", "version": ">=1.0.0", "optional": false }
+  ],
+  "layers": {
+    "map": { "name": "学园正门", "parent": null },
+    "world/中庭花坛": { "name": "中庭花坛", "parent": "map" },
+    "world/屋顶天台": { "name": "屋顶天台", "parent": "map", "stub": true }
+  },
+  "characters": [
+    { "id": "七海", "home": "world/中庭花坛", "role": "companion" },
+    { "id": "风纪委员", "home": "map", "role": "npc" }
+  ],
+  "createdAt": "2026-09-11T00:00:00Z",
+  "updatedAt": "2026-09-11T00:00:00Z"
+}

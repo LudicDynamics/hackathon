@@ -1,0 +1,26 @@
+{
+  "id": "innsmouth-shadows",
+  "name": "印斯茅斯迷雾",
+  "version": "1.0.0",
+  "schema": 1,
+  "description": "腥咸的海风、倾颓的木屋与深渊里的窃窃私语。",
+  "author": "明月",
+  "genre": "cthulhu",
+  "tags": ["克苏鲁", "悬疑", "惊悚", "洛夫克拉夫特"],
+  "material": "dark-parchment",
+  "extensions": [
+    { "id": "airp:letter", "version": ">=1.0.0", "optional": false },
+    { "id": "airp:note", "version": ">=1.0.0", "optional": false }
+  ],
+  "layers": {
+    "map": { "name": "印斯茅斯车站", "parent": null },
+    "world/废弃港口": { "name": "废弃港口", "parent": "map" },
+    "world/灯塔底舱": { "name": "灯塔底舱", "parent": "world/废弃港口", "stub": true }
+  },
+  "characters": [
+    { "id": "怪异旅社掌柜", "home": "map", "role": "npc" },
+    { "id": "老水手", "home": "world/废弃港口", "role": "companion" }
+  ],
+  "createdAt": "2026-09-11T00:00:00Z",
+  "updatedAt": "2026-09-11T00:00:00Z"
+}

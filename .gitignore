@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+*.tsbuildinfo
+**/.airpworld/*.db*
+.airpworld/*.db*
+.env
+.env.local
+.env.*.local
+.artifacts/
+worlds/
