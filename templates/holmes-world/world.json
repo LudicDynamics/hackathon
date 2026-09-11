@@ -1,32 +1,32 @@
 {
   "id": "holmes-beckstreet",
-  "name": "贝克街的迷雾",
+  "name": "Fog Over Baker Street",
   "version": "1.0.0",
   "schema": 1,
-  "description": "艾德勒女士失踪案——一个开放性的推理世界，只靠线索串联",
-  "author": "福尔摩斯",
+  "description": "The Disappearance of Lady Adler — an open-ended mystery world held together by clues alone",
+  "author": "Sherlock Holmes",
   "genre": "mystery",
-  "tags": ["推理", "悬疑", "开放世界"],
+  "tags": ["mystery", "suspense", "open world"],
   "material": "parchment",
   "extensions": [
     { "id": "airp:letter", "version": ">=1.0.0", "optional": false },
     { "id": "airp:note", "version": ">=1.0.0", "optional": false }
   ],
   "layers": {
-    "map": { "name": "贝克街221B", "parent": null },
-    "world/贝克街": { "name": "贝克街", "parent": "map" },
-    "world/贝克街/犯罪现场": { "name": "犯罪现场", "parent": "world/贝克街", "stub": true },
-    "world/贝克街/废弃果园": { "name": "废弃果园", "parent": "world/贝克街", "stub": true },
-    "world/公寓": { "name": "公寓", "parent": "map" }
+    "map": { "name": "221B Baker Street", "parent": null },
+    "world/baker-street": { "name": "Baker Street", "parent": "map" },
+    "world/baker-street/crime-scene": { "name": "Crime Scene", "parent": "world/baker-street", "stub": true },
+    "world/baker-street/abandoned-orchard": { "name": "Abandoned Orchard", "parent": "world/baker-street", "stub": true },
+    "world/apartment": { "name": "Apartment", "parent": "map" }
   },
   "characters": [
-    { "id": "华生", "home": "world/贝克街", "role": "companion" },
-    { "id": "巡警", "home": "world/贝克街", "role": "npc" }
+    { "id": "watson", "home": "world/baker-street", "role": "companion" },
+    { "id": "constable", "home": "world/baker-street", "role": "npc" }
   ],
   "mystery": {
-    "victim": "艾德勒女士",
-    "status": "失踪第3日",
-    "clues": ["模糊的照片", "匿名纸条", "生锈的钥匙", "沾泥的信"],
+    "victim": "Lady Adler",
+    "status": "Missing — Day 3",
+    "clues": ["a blurred photograph", "an anonymous note", "a rusted key", "a mud-stained letter"],
     "open_ended": true,
     "no_predetermined_killer": true
   },

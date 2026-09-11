@@ -3,9 +3,9 @@ type: readme
 name: journal
 ---
 
-# 轮次日志
+# Turn Journal
 
-故事的摘要记载在这。
+A summary of the story is kept here.
 
-每一段叙事都会被记录在这里——
-供作家续写时参考。
+Every stretch of narrative is recorded here —
+for the Writer to draw on when continuing.

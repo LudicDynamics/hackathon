@@ -1,100 +1,100 @@
-# 贝克街的迷雾 — 完整示例世界
+# Fog Over Baker Street — Complete Example World
 
-> 产品：AIRP（AI 互动叙事游戏）
-> 主题：福尔摩斯 × 艾德勒失踪案
-> 类型：开放性推理
-> 设计文档来源：doc-05 AIRP产品构想.md §8 世界文件结构
+> Product: AIRP (AI Interactive Narrative Game)
+> Theme: Sherlock Holmes × the Adler disappearance case
+> Genre: open-ended mystery
+> Design doc source: doc-05 AIRP Product Vision.md §8 World file structure
 
-## 世界概览
+## World Overview
 
-玩家扮演**福尔摩斯**，在贝克街221B追查**艾德勒女士失踪案**。没有预设凶手——所有真相只靠线索串联。
+The player takes on the role of **Sherlock Holmes**, investigating **the disappearance of Lady Adler** from 221B Baker Street. There is no predetermined killer — every truth is pieced together from clues alone.
 
-**华生**是同伴（右侧边栏角色tab可导航/聊天/跟随），**巡警**提供初始线索。
+**Watson** is the companion (navigable / chat / follow via the character tab in the right sidebar), and the **Constable** provides the initial clue.
 
-## 层级画布
+## Layered Canvas
 
 ```
-贝克街221B（大地图 · material: parchment）
-├── 贝克街（场景层 · material: warm）
-│   ├── 犯罪现场（stub层 · 首次进入实例化）
-│   └── 废弃果园（stub层 · 首次进入实例化）
-└── 公寓（场景层 · material: wood）
+221B Baker Street (world map · material: parchment)
+├── Baker Street (scene layer · material: warm)
+│   ├── Crime Scene (stub layer · instantiated on first entry)
+│   └── Abandoned Orchard (stub layer · instantiated on first entry)
+└── Apartment (scene layer · material: wood)
 ```
 
-## 线索串联（叙事脚本关键词触发）
+## Clue Chaining (narrative script keyword triggers)
 
-| 关键词 | 触发场景 | 获得线索 |
-|--------|----------|----------|
-| "看"、"线索"、"观察"、"发现" | 贝克街 | 模糊照片（指向废弃果园） |
-| "艾德勒"、"失踪"、"女子" | 贝克街 | 匿名纸条（"她去废弃果园了"） |
-| "雾"、"天气"、"晚上"、"夜" | 贝克街 | 华生提醒果园线索 |
-| 进入犯罪现场 | 犯罪现场 | 自动出现生锈的钥匙 |
-| "果园"、"废弃"、"树木"、"树" | 犯罪现场 | 沾泥的信（署名"A"） |
-| "走"、"离开"、"回"、"回去" | 贝克街 | 雾更浓，世界等你下一步 |
+| Keyword | Trigger scene | Clue gained |
+|---------|---------------|-------------|
+| "look", "clue", "observe", "discover" | Baker Street | A blurred photograph (points to the Abandoned Orchard) |
+| "Adler", "missing", "woman" | Baker Street | An anonymous note ("She's gone to the abandoned orchard.") |
+| "fog", "weather", "evening", "night" | Baker Street | Watson reminds you of the orchard clue |
+| Enter the Crime Scene | Crime Scene | A rusted key appears automatically |
+| "orchard", "abandoned", "trees", "tree" | Crime Scene | A mud-stained letter (signed "A") |
+| "walk", "leave", "back", "return" | Baker Street | The fog thickens; the world awaits your next move |
 
-## 文件清单
+## File List
 
-| 文件 | 类型 | 说明 |
-|------|------|------|
-| `README.md` | type: readme | 世界介绍 |
-| `world.json` | manifest | 世界配置（含层级、角色、谜案） |
-| `world/README.md` | type: readme | 大地图描述 |
-| `world/贝克街/README.md` | type: readme | 贝克街场景描述 |
-| `world/贝克街/傍晚.md` | type: chalk + frontmatter | 照片线索叙事 |
-| `world/贝克街/深夜.md` | type: chalk + frontmatter | 雾中提醒叙事 |
-| `world/犯罪现场/README.md` | type: readme | 犯罪现场（stub） |
-| `world/犯罪现场/傍晚.md` | type: chalk + frontmatter | 钥匙发现叙事 |
-| `world/废弃果园/README.md` | type: readme | 废弃果园（stub） |
-| `characters/华生/README.md` | type: readme | 华生角色简介 |
-| `characters/华生/preset.json` | pi-rp preset | 华生提示词预设 |
-| `characters/巡警/README.md` | type: readme | 巡警角色简介 |
-| `characters/巡警/preset.json` | pi-rp preset | 巡警提示词预设 |
-| `player/README.md` | type: readme | 玩家小天地 |
-| `player/旧船票.md` | type: note | 起始物品（背包） |
-| `journal/README.md` | type: readme | 日志目录说明 |
-| `journal/01-迷雾-第1日-初入贝克街.md` | type: chalk | 案件日志 |
-| `.airpworld/openings/holmes.json` | opening播种 | 作家开场白与初始状态 |
+| File | Type | Description |
+|------|------|-------------|
+| `README.md` | type: readme | World introduction |
+| `world.json` | manifest | World configuration (layers, characters, mystery) |
+| `world/README.md` | type: readme | World map description |
+| `world/baker-street/README.md` | type: readme | Baker Street scene description |
+| `world/baker-street/evening.md` | type: chalk + frontmatter | Photograph-clue narrative |
+| `world/baker-street/late-night.md` | type: chalk + frontmatter | Fog reminder narrative |
+| `world/crime-scene/README.md` | type: readme | Crime Scene (stub) |
+| `world/crime-scene/evening.md` | type: chalk + frontmatter | Key-discovery narrative |
+| `world/abandoned-orchard/README.md` | type: readme | Abandoned Orchard (stub) |
+| `characters/watson/README.md` | type: readme | Watson character profile |
+| `characters/watson/preset.json` | pi-rp preset | Watson prompt preset |
+| `characters/constable/README.md` | type: readme | Constable character profile |
+| `characters/constable/preset.json` | pi-rp preset | Constable prompt preset |
+| `player/README.md` | type: readme | Player's own space |
+| `player/old-boat-ticket.md` | type: note | Starting item (inventory) |
+| `journal/README.md` | type: readme | Journal directory notes |
+| `journal/01-fog-day-one-arriving-on-baker-street.md` | type: chalk | Case journal |
+| `.airpworld/openings/holmes.json` | opening seed | Writer's opening line and initial state |
 
-## 角色设定
+## Character Setup
 
-### 华生（玩家同伴）
-- 身份：约翰·H·华生医生，福尔摩斯的挚友与传记者
-- 作用：对话提示、线索补充、情绪锚点
-- 位置：右侧边栏"角色"tab → 导航/聊天/跟随
-- 立绘：`assets/characters/portraits/portrait21_sara.png`
+### Watson (player companion)
+- Identity: Dr. John H. Watson, Holmes's closest friend and chronicler
+- Role: dialogue prompts, clue reinforcement, emotional anchor
+- Position: right sidebar "Characters" tab → navigate / chat / follow
+- Portrait: `assets/characters/portraits/portrait21_sara.png`
 
-### 巡警（NPC）
-- 身份：贝克街巡警分局警长
-- 作用：提供匿名纸条线索
-- 位置：右侧边栏"角色"tab → 导航/聊天
-- 立绘：`assets/characters/portraits/LPCportrait5.png`
+### The Constable (NPC)
+- Identity: sergeant of the Baker Street police station
+- Role: provides the anonymous-note clue
+- Position: right sidebar "Characters" tab → navigate / chat
+- Portrait: `assets/characters/portraits/LPCportrait5.png`
 
-## 开放性设计原则
+## Open-Ended Design Principles
 
-1. **没有预设凶手** — 一切真相靠线索串联
-2. **开放推理** — 玩家可以自由组合线索得出不同结论
-3. **雾是隐喻** — 雾越大，离真相越近，但也越模糊
-4. **作家只写环境** — 角色说的话、发现的物品是叙事文本，作家只补充环境氛围
-5. **多结局可能** — 线索的解读方式决定故事走向
+1. **No predetermined killer** — every truth is pieced together from clues
+2. **Open deduction** — players can combine clues freely to reach different conclusions
+3. **Fog is a metaphor** — the thicker the fog, the closer to the truth, and the more blurred it becomes
+4. **The Writer writes only the environment** — what characters say and the items you find is narrative text; the Writer adds only environmental atmosphere
+5. **Multiple endings possible** — how clues are interpreted determines where the story goes
 
-## 如何使用
+## How to Use
 
-### 方式1：直接作为文件世界（推荐）
-将整个 `holmes-world/` 目录放入 AIRP 引擎的世界目录，引擎自动扫描 `world.json` 和 `.airpworld/` 配置。
+### Option 1: Use directly as a file world (recommended)
+Place the entire `holmes-world/` directory into the AIRP engine's worlds directory; the engine automatically scans `world.json` and the `.airpworld/` configuration.
 
-### 方式2：复制到现有项目
+### Option 2: Copy into an existing project
 ```bash
-cp -r holmes-world/ <你的世界目录>/
+cp -r holmes-world/ <your world directory>/
 ```
 
-### 方式3：打包分享
+### Option 3: Package and share
 ```bash
 cd holmes-world && zip -r holmes-world.airpworld.zip .
 ```
 
-## 与前端原型的关系
+## Relationship to the Front-End Prototype
 
-前端渲染原型 `画布世界v1-yoshi.html` 在 **`infini-canvas` 项目**里（纸质感画布、层级穿越、chalk流式书写、角色对话遮罩、背包拖拽）；克隆该项目到本项目的兄弟目录即可对照。
-- 地图数据、叙事脚本、角色配置已写入此文件目录
-- 前端 HTML 中的 LAYERS / WRITER_SCRIPTS / DLG_ASSETS 与此目录一一对应
-- 此目录是**真相源**（文件即世界状态），HTML 是**投影**（画布即渲染）
+`../canvas-world-v1-yoshi.html` is this world's **front-end rendering prototype** (paper-textured canvas, layer traversal, streaming chalk writing, character dialogue overlay, inventory drag-and-drop).
+- The map data, narrative scripts, and character configuration are written into this directory
+- The front-end HTML's LAYERS / WRITER_SCRIPTS / DLG_ASSETS map one-to-one to this directory
+- This directory is the **source of truth** (files are the world state); the HTML is the **projection** (the canvas as rendered)

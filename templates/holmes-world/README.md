@@ -1,21 +1,21 @@
 ---
 type: readme
-name: 贝克街221B
+name: 221B Baker Street
 material: parchment
 cover: null
 ---
 
-# 贝克街221B
+# 221B Baker Street
 
-伦敦的雾气总在最不合适的时候降临在这条街的门阶上。
+London's fog always descends on this street's doorstep at the worst possible moment.
 
-艾德勒女士已经连续三日未归。贝克街弥漫着不安——每个街角都藏着未被读懂的线索。
+Lady Adler has been missing for three days now. Unease hangs over Baker Street — every street corner hides a clue no one has yet read.
 
-## 场景
+## Scenes
 
-- **贝克街** — 我的街道，我的战场。
-- **公寓** — 221B，住客：夏洛克·福尔摩斯。
+- **Baker Street** — my street, my battlefield.
+- **The Apartment** — 221B. Resident: Sherlock Holmes.
 
-## 提示
+## Hint
 
-对作家说任何话来推进剧情。观察线索、发现真相——世界在等你下一步。
+Say anything to the Writer to move the story forward. Watch for clues, uncover the truth — the world awaits your next move.

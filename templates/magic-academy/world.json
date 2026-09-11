@@ -1,0 +1,26 @@
+{
+  "id": "magic-academy",
+  "name": "Emberglass Academy",
+  "version": "1.0.0",
+  "schema": 1,
+  "description": "A candlelit academy of magic, where the library indexes itself and the observatory has been sealed for a hundred years.",
+  "author": "Mingyue",
+  "genre": "magic-academy",
+  "tags": ["magic", "academy", "fantasy", "daily-life"],
+  "material": "parchment",
+  "extensions": [
+    { "id": "airp:letter", "version": ">=1.0.0", "optional": false },
+    { "id": "airp:note", "version": ">=1.0.0", "optional": false }
+  ],
+  "layers": {
+    "map": { "name": "Emberglass Academy", "parent": null },
+    "world/arcane-library": { "name": "The Arcane Library", "parent": "map" },
+    "world/observatory": { "name": "The Observatory", "parent": "map", "stub": true }
+  },
+  "characters": [
+    { "id": "seraphina", "home": "world/arcane-library", "role": "companion" },
+    { "id": "archivist", "home": "world/arcane-library", "role": "npc" }
+  ],
+  "createdAt": "2026-09-11T00:00:00Z",
+  "updatedAt": "2026-09-11T00:00:00Z"
+}

@@ -229,7 +229,7 @@ export function createWorldRouter(
       // Notify writer
       const writer = lifecycle.getWriter();
       if (writer) {
-        writer.prompt(`[系统通知：玩家进行了检定「${expect}」，掷出 ${rollResult}（${passed ? '成功' : '失败'}）。请据此进行剧情发展与叙事回应。]`).catch(console.error);
+        writer.prompt(`[System notice: the player made a check "${expect}" and rolled ${rollResult} (${passed ? 'success' : 'failure'}). Continue the story and respond in narration accordingly.]`).catch(console.error);
       }
 
       res.json({ ok: true, result: rollResult, passed });
@@ -255,7 +255,7 @@ export function createWorldRouter(
       // Inform writer agent
       const writer = lifecycle.getWriter();
       if (writer) {
-        writer.prompt(`[系统通知：玩家使用了道具「${path.basename(itemPath)}」在「${path.basename(targetPath)}」上。请根据道具互动逻辑推进场景演化与撰写叙事回应。]`).catch(console.error);
+        writer.prompt(`[System notice: the player used the item "${path.basename(itemPath)}" on "${path.basename(targetPath)}". Advance the scene's evolution and write a narrative response according to the item-interaction logic.]`).catch(console.error);
       }
 
       res.json({ ok: true, event });
@@ -292,7 +292,7 @@ export function createWorldRouter(
       // If thawed, inform writer
       if (!worldFrozen) {
         const writer = lifecycle.getWriter();
-        writer?.prompt(`[系统通知：上帝之手修改了世界物件「${filePath}」（动作：${action}）。请予以叙事缝合。]`).catch(console.error);
+        writer?.prompt(`[System notice: the god hand modified the world object "${filePath}" (action: ${action}). Please stitch it into the narrative.]`).catch(console.error);
       }
 
       res.json({ ok: true, event });

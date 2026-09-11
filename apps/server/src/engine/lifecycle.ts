@@ -61,7 +61,7 @@ export class AgentLifecycleManager {
     }
 
     const client = new PiRpcClient(this.vendorCliPath);
-    // 角色自己的 preset 优先；没有就退回仓库里的通用角色 preset。
+    // The character's own preset takes priority; otherwise fall back to the repo's generic character preset.
     const characterPreset = path.join(worldRoot, 'characters', characterId, 'preset.json');
     const presetId = installPreset(
       worldRoot,
@@ -83,7 +83,7 @@ export class AgentLifecycleManager {
     // Inject recent context
     if (recentContext) {
       setTimeout(() => {
-        client.prompt(`[系统提示：当前玩家站在你面前，场景情况如下：${recentContext}]`).catch(console.error);
+        client.prompt(`[System note: the player is standing in front of you right now; the scene is as follows: ${recentContext}]`).catch(console.error);
       }, 500);
     }
 

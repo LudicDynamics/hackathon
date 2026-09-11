@@ -45,8 +45,9 @@ async function runProbe() {
   const presetId = installPreset(TEST_WORLD, path.join(REPO_ROOT, 'presets/writer.json'));
   console.log(`Installed preset "${presetId}" into ${TEST_WORLD}/.airpworld/prompt-presets/`);
 
-  // pi-rp 的 --preset 只认 id；传文件路径会打 "not found" 并静默回退到默认预设。
-  // 把这条警告升格为探针失败，防止接线再退化。
+  // pi-rp's --preset recognizes only the id; passing a file path prints "not found" and
+  // silently falls back to the default preset. Promote that warning to a probe failure so
+  // the wiring cannot silently regress again.
   const presetWarnings = [];
   client.on('stderr', (err) => {
     if (err.includes('not found')) presetWarnings.push(err.trim());
@@ -62,7 +63,7 @@ async function runProbe() {
   await new Promise((r) => setTimeout(r, 1500));
   console.log('✓ PiRpcClient process spawned and responsive.');
   if (presetWarnings.length > 0) {
-    throw new Error(`preset "${presetId}" 未被加载：\n${presetWarnings.join('\n')}`);
+    throw new Error(`preset "${presetId}" was not loaded:\n${presetWarnings.join('\n')}`);
   }
   console.log(`✓ Preset "${presetId}" resolved (no "not found" warning).`);
 

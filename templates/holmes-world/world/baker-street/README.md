@@ -2,11 +2,10 @@
 type: readme
 name: Baker Street
 material: warm
-bg: "assets/scenes/map/map-parchment.png"   # world-map backdrop (README = scene config, see doc-10 E0)
+bg: "assets/scenes/baker-street/parchment-warm.png"   # scene backdrop/texture: README = scene preview = scene config (see doc-10 E0; bg is a frontmatter field, not a standalone asset/component)
 bgStyle:
   tone: warm
   grain: parchment
-compass: true   # compass = a fixed style on top of bg, not a standalone component (see doc-10 E0)
 ---
 
 # Baker Street

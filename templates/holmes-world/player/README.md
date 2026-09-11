@@ -1,13 +1,13 @@
 ---
 type: readme
-name: 玩家
+name: Player
 material: parchment
 ---
 
-# 玩家
+# Player
 
-夏洛克·福尔摩斯。
+Sherlock Holmes.
 
-艾德勒女士失踪了。而你，是唯一在追查的人。
+Lady Adler has vanished. And you are the only one on the trail.
 
-线索已经散落——拿起它们，拼出真相。
+The clues are already scattered — pick them up, and piece together the truth.
