@@ -195,14 +195,14 @@ characters/
     └── ...
 ```
 
-- **preset.json 是角色的"大脑"**：用 pi-rp 的 preset 机制组装提示词——`block` 写角色行为规则（平台统一隐形提示词的文本），`slot` 的 `file` 引用本目录下的 md 文件（`baseDir` 指向角色目录，因为相对路径的基准是会话 cwd = 世界根）：
+- **preset.json 是角色的"大脑"**：用 pi-rp 的 preset 机制组装提示词——`slot` 的 `system-char` 注入平台统一的角色行为规范（情绪差分、特写对话规范），`slot` 的 `file` 引用本目录下的 md 文件（`baseDir` 指向角色目录，因为相对路径的基准是会话 cwd = 世界根）：
 ```json
 {
   "schemaVersion": 1,
   "id": "tavern-keeper",
   "name": "旅店老板",
   "items": [
-    { "kind": "block", "id": "role", "role": "system", "content": "<平台统一的角色行为规则文本>" },
+    { "kind": "slot", "id": "character-instruction", "slot": "system-char" },
     { "kind": "slot", "id": "profile", "slot": "file",
       "options": { "path": ["identity.md", "appearance.md", "personality.md"],
                    "baseDir": "characters/旅店老板", "onMissing": "skip" } },
@@ -210,7 +210,7 @@ characters/
   ]
 }
 ```
-> **两条硬约束（2026-09-11 实测）**：① **不存在 `system` 这个 slot**——`slot` 只能取内建槽名（`chat-history`/`tools`/`file`/`state`/`variables`/`date`/`cwd`…）或扩展注册的自定义槽；写 `"slot": "system"` 会渲染成 `[unknown slot: system]` 并留 warning。平台统一隐形提示词目前**用 `block` 直接写文本**，暂不为它注册自定义 slot。② pi-rp 的 preset 顶层**没有 `system` 字段**——顶层只有 `schemaVersion`/`id`/`items` 等，提示词一律进 `items`；写成 `{"system": "..."}` 会被 loader 整个忽略（`items` 缺失 → 报错）。
+> **两条硬约束与定案（2026-09-11 实测）**：① **不存在内建 `system` 这个 slot**——`slot` 只能取内建槽名或扩展注册的自定义槽。AIRP 通过扩展 `extensions/instructions.ts` 为不同职责的 Agent 注册专属 instruction slot：角色专用 `system-char`、作家专用 `writer-char`、场景初始化专用 `scene-init-instruction`、小天地初始化专用 `nook-init-instruction`。slot 的 name 与 item id 严格隔离互不混用。② pi-rp 的 preset 顶层**没有 `system` 字段**——顶层只有 `schemaVersion`/`id`/`items` 等，提示词一律进 `items`；写成 `{"system": "..."}` 会被 loader 整个忽略（`items` 缺失 → 报错）。
 - **角色 spawn 上下文 = 极薄**：preset 引用文件（身份/性格/记忆）+ 最近场景情况（invoke 时注入）+ 自己手动 read_canvas。没有共享状态通道、没有自动注入、没有信息边界规则——**角色知道什么 = 没人告诉它什么，不是规则防出来的**。
 
 **玩家目录（`player/`）= 玩家的小天地 / 背包**：玩家是真人，不是 agent，不需要 preset.json——但 `player/` 目录本身就是玩家的私人空间，前端右侧边栏的背包就是它的列表预览。玩家从场景收藏进背包的东西就落在这里：

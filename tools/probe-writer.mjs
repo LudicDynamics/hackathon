@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { airpEnv, installPreset, skillArgs } from '../apps/server/dist/engine/presets.js';
+import { airpEnv, extensionArgs, installPreset, skillArgs } from '../apps/server/dist/engine/presets.js';
 import { PiRpcClient } from '../apps/server/dist/engine/rpc-client.js';
 import { LocalWorldStore } from '../packages/shared/dist/index.js';
 
@@ -55,14 +55,17 @@ async function runProbe() {
     if (err.includes('not found') || err.includes('unknown slot')) presetWarnings.push(err.trim());
   });
 
-  // Spawn with the same skill args the server uses, so a broken --skill path or an
-  // unimplemented `skills` slot fails the probe instead of degrading silently at runtime.
+  // Spawn with the same skill & extension args the server uses, so a broken path or an
+  // unimplemented slot fails the probe instead of degrading silently at runtime.
   const skills = skillArgs(REPO_ROOT, TEST_WORLD);
   console.log(`Skill dirs: ${skills.filter((a) => a !== '--skill').join(', ') || '(none)'}`);
 
+  const extensions = extensionArgs(REPO_ROOT, TEST_WORLD);
+  console.log(`Extension files: ${extensions.filter((a) => a !== '--extension').join(', ') || '(none)'}`);
+
   client.start({
     cwd: TEST_WORLD,
-    args: ['--preset', presetId, '--offline', ...skills],
+    args: ['--preset', presetId, '--offline', ...extensions, ...skills],
     env: airpEnv(TEST_WORLD),
   });
 
@@ -76,6 +79,33 @@ async function runProbe() {
 
   client.stop();
   console.log('✓ PiRpcClient successfully stopped.');
+
+  // 3. Test Character preset and system-char slot resolution
+  console.log('\n[Probe 3] Testing Character preset and system-char slot resolution...');
+  const charClient = new PiRpcClient(VENDOR_CLI);
+  const charPresetId = installPreset(TEST_WORLD, path.join(REPO_ROOT, 'presets/character.json'));
+  console.log(`Installed preset "${charPresetId}" into ${TEST_WORLD}/.airpworld/prompt-presets/`);
+
+  const charPresetWarnings = [];
+  charClient.on('stderr', (err) => {
+    if (err.includes('not found') || err.includes('unknown slot')) charPresetWarnings.push(err.trim());
+  });
+
+  charClient.start({
+    cwd: TEST_WORLD,
+    args: ['--preset', charPresetId, '--offline', ...extensions],
+    env: airpEnv(TEST_WORLD),
+  });
+
+  await new Promise((r) => setTimeout(r, 1500));
+  console.log('✓ Character PiRpcClient process spawned and responsive.');
+  if (charPresetWarnings.length > 0) {
+    throw new Error(`preset "${charPresetId}" was not loaded:\n${charPresetWarnings.join('\n')}`);
+  }
+  console.log(`✓ Preset "${charPresetId}" resolved (no "not found" warning).`);
+
+  charClient.stop();
+  console.log('✓ Character PiRpcClient successfully stopped.');
 
   console.log('\n=== [AIRP Gate Probe] ALL CHECKS PASSED ===');
 }

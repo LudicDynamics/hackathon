@@ -62,6 +62,7 @@ apps/
     components/god/        # 上帝模式工具栏
 packages/shared/src/    # world / frontmatter / components / events schema + store + sqlite
 presets/                # 提示词预设：writer, character, scene-init, nook-init
+extensions/             # 项目级 pi-rp 扩展：注册专用指令槽（writer-char, system-char, scene-init-instruction 等）
 skills/                 # 项目级 skills：跨世界通用手艺（生图 / 组件叙事 / 节奏 / 玩法咬合）
 templates/              # 开箱世界模板：holmes-world, school-romance, magic-academy, cthulhu
   <world>/skills/       # 世界级 skills：该世界自己的文风与剧情，与 world/ 同级、随包分发
@@ -197,7 +198,7 @@ pnpm build && pnpm probe
 ### 7.3 preset 格式铁律（实测，踩过坑）
 
 1. **顶层没有 `system` 字段**——提示词一律进 `items`。
-2. **不存在 `system` 这个 slot**——平台隐形提示词用 `{ "kind": "block", "role": "system" }` 写文本。
+2. **不存在内建的 `system` slot**——但可通过扩展注册专属 instruction slot（AIRP 在 `extensions/instructions.ts` 注册了 `writer-char`、`system-char`、`scene-init-instruction`、`nook-init-instruction`，各 agent 职责隔离、slot id 与 name 互不混用）。
 3. **`--preset` 只认 id，不认文件路径**，且只扫 `<configDir>/prompt-presets/` 顶层；配置目录由 `PI_PROJECT_CONFIG_DIR=.airpworld` 指定。
 4. slot 的 `options` **不展开宏**（宏只在渲染后的文本上展开）。
 5. 加载器只读顶层，`onMissing: "error"` 是致命的，文件槽用 `onMissing: "skip"`。

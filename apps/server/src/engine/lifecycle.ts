@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { airpEnv, installPreset, skillArgs } from './presets.js';
+import { airpEnv, extensionArgs, installPreset, skillArgs } from './presets.js';
 import { PiRpcClient } from './rpc-client.js';
 
 export interface AgentLifecycleManagerOptions {
@@ -38,7 +38,11 @@ export class AgentLifecycleManager {
 
     client.start({
       cwd: worldRoot,
-      args: ['--preset', presetId, ...skillArgs(this.repoRoot, worldRoot)],
+      args: [
+        '--preset', presetId,
+        ...extensionArgs(this.repoRoot, worldRoot),
+        ...skillArgs(this.repoRoot, worldRoot),
+      ],
       env: airpEnv(worldRoot),
     });
 
@@ -74,7 +78,10 @@ export class AgentLifecycleManager {
 
     client.start({
       cwd: worldRoot,
-      args: ['--preset', presetId],
+      args: [
+        '--preset', presetId,
+        ...extensionArgs(this.repoRoot, worldRoot),
+      ],
       env: airpEnv(worldRoot, characterId),
     });
 

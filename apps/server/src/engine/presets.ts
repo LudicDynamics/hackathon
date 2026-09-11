@@ -81,3 +81,37 @@ export function skillArgs(repoRoot: string, worldRoot: string): string[] {
   }
   return args;
 }
+
+/**
+ * Extension paths handed to pi-rp via `--extension` (repeatable; accepts a file or directory).
+ *
+ * Discovers project-level extensions under `<repoRoot>/extensions/` and world-level extensions
+ * under `<worldRoot>/extensions/`.
+ */
+export function extensionArgs(repoRoot: string, worldRoot?: string): string[] {
+  const args: string[] = [];
+  const searchDirs = [path.join(repoRoot, 'extensions')];
+  if (worldRoot) {
+    searchDirs.push(path.join(worldRoot, 'extensions'));
+  }
+  for (const dir of searchDirs) {
+    if (fs.existsSync(dir)) {
+      try {
+        for (const file of fs.readdirSync(dir)) {
+          if (
+            (file.endsWith('.ts') || file.endsWith('.js')) &&
+            !file.endsWith('.d.ts') &&
+            !file.endsWith('.test.ts') &&
+            !file.endsWith('.spec.ts')
+          ) {
+            args.push('--extension', path.join(dir, file));
+          }
+        }
+      } catch {
+        // Skip unreadable directory
+      }
+    }
+  }
+  return args;
+}
+

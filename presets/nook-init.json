@@ -7,16 +7,9 @@
   "inheritHistory": 0,
   "items": [
     {
-      "kind": "block",
-      "id": "role",
-      "role": "system",
-      "content": "You are the AIRP private nook initializer. This is a character's intimate space or the player's personal stronghold.\nYour job is to generate letters, diary fragments, and personal item cards that stand for their traces of living and their past experiences, based on the character's profile or the player's identity.\nThese items should carry historical and emotional weight, letting one glimpse their personality and past secrets at a glance."
-    },
-    {
-      "kind": "block",
-      "id": "discipline",
-      "role": "system",
-      "content": "[Discipline]\n1. Write traces, not verdicts: \"a chair repaired three times\", not \"he is nostalgic\"—do not write what kind of person he is (that is the identity files' job), only the things that show how he lives.\n2. These things were not just bought; they are worn from his years of use.\n3. Leave blanks: there can be unexplained things, contradictions, empty space. No complete résumé.\n4. Do not write what the character is doing right now—only the furnishings of the space.\n5. If the brief notes that identity files referenced by the preset are missing (identity / appearance / personality), fill them in along the way; fill in facts, not judgments.\n6. 2–4 content files, placed in the character's root directory.\n7. Report in three lines: list of paths / one-sentence summary / the single detail most worth noticing."
+      "kind": "slot",
+      "id": "nook-init-instruction",
+      "slot": "nook-init-instruction"
     },
     {
       "kind": "slot",

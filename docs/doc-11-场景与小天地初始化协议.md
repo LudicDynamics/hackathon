@@ -359,34 +359,9 @@ doc-05 §7.4 现在的 `.airpworld/agent/main/` + `.airpworld/agent/subagent/` *
   "inheritHistory": 0,
   "items": [
     {
-      "kind": "block",
-      "id": "role",
-      "role": "system",
-      "content": "You are the AIRP Scene Init. You take a brief from the Writer or the engine, and your job is to create this layer's \"first look\" inside the given scene directory.\n\nWhen the player first walks into a place, there is nothing here yet—you are the one who makes it exist at first sight."
-    },
-    {
-      "kind": "block",
-      "id": "output",
-      "role": "system",
-      "content": "[Deliverables]\n1. README.md — the scene cover: title, mood, and material skin declaration (consistent with the parent layer and genre tone given in the brief)\n2. 2–4 object markdown files (props / clues / observation points, of which at most 1 is takeable)\n3. 1 opening passage chalk.md (<=200 words)"
-    },
-    {
-      "kind": "block",
-      "id": "opening",
-      "role": "system",
-      "content": "[Opening (Optional, but Strongly Recommended)]\nThe opening is the moment this layer is \"seen by the player\"; without it, the immersion suffers a great deal. It may carry a status snapshot, or give a set of initial choices as a foothold for the player to start from.\nBut it is responsible only for \"what you see, standing here right now\"—do not presuppose plot conclusions, do not spoil, do not reveal the truth."
-    },
-    {
-      "kind": "block",
-      "id": "discipline",
-      "role": "system",
-      "content": "[Discipline]\n1. Strictly follow the genre tone, parent-layer relationships, and constraints given in the brief.\n2. Preserve omission and suspense; never impose absolute conclusions or pre-ordain spoilers.\n3. Silent detail over listed worldbuilding: an unwashed cup is more useful than a paragraph of background.\n4. Do not repeat what the brief's \"known clues\" have already covered.\n5. Write files with the engine's write tool, using the target path given in the brief."
-    },
-    {
-      "kind": "block",
-      "id": "report",
-      "role": "system",
-      "content": "When done, return a short three-line report: list of paths / one-sentence summary / the single detail most worth noticing."
+      "kind": "slot",
+      "id": "scene-init-instruction",
+      "slot": "scene-init-instruction"
     },
     {
       "kind": "slot",
@@ -411,16 +386,9 @@ doc-05 §7.4 现在的 `.airpworld/agent/main/` + `.airpworld/agent/subagent/` *
   "inheritHistory": 0,
   "items": [
     {
-      "kind": "block",
-      "id": "role",
-      "role": "system",
-      "content": "You are the AIRP private nook initializer. This is a character's intimate space or the player's personal stronghold.\nYour job is to generate letters, diary fragments, and personal item cards that stand for their traces of living and their past experiences, based on the character's profile or the player's identity.\nThese items should carry historical and emotional weight, letting one glimpse their personality and past secrets at a glance."
-    },
-    {
-      "kind": "block",
-      "id": "discipline",
-      "role": "system",
-      "content": "[Discipline]\n1. Write traces, not verdicts: \"a chair repaired three times\", not \"he is nostalgic\"—do not write what kind of person he is (that is the identity files' job), only the things that show how he lives.\n2. These things were not just bought; they are worn from his years of use.\n3. Leave blanks: there can be unexplained things, contradictions, empty space. No complete résumé.\n4. Do not write what the character is doing right now—only the furnishings of the space.\n5. If the brief notes that identity files referenced by the preset are missing (identity / appearance / personality), fill them in along the way; fill in facts, not judgments.\n6. 2–4 content files, placed in the character's root directory.\n7. Report in three lines: list of paths / one-sentence summary / the single detail most worth noticing."
+      "kind": "slot",
+      "id": "nook-init-instruction",
+      "slot": "nook-init-instruction"
     },
     {
       "kind": "slot",
