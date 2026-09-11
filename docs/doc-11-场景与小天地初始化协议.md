@@ -119,7 +119,7 @@ Three lines: list of paths / one-sentence scene summary / one sentence on "what 
 | **C3** | slot 的 `options` 展开宏（字符串叶子走宏展开，非字符串原样） | ✅ **已支持**（原"不展开"已失效） | `slot-renderers.ts`（`05893618c`） | `options.path:"{{who}}.md"` 现在可用。但 §2.1「preset 静态 / brief 动态」的分工**继续保留**——理由从"硬约束"降为"设计选择"：brief 才是每次不同的东西 |
 | **C4** | **`onMissing:"error"` 是致命的**：prepare 把 error 级诊断当失败，整个 subagent 起不来 | ⚠️ **仍然成立** | `prepare.ts:236` | 引用"可能不存在"的角色文件（如 `identity.md`）必须 `skip`（默认）或 `placeholder` |
 | **C5** | 子会话用 **prepare 记录的 cwd**（不再是 `process.cwd()`） | ✅ **已修**（原"cwd 可能不一致"已失效） | `run.ts:56/59`（`ea310c9fc`） | 相对 file slot 路径与相对写盘解析到同一个 cwd；引擎仍应保证 cwd = 世界根，但不再是踩雷点 |
-| **C6** | **`spawnAgent` 不校验 `delegatable`**；`subagent` 工具与 `/subagent` 命令才校验 | ⚠️ **仍然成立（且是有意的）** | `spawn.ts` 的函数注释明写 "not gated on the preset being delegatable" vs `extension.ts:92` | 两个入口都能用同一个 profile，正合我们的 R1/R2 共用设计；`delegatable: true` 只为了让作家侧看得到。**同一段注释还写了 `spawnAgent` 不继承父会话扩展工具**——这才是两入口真正的不对齐点，见 §2.4 |
+| **C6** | **`spawnAgent` 不校验 `delegatable`**；`subagent` 工具与 `/subagent` 命令才校验 | ⚠️ **仍然成立（且是有意的）** | `spawn.ts` 的函数注释明写 "not gated on the preset being delegatable" vs `extension.ts:92` | 两个入口都能用同一个 profile，正合我们的 R1/R2 共用设计；`delegatable: true` 只为了让作家侧看得到。**同一段注释还写了 `spawnAgent` 不继承父会话扩展工具**——这一条留着（刻意隔离），但由它派生的那个静默坑（`tools` 预填导致 `customTools` 被滤掉）已在 `dfebadcd3` 修掉，见 §2.4 |
 | **C7** | **preset 目录递归**：`collectPresetFiles` 深度优先收集子目录的 `*.json` | ✅ **已递归**（原"只读顶层"已失效） | `loader.ts::collectPresetFiles`（`6c693a7f3`） | 递归范围仍限于 `<configDir>/prompt-presets/` 内部。`characters/<id>/preset.json` **不在这棵树上**，所以引擎侧的"安装到 prompt-presets"动作依然需要（见 §7.1 修订） |
 | **C8** | **子会话无扩展运行时**：扩展工具的定义会继承，但事件 handler 不触发 | ⚠️ **仍然成立** | `run.ts:76`（"Omit extensions to fulfill no extensions"） | 依赖 `agent_start`/`tool_result` 钩子的逻辑在 subagent 里不会跑；落账要写在工具实现**内部** |
 | **C9** | 输出被 `truncateTail` 截断（2000 行 / 50KB） | ⚠️ **仍然成立** | `run.ts:136` | 回报格式必须短（§2.2 三行） |
@@ -147,24 +147,27 @@ options.path   "/w/{{who}}.md"            → file not found "/w/{{who}}.md"  �
 
 ### 2.4 工具集对齐表（两个入口要给出相同的工具）
 
-> **2026-09-11 复核**：C1 修好之后，**内建工具**两边默认对齐了（`spawnAgent` 不传 `tools` 时落到同一个 `DEFAULT_SUBAGENT_TOOLS`，`spawn.ts:90`），原来那套"扩展必须注册 `write_world_file`"的绕法可以删掉。**但扩展工具仍然不对齐**——见下表第三列，`INIT_TOOLS` 依然必需。
+> **2026-09-12 复核（本节已因一次上游修复重写）**：C1 修好之后**内建工具**两边默认对齐（`spawnAgent` 不传 `tools` 时落到同一个 `DEFAULT_SUBAGENT_TOOLS`）。扩展工具原本**不**对齐——`spawnAgent` 把 `tools` 预填成"只有内建集"，于是显式传进去的 `customTools` 因为名字不在白名单里被 `AgentSession._refreshToolRegistry` 静默滤掉。这违背了 pi 自己的工具语义（`tools` 是**收窄用的白名单**，省略即"全开"），已在 pi-rp `dfebadcd3` 修掉。
 
 | 入口 | 内建工具 | **扩展工具**（`chalk` / `read_canvas` / `link` …） |
 |---|---|---|
-| **R1 作家委托**（`subagent` 工具） | 默认集，什么都不用做 | **自动继承**：`inheritExtensionTools` 默认 true，父会话注册的工具并进 `effectiveTools`（`prepare.ts:178`） |
-| **R2 引擎直唤**（`ctx.spawnAgent`） | 不传 `tools` 即同一默认集 | **拿不到**：`spawnAgent` 把 `inheritExtensionTools` **硬编码为 false**（`spawn.ts`），必须显式传 `customTools: [...定义]`，**且工具名同时列进 `tools`**才可选中（`SpawnAgentOptions.customTools` 的 JSDoc 明写） |
+| **R1 作家委托**（`subagent` 工具） | 默认集，什么都不用做 | **自动继承**：`inheritExtensionTools` 默认 true，父会话注册的工具并进 `effectiveTools`（`prepare.ts:180`） |
+| **R2 引擎直唤**（`ctx.spawnAgent`） | 不传 `tools` 即同一默认集 | **传 `customTools` 即可用**（`dfebadcd3` 起）：省略 `tools` 时默认集自动并上 `customTools` 的名字。仍**不继承**父会话里别的扩展工具——那是 `inheritExtensionTools: false` 的刻意设计 |
 
-> **所以 `INIT_TOOLS` 依然要有**，只是职责收窄成一件事：**把 AIRP 扩展工具的名字与定义同时喂给 R2**。落地形状：
+> **`INIT_TOOLS` 因此可以不要了**。R2 只需把 AIRP 的工具定义交出去：
 >
 > ```ts
-> export const INIT_EXTENSION_TOOLS = ['chalk', 'read_canvas', 'link', 'arrange'];
-> // R2：spawnAgent({ profileId, task: brief,
-> //                  tools: [...DEFAULT_SUBAGENT_TOOLS, ...INIT_EXTENSION_TOOLS],
-> //                  customTools: airpToolDefs })
+> // R2：spawnAgent({ profileId, task: brief, customTools: airpToolDefs })
+> //   省略 tools => DEFAULT_SUBAGENT_TOOLS + airpToolDefs 的名字，与 R1 等价。
+> //   只有在要**收窄**时才写 tools，此时它是纯白名单，扩展工具名必须一并列出。
 > ```
 >
-> 忘了这一步的症状很隐蔽：**同一份 brief，作家委托时能用 `chalk` 落板书，玩家双击 stub 卡时只能用裸 `write`**——产物格式不一致，且没有任何报错。
+> 需要收窄的场景（例如初始化子代理不该有 `bash`）仍然照 pi 的语义写：
 >
+> ```ts
+> tools: ['read', 'write', 'edit', 'grep', 'find', 'ls', 'chalk', 'read_canvas', 'link', 'arrange']
+> ```
+
 > 另一处两入口不同、但对 AIRP 无影响的点：`spawnAgent` 把 `strict: true` 写死（无 schema 的命名空间写入会被拒）。AIRP 不用 pi-rp 的 state，碰不到。
 
 ---
@@ -365,7 +368,7 @@ doc-05 §7.4 早先的 `.airpworld/agent/main/` + `.airpworld/agent/subagent/` �
 
 - 落地时**不要**再造 `write_world_file`——多一层同义工具只会让模型犹豫用哪个；
 - AIRP 扩展该注册的是**引擎独有能力**（`chalk` / `read_canvas` / `link` / `arrange`），不是内建工具的替身；
-- 这些扩展工具经 `inheritExtensionTools`（默认 true）进 R1；R2 若显式传 `tools` 要一并带上（§2.4）。
+- 这些扩展工具经 `inheritExtensionTools`（默认 true）进 R1；R2 经 `customTools` 交出定义即可，只在显式收窄 `tools` 时才要把名字一并带上（§2.4）。
 
 ---
 
