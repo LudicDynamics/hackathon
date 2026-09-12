@@ -9,6 +9,8 @@
 
 ## 0. 一句话
 
+初雪日语 Demo 的可选新环境复用 Writer 亲写流程：玩家请求避雪处后，先生成 README、人物 note、物件与入场 Chalk，最后补一张背景；不启用新的 scene-init 委托，不将人物 note 冒充已注册角色 Agent。世界 skill 是执行正文，见《初雪短闭环与AI生长验收》。
+
 日语世界装配补充：`first-snow-jp` 的人物 preset 仍引用共享 `system-char`；新增 `world-language` 文件槽读取世界根 `language.md`，随后加载角色自身四份日语文档。精确 JSON、文件路径与 Writer skill 的日语规则见《世界日语化迁移》§4；不复制平台提示词正文、不启用新初始化路径。
 
 2026-09-12 未写之门实际接线：首次进入 stub 落事件后串行提交作家亲写（W1），R1/R2 尚未启用。writer preset 增加 `"tools": { "deny": ["bash"] }`，原生 write/edit 经 `world-context.ts` 落账。完整范围见 doc-25；下文 R1/R2 为目标协议，不表示该 Demo 已验证委托。

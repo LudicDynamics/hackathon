@@ -477,7 +477,7 @@ const decodeCache = new Map<string, Promise<AudioBuffer>>();
 const failCached = new Set<string>();
 
 const SAMPLE_LEVELS: Record<TrackId, number> = { ambient: 0.5, bgm: 0.35, theme: 0.22 };
-const FOLEY_SAMPLE_LEVEL = 0.7;
+const FOLEY_SAMPLE_LEVEL = 0.14;
 const STINGER_SAMPLE_LEVEL = 0.8;
 
 const isUrl = (ref: string): boolean => ref.startsWith('/') || ref.startsWith('http');
@@ -717,7 +717,10 @@ export function setTheme(ref: string | null): void {
 function synthFoley(name: FoleyName, intensity: number): void {
   if (!initAudio() || !master) return;
   const c = ctx!;
-  const dest = master;
+  const dest = c.createGain();
+  dest.gain.value = .2;
+  dest.connect(master);
+  window.setTimeout(() => dest.disconnect(), 2000);
   const k = clamp01(intensity);
   const t = c.currentTime;
 
@@ -827,20 +830,34 @@ function synthFoley(name: FoleyName, intensity: number): void {
 /** Play an interaction sound: real sample first, synthesized voice on failure.
  *  `intensity` (0–1) scales the sample level, keeping the drag-weight semantic
  *  continuous with the synth path. */
+const canvasFoley: Record<FoleyName, [string, number]> = {
+  'paper-slide': ['card', .14], 'bag-pack': ['get', .18],
+  'dice-roll': ['dice', .28], 'unlock': ['success', .22],
+  'pen-scratch': ['write', .16], 'gate-open': ['door', .2],
+  'crit-chime': ['success', .22], 'fumble-break': ['card', .14],
+  'page-turn': ['paper', .14],
+};
+const foleyBusyUntil = new Map<FoleyName, number>();
 export function playFoley(name: FoleyName, intensity = 1): void {
-  if (!initAudio() || !master) return;
+  if (!initAudio() || !master || ctx?.state !== 'running' || mutedState || document.hidden) return;
+  const now = performance.now();
+  if (now < (foleyBusyUntil.get(name) ?? 0)) return;
+  foleyBusyUntil.set(name, now + 500);
   const k = clamp01(intensity);
-  const url = `/api/audio?path=foley%2F${name}.mp3`;
+  const [sample, level] = canvasFoley[name];
+  const url = `/api/audio?path=foley%2Fcanvas%2Fse-${sample}.mp3`;
   if (failCached.has(url)) {
-    synthFoley(name, k); // known-missing sample → straight to the synth
+    synthFoley(name, k * .2); // keep a quiet offline fallback
     return;
   }
   void loadSample(url).then((buf) => {
+    if (performance.now() - now > 500 || mutedState || document.hidden || ctx?.state !== 'running') return;
     if (buf) {
       if (!master) return;
-      playClip(master, buf, false, FOLEY_SAMPLE_LEVEL * k);
+      foleyBusyUntil.set(name, performance.now() + Math.max(500, buf.duration * 1000));
+      playClip(master, buf, false, (level || FOLEY_SAMPLE_LEVEL) * k);
     } else {
-      synthFoley(name, k);
+      synthFoley(name, k * .2);
     }
   });
 }

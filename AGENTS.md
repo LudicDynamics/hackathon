@@ -47,6 +47,7 @@ apps/
     index.ts            # Express + WS 入口（/api、静态托管 apps/web/dist、端口 3001）
     routes/world.ts     # 玩家 UI 路由 → 动作服务（/move, /dice, /use-item, /choice, /enter-layer, /god-action, …）
     world-shelf.ts      # 世界/存档书架投影与可恢复删除；见 docs/世界与存档.md
+    # Agent 帧到前端的身份与状态接线见 docs/Agent前端接线.md
     engine/
       launch.ts         # spawn 参数单一来源（preset / --session-dir / --continue / env / AIRP_AGENT_ROLE / --no-* 资源隔离），服务端与探针共用
       lifecycle.ts      # Agent 生命周期编排（单例复用 / spawn / warmup / 崩溃退避重启 / stopAll）

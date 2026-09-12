@@ -3,6 +3,7 @@ type: note
 title: The Phone
 portable: false
 visual: phone
+image: assets/tokens/phone.png
 status:
   data:
     contacted: false

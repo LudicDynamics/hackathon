@@ -188,13 +188,15 @@ function storedSizeOf(
  * regex on the raw text also matched prose lines (docs/audio/01 §8.1), so tone/grain
  * now come from the structured frontmatter. `bg.src` cleaning is unchanged.
  */
-function readLayerBg(raw: string): { src: string | null; tone: string; grain: string } {
+function readLayerBg(raw: string): { src: string | null; video?: string; tone: string; grain: string } {
   let src: string | null = null;
+  let video: string | undefined;
   let tone = 'warm';
   let grain = 'parchment';
   try {
     const fm = parseFrontmatter(raw).frontmatter;
     const bgValue = fm?.bg;
+    if (typeof fm?.bgVideo === 'string' && /\.(mp4|webm)$/i.test(fm.bgVideo)) video = fm.bgVideo;
     if (typeof bgValue === 'string' && bgValue.trim() !== '') {
       // Strip trailing inline comments and quotes (parser keeps them verbatim).
       const cleaned = bgValue.replace(/\s+#.*$/, '').trim().replace(/^["']|["']$/g, '').trim();
@@ -205,7 +207,7 @@ function readLayerBg(raw: string): { src: string | null; tone: string; grain: st
   } catch {
     src = null;
   }
-  return { src, tone, grain };
+  return { src, ...(video ? { video } : {}), tone, grain };
 }
 
 /**
@@ -473,7 +475,7 @@ export function createWorldRouter(
       let scene: SceneReadme | null = null;
 
       // bg + audio from the layer README frontmatter (doc-10 E0; docs/audio/00 §3).
-      let bg: { src: string | null; tone: string; grain: string } = { src: null, tone: 'warm', grain: 'parchment' };
+      let bg: { src: string | null; video?: string; tone: string; grain: string } = { src: null, tone: 'warm', grain: 'parchment' };
       let audio: { ambient: string | null; bgm: string | null } = { ambient: null, bgm: null };
       try {
         const readmePath = layer === 'map' ? 'world/README.md' : `${layer}/README.md`;
@@ -487,6 +489,10 @@ export function createWorldRouter(
           kind: 'scene',
         };
         bg = readLayerBg(raw);
+        if (bg.video && !bg.video.includes('-transparent')) {
+          const lightweight = bg.video.replace(/\.(webm|mp4)$/i, '-lite.mp4');
+          if (await store.statKind(lightweight) === 'file') bg.video = lightweight;
+        }
         const ownFm = parsedReadme.frontmatter;
         const own = readLayerAudio(ownFm, store, AUDIO_ROOT);
         audio = own;

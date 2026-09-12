@@ -10,6 +10,7 @@ import { useCamera } from './state/useCamera.js';
 import { useWorld } from './state/useWorld.js';
 import { airpGateway, type WorldShelf } from './lib/airp-gateway.js';
 import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
+import { BagItemDialog } from './components/BagItemDialog.js';
 import { initialShell, transitionShell, splitCharacters } from './lib/ui-shell.mjs';
 import { MarkdownText } from './lib/md.js';
 import { BookOpen, ChevronDown, ChevronUp, Maximize, Minimize, UserRound, Backpack, Sparkles } from 'lucide-react';
@@ -82,6 +83,8 @@ export function App() {
   const [shell, setShell] = useState(initialShell);
   const [encounters, setEncounters] = useState<Record<string, string[]>>({});
   const [bagOpen, setBagOpen] = useState(false);
+  const [selectedBagPath, setSelectedBagPath] = useState<string | null>(null);
+  const selectedBagItem = backpack.find(item => item.path === selectedBagPath);
   const [effectsEnabled, setEffectsEnabled] = useState(() => {
     try { return localStorage.getItem('airp:effects') === 'on'; } catch { return false; }
   });
@@ -96,6 +99,17 @@ export function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [loadingWorld, setLoadingWorld] = useState<string | null>(null);
   const [backdropReady, setBackdropReady] = useState(false);
+  const [writerWorking, setWriterWorking] = useState(false);
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const frame = (event as CustomEvent).detail;
+      if (frame.source !== 'writer') return;
+      if (['writer_delta', 'tool_start', 'chalk_writing'].includes(frame.type)) setWriterWorking(true);
+      if (['writer_idle', 'error', 'turn_aborted'].includes(frame.type)) setWriterWorking(false);
+    };
+    window.addEventListener('airp:agent-frame', receive);
+    return () => window.removeEventListener('airp:agent-frame', receive);
+  }, []);
   const writerRef = useRef<HTMLInputElement>(null);
   const toastTimer = useRef<number | null>(null);
 
@@ -237,6 +251,10 @@ export function App() {
 
   const loadWorld = async (worldPath: string) => {
     setLoadingWorld(worldPath);
+    setWorldPickerOpen(false);
+    setSelectedBagPath(null);
+    setActiveCharacter(null);
+    setWriterWorking(false);
     try {
       const result = await airpGateway.loadWorld<WorldManifest>(worldPath);
       setManifest(result.manifest);
@@ -249,6 +267,7 @@ export function App() {
       setBagOpen(false);
       notify(`Entered ${result.manifest.name}`);
     } catch (error) {
+      setWorldPickerOpen(true);
       notify(error instanceof Error ? error.message : 'Could not load that world');
     } finally {
       setLoadingWorld(null);
@@ -260,6 +279,7 @@ export function App() {
     const input = writerRef.current;
     const text = input?.value.trim() || '';
     if (!text) return;
+    setWriterWorking(true);
     sendToWriter(text);
     input!.value = '';
     notify('The writer is listening…');
@@ -282,8 +302,10 @@ export function App() {
       await airpGateway.move(itemPath, destination);
       await refresh();
       await loadChromeData();
+      return true;
     } catch (error) {
       notify(error instanceof Error ? error.message : 'The item could not be placed');
+      return false;
     }
   };
 
@@ -446,6 +468,7 @@ export function App() {
                   key={item.path}
                   className="prototype-hand-chip"
                   draggable
+                  onClick={() => setSelectedBagPath(item.path)}
                   onDragStart={(event) => event.dataTransfer.setData('text/plain', item.path)}
                   title={item.body}
                   style={image ? { backgroundImage: `url("${image}")` } : undefined}
@@ -490,6 +513,7 @@ export function App() {
               <span>↵</span>
             </div>
             <div className="prototype-dockrow">
+              {writerWorking && <span role="status">{t('The writer is working…')} <button type="button" onClick={() => { sendMessage({ type: 'writer_abort' }); setWriterWorking(false); }}>{t('Stop writing')}</button></span>}
               <input ref={writerRef} aria-label={t("Action")} placeholder={t("What do you do? You can also address someone by name…")} autoComplete="off" />
               <button className="prototype-primary" aria-label={t("Send action")}>↑</button>
             </div>
@@ -505,9 +529,12 @@ export function App() {
         </section>
       </main>
 
+      {loadingWorld && <div role="status" className="prototype-world-loading">{t(' · opening…')}</div>}
       {worldPickerOpen && (
         <WorldShelfDialog shelf={shelf} loading={loadingWorld} onLoad={path => void loadWorld(path)} onClose={() => setWorldPickerOpen(false)} onRefresh={async () => { setShelf(await airpGateway.worlds()); }} />
       )}
+
+      {selectedBagItem && <BagItemDialog item={selectedBagItem} onClose={() => setSelectedBagPath(null)} onPlace={handleReturnItem} />}
 
       {radialState && <RadialMenu {...radialState} onClose={() => setRadialState(null)} onCreate={createAt} />}
 

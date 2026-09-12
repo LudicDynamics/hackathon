@@ -161,6 +161,7 @@ export function characterLaunch(
       sessionsDir,
       '--session',
       path.join(sessionsDir, `char-${characterId}.jsonl`),
+      ...((process.env.AIRP_CHARACTER_MODEL || process.env.AIRP_WRITER_MODEL) ? ['--model', (process.env.AIRP_CHARACTER_MODEL || process.env.AIRP_WRITER_MODEL)!] : []),
       ...ISOLATION_ARGS,
       ...extensionArgs(repoRoot, worldRoot),
     ],

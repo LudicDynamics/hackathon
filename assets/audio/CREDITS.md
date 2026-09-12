@@ -84,6 +84,16 @@ are used in any public/distributed build, credit them:
 
 ## 6. Foley — `foley/` (interaction one-shots)
 
+The current UI uses `foley/canvas/se-*.mp3`, copied byte-for-byte from
+`worldlines-canvas/app/media/se/`. Sound effects: MaouDamashii (Koichi Morita),
+https://maou.audio/ — used under the creator's usage terms, not CC0.
+Original attribution: `worldlines-canvas/app/media/CREDITS.md`.
+Tracks: get = System 20; paper = System 35; door = Zippo opening;
+bell = System 40; write = System 28; dice = One Point 26;
+success = One Point 21; card = System 44. Bell is retained for future use.
+Playback levels follow Canvas (0.14–0.28); repeated instances of the same
+effect cannot overlap. The older Freesound files below are retained.
+
 | File | Key | Title | Artist | ID | Dur | License |
 |---|---|---|---|---|---|---|
 | `foley/paper-slide.mp3` | paper-slide | paper_rustle_1 | StarTowerStudio | 426816 | 1.5s | CC0 1.0 |

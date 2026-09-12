@@ -1,4 +1,8 @@
 {
+  "Place in current scene": { "zh-CN": "放回当前场景", "ja": "今のシーンに置く" },
+  "The agent could not finish. Please try again.": { "zh-CN": "Agent 未能完成，请重试。", "ja": "応答を完了できませんでした。もう一度お試しください。" },
+  "The writer is working…": { "zh-CN": "作家正在续写…", "ja": "作家が物語を紡いでいます…" },
+  "Stop writing": { "zh-CN": "停止续写", "ja": "執筆を止める" },
   "Saved games": { "zh-CN": "存档", "ja": "セーブデータ" },
   "{count} saves": { "zh-CN": "{count} 个存档", "ja": "セーブ {count} 件" },
   "← All worlds": { "zh-CN": "← 全部世界", "ja": "← ワールド一覧" },

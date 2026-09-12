@@ -20,7 +20,7 @@ interface CanvasProps {
   currentLayer: string;
   items: LayerItem[];
   links: LayerLink[];
-  bg: { src: string | null; tone: string; grain: string };
+  bg: { src: string | null; video?: string; tone: string; grain: string };
   scene: LayerItem | null;
   sceneCopy: { label: string; collapse: string; expand: string };
   onMoveCard?: (path: string, x: number, y: number) => Promise<void> | void;

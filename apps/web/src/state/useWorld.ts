@@ -36,7 +36,7 @@ export interface PresenceEntry {
 export interface LayerState {
   layer: string;
   scene: LayerItem | null;
-  bg: { src: string | null; tone: string; grain: string };
+  bg: { src: string | null; video?: string; tone: string; grain: string };
   audio: { ambient: string | null; bgm: string | null };
   items: LayerItem[];
   links: LayerLink[];
@@ -242,6 +242,7 @@ export function useWorld(): UseWorldApi {
     let ws: WebSocket | null = null;
 
     const onMessage = (msg: Record<string, unknown>) => {
+      window.dispatchEvent(new CustomEvent('airp:agent-frame', { detail: msg }));
       if (
         msg.type === 'file_changed' ||
         msg.type === 'world_event' ||

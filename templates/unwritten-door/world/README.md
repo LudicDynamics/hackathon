@@ -1,6 +1,7 @@
 ---
 type: readme
 name: The Cabin
+bg: assets/backgrounds/intro.png
 bgStyle:
   tone: dark
   grain: wood

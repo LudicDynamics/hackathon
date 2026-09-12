@@ -1,5 +1,7 @@
 # doc-09 通用互动 frontmatter 完整 schema（待完善）
 
+场景媒体补充：README 可声明 `bgVideo: assets/scenes/intro.webm`（mp4/webm 世界相对路径），`bg` 继续指静态兜底图。`GET /api/layer` 返回 `bg.video?`；特效关闭时使用静态图。不是互动字段，不参与 choice/status 归一化。详《动态素材接线》。
+
 > 状态：**归属与工具协议已定案，字段细节待设计**。doc-20 §2 是互动字段的上位协议。
 > 关联：doc-05 §3.1（frontmatter + 骰子协议）、doc-06 §2.6（渲染原则）、doc-10（组件 schema）、doc-20（Agent 工具与 `look_at`）。
 

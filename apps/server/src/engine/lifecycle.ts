@@ -6,7 +6,7 @@ import { characterLaunch, hasExistingSession, writerLaunch } from './launch.js';
 /** Raw WS frame produced by lifecycle itself (warmup replay), not by the engine event map. */
 export type FrameSink = (message: Record<string, any>) => void;
 /** Engine event sink — `eventBridge.emitEngine`. */
-export type EventSink = (source: 'writer' | 'character', event: JsonAgentSessionEvent) => void;
+export type EventSink = (source: 'writer' | 'character', event: JsonAgentSessionEvent, characterId?: string) => void;
 
 export interface AgentLifecycleManagerOptions {
   repoRoot: string;
@@ -189,7 +189,7 @@ export class AgentLifecycleManager {
     } else if (event.type === 'agent_settled') {
       this.clearTurnTimeout(clientKey);
     }
-    this.eventSink?.(source, event);
+    this.eventSink?.(source, event, source === 'character' ? clientKey.slice('character:'.length) : undefined);
   }
 
   private armTurnTimeout(clientKey: string, client: RpcClient, source: 'writer' | 'character'): void {
@@ -202,6 +202,7 @@ export class AgentLifecycleManager {
       this.frameSink?.({
         type: 'turn_aborted',
         source,
+        ...(source === 'character' ? { characterId: clientKey.slice('character:'.length) } : {}),
         reason: 'timeout',
         timestamp: new Date().toISOString(),
       });

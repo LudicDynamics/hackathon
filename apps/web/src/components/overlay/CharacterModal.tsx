@@ -32,20 +32,6 @@ interface CharacterModalProps {
 
 const EMO_TAGS: readonly Emotion[] = ['normal', 'smile', 'shock', 'sad', 'angry', 'thinking'];
 
-/**
- * Local fallback reply bank — T3.1 STOPGAP until the backend character agent
- * streams real responses through the character_prompt channel. The channel
- * (onSendMessage) is intentionally preserved; this bank only covers the
- * offline gap. Replies carry T3.2 [emo: tag] prefixes to exercise the parser.
- */
-const FALLBACK_REPLIES: ReadonlyArray<{ text: string; emo: Emotion }> = [
-  { text: '[emo: thinking] Let me think... this is more complicated than it looks.', emo: 'thinking' },
-  { text: '[emo: smile] I am glad we can speak of this. Please, do be careful.', emo: 'smile' },
-  { text: '[emo: shock] What?! Where did you find that thing?!', emo: 'shock' },
-  { text: '[emo: sad] There are things I cannot change about last winter...', emo: 'sad' },
-  { text: '[emo: angry] That is a dangerous path. I will not help you walk it.', emo: 'angry' },
-  { text: 'The fire keeps its own time here. So do we.', emo: 'normal' },
-];
 
 /** Current on-stage performance: idle → thinking → streaming → done. */
 type Phase = 'idle' | 'thinking' | 'streaming' | 'done';
@@ -79,6 +65,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 
   const streamTimer = useRef<number | null>(null);
   const closeTimer = useRef<number | null>(null);
+  const streamed = useRef('');
 
   const clearTimers = useCallback(() => {
     if (streamTimer.current !== null) window.clearTimeout(streamTimer.current);
@@ -92,61 +79,29 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     closeTimer.current = window.setTimeout(() => onClose(), 220);
   }, [onClose]);
 
-  /**
-   * Stream a line char by char. Rhythm = personality: watson reads at a steady
-   * 45ms/char, pauses 300ms after a comma, 150ms after sentence punctuation.
-   * The portrait shows `thinking` during the 100–400ms ponder, then switches
-   * to the reply's parsed [emo:] mood as the stream begins (tags sit at line
-   * start, so they lead the mood of the whole reply).
-   */
-  const streamLine = useCallback(
-    (fullText: string, mood: Emotion) => {
-      clearTimers();
-      setLine(fullText);
-      setShown('');
-      setPhase('thinking');
-      setEmo('thinking');
-
-      const thinkMs = 100 + Math.random() * 300; // 100–400ms "陷入沉思"
-      streamTimer.current = window.setTimeout(() => {
-        setPhase('streaming');
-        setEmo(mood);
-        // T3.2 — the [emo:] tag does double duty: it swaps the sprite AND fires a
-        // short one-shot stinger. It MUST NOT touch the BGM main track (galgame
-        // convention: emotion is a transient accent, not a score change); see
-        // docs/audio/02 §3.8 and docs/audio/04 §3.2. No-op when the stinger
-        // asset is missing (assets/audio/stinger/ is a known gap).
-        playStinger(mood);
-        let i = 0;
-        const step = () => {
-          if (streamTimer.current === null) return; // cancelled/unmounted
-          i += 1;
-          setShown(fullText.slice(0, i));
-          if (i >= fullText.length) {
-            setPhase('done');
-            streamTimer.current = null;
-            return;
-          }
-          const prev = fullText[i - 1];
-          let delay = 45;
-          if (prev === ',' || prev === '，') delay = 300;
-          else if ('.;!?。！？…'.includes(prev)) delay = 150;
-          streamTimer.current = window.setTimeout(step, delay);
-        };
-        streamTimer.current = window.setTimeout(step, 45);
-      }, thinkMs);
-    },
-    [clearTimers],
-  );
-
-  // Opening line, streamed shortly after the overlay settles.
+  // Real agent frames own the reply; an opening UI hint is not character speech.
   useEffect(() => {
-    const t = window.setTimeout(
-      () => streamLine(ja ? '（あなたの方へ顔を向ける）' : '(Watching you) Is there something you would like to know?', 'normal'),
-      420,
-    );
-    return () => window.clearTimeout(t);
-  }, [streamLine, ja]);
+    const receive = (event: Event) => {
+      const frame = (event as CustomEvent).detail;
+      if (frame.source !== 'character' || frame.characterId !== characterId) return;
+      if (frame.type === 'character_delta') {
+        streamed.current += String(frame.delta || '');
+        const parsed = parseEmoTag(streamed.current);
+        setLine(parsed.text); setShown(parsed.text); setEmo(parsed.emo); setPhase('streaming');
+      } else if (frame.type === 'character_message') {
+        streamed.current = '';
+        const parsed = parseEmoTag(String(frame.text || ''));
+        setLine(parsed.text); setShown(parsed.text); setEmo(parsed.emo);
+      } else if (frame.type === 'character_idle') {
+        setPhase('done');
+      } else if (frame.type === 'error' || frame.type === 'turn_aborted') {
+        const notice = String(frame.message || t('The agent could not finish. Please try again.'));
+        setLine(notice); setShown(notice); setPhase('done');
+      }
+    };
+    window.addEventListener('airp:agent-frame', receive);
+    return () => window.removeEventListener('airp:agent-frame', receive);
+  }, [characterId, t]);
 
   // Unmount: cancel every pending timer.
   useEffect(() => clearTimers, [clearTimers]);
@@ -168,19 +123,9 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     if (!msg || phase === 'thinking' || phase === 'streaming') return; // one performance at a time
     setInputText('');
     setPlayerEcho(msg); // kept on the paper, not a history list
-    onSendMessage?.(msg); // character_prompt protocol — App wires the message type
-    if (ja) {
-      // This legacy overlay does not consume agent frames yet. Never invent a reply.
-      const notice = '【表示状態】送信しました。役の返答を表示する接続は、まだ準備中です。';
-      setLine(notice);
-      setShown(notice);
-      setPhase('done');
-      setEmo('normal');
-      return;
-    }
-    const pick = FALLBACK_REPLIES[Math.floor(Math.random() * FALLBACK_REPLIES.length)];
-    const { text, emo: mood } = parseEmoTag(pick.text);
-    streamLine(text, mood);
+    clearTimers(); streamed.current = '';
+    setLine(''); setShown(''); setPhase('thinking'); setEmo('thinking');
+    onSendMessage?.(msg);
   };
 
   const busy = phase === 'thinking' || phase === 'streaming';

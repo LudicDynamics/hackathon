@@ -267,7 +267,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
       <span className="note__clip" />
       <div className="note__title">{noteTitle}</div>
       <MarkdownText text={stripLeadingTitle(body)} className="note__body" />
-      {frontmatter?.portable === true && (
+      {frontmatter?.portable === true && onTakeItem && (
         <button
           type="button"
           data-no-drag

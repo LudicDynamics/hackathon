@@ -3,6 +3,7 @@ type: letter
 title: The Sealed Envelope
 portable: false
 visual: envelope
+image: assets/tokens/envelope.png
 status:
   data:
     opened: false

@@ -1,4 +1,6 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
+import { BagItemDialog } from '../BagItemDialog.js';
 import { CardRenderer } from './CardRenderer.js';
 import { highlightLinks } from './LinkLayer.js';
 import { chalkStyleOf } from '@airp/shared/forms';
@@ -82,6 +84,9 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   onTakeItem,
 }) => {
   const kind = item.kind;
+  const [reading, setReading] = React.useState(false);
+  const pointerStart = React.useRef({ x: 0, y: 0 });
+  const readable = kind !== 'sprite' && kind !== 'gate';
   const [isDragOver, setIsDragOver] = React.useState(false);
   const [isItemDragging, setIsItemDragging] = React.useState(false);
   const [isUnlockedEffect, setIsUnlockedEffect] = React.useState(false);
@@ -129,6 +134,13 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
     <div
       data-path={item.path}
       tabIndex={0}
+      onPointerDownCapture={event => { pointerStart.current = { x: event.clientX, y: event.clientY }; }}
+      onClick={event => {
+        if (!readable || (event.target as HTMLElement).closest('button,a,input,textarea,select,.entity-interactions,.cabin-prop,[role="dialog"]')) return;
+        if (Math.hypot(event.clientX - pointerStart.current.x, event.clientY - pointerStart.current.y) > 6) return;
+        setReading(value => !value);
+      }}
+      onKeyDown={event => { if (readable && event.target === event.currentTarget && event.key === 'Enter') { event.preventDefault(); setReading(value => !value); } }}
       onPointerEnter={event => { setHovered(true); highlight(event.currentTarget, true); }}
       onPointerLeave={event => { setHovered(false); highlight(event.currentTarget, false); }}
       onFocus={event => { setFocused(true); highlight(event.currentTarget, true); }}
@@ -181,6 +193,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
           />
         )}
         <EntityInteractions item={item} active={hovered || focused} onChoice={onEntityAction} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate} onOpenCharacter={onOpenCharacterModal} />
+        {reading && createPortal(<BagItemDialog item={item} onClose={() => setReading(false)} />, document.body)}
     </div>
   );
 };

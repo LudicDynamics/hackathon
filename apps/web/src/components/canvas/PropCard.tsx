@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { airpGateway } from '../../lib/airp-gateway.js';
 import { MarkdownText } from '../../lib/md.js';
+import { playFoley } from '../../lib/audio.js';
 import './prop-card.css';
 
 interface Props {
@@ -23,12 +24,12 @@ export function PropCard({ visual, title, body, image, onEnter }: Props) {
   }, [open]);
   return <>
     <button className={`cabin-prop cabin-prop--${visual}`} aria-label={title}
-      onClick={() => onEnter ? onEnter() : setOpen(true)}>
+      onClick={() => { if (onEnter) onEnter(); else { playFoley('page-turn'); setOpen(value => !value); } }}>
       {image ? <img src={airpGateway.assetUrl(image)} alt="" /> : <span className="cabin-prop__shape" aria-hidden="true"><i /><b /></span>}
       <span className="cabin-prop__label">{title}</span>
       <span className="cabin-prop__hint">{onEnter ? 'TURN THE HANDLE' : 'INSPECT'}</span>
     </button>
-    {open && createPortal(<div className="cabin-reading" onClick={() => setOpen(false)}>
+    {open && createPortal(<div className="cabin-reading" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); setOpen(false); }}>
       <section role="dialog" aria-modal="true" aria-label={title} onClick={event => event.stopPropagation()}>
         <button autoFocus onClick={() => setOpen(false)} aria-label="Close">×</button>
         <h2>{title}</h2><MarkdownText text={body} />

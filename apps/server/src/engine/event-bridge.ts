@@ -65,6 +65,11 @@ export function mapEngineEvent(
     }
     case 'message_end': {
       if (event.message?.role === 'assistant') {
+        const result = event.message as { stopReason?: string; errorMessage?: string };
+        if (result.stopReason === 'error' || result.stopReason === 'aborted') {
+          push({ type: 'error', source, message: result.errorMessage || 'The agent could not finish this turn.' });
+          break;
+        }
         const text = messageText(event.message);
         if (text) {
           push({ type: source === 'writer' ? 'writer_message' : 'character_message', source, text });
@@ -242,9 +247,9 @@ export class EventBridge {
   }
 
   /** Fan an engine event out to every WS client as the mapped AIRP frames. */
-  emitEngine(source: EventSource, event: JsonAgentSessionEvent): void {
+  emitEngine(source: EventSource, event: JsonAgentSessionEvent, characterId?: string): void {
     for (const message of mapEngineEvent(source, event, this.toolArgsByCallId)) {
-      this.broadcast(message);
+      this.broadcast(characterId ? { ...message, characterId } : message);
     }
   }
 
