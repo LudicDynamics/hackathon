@@ -233,9 +233,9 @@ v2 把 NoDesign 的"**纸墙/侦探板**"换成了"**一张墨画布**"：全界
 > 为对齐 PlayCo（视听动大满贯）与 AnotherBall（舞台大秀与沉迷感）的评审标准，视觉系统升级为**视、听、动一体化的“2.5D 微缩立体纸雕剧场”**：
 
 1. **全景声场体系（Audio Engine）**：
-   - **环境白噪音**：场景层级挂载环境循环音（`ambient_rain.mp3`、`ambient_fireplace.mp3`），切层时 1.5s 交叉淡入淡出；
-   - **实体拟音（Foley）**：拖拽卡片沙沙声、背包收纳啪嗒声、实木骰子翻滚落木声、钥匙开锁咔哒声、落墨笔尖轻响；
-   - **动态配乐**：预制悬疑/日常/博弈短 BGM，随剧情情绪标签平滑切换音轨增益。
+   - **环境白噪音**：场景层级挂载环境循环音——按该层 README 的 `ambient` 字段取键（`rain` / `fireplace` / `cellar-drip`，或 `ambient/pool/` 下的场景池键如 `storm` / `library`），切层时 1.5s 交叉淡入淡出；
+   - **实体拟音（Foley）**：拖拽卡片沙沙声（`paper-slide`）、收纳落定顿响（`bag-pack`）、实木骰子翻滚（`dice-roll`）、开锁咔哒（`unlock`）、落墨笔尖轻响（`pen-scratch`）、检定成功/大失败（`crit-chime` / `fumble-break`）；
+   - **动态配乐**：预制悬疑/日常/博弈短 BGM，随层 README 的 `bgm` 字段平滑切换音轨增益；角色 `[emo: tag]` 只触发瞬时 stinger，不改主轨。
 2. **2.5D 纸雕立体微缩空间（Shadow Box & Parallax）**：
    - 画布容器启用 `perspective: 1200px`，鼠标在视口移动时产生微视差（前景 1.35x，中景 1.0x，远景 0.25x）；
    - 前景常驻轻量 Canvas 浮尘微光微粒，打破平面 DOM 的塑料感；

@@ -1,15 +1,24 @@
 /**
- * audio.ts — AIRP Web Audio synthesis engine.
+ * audio.ts — AIRP Web Audio engine: sample-first, synth-fallback.
  *
- * T2.0 discipline: zero audio assets, every voice synthesized at runtime.
- * One module-level AudioContext; everything hangs under a single master gain
- * so mute is one ramp away. Three ambient layers (rain / fireplace / cellar
- * drip) crossfade over 1.5s, three BGM drone moods crossfade the same way,
- * and eight foley one-shots cover card/backpack/dice/gate interactions.
+ * Two chains, one surface:
+ *  1. Sample chain — `fetch → decodeAudioData → AudioBufferSourceNode → GainNode
+ *     → master`, fed by server-resolved URLs (`/api/audio` platform pool or
+ *     `/api/asset` world files). One decode per URL (`decodeCache`), failures
+ *     remembered (`failCached`) so a 404 is never re-fetched.
+ *  2. Synth chain — the original runtime synthesizer, kept verbatim as the
+ *     offline演出保底 (contract §5.2 / §9 anti-pattern 4): `templates/**` ships
+ *     no `assets/`, so world-level samples legitimately 404 and the demo must
+ *     still make sound.
+ *
+ * Three independent main tracks crossfade over `AMBIENT_FADE` (1.5s):
+ * `ambient` (layer bed) / `bgm` (layer mood) / `theme` (world theme), plus
+ * one-shot `playFoley` / `playStinger` voices that never touch a main-track
+ * gain. A main track declared `null` is *declared silence* (the synth bed stops
+ * too); a URL that fails to load is *degradation* (the synth bed takes over,
+ * except `theme`, which has no synth voice).
  *
  * Every burst voice runs through an attack/decay envelope so nothing clicks.
- * A future asset pass may swap individual voices for buffered files behind
- * the same playFoley / setAmbient surface (loading note per voice).
  */
 
 export type FoleyName =
@@ -20,9 +29,12 @@ export type FoleyName =
   | 'pen-scratch'
   | 'gate-open'
   | 'crit-chime'
-  | 'fumble-break';
+  | 'fumble-break'
+  | 'page-turn';
 
 export type BGMood = 'calm' | 'tense' | 'crisis';
+
+export type Emotion = 'normal' | 'smile' | 'shock' | 'sad' | 'angry' | 'thinking';
 
 type ToneKey = 'rain' | 'fireplace' | 'drip';
 
@@ -48,11 +60,6 @@ const BGM_TARGETS: Record<BGMood, number> = {
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let mutedState = false;
-
-// Whether the app has ever picked an ambient/BGM explicitly. unlock() seeds
-// the default world bed (rain + calm drone) only when nobody chose yet.
-let ambientRequested = false;
-let bgmRequested = false;
 
 const noiseCache = new Map<'white' | 'brown', AudioBuffer>();
 
@@ -312,22 +319,9 @@ function rampAmbient(): void {
   }
 }
 
-/** Crossfade the world ambience. The server tone vocabulary is loose, so
- *  unknown tones degrade to the default rain bed. */
-export function setAmbient(tone: string): void {
-  if (!initAudio()) return;
-  ensureAmbientEngines();
-  ambientRequested = true;
-  const t = tone.trim().toLowerCase();
-  if (t.includes('fire') || t.includes('hearth') || t === 'warm') activeTone = 'fireplace';
-  else if (t.includes('drip') || t.includes('cellar') || t.includes('cave')) activeTone = 'drip';
-  else activeTone = 'rain';
-  rampAmbient();
-}
-
 /* ============================================================
  * BGM drones — three low-intensity moods, crossfaded like the
- * ambience. Default calm when the caller never picks one.
+ * ambience.
  * ============================================================ */
 
 interface BgmEngine {
@@ -450,22 +444,277 @@ function rampBgm(): void {
   }
 }
 
-/** Crossfade the BGM drone mood. */
-export function setBGM(mood: BGMood): void {
-  if (!initAudio()) return;
+/* ============================================================
+ * Sample layer — real files behind the same surface as the synth
+ * engines. Each track: one AudioBufferSourceNode (loop?) → its own
+ * GainNode (crossfade ramp) → master. Sources are one-shot nodes
+ * (same pattern as noiseSource(), :104): every play builds a fresh
+ * source from the cached AudioBuffer.
+ * ============================================================ */
+
+type TrackId = 'ambient' | 'bgm' | 'theme';
+
+interface Clip {
+  url: string;
+  src: AudioBufferSourceNode;
+  gain: GainNode;
+  loop: boolean;
+}
+
+interface SampleTrack {
+  ref: string | null; // declared ref verbatim (debug truth)
+  clip: Clip | null; // what is sounding now
+  token: number; // async-race guard
+}
+
+const tracks: Record<TrackId, SampleTrack> = {
+  ambient: { ref: null, clip: null, token: 0 },
+  bgm: { ref: null, clip: null, token: 0 },
+  theme: { ref: null, clip: null, token: 0 },
+};
+
+const decodeCache = new Map<string, Promise<AudioBuffer>>();
+const failCached = new Set<string>();
+
+const SAMPLE_LEVELS: Record<TrackId, number> = { ambient: 0.5, bgm: 0.35, theme: 0.22 };
+const FOLEY_SAMPLE_LEVEL = 0.7;
+const STINGER_SAMPLE_LEVEL = 0.8;
+
+const isUrl = (ref: string): boolean => ref.startsWith('/') || ref.startsWith('http');
+
+/* --- URL → synth-hint helpers (used only on the sample-failure path).
+ * toneFromHint is the body extracted from the former inline mapping that lived
+ * in setAmbient; the inline copy is gone (no duplication).
+ * ToneKey already exists above — not redeclared. --- */
+
+/** Decode the file-name stem from a platform URL.
+ *  `/api/audio?path=ambient%2Ffireplace.mp3` → 'fireplace'. */
+function synthHintFromUrl(url: string): string {
+  const file = url.split('/').pop() ?? '';
+  const q = file.includes('?') ? (file.split('?')[1] ?? '') : file;
+  const raw = q.includes('path=') ? decodeURIComponent(q.split('path=')[1] ?? '') : file;
+  return (raw.split('/').pop() ?? '').replace(/\.[a-z0-9]+$/i, '');
+}
+
+/** Bare-hint → ambient bed; unknown hints degrade to the default rain bed. */
+function toneFromHint(hint: string): ToneKey {
+  const t = hint.trim().toLowerCase();
+  if (t.includes('fire') || t.includes('hearth') || t === 'warm') return 'fireplace';
+  if (t.includes('drip') || t.includes('cellar') || t.includes('cave')) return 'drip';
+  return 'rain';
+}
+
+/** Bare-hint/stem → BGM mood; `calm` is the safe floor. */
+function moodFromHint(hint: string): BGMood {
+  const t = hint.trim().toLowerCase();
+  if (t.includes('crisis')) return 'crisis';
+  if (t.includes('tense')) return 'tense';
+  return 'calm';
+}
+
+/* Synth halves of the per-track decision table: these drive the EXISTING
+ * engines above. `null` silences the bed. */
+function setSynthAmbient(tone: ToneKey | null): void {
+  ensureAmbientEngines();
+  activeTone = tone;
+  rampAmbient();
+}
+
+function setSynthBgm(mood: BGMood | null): void {
   ensureBgmEngines();
-  bgmRequested = true;
   activeMood = mood;
   rampBgm();
 }
 
+/** Fetch → arrayBuffer → decode, cached per URL. Failure is recorded in
+ *  failCached (never retried) and resolves to null — callers fall back to
+ *  the synth engines. Never throws. */
+function loadSample(url: string): Promise<AudioBuffer | null> {
+  if (failCached.has(url)) return Promise.resolve(null);
+  const cached = decodeCache.get(url);
+  if (cached) return cached;
+
+  const c = ctx;
+  if (!c) return Promise.resolve(null); // no ctx → return FIRST, never cache a
+  // promise: a stretched decodeCache entry would leak into
+  // audioDebugState().loaded, breaking "loaded === []" without ctx.
+
+  const p: Promise<AudioBuffer | null> = (async (): Promise<AudioBuffer | null> => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const ab = await res.arrayBuffer();
+      return await c.decodeAudioData(ab);
+    } catch (err) {
+      failCached.add(url);
+      decodeCache.delete(url); // failCached owns the negative result
+      console.warn('Audio: sample load failed', url, err);
+      return null;
+    }
+  })();
+  decodeCache.set(url, p as Promise<AudioBuffer>);
+  return p;
+}
+
+/** Start a fresh one-shot source for `buffer`, fading its own gain up.
+ *  TRACK-AGNOSTIC: takes a destination node, not a TrackId, so the three
+ *  sample loops AND the foley/stinger one-shots share one player. Callers own
+ *  the returned nodes: main tracks register them in tracks[id].clip; one-shots
+ *  let onended clean themselves up. */
+function playClip(
+  dest: AudioNode,
+  buffer: AudioBuffer,
+  loop: boolean,
+  level: number
+): { src: AudioBufferSourceNode; gain: GainNode } | null {
+  const c = ctx;
+  if (!c) return null;
+
+  const src = c.createBufferSource(); // one-shot node: never reuse
+  src.buffer = buffer;
+  src.loop = loop;
+  const gain = c.createGain();
+  gain.gain.value = 0; // fade in from silence (no click)
+  src.connect(gain);
+  gain.connect(dest);
+
+  const t = c.currentTime;
+  src.start(t); // start() is once-only per source
+  gain.gain.linearRampToValueAtTime(level, t + AMBIENT_FADE);
+
+  if (!loop) {
+    src.onended = (): void => {
+      src.disconnect();
+      gain.disconnect();
+    };
+  }
+  return { src, gain };
+}
+
+/** Fade out, then stop + disconnect a specific main-track clip. */
+function stopClip(track: TrackId, clip: Clip, fade: number): void {
+  const c = ctx;
+  if (!c) return;
+  const t = c.currentTime;
+  clip.gain.gain.cancelScheduledValues(t);
+  clip.gain.gain.setValueAtTime(clip.gain.gain.value, t);
+  clip.gain.gain.linearRampToValueAtTime(0, t + fade);
+  window.setTimeout(() => {
+    try {
+      clip.src.stop();
+    } catch {
+      /* already stopped */
+    }
+    clip.src.disconnect();
+    clip.gain.disconnect();
+  }, fade * 1000 + 40);
+  if (tracks[track].clip === clip) tracks[track].clip = null;
+}
+
+/** Play a main-track sample loop and register it in the track table. */
+function playTrackLoop(track: TrackId, url: string, buffer: AudioBuffer, token: number): void {
+  if (!master) return;
+  const nodes = playClip(master, buffer, true, SAMPLE_LEVELS[track]);
+  if (!nodes) return;
+  // A newer set() landed while we were decoding → discard this clip.
+  if (token !== tracks[track].token) {
+    nodes.gain.gain.cancelScheduledValues(ctx!.currentTime);
+    nodes.gain.gain.setValueAtTime(nodes.gain.gain.value, ctx!.currentTime);
+    nodes.gain.gain.linearRampToValueAtTime(0, ctx!.currentTime + 0.05);
+    try {
+      nodes.src.stop(ctx!.currentTime + 0.06);
+    } catch {
+      /* already stopped */
+    }
+    return;
+  }
+  const prev = tracks[track].clip;
+  tracks[track].clip = { url, src: nodes.src, gain: nodes.gain, loop: true };
+  if (prev) stopClip(track, prev, AMBIENT_FADE);
+}
+
+/** Declare a track's sample ref, then apply it. Records the ref even when
+ *  there is no AudioContext (debug/test contract). */
+function setTrackSample(track: TrackId, ref: string | null): void {
+  const tr = tracks[track];
+  tr.ref = ref;
+  tr.token += 1;
+  const c = initAudio();
+  if (!c || !master) return;
+  if (!ref) {
+    // Declared silence: stop the clip AND the synth bed — do not fall back.
+    if (tr.clip) stopClip(track, tr.clip, AMBIENT_FADE);
+    if (track === 'ambient') setSynthAmbient(null);
+    else if (track === 'bgm') setSynthBgm(null);
+    return;
+  }
+  if (!isUrl(ref)) {
+    // Bare name = compat hint → synth only.
+    if (tr.clip) stopClip(track, tr.clip, AMBIENT_FADE);
+    if (track === 'ambient') setSynthAmbient(toneFromHint(ref));
+    else if (track === 'bgm') setSynthBgm(moodFromHint(ref));
+    else console.warn('Audio: theme expects a URL, got bare name', ref);
+    return;
+  }
+  const token = tr.token;
+  void loadSample(ref).then((buf) => {
+    if (token !== tr.token) return;
+    if (buf) {
+      if (track === 'ambient') setSynthAmbient(null); // sample wins, silence the synth
+      else if (track === 'bgm') setSynthBgm(null);
+      playTrackLoop(track, ref, buf, token);
+    } else {
+      // Load FAILED → synth fallback. theme has no synth → stays silent.
+      const stem = synthHintFromUrl(ref);
+      if (track === 'ambient') setSynthAmbient(toneFromHint(stem));
+      else if (track === 'bgm') setSynthBgm(moodFromHint(stem));
+    }
+  });
+}
+
+/** Re-assert every clip ramp from now (mirrors rampAmbient). */
+function rampClips(): void {
+  const c = ctx;
+  if (!c) return;
+  const t = c.currentTime;
+  const ids: TrackId[] = ['ambient', 'bgm', 'theme'];
+  for (const id of ids) {
+    const clip = tracks[id].clip;
+    if (!clip) continue;
+    clip.gain.gain.cancelScheduledValues(t);
+    clip.gain.gain.setValueAtTime(clip.gain.gain.value, t);
+    clip.gain.gain.linearRampToValueAtTime(SAMPLE_LEVELS[id], t + AMBIENT_FADE);
+  }
+}
+
 /* ============================================================
- * Foley — eight one-shots, all < 1.5s, all with envelopes.
+ * Main-track surface — thin shells over setTrackSample.
  * ============================================================ */
 
-/** Play a synthesized interaction sound. `intensity` (0–1) scales the
- *  paper-slide level; other voices ignore it. */
-export function playFoley(name: FoleyName, intensity = 1): void {
+/** Set the layer ambience: a server-resolved URL plays a real sample,
+ *  a bare name falls back to the synth bed, `null` declares silence. */
+export function setAmbient(ref: string | null): void {
+  setTrackSample('ambient', ref);
+}
+
+/** Set the layer BGM mood: same three-state contract as setAmbient. */
+export function setBGM(ref: string | null): void {
+  setTrackSample('bgm', ref);
+}
+
+/** Set the world theme: an independent, light main track. `null` stops it;
+ *  a load failure stays silent (no synth voice to fall back to). */
+export function setTheme(ref: string | null): void {
+  setTrackSample('theme', ref);
+}
+
+/* ============================================================
+ * Foley — nine one-shots, all < 1.5s, all with envelopes.
+ * ============================================================ */
+
+/** Synthesized interaction sound (the fallback chain). `intensity` (0–1)
+ *  scales the paper-slide level; other voices ignore it. */
+function synthFoley(name: FoleyName, intensity: number): void {
   if (!initAudio() || !master) return;
   const c = ctx!;
   const dest = master;
@@ -566,7 +815,70 @@ export function playFoley(name: FoleyName, intensity = 1): void {
       noiseBurst(dest, { dur: 0.3, filter: { type: 'lowpass', freqA: 220 }, peak: 0.16, attack: 0.005 }, t + 0.02);
       break;
     }
+    case 'page-turn': {
+      // paper lift + settle: a short bright rip over a low rustle wash
+      noiseBurst(dest, { dur: 0.05 + Math.random() * 0.03, filter: { type: 'bandpass', freqA: 3200, freqB: 2200, q: 1.1 }, peak: 0.05 + 0.06 * k, attack: 0.004 });
+      noiseBurst(dest, { dur: 0.12, filter: { type: 'lowpass', freqA: 1400 }, peak: 0.03, attack: 0.02 }, t + 0.03);
+      break;
+    }
   }
+}
+
+/** Play an interaction sound: real sample first, synthesized voice on failure.
+ *  `intensity` (0–1) scales the sample level, keeping the drag-weight semantic
+ *  continuous with the synth path. */
+export function playFoley(name: FoleyName, intensity = 1): void {
+  if (!initAudio() || !master) return;
+  const k = clamp01(intensity);
+  const url = `/api/audio?path=foley%2F${name}.mp3`;
+  if (failCached.has(url)) {
+    synthFoley(name, k); // known-missing sample → straight to the synth
+    return;
+  }
+  void loadSample(url).then((buf) => {
+    if (buf) {
+      if (!master) return;
+      playClip(master, buf, false, FOLEY_SAMPLE_LEVEL * k);
+    } else {
+      synthFoley(name, k);
+    }
+  });
+}
+
+/** Instant emotional sting (<1.5s), orthogonal to the main tracks: fully
+ *  additive, never touches ambient/bgm/theme gain. Drops (no queueing) unless
+ *  the context is already running — replaying after unlock would land off-beat. */
+export function playStinger(emo: Emotion): void {
+  const c = initAudio();
+  if (!c || !master) return;
+  if (c.state !== 'running') return; // drop, don't queue
+  const url = `/api/audio?path=stinger%2F${emo}.mp3`;
+  void loadSample(url).then((buf) => {
+    if (!buf || !master) return; // material absent → silent no-op
+    playClip(master, buf, false, STINGER_SAMPLE_LEVEL);
+  });
+}
+
+/** Warm the sample cache ahead of playback. Never rejects: a failed URL is
+ *  recorded in failCached and resolves quietly. */
+export async function preloadAudio(urls: string[]): Promise<void> {
+  if (!initAudio()) return; // no decoder → nothing to fail
+  await Promise.allSettled(urls.filter((u) => u.length > 0).map((u) => loadSample(u)));
+}
+
+/** Test/diagnostic view: declared refs verbatim (URL | bare name | null) plus
+ *  the URLs that actually decoded. Independent of `ctx`. */
+export function audioDebugState(): {
+  ambient: string | null;
+  bgm: string | null;
+  theme: string | null;
+  loaded: string[];
+} {
+  const loaded: string[] = [];
+  for (const url of decodeCache.keys()) {
+    if (!failCached.has(url)) loaded.push(url);
+  }
+  return { ambient: tracks.ambient.ref, bgm: tracks.bgm.ref, theme: tracks.theme.ref, loaded };
 }
 
 /* ============================================================
@@ -587,8 +899,9 @@ export function setMuted(m: boolean): void {
 }
 
 /** Resume the context — required by browser autoplay policy. Idempotent;
- *  call on the first user gesture. Also seeds the default world bed (rain
- *  ambience + calm drone) when the app has not already picked one. */
+ *  call on the first user gesture. Releases the mute and re-asserts the ramps
+ *  already declared (synth beds + sample clips); it does NOT pick defaults —
+ *  choosing a bed is the app's job, not the engine's. */
 export async function unlock(): Promise<void> {
   const c = initAudio();
   if (!c || !master) return;
@@ -599,10 +912,9 @@ export async function unlock(): Promise<void> {
       console.warn('Audio resume blocked:', err);
     }
   }
-  if (!ambientRequested) setAmbient('rain');
-  if (!bgmRequested) setBGM('calm');
   rampAmbient();
   rampBgm();
+  rampClips();
   const t = c.currentTime;
   master.gain.cancelScheduledValues(t);
   master.gain.setValueAtTime(mutedState ? 0 : 1, t);

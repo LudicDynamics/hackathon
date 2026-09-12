@@ -13,6 +13,7 @@ import { RadialMenu, RadialItemType } from './components/god/RadialMenu.js';
 import { useAudio } from './state/useAudio.js';
 import { useCamera } from './state/useCamera.js';
 import { useWorld } from './state/useWorld.js';
+import { preloadAudio } from './lib/audio.js';
 
 interface WorldManifest {
   id: string;
@@ -21,6 +22,7 @@ interface WorldManifest {
   material: string;
   layers: Record<string, any>;
   characters: any[];
+  audio?: { theme: string | null };
 }
 
 export function App() {
@@ -41,17 +43,34 @@ export function App() {
     worldY: number;
   } | null>(null);
   const camera = useCamera();
-  const { setAmbient } = useAudio();
+  const { setAmbient, setBGM, setTheme } = useAudio();
 
   // Canvas world state (layer payload, WS events, card persistence).
   const world = useWorld();
   const { state: worldState, layer: currentLayer, enterLayer, refresh, moveCard, sendToWriter, sendMessage } = world;
   const worldFrozen = worldState?.worldFrozen === true;
 
-  // Ambient bed follows the layer's material tone (T2.1): warm → fireplace, else rain.
+  // Audio beds follow server-resolved URLs from /api/layer (00 §4.2). `tone` is a
+  // material CSS hook only — it is NOT an audio selector anymore.
+  //
+  // `worldState.audio` is REQUIRED (00 §5.4): "url" → play, null → declared silence.
+  // No fallback default (00 §5.4 #3): silence is a declaration, never replaced.
+  const themeUrl = manifest?.audio?.theme ?? null;
   useEffect(() => {
-    setAmbient(worldState?.bg?.tone || 'rain');
-  }, [currentLayer]);
+    if (!worldState) return; // first-frame window: leave every main track untouched
+    const audio = worldState.audio;
+    setAmbient(audio.ambient ?? null);
+    setBGM(audio.bgm ?? null);
+    const urls = [audio.ambient, audio.bgm, themeUrl].filter(
+      (u): u is string => typeof u === 'string' && u.length > 0
+    );
+    if (urls.length > 0) void preloadAudio(urls);
+  }, [worldState?.audio?.ambient, worldState?.audio?.bgm, themeUrl]);
+
+  // World theme: set on world load, persists across layers (00 §5.3).
+  useEffect(() => {
+    setTheme(themeUrl);
+  }, [themeUrl]);
 
   // Camera memory around the modal mask (P0: save before opening, restore after).
   const openCharacterModal = (charId: string) => {

@@ -39,6 +39,9 @@ export const WorldManifestSchema = z.object({
   // declaring it created a second source that drifted.
   layers: z.record(z.string(), LayerConfigSchema).default({}),
   characters: z.array(CharacterConfigSchema).default([]),
+  // World theme song key. Resolved to a URL by the server before it reaches the
+  // client (docs/audio/00 §4.3); the raw key never leaves the server.
+  audio: z.object({ theme: z.string().optional() }).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 }).passthrough();

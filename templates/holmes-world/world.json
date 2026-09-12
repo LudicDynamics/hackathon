@@ -12,6 +12,7 @@
     "open world"
   ],
   "material": "parchment",
+  "audio": { "theme": "whitechapel" },
   "extensions": [
     {
       "id": "airp:letter",

@@ -1,6 +1,6 @@
 # Audio Asset Plan — AIRP 全量音频需求清单
 
-> 状态：**清单 + 首批产出完成（2026-09-12）**。✅ = 已下载到 `assets/audio/`，❌/⚠️ = 待办。
+> 状态：**清单 + 首批产出完成（2026-09-12）**；**接线已启动（批次 A1，见 `docs/audio/`）**。✅ = 已下载到 `assets/audio/`，❌/⚠️ = 待办。
 > 依据：`doc-19 §2`（三层声场，权威）、`doc-06 §1/§2`、`doc-04 §10.4`、
 > `docs/前端改造计划.md §5 T2.1 / §8 T5 / §12`、`docs/tools/08 §6`、
 > `apps/web/src/lib/audio.ts`（当前实现真相）。
@@ -18,11 +18,10 @@
 | L2 BGM | 正弦 drone（calm=A1+E2 / tense=55+58.3Hz 拍频 / crisis=心跳脉冲） | **根本不是音乐**，与 doc-19"平缓爵士/悬疑提琴/危机鼓点"完全不符 |
 | L3 Foley | 8 个噪声爆裂 + 正弦 thump | 能听出"有反应"，但没有材质感（纸/木/铜） |
 
-两处真实断层：
-1. **`ambient` 字段在模板里根本不存在**——`doc-11`/`前端改造计划 §T2.1` 都说"按该层 README 的
-   `ambient` 字段交叉淡入"，但四个模板 README 只有 `tone`/`grain`（材质色）。
-   代码 `App.tsx:53` 退化为 `setAmbient(bg.tone)`——**拿材质色调猜环境音**。
-2. **本轮已产出 31 条真音频**（`assets/audio/`，28 条 CC0 + 3 条 CC-BY），见 §1–§4/§6 标 ✅。
+两处真实断层（**已解决 / 进行中，批次 A1**）：
+1. **`ambient` 字段不存在** → ✅ **已定义**：契约 `docs/audio/00 §3.1` 新增顶层 `ambient`/`bgm`，服务端 `readLayerAudio` 解析（世界级 `assets/audio/` 优先、平台池兜底）；`App.tsx` 的 `tone→ambient` 误用已废。4 模板已按 `docs/audio/05 §9` 逐层声明。
+2. **31 条无 URL 可达** → ✅ **已接通**：新增 `/api/audio` 路由（平台级）+ 引擎采样链（采样优先、合成兜底），见 `docs/audio/01`/`02`。
+3. **`stinger/` 6 情绪缺素材** → ⚠️ 待办（P1，见 `docs/audio/05 §10.1`）。
 
 ---
 
@@ -190,7 +189,8 @@ doc-19 §2.1 点名了"夜风 + 钟楼、钟表滴答、远方雷鸣、低声杂
 
 ## 8. 建议的下一步
 
-1. **接线（下一个 P0）**：把 `assets/audio/**` 接进 `lib/audio.ts`——采样播放真素材，
-   合成器降为离线兜底；同时补 `ambient` frontmatter 字段（现在是拿 `bg.tone` 猜，见 §0）；
-2. **演出音效**（钟鸣 / 墨洇 / 悬念滚奏）—— P1，可复用 `pool/bell-church` 与 `foley/*`；
-3. 剩余环境音族与 2 个模板主题曲，**等 doc-24 五世界选项定案**（§12 要求试玩先行）。
+1. **接线（P0）** → ✅ **进行中（批次 A1）**：`/api/audio` 路由 + `lib/audio.ts` 采样链（合成器降为离线兜底）+ `ambient`/`bgm` frontmatter 贯通（设计见 `docs/audio/00`–`06`）。
+2. **`stinger/` 6 条情绪瞬时音**（P1 缺口）：`normal`/`smile`/`shock`/`sad`/`angry`/`thinking`，<1.5s，供角色 `[emo: tag]` 触发（`playStinger` 已接线，缺素材时静默 no-op）。
+3. **演出音效**（钟鸣 / 墨洇 / 悬念滚奏）—— P1，可复用 `pool/bell-church` 与 `foley/*`；
+4. **`gate-open` / `page-turn` 接线**（有素材无调用点）：`gate-open` 留 T4.3 门卡过场，`page-turn` 留 book/pages 二级层；
+5. 剩余环境音族与 2 个模板主题曲（school / cthulhu），**等 doc-24 五世界选项定案**。

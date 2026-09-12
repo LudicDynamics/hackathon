@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { playStinger, type Emotion } from '../../lib/audio.js';
 
 /**
  * CharacterModal — galgame dialogue overlay (wave 2, Task D, T3.3).
@@ -23,8 +24,9 @@ interface CharacterModalProps {
   onSendMessage?: (msg: string) => void;
 }
 
-/** T3.2 emotion-tag protocol. Moods are pure CSS diffs until sprite sheets land. */
-type Emotion = 'normal' | 'smile' | 'shock' | 'sad' | 'angry' | 'thinking';
+/** T3.2 emotion-tag protocol. Moods are pure CSS diffs until sprite sheets land.
+ *  The union lives in `lib/audio.ts` (single source of truth — it also types
+ *  `playStinger`); this file imports it rather than re-declaring it. */
 
 const EMO_TAGS: readonly Emotion[] = ['normal', 'smile', 'shock', 'sad', 'angry', 'thinking'];
 
@@ -104,6 +106,12 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
       streamTimer.current = window.setTimeout(() => {
         setPhase('streaming');
         setEmo(mood);
+        // T3.2 — the [emo:] tag does double duty: it swaps the sprite AND fires a
+        // short one-shot stinger. It MUST NOT touch the BGM main track (galgame
+        // convention: emotion is a transient accent, not a score change); see
+        // docs/audio/02 §3.8 and docs/audio/04 §3.2. No-op when the stinger
+        // asset is missing (assets/audio/stinger/ is a known gap).
+        playStinger(mood);
         let i = 0;
         const step = () => {
           if (streamTimer.current === null) return; // cancelled/unmounted

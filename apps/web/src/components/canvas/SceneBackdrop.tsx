@@ -5,7 +5,7 @@ import { materialSkinOf } from '@airp/shared/forms';
 export interface SceneBackdropBg {
   /** World-relative asset path (`assets/scenes/<layer>/<file>.png`), or null. */
   src: string | null;
-  /** Ambient tone (audio bed selection; carried through for CSS hooks). */
+  /** Material tone — a CSS hook (`data-tone`), NOT an audio selector (see docs/audio/03 §3.2). */
   tone: string;
   /** Material skin key — `parchment` | `warm` | `stub` | `kraft`. */
   grain: string;

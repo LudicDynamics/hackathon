@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Response } from 'express';
 import fs from 'node:fs/promises';
+import { existsSync, realpathSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import {
@@ -84,25 +85,107 @@ function cardSize(item: LayerItem): { w: number; h: number } {
 
 /**
  * Layer background config from the layer README (doc-10 E0: bg is a README field).
- * shared's parseFrontmatter only resolves status/choice/roll_dice, so tone/grain are
- * extracted with a light regex from the raw text (plan §6.11).
+ * `bgStyle` is a NESTED block (templates/holmes-world/world/README.md:6-8); a bare
+ * regex on the raw text also matched prose lines (docs/audio/01 §8.1), so tone/grain
+ * now come from the structured frontmatter. `bg.src` cleaning is unchanged.
  */
 function readLayerBg(raw: string): { src: string | null; tone: string; grain: string } {
   let src: string | null = null;
+  let tone = 'warm';
+  let grain = 'parchment';
   try {
-    const parsed = parseFrontmatter(raw);
-    const bgValue = parsed.frontmatter?.bg;
+    const fm = parseFrontmatter(raw).frontmatter;
+    const bgValue = fm?.bg;
     if (typeof bgValue === 'string' && bgValue.trim() !== '') {
       // Strip trailing inline comments and quotes (parser keeps them verbatim).
       const cleaned = bgValue.replace(/\s+#.*$/, '').trim().replace(/^["']|["']$/g, '').trim();
       src = cleaned === '' ? null : cleaned;
     }
+    if (typeof fm?.bgStyle?.tone === 'string') tone = fm.bgStyle.tone;
+    if (typeof fm?.bgStyle?.grain === 'string') grain = fm.bgStyle.grain;
   } catch {
     src = null;
   }
-  const tone = raw.match(/^\s*tone:\s*(\S+)/m)?.[1] ?? 'warm';
-  const grain = raw.match(/^\s*grain:\s*(\S+)/m)?.[1] ?? 'parchment';
   return { src, tone, grain };
+}
+
+/**
+ * Bare-name candidate table, order = priority (docs/audio/00 §2.3).
+ * Probing is LEVEL-MAJOR: every WORLD-level candidate is tried before any
+ * PLATFORM-level one, so a world's private `ambient/pool/X` beats a platform
+ * `ambient/X` — world overrides platform (docs/audio/01 §3.2 step 4).
+ */
+const AUDIO_POOL: Record<'ambient' | 'bgm', readonly string[]> = {
+  ambient: ['ambient/{n}.mp3', 'ambient/pool/{n}.mp3'],
+  bgm: ['bgm/{n}.mp3', 'themes/{n}.mp3'],
+};
+
+/**
+ * One audio value → URL. Three shapes (docs/audio/00 §1/§3.1):
+ *   - `assets/…` → direct world-relative file → `/api/asset?path=<enc>` (missing → null)
+ *   - a value containing `/` that is NOT `assets/`-prefixed → contract violation:
+ *     warn + null (fail-loud, response shape unchanged)
+ *   - a bare name → the 5-step override chain: world-level (all candidates, override)
+ *     then platform-level (all candidates, fallback); nothing found → null
+ */
+function resolveAudioRef(
+  v: string,
+  kind: 'ambient' | 'bgm',
+  store: LocalWorldStore,
+  audioRoot: string
+): string | null {
+  const val = v.trim();
+  if (val === '') return null;
+
+  if (val.startsWith('assets/')) {
+    const abs = path.resolve(store.worldRoot, val);
+    if (abs !== store.worldRoot && !abs.startsWith(store.worldRoot + path.sep)) {
+      console.warn('[audio] ref escapes world root:', val);
+      return null;
+    }
+    // A declared-but-absent world path folds to null (declared silence), NOT a
+    // frontend fetch failure (which would fall back to synthesis, 00 §7).
+    if (!existsSync(abs)) return null;
+    return `/api/asset?path=${encodeURIComponent(val)}`;
+  }
+
+  if (val.includes('/')) {
+    console.warn('[audio] ref must be a bare pool key or start with assets/:', val);
+    return null;
+  }
+
+  for (const level of ['world', 'platform'] as const) {
+    for (const tpl of AUDIO_POOL[kind]) {
+      const cand = tpl.replace('{n}', val);
+      if (level === 'world') {
+        if (existsSync(path.resolve(store.worldRoot, 'assets/audio', cand))) {
+          return `/api/asset?path=${encodeURIComponent(`assets/audio/${cand}`)}`;
+        }
+      } else if (existsSync(path.join(audioRoot, cand))) {
+        return `/api/audio?path=${encodeURIComponent(cand)}`;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Translate one README's top-level `ambient` / `bgm` into URLs (docs/audio/00 §3.1).
+ * Pure translation of THIS file — inheritance across READMEs lives in `/api/layer`.
+ */
+function readLayerAudio(
+  fm: Record<string, any> | null,
+  store: LocalWorldStore,
+  audioRoot: string
+): { ambient: string | null; bgm: string | null } {
+  const out: { ambient: string | null; bgm: string | null } = { ambient: null, bgm: null };
+  for (const kind of ['ambient', 'bgm'] as const) {
+    const raw = fm?.[kind];
+    if (typeof raw === 'string' && raw.trim() !== '') {
+      out[kind] = resolveAudioRef(raw, kind, store, audioRoot);
+    }
+  }
+  return out;
 }
 
 export function createWorldRouter(
@@ -114,6 +197,9 @@ export function createWorldRouter(
 ): Router {
   const router = Router();
   let worldFrozen = false;
+  // Platform audio root: <REPO_ROOT>/assets/audio. `repoRoot` (index.ts:15) is the
+  // repo root in both dev and prod, so this always points at the 31 produced clips.
+  const AUDIO_ROOT = path.resolve(repoRoot, 'assets/audio');
 
   // List available templates and worlds
   router.get('/worlds', async (_req, res) => {
@@ -172,7 +258,15 @@ export function createWorldRouter(
     if (!store) return res.status(400).json({ error: 'No active world' });
     try {
       const manifest = await store.getManifest();
-      res.json(manifest);
+      // Resolve the world theme key to a URL here — the frontend never resolves
+      // README/manifest audio values (docs/audio/00 §4.1/§9.2). `themes` lives in
+      // the `bgm` pool table (00 §2.3).
+      const themeKey = manifest.audio?.theme;
+      const theme =
+        typeof themeKey === 'string' && themeKey.trim() !== ''
+          ? resolveAudioRef(themeKey, 'bgm', store, AUDIO_ROOT)
+          : null;
+      res.json({ ...manifest, audio: { theme } });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -251,14 +345,37 @@ export function createWorldRouter(
         };
       });
 
-      // bg from the layer README frontmatter (doc-10 E0); tone/grain via light regex
+      // bg + audio from the layer README frontmatter (doc-10 E0; docs/audio/00 §3).
       let bg: { src: string | null; tone: string; grain: string } = { src: null, tone: 'warm', grain: 'parchment' };
+      let audio: { ambient: string | null; bgm: string | null } = { ambient: null, bgm: null };
       try {
         const readmePath = layer === 'map' ? 'world/README.md' : `${layer}/README.md`;
         const raw = await store.readFile(readmePath);
         bg = readLayerBg(raw);
+        const ownFm = parseFrontmatter(raw).frontmatter;
+        const own = readLayerAudio(ownFm, store, AUDIO_ROOT);
+        audio = own;
+        // Inheritance is keyed on DECLARATION, not on resolution: `??` cannot tell
+        // "key absent" from "key present but null" — and the latter is declared
+        // silence that MUST NOT fall back (docs/audio/00 §3.3, three-state table).
+        if (layer !== 'map') {
+          // Only the map README read is guarded — a failure here must not swallow
+          // the layer's own `audio` resolved above.
+          try {
+            const mapFm = parseFrontmatter(await store.readFile('world/README.md')).frontmatter;
+            const inh = readLayerAudio(mapFm, store, AUDIO_ROOT);
+            // `k in ownFm` = "declared" (docs/audio/00 §3.3); resolution result is
+            // separate — a declared key that resolves to null stays null (silence).
+            audio = {
+              ambient: ownFm != null && 'ambient' in ownFm ? own.ambient : (inh.ambient ?? null),
+              bgm: ownFm != null && 'bgm' in ownFm ? own.bgm : (inh.bgm ?? null),
+            };
+          } catch {
+            // map README missing -> no inheritance, keep own
+          }
+        }
       } catch {
-        // README missing -> defaults
+        // README missing -> defaults (audio stays the declared-silence default)
       }
 
       const links = (store.queryCanvas(
@@ -277,12 +394,11 @@ export function createWorldRouter(
         [layer]
       ) as Array<Record<string, unknown>>).map((row) => ({
         characterId: String(row.character_id),
-        x: Number(row.x),
         y: Number(row.y),
         following: Number(row.following) === 1,
       }));
 
-      res.json({ layer, bg, items: enriched, links, presence, worldFrozen });
+      res.json({ layer, bg, audio, items: enriched, links, presence, worldFrozen });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -557,6 +673,41 @@ export function createWorldRouter(
         return res.status(403).json({ error: 'path escapes world root' });
       }
       res.sendFile(abs);
+    } catch (err) {
+      res.status(404).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  /**
+   * Serve a platform audio clip from `<REPO_ROOT>/assets/audio` (the 31 produced
+   * files). Same double traversal belt as `/asset`, plus a symlink re-check since
+   * only the first check inspects the unresolved string. Clips are immutable build
+   * artifacts, so they get a year-long `immutable` cache (docs/audio/01 §3.1).
+   */
+  router.get('/audio', (req, res) => {
+    const rel = String(req.query.path || '').replace(/^\/+/, '');
+    if (!rel) return res.status(400).json({ error: 'path required' });
+    if (rel.split('/').includes('..')) {
+      return res.status(403).json({ error: 'path must not contain ..' });
+    }
+    try {
+      const abs = path.resolve(AUDIO_ROOT, rel);
+      if (!abs.startsWith(AUDIO_ROOT + path.sep)) {
+        return res.status(403).json({ error: 'path escapes audio root' });
+      }
+      const real = realpathSync(abs);
+      if (!real.startsWith(realpathSync(AUDIO_ROOT) + path.sep)) {
+        return res.status(403).json({ error: 'path escapes audio root (symlink)' });
+      }
+      res.sendFile(
+        abs,
+        { headers: { 'Cache-Control': 'public, max-age=31536000, immutable' } },
+        (err) => {
+          if (err && !res.headersSent) {
+            res.status(404).json({ error: err.message });
+          }
+        }
+      );
     } catch (err) {
       res.status(404).json({ error: err instanceof Error ? err.message : String(err) });
     }
