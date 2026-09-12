@@ -7,15 +7,44 @@
  * Form vocabulary borrowed from the v2 prototype (canvas-stack-mingyue.html /
  * hearth.html) and NoDesign's `chrome: card | bare` axis (board-kinds.js):
  *
- *   'bare'  — a stroke of ink on the canvas: no card surface, no border, no
- *             shadow. Narrations (`chalk`) and character presences are ink.
- *   'paper' — a sheet: paper tone + hairline + soft shadow.
- *   'cover' — a scene gate: paper sheet with a material cover band on top,
- *             a hand-drawn ordinal seal and a pin.
- *   'note'  — a sticky note: yellow stock + ruled lines + a paperclip.
+ *   'bare'   — a stroke of ink on the canvas: no card surface, no border, no
+ *              shadow. Narrations (`chalk`) and character presences are ink.
+ *   'paper'  — a sheet: paper tone + hairline + soft shadow.
+ *   'cover'  — a scene gate: paper sheet with a material cover band on top,
+ *              a hand-drawn ordinal seal and a pin.
+ *   'note'   — a sticky note: yellow stock + ruled lines + a paperclip.
+ *   'slab'   — stone/metal: inset shadow, so it reads as set INTO the scene.
+ *   'board'  — a table top: deeper cream + a 80px grid.
+ *   'panel'  — an instrument face: light ink wash + DM Mono.
+ *   'scroll' — a long sheet: doubled top/bottom edges, no rounding.
  */
 
-export type CardChrome = 'bare' | 'paper' | 'cover' | 'note';
+/**
+ * The component resolver, pushed IN from `components/registry.ts` once that
+ * module loads. This module MUST NOT import the registry: the registry imports
+ * `CARD_FORMS`, and a back-edge would be an ESM cycle (review m-20). The
+ * indirection keeps `CARD_FORMS` a leaf while still letting `cardKindOf` know
+ * about component kinds.
+ */
+let componentKindResolver: ((fm: Record<string, any>, filename: string) => string) | null = null;
+
+export function registerComponentKindResolver(
+  fn: (fm: Record<string, any>, filename: string) => string
+): void {
+  componentKindResolver = fn;
+}
+
+export type CardChrome =
+  | 'bare'
+  | 'paper'
+  | 'cover'
+  | 'note'
+  // Component material vocabulary (doc 10 §13.4 / appendix A.3): a locked door
+  // is iron, a board is a table, a clock is an instrument, a map is a scroll.
+  | 'slab'
+  | 'board'
+  | 'panel'
+  | 'scroll';
 
 export interface CardForm {
   /** English label (the repo is public; UI copy is English). */
@@ -25,26 +54,62 @@ export interface CardForm {
   chrome: CardChrome;
 }
 
+/**
+ * Every card's footprint. `h` only serves seating — the painted height comes
+ * from the content — so this table is a seating/identity contract, not CSS.
+ * The eighteen component kinds (doc 10 appendix A.2) sit beside the five
+ * non-component kinds; adding a kind to the registry WITHOUT a row here throws
+ * at module load (registry.ts), which is the guard against "two size tables".
+ */
 export const CARD_FORMS: Record<string, CardForm> = {
+  // non-component kinds (doc 10 §9.2: not in the registry, but they need a form)
   chalk: { label: 'Narration', w: 460, h: 190, chrome: 'bare' },
   gate: { label: 'Scene', w: 288, h: 240, chrome: 'cover' },
-  letter: { label: 'Letter', w: 224, h: 176, chrome: 'paper' },
-  note: { label: 'Note', w: 200, h: 168, chrome: 'note' },
   sprite: { label: 'Presence', w: 176, h: 196, chrome: 'bare' },
   /** Defensive fallback only; every real kind is matched above. */
   default: { label: 'File', w: 240, h: 168, chrome: 'paper' },
+
+  // core
+  note: { label: 'Note', w: 200, h: 168, chrome: 'note' },
+  letter: { label: 'Letter', w: 224, h: 176, chrome: 'paper' },
+  // adventure
+  lock: { label: 'Lock', w: 176, h: 176, chrome: 'slab' },
+  container: { label: 'Container', w: 200, h: 200, chrome: 'slab' },
+  trap: { label: 'Trap', w: 168, h: 168, chrome: 'slab' },
+  mechanism: { label: 'Mechanism', w: 192, h: 160, chrome: 'slab' },
+  map: { label: 'Map', w: 300, h: 200, chrome: 'scroll' },
+  // mystery
+  book: { label: 'Book', w: 208, h: 264, chrome: 'paper' },
+  ledger: { label: 'Ledger', w: 260, h: 176, chrome: 'paper' },
+  photo: { label: 'Photograph', w: 224, h: 240, chrome: 'paper' },
+  cipher: { label: 'Cipher', w: 220, h: 168, chrome: 'paper' },
+  // chronicle
+  clock: { label: 'Clock', w: 160, h: 160, chrome: 'panel' },
+  tape: { label: 'Recording', w: 240, h: 148, chrome: 'panel' },
+  anchor: { label: 'Anchor', w: 168, h: 168, chrome: 'slab' },
+  // craft
+  instrument: { label: 'Instrument', w: 320, h: 200, chrome: 'board' },
+  board: { label: 'Board', w: 288, h: 288, chrome: 'board' },
+  // room
+  diary: { label: 'Diary', w: 208, h: 240, chrome: 'paper' },
+  thread: { label: 'Conversation', w: 300, h: 200, chrome: 'paper' },
 };
 
 /**
  * Resolve a card's kind from parsed frontmatter + filename. Order matters.
- * A bare markdown file with no `type` is a sticky note (the prototype's
- * `<b>title</b>\nbody` memo), never an "unknown" default card — the default
- * form is a last-ditch fallback, not a real kind.
+ *
+ * When the component registry has loaded, its resolver owns the answer: it
+ * knows every registered kind AND the non-component kinds (chalk / gate /
+ * sprite), so `type: component, component: lock` no longer collapses to `note`
+ * (review D2 / 00 §10 #6). Before the registry loads — or in a build that never
+ * imports it — the local branches below are the fallback, matching the
+ * historical behaviour exactly.
  */
 export function cardKindOf(
   frontmatter: Record<string, any> | null | undefined,
   filename: string
 ): string {
+  if (componentKindResolver) return componentKindResolver(frontmatter || {}, filename);
   const fm = frontmatter || {};
   if (fm.type === 'chalk') return 'chalk';
   if (fm.type === 'gate' || filename === 'README.md') return 'gate';

@@ -1,7 +1,18 @@
 import { Router } from 'express';
+import type { Response } from 'express';
 import fs from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { LocalWorldStore, SEAT_ANCHOR, parseFrontmatter, stringifyChalk, cardFormOf, cardKindOf } from '@airp/shared';
+import {
+  ActionError,
+  LocalWorldStore,
+  SEAT_ANCHOR,
+  createActionService,
+  parseFrontmatter,
+  cardFormOf,
+  cardKindOf,
+  type Actor,
+} from '@airp/shared';
 import type { AgentLifecycleManager } from '../engine/lifecycle.js';
 import type { EventBridge } from '../engine/event-bridge.js';
 
@@ -10,6 +21,45 @@ interface LayerItem {
   filename: string;
   frontmatter: Record<string, unknown> | null;
   body: string;
+}
+
+/**
+ * One HTTP request = one `turn` anchor (docs/tools/01 §3.7, C entry).
+ *
+ * `randomUUID()` and not a counter: the server and every agent process each
+ * keep their own counter, so the two would collide. A request id only has to
+ * be unique and stable, never ordered (docs/tools/12 §2.4).
+ */
+function serviceFor(store: LocalWorldStore, actor: Actor) {
+  return createActionService(store, actor, { turn: `req:${randomUUID()}` });
+}
+
+/**
+ * ActionError → HTTP; anything else → 500. The status code comes from the ONE
+ * table in docs/tools/01 §7.1 (`ActionError.toHttp()`); this layer MUST NOT
+ * invent its own (docs/tools/12 §7.1).
+ *
+ * The response body is always `{ ok: true, ...details }` or
+ * `{ ok: false, code, error }`.
+ */
+async function reply(
+  res: Response,
+  run: () => Promise<{ details: Record<string, unknown> }>
+): Promise<void> {
+  try {
+    res.json({ ok: true, ...(await run()).details });
+  } catch (err) {
+    if (err instanceof ActionError) {
+      const http = err.toHttp();
+      res.status(http.status).json(http.body);
+      return;
+    }
+    res.status(500).json({
+      ok: false,
+      code: 'internal',
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 /** Deterministic pseudorandom hash (doc-04 §4) - mirror of the frontend lib/camera hashInt. */
@@ -78,8 +128,8 @@ export function createWorldRouter(
       } catch {}
 
       res.json({ templates, worlds });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -99,6 +149,10 @@ export function createWorldRouter(
       setActiveStore(store);
 
       const manifest = await store.getManifest();
+      // Re-align lastSeq against the NEW history.db before watching: the old
+      // cursor belongs to another sequence and could permanently skip events
+      // (docs/tools/12 §8.6 / §8 "index.ts 的接线").
+      eventBridge.startTailReader(store);
       eventBridge.watchWorld(resolvedPath);
 
       // Start writer process (reused when the same world is already loaded)
@@ -107,8 +161,8 @@ export function createWorldRouter(
       });
 
       res.json({ ok: true, manifest, path: resolvedPath });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -119,8 +173,8 @@ export function createWorldRouter(
     try {
       const manifest = await store.getManifest();
       res.json(manifest);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -253,8 +307,8 @@ export function createWorldRouter(
         })
       );
       res.json({ items });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -282,142 +336,141 @@ export function createWorldRouter(
         })
       );
       res.json({ characters: chars });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // Move item (backpack <-> scene, etc.)
-  router.post('/move', async (req, res) => {
-    const store = getActiveStore();
-    if (!store) return res.status(400).json({ error: 'No active world' });
-    try {
-      const { from, to } = req.body;
-      const result = await store.move(from, to);
-      // Migrate canvas state so the new path doesn't spawn a second seat (plan §6.4).
-      try {
-        await store.renameCardPosition(from, to);
-      } catch (err) {
-        console.warn('[move] card position migration skipped:', err);
-      }
-      eventBridge.broadcast({ type: 'item_moved', result });
-      res.json(result);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // Persist a card's dropped position (UPSERT; z/w/h untouched)
-  router.post('/card/position', async (req, res) => {
-    const store = getActiveStore();
-    if (!store) return res.status(400).json({ error: 'No active world' });
-    try {
-      const body = req.body as { path?: unknown; x?: unknown; y?: unknown };
-      const { path: cardPath, x, y } = body;
-      if (typeof cardPath !== 'string' || cardPath === '') {
-        return res.status(400).json({ error: 'Invalid path' });
-      }
-      if (
-        typeof x !== 'number' || !Number.isFinite(x) ||
-        typeof y !== 'number' || !Number.isFinite(y)
-      ) {
-        return res.status(400).json({ error: 'Invalid x/y' });
-      }
-      // Reject zombie rows: the file must actually exist
-      try {
-        await store.readFile(cardPath);
-      } catch {
-        return res.status(404).json({ error: `File not found: ${cardPath}` });
-      }
-      const card = await store.saveCardPosition(cardPath, x, y);
-      eventBridge.broadcast({ type: 'card_position', path: cardPath, x, y });
-      res.json({
-        ok: true,
-        card: { path: card.id, layer: card.layer, x: card.x, y: card.y, w: card.w, h: card.h, z: card.z },
-      });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
-  // Resolve roll_dice
+  // Move item (backpack <-> scene, etc.) — the single action, no local rules.
+  // The router used to call `store.move` + `renameCardPosition` and broadcast an
+  // `item_moved` frame; the frame is deleted (docs/tools/12 §6.2) and the event
+  // reaches the frontend as `world_event{entity_moved}` via the tail reader.
+  router.post('/move', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const { from, to, near } = req.body as { from?: unknown; to?: unknown; near?: unknown };
+    if (typeof from !== 'string' || from === '') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'from must be a non-empty world-relative path' });
+    }
+    if (typeof to !== 'string' || to === '') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'to must be a non-empty world-relative path' });
+    }
+    await reply(res, () =>
+      serviceFor(store, { type: 'player' }).moveEntity({
+        from,
+        to,
+        ...(typeof near === 'string' && near !== '' ? { near } : {}),
+      })
+    );
+  });
+
+  /**
+   * Persist a card's dropped position.
+   *
+   * The state write goes through `arrangeCards({ place })` (09 §8.3: one action
+   * semantics), but the frame is `card_position` — NOT `canvas_patched`, which is
+   * reserved for the tool path (docs/tools/12 §6.5). Broadcasting has to happen
+   * after the action succeeded, so this route cannot use `reply` (which swallows
+   * the error).
+   */
+  router.post('/card/position', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const { path: cardPath, x, y } = req.body as { path?: unknown; x?: unknown; y?: unknown };
+    if (typeof cardPath !== 'string' || cardPath === '') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'path must be a non-empty string' });
+    }
+    if (
+      typeof x !== 'number' || !Number.isFinite(x) ||
+      typeof y !== 'number' || !Number.isFinite(y)
+    ) {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'x and y must be finite numbers' });
+    }
+    try {
+      const r = await serviceFor(store, { type: 'player' }).arrangeCards({ place: { path: cardPath, x, y } });
+      eventBridge.broadcast({ type: 'card_position', path: cardPath, x, y });
+      res.json({ ok: true, ...r.details });
+    } catch (err) {
+      if (err instanceof ActionError) {
+        const h = err.toHttp();
+        return res.status(h.status).json(h.body);
+      }
+      res.status(500).json({ ok: false, code: 'internal', error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  // Resolve roll_dice — `rollDice` is the ONE adjudicator (doc-20 §2.2). The old
+  // body rolled, parsed `expect` and wrote the file back here, a second rule set.
+  // The HTTP path sends NO presentation frame (§3.3 step 5): the frontend drives
+  // the animation from this response; `dice_result` belongs to the tool path.
   router.post('/dice', async (req, res) => {
     const store = getActiveStore();
     if (!store) return res.status(400).json({ error: 'No active world' });
-    try {
-      const { filePath, rollType = '1d100', expect = '>50' } = req.body;
-      const raw = await store.readFile(filePath);
-      const { frontmatter, body } = parseFrontmatter(raw);
-
-      if (!frontmatter) {
-        return res.status(400).json({ error: 'File does not contain frontmatter' });
-      }
-
-      // Roll true random 1d100
-      const diceMax = rollType.includes('d') ? Number(rollType.split('d')[1]) || 100 : 100;
-      const rollResult = Math.floor(Math.random() * diceMax) + 1;
-
-      // Evaluate expect expression (e.g. ">50", "<30", ">=60")
-      let passed = false;
-      const numMatch = expect.match(/(\d+)/);
-      const threshold = numMatch ? Number(numMatch[1]) : 50;
-
-      if (expect.startsWith('>=')) passed = rollResult >= threshold;
-      else if (expect.startsWith('>')) passed = rollResult > threshold;
-      else if (expect.startsWith('<=')) passed = rollResult <= threshold;
-      else if (expect.startsWith('<')) passed = rollResult < threshold;
-      else passed = rollResult === threshold;
-
-      frontmatter.roll_dice = {
-        ...(frontmatter.roll_dice || {}),
-        type: rollType,
-        expect,
-        result: rollResult,
-        passed,
-      };
-
-      const updatedContent = stringifyChalk(frontmatter, body);
-      await store.writeFile(filePath, updatedContent);
-
-      const event = await store.appendWorldEvent('roll_resolved', {
-        filePath,
-        rollType,
-        expect,
-        result: rollResult,
-        passed,
-      });
-
-      eventBridge.broadcast({ type: 'roll_resolved', event, result: rollResult, passed });
-
-      // Event is recorded in history.db and injected via Hook on next player turn (doc-05 §5.1)
-      res.json({ ok: true, result: rollResult, passed });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    const { path: dicePath, forcedResult } = req.body as { path?: unknown; forcedResult?: unknown };
+    if (typeof dicePath !== 'string' || dicePath === '') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'path must be a non-empty world-relative path' });
     }
+    if (forcedResult !== undefined && (typeof forcedResult !== 'number' || !Number.isFinite(forcedResult))) {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'forcedResult must be a finite number' });
+    }
+    // Only a forged score is a god action; a plain click is the player's (07 §5.2).
+    const actor: Actor = typeof forcedResult === 'number' ? { type: 'god' } : { type: 'player' };
+    await reply(res, () =>
+      serviceFor(store, actor).rollDice({
+        path: dicePath,
+        ...(typeof forcedResult === 'number' ? { forcedResult } : {}),
+      })
+    );
   });
 
-  // Use item on target (Point-and-Click puzzle)
+  // Use item on target (point-and-click puzzle). No bare frame: the event goes
+  // out as `world_event{use_item_on}` (docs/tools/08 §6.2 / 12 §6.2).
   router.post('/use-item', async (req, res) => {
     const store = getActiveStore();
     if (!store) return res.status(400).json({ error: 'No active world' });
-    try {
-      const { itemPath, targetPath, targetType } = req.body;
-      const event = await store.appendWorldEvent('use_item_on', {
-        itemPath,
-        targetPath,
-        targetType,
-      });
-
-      eventBridge.broadcast({ type: 'use_item_on', event });
-
-      // Event is recorded in history.db and injected via Hook on next player turn (doc-05 §5.1)
-      res.json({ ok: true, event });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    const { item, target } = req.body as { item?: unknown; target?: unknown };
+    if (typeof item !== 'string' || item === '') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'item must be a non-empty world-relative path' });
     }
+    if (typeof target !== 'string' || target === '') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'target must be a non-empty world-relative path' });
+    }
+    await reply(res, () => serviceFor(store, { type: 'player' }).useItemOn({ item, target }));
   });
 
-  // God mode toggle freeze
+  // Player picks one of the public options an entity declares (06 §2.5).
+  router.post('/choice', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const { path: choicePath, choice } = req.body as { path?: unknown; choice?: unknown };
+    if (typeof choicePath !== 'string' || choicePath === '') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'path must be a non-empty world-relative path' });
+    }
+    if (!((typeof choice === 'string' && choice !== '') || (typeof choice === 'number' && Number.isFinite(choice)))) {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'choice must be a string label or a 1-based number' });
+    }
+    await reply(res, () => serviceFor(store, { type: 'player' }).chooseOption({ path: choicePath, choice }));
+  });
+
+  // Player walks through a door into another layer (05 §3.6.2 / 12 §2.4).
+  router.post('/enter-layer', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const { layer } = req.body as { layer?: unknown };
+    if (typeof layer !== 'string' || layer === '') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'layer must be a non-empty layer id' });
+    }
+    await reply(res, () => serviceFor(store, { type: 'player' }).enterLayer({ layer }));
+  });
+
+  /**
+   * `/api/viewpoint` belongs to B2 / doc-22 §9 (a `viewpoint` row in canvas.db).
+   * B1 deliberately ships no route and no table: a placeholder table now would
+   * create a second source of truth (docs/tools/12 §2.4).
+   */
+
+  // God mode toggle freeze — a presentation toggle, not an action: it writes no
+  // event and broadcasts a演出 frame directly (docs/tools/12 §2.4).
   router.post('/freeze', (_req, res) => {
     worldFrozen = !worldFrozen;
     eventBridge.broadcast({
@@ -427,26 +480,63 @@ export function createWorldRouter(
     res.json({ worldFrozen });
   });
 
-  // God mode entity create/edit/delete
+  /**
+   * God mode entity create/edit/delete — actor `god`, through the same actions
+   * the tools use. `content` stays as an escape hatch for a whole-file god
+   * rewrite; it is parsed into frontmatter + body so the single action path
+   * still owns the event (docs/tools/12 §2.4.1).
+   */
   router.post('/god-action', async (req, res) => {
     const store = getActiveStore();
     if (!store) return res.status(400).json({ error: 'No active world' });
-    try {
-      const { action, filePath, content } = req.body;
-      if (action === 'create' || action === 'update') {
-        await store.writeFile(filePath, content);
-      } else if (action === 'delete') {
-        await store.deleteFile(filePath);
-      }
-
-      const event = await store.appendWorldEvent('god_action', { action, filePath });
-      eventBridge.broadcast({ type: 'god_action', event });
-
-      // Event is recorded in history.db and perceived via Hook on next player turn (doc-05 §5.1)
-      res.json({ ok: true, event });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    const body = req.body as {
+      action?: unknown;
+      path?: unknown;
+      frontmatter?: unknown;
+      body?: unknown;
+      content?: unknown;
+    };
+    const action = body.action;
+    if (action !== 'create' && action !== 'update' && action !== 'delete') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'action must be one of: create, update, delete' });
     }
+    const targetPath = body.path;
+    if (typeof targetPath !== 'string' || targetPath === '') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'path must be a non-empty world-relative path' });
+    }
+
+    let frontmatter = (typeof body.frontmatter === 'object' && body.frontmatter !== null
+      ? (body.frontmatter as Record<string, unknown>)
+      : undefined);
+    let content = typeof body.body === 'string' ? body.body : undefined;
+    if (typeof body.content === 'string') {
+      const parsed = parseFrontmatter(body.content);
+      frontmatter = frontmatter ?? (parsed.frontmatter ?? undefined);
+      content = content ?? parsed.body;
+    }
+
+    const svc = serviceFor(store, { type: 'god' });
+    if (action === 'delete') {
+      await reply(res, () => svc.removeEntity({ path: targetPath }));
+      return;
+    }
+    if (action === 'create') {
+      await reply(res, () =>
+        svc.createEntity({
+          path: targetPath,
+          body: content ?? '',
+          ...(frontmatter ? { frontmatter } : {}),
+        })
+      );
+      return;
+    }
+    await reply(res, () =>
+      svc.editEntity({
+        path: targetPath,
+        ...(frontmatter ? { frontmatter } : {}),
+        ...(content !== undefined ? { body: content } : {}),
+      })
+    );
   });
 
   /**
@@ -467,8 +557,8 @@ export function createWorldRouter(
         return res.status(403).json({ error: 'path escapes world root' });
       }
       res.sendFile(abs);
-    } catch (err: any) {
-      res.status(404).json({ error: err.message });
+    } catch (err) {
+      res.status(404).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
