@@ -54,6 +54,7 @@ apps/
       presets.ts        # preset 安装到 <worldRoot>/.airpworld/prompt-presets/；skillArgs 拼 --skill
   web/src/
     lib/ui-shell.mjs       # Header / journal 独立显隐、人物分区与测量后排版
+    lib/effects-clock.mjs  # 视差逐帧合并与粒子限帧调度；停止时取消任务
     scene-shell.css        # 素材版世界 UI：暖纸栏、玩家身份与人物圆牌
     lib/                   # camera（插值相机）/ collide（软碰撞）/ seat（排座镜像）
     state/                 # useCamera（相机与层级记忆）/ useWorld（层数据 + WS + 落库）

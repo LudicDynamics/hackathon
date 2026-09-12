@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { materialSkinOf } from '@airp/shared/forms';
 
 /** The layer backdrop payload from `GET /api/layer` (see LayerState.bg). */
@@ -13,8 +13,8 @@ export interface SceneBackdropBg {
 
 export interface SceneBackdropProps {
   bg: SceneBackdropBg;
-  /** Normalized mouse parallax coordinates [-1, 1] */
-  parallax?: { x: number; y: number };
+  motionRef?: React.RefObject<HTMLDivElement | null>;
+  effectsEnabled?: boolean;
 }
 
 /**
@@ -26,22 +26,34 @@ export interface SceneBackdropProps {
  * Parallax depth: 0.25x slow drift with camera & pointer.
  * Video support: if src ends with .mp4 or .webm, renders an autoplaying loop video.
  */
-export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg, parallax = { x: 0, y: 0 } }) => {
+export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg, motionRef, effectsEnabled = false }) => {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const src = bg.src;
   const isAvailable = !!src && failedSrc !== src;
   const isVideo = !!src && /\.(mp4|webm)$/i.test(src);
 
   // Parallax transform: 0.25x background drift (scaled up slightly so edges never bleed)
-  const shiftX = parallax.x * 16;
-  const shiftY = parallax.y * 16;
   const parallaxStyle: React.CSSProperties = {
-    transform: `translate3d(${shiftX}px, ${shiftY}px, 0) scale(1.06)`,
+    transform: 'translate3d(0, 0, 0) scale(1.06)',
     transition: 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
   };
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const sync = () => {
+      if (!effectsEnabled || document.hidden) video.pause();
+      else void video.play().catch(() => {});
+    };
+    sync();
+    document.addEventListener('visibilitychange', sync);
+    return () => { video.pause(); document.removeEventListener('visibilitychange', sync); };
+  }, [effectsEnabled, src, isAvailable]);
+
   return (
     <div
+      ref={motionRef}
       className={`scene-backdrop ${materialSkinOf(bg.grain)}`}
       data-tone={bg.tone}
       style={parallaxStyle}
@@ -49,8 +61,8 @@ export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg, parallax = { x
       {isAvailable && (
         isVideo ? (
           <video
+            ref={videoRef}
             className="scene-backdrop__img object-cover"
-            autoPlay
             loop
             muted
             playsInline

@@ -7,6 +7,11 @@
 .is-reading .prototype-worldtop { padding-left: 26px; }
 .prototype-brand { font: 24px Georgia, serif; letter-spacing: -1px; margin-right: 20px; }
 .prototype-brand span { color: #7853ae; }
+.prototype-effects-toggle { display: flex; align-items: center; gap: 7px; font-size: 11px!important; white-space: nowrap; }
+.prototype-effects-toggle > span { width: 25px; height: 14px; border-radius: 10px; background: #aa9baf; padding: 2px; }
+.prototype-effects-toggle > span::after { content: ''; display: block; width: 10px; height: 10px; border-radius: 50%; background: #f1e8d8; transition: transform .15s; }
+.prototype-effects-toggle[aria-checked="true"] > span { background: #7853ae; }
+.prototype-effects-toggle[aria-checked="true"] > span::after { transform: translateX(11px); }
 .is-dusk .prototype-worldtop button { background: transparent; border-color: #88736033; }
 .prototype-narrative { top: 76px; bottom: 100px; left: 14px; width: 300px; border: 1px solid #b19b7b88; border-radius: 4px 14px 14px 4px; box-shadow: 8px 16px 50px #100b1866; }
 .prototype-narrhead { padding: 20px 22px 12px; }

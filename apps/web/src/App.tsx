@@ -69,7 +69,12 @@ export function App() {
   const [shell, setShell] = useState(initialShell);
   const [encounters, setEncounters] = useState<Record<string, string[]>>({});
   const [bagOpen, setBagOpen] = useState(false);
-  const [effectsEnabled, setEffectsEnabled] = useState(false);
+  const [effectsEnabled, setEffectsEnabled] = useState(() => {
+    try { return localStorage.getItem('airp:effects') === 'on'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('airp:effects', effectsEnabled ? 'on' : 'off'); } catch { /* Storage is optional. */ }
+  }, [effectsEnabled]);
   const [radialState, setRadialState] = useState<{ x: number; y: number; worldX: number; worldY: number } | null>(null);
   const toggleShell = (action: 'header' | 'journal' | 'immersion') => setShell(current => transitionShell(current, action));
   const [worldPickerOpen, setWorldPickerOpen] = useState(false);
@@ -142,7 +147,7 @@ export function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      const typing = target?.matches('input, textarea, select, [contenteditable="true"]');
+      const typing = target?.closest('input, textarea, select, button, a, [role="switch"], [contenteditable="true"]');
       if (event.key === 'Escape') {
         setWorldPickerOpen(false);
         setProfileOpen(false);
@@ -359,7 +364,7 @@ export function App() {
             <span className="prototype-status">{handItems.length} ITEMS · {characters.length} PEOPLE</span>
             <button className="prototype-pill" onClick={() => setWorldPickerOpen(true)}>Worlds</button>
             <MuteButton />
-            <button onClick={() => setEffectsEnabled(value => !value)} aria-pressed={effectsEnabled}>Motion {effectsEnabled ? 'on' : 'off'}</button>
+            <button className="prototype-effects-toggle" role="switch" aria-label="Visual effects" aria-checked={effectsEnabled} onClick={() => setEffectsEnabled(value => !value)} title="Particles, parallax and animated backgrounds"><span aria-hidden="true" />Effects {effectsEnabled ? 'on' : 'off'}</button>
             <button className="prototype-quiet" onClick={() => toggleShell('header')} aria-label="Close header"><ChevronUp size={16} /></button>
           </header>
 

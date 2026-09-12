@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { CanvasObject, clearAllLifts, pruneLifts, raiseObject } from './CanvasObject.js';
 import { LinkLayer, highlightLinks, updateAllLinks } from './LinkLayer.js';
 import { SceneBackdrop } from './SceneBackdrop.js';
@@ -8,6 +8,7 @@ import { clampZ, zoomAt, screenToWorld } from '../../lib/camera.js';
 import { makeBox, pushFrom, relaxAll } from '../../lib/collide.js';
 import { unlock, playFoley } from '../../lib/audio.js';
 import { separateBounds } from '../../lib/ui-shell.mjs';
+import { createFrameTask } from '../../lib/effects-clock.mjs';
 import type { LayerItem, LayerLink } from '../../state/useWorld.js';
 
 interface CanvasProps {
@@ -92,7 +93,37 @@ export const Canvas: React.FC<CanvasProps> = ({
 }) => {
   const camera = useCamera();
 
-  const [parallax, setParallax] = useState({ x: 0, y: 0 });
+  const parallaxRef = useRef({ x: 0, y: 0 });
+  const backdropRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const viewport = camera.viewportRef.current;
+    if (!viewport || !effectsEnabled) return;
+    const task = createFrameTask(() => {
+      const { x, y } = parallaxRef.current;
+      if (backdropRef.current) backdropRef.current.style.transform = `translate3d(${x * 16}px, ${y * 16}px, 0) scale(1.06)`;
+    });
+    const onMove = (event: PointerEvent) => {
+      if (document.hidden || event.pointerType === 'touch') return;
+      const rect = viewport.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      parallaxRef.current = { x: ((event.clientX - rect.left) / rect.width - .5) * 2, y: ((event.clientY - rect.top) / rect.height - .5) * 2 };
+      task.schedule();
+    };
+    const onLeave = () => { parallaxRef.current = { x: 0, y: 0 }; task.schedule(); };
+    const onVisibility = () => { if (document.hidden) task.cancel(); };
+    viewport.addEventListener('pointermove', onMove, { passive: true });
+    viewport.addEventListener('pointerleave', onLeave);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      task.cancel();
+      viewport.removeEventListener('pointermove', onMove);
+      viewport.removeEventListener('pointerleave', onLeave);
+      document.removeEventListener('visibilitychange', onVisibility);
+      parallaxRef.current = { x: 0, y: 0 };
+      if (backdropRef.current) backdropRef.current.style.transform = 'translate3d(0, 0, 0) scale(1.06)';
+    };
+  }, [camera, effectsEnabled]);
 
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const pinchRef = useRef<{ d: number; z: number } | null>(null);
@@ -270,17 +301,6 @@ export const Canvas: React.FC<CanvasProps> = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    // 2.5D Parallax tracking: normalized coordinates [-1, 1] relative to viewport center
-    const vp = camera.viewportRef.current;
-    if (vp && effectsEnabled) {
-      const rect = vp.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        const nx = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
-        const ny = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
-        setParallax({ x: nx, y: ny });
-      }
-    }
-
     const s = cardDragRef.current;
     if (s && e.pointerId === s.pointerId) {
       const dx = e.clientX - s.sx;
@@ -476,7 +496,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       style={{ perspective: '1200px' }}
     >
       {/* 2.5D Background sheet with 0.25x parallax drift & video support */}
-      <SceneBackdrop bg={bg} parallax={effectsEnabled ? parallax : { x: 0, y: 0 }} />
+      <SceneBackdrop bg={bg} motionRef={backdropRef} effectsEnabled={effectsEnabled} />
 
       {/* World Transform Layer — single transform layer, rAF writes transform.
           Must pin transform-origin to top-left: default is center, which would
@@ -503,7 +523,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       </div>
 
       {/* Atmospheric 1.35x foreground particle system: floating dust & rain overlay */}
-      {effectsEnabled && <ParticleLayer tone={bg.tone} parallax={parallax} />}
+      {effectsEnabled && <ParticleLayer key={bg.tone} tone={bg.tone} parallaxRef={parallaxRef} />}
     </div>
   );
 };

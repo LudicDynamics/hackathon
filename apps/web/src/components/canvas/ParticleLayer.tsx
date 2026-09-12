@@ -1,9 +1,10 @@
 import React, { useEffect, useRef } from 'react';
+import { createFrameLoop } from '../../lib/effects-clock.mjs';
 
 export interface ParticleLayerProps {
   tone?: string;
   /** Normalized mouse parallax coordinates [-1, 1] */
-  parallax?: { x: number; y: number };
+  parallaxRef: React.RefObject<{ x: number; y: number }>;
 }
 
 interface Particle {
@@ -24,11 +25,9 @@ interface Particle {
 
 export const ParticleLayer: React.FC<ParticleLayerProps> = ({
   tone = 'warm',
-  parallax = { x: 0, y: 0 },
+  parallaxRef,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const parallaxRef = useRef(parallax);
-  parallaxRef.current = parallax;
 
   const toneRef = useRef(tone);
   toneRef.current = tone;
@@ -39,18 +38,33 @@ export const ParticleLayer: React.FC<ParticleLayerProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let animId: number;
     let width = (canvas.width = window.innerWidth);
     let height = (canvas.height = window.innerHeight);
 
     const onResize = () => {
       if (!canvas) return;
-      width = canvas.width = window.innerWidth;
-      height = canvas.height = window.innerHeight;
+      width = canvas.clientWidth || window.innerWidth;
+      height = canvas.clientHeight || window.innerHeight;
+      const scale = Math.min(1, 1600 / width, 1000 / height);
+      canvas.width = Math.round(width * scale);
+      canvas.height = Math.round(height * scale);
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
     };
     window.addEventListener('resize', onResize);
+    onResize();
 
-    const count = 48; // Lightweight particle budget (< 1% CPU)
+    // Cache one soft light texture instead of allocating gradients per particle/frame.
+    const mote = document.createElement('canvas');
+    mote.width = mote.height = 32;
+    const paint = mote.getContext('2d')!;
+    const glow = paint.createRadialGradient(16, 16, 0, 16, 16, 16);
+    glow.addColorStop(0, 'rgba(235, 205, 140, 1)');
+    glow.addColorStop(.5, 'rgba(215, 160, 90, .5)');
+    glow.addColorStop(1, 'rgba(215, 160, 90, 0)');
+    paint.fillStyle = glow;
+    paint.fillRect(0, 0, 32, 32);
+
+    const count = width < 700 ? 16 : 32;
     const particles: Particle[] = [];
 
     const isRain = toneRef.current.includes('rain');
@@ -74,8 +88,9 @@ export const ParticleLayer: React.FC<ParticleLayerProps> = ({
     }
 
     let time = 0;
-    const render = () => {
-      time += 1;
+    const render = (delta: number) => {
+      const step = delta / (1000 / 60);
+      time += step;
       ctx.clearRect(0, 0, width, height);
 
       const isCurrentRain = toneRef.current.includes('rain');
@@ -88,8 +103,8 @@ export const ParticleLayer: React.FC<ParticleLayerProps> = ({
 
         if (isCurrentRain) {
           // Rain streaks
-          p.x += p.vx;
-          p.y += p.vy;
+          p.x += p.vx * step;
+          p.y += p.vy * step;
           if (p.y > height) {
             p.y = -20;
             p.x = Math.random() * (width + 100);
@@ -107,7 +122,7 @@ export const ParticleLayer: React.FC<ParticleLayerProps> = ({
           ctx.stroke();
         } else {
           // Warm floating motes / dust
-          p.baseY += p.vy;
+          p.baseY += p.vy * step;
           if (p.baseY < -20) {
             p.baseY = height + 20;
             p.baseX = Math.random() * width;
@@ -120,26 +135,22 @@ export const ParticleLayer: React.FC<ParticleLayerProps> = ({
           const drawX = p.baseX + wobble + shiftX;
           const drawY = p.baseY + shiftY;
 
-          // Glowing dust mote
-          const grad = ctx.createRadialGradient(drawX, drawY, 0, drawX, drawY, p.size * 2.2);
-          grad.addColorStop(0, `rgba(235, 205, 140, ${currentAlpha})`);
-          grad.addColorStop(0.5, `rgba(215, 160, 90, ${currentAlpha * 0.5})`);
-          grad.addColorStop(1, 'rgba(215, 160, 90, 0)');
-
-          ctx.beginPath();
-          ctx.arc(drawX, drawY, p.size * 2.2, 0, Math.PI * 2);
-          ctx.fillStyle = grad;
-          ctx.fill();
+          const radius = p.size * 2.2;
+          ctx.globalAlpha = currentAlpha;
+          ctx.drawImage(mote, drawX - radius, drawY - radius, radius * 2, radius * 2);
+          ctx.globalAlpha = 1;
         }
       }
 
-      animId = requestAnimationFrame(render);
     };
-
-    animId = requestAnimationFrame(render);
+    const loop = createFrameLoop(render);
+    const syncVisibility = () => { if (document.hidden) loop.stop(); else loop.start(); };
+    document.addEventListener('visibilitychange', syncVisibility);
+    syncVisibility();
 
     return () => {
-      cancelAnimationFrame(animId);
+      loop.stop();
+      document.removeEventListener('visibilitychange', syncVisibility);
       window.removeEventListener('resize', onResize);
     };
   }, []);
