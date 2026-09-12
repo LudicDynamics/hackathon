@@ -975,12 +975,14 @@ type UseItemOnHandler = (args: {
   | { handled: false; reason?: string }
 >;
 
-interface EntityRef { path: string; name: string; frontmatter: Record<string, any> }
+interface EntityRef { path: string; name: string; frontmatter: Record<string, any>; body?: string }
+
+> **`body?` 是实现期追加的**（`components/types.ts:42`）：handler 要**原地重写文件并保留正文**（只改 `status.data.locked`），所以调用方把已读到的 body 一并传入；缺失时按空正文处理。`08 §3.4` 同款。
 ```
 
 **四条纪律**：
 
-1. **按 target 的 kind 查找，绝不按 item 的 kind。** 钥匙开锁：锁是 target，查 `lock.handler`。
+1. **按 target 的 kind 查找，绝不按 item 的 kind。** 钥匙开锁：锁是 target，查 `lock.handler`。**查找 helper 是 `componentDefOf(kind)`**（`components/registry.ts:86`）——不是 `getComponent(...)`（那是 `get_component` **工具动作**的名字）。匹配 item 的 helper 是 `useItemTargetOf(targetKind, itemFm)`（`registry.ts:156`）。
 2. **handler 只允许重写 target 自己的 frontmatter**（`store.writeFileAtomic`）；**MUST NOT** 创建 / 移动 / 删除实体，**MUST NOT** 调其它动作函数；**绝不** `writer.prompt`、绝不发 WS 帧、绝不直接 `fs.writeFileSync`。理由：00 §1 硬约束（扩展不假设连着 WS）+ 01 的 `ActionContext` 形状 + 08 §3.4 的严口径。
 3. **`handled:false` 不是错误、不是静默降级。** 它是合法结果（"这东西对这门没用"）；`use_item_on` 照落事件，文本明说目标没有反应，作家下一轮可以写"钥匙插不进去"。
 4. **`target.frontmatter` 必须传进去**（本文对 08 提案的追加）。理由：`lock`/`instrument`/`mechanism` 的 handler 要读当前 `status.data`（`locked`/`lid`/`position`）才能决定后果；不传就得 handler 自己再读一次盘，多一次 I/O 且可能读到半写文件。
@@ -997,9 +999,10 @@ const lockHandler: UseItemOnHandler = async ({ item, target, store, actor, turn 
   }
   fm.status.data.locked = false;
   fm.status.data.opened_by = item.path;
-  // 02 §4.3 冻结的 writer（归属 packages/shared/src/schemas/frontmatter.ts）：
-  // stringifyEntityFrontmatter(frontmatter, interactive) → `---…---` 块（不含尾随空行），body 由调用者拼上。
-  await store.writeFileAtomic(target.path, stringifyEntityFrontmatter(fm, {}) + '\n\n' + target.body);
+  // 中性 writer（`schemas/frontmatter.ts::stringifyFrontmatter(fm, body)`，实现期由 peer 请求新增）：
+  // 整个文件一次原子写回。02 的 `stringifyEntityFrontmatter`/`stringifyChalkFile` 是 chalk 专用
+  // 整形器（管冻结键序），handler 只需原样保留 target 的 frontmatter 与正文，故用中性那个。
+  await store.writeFileAtomic(target.path, stringifyFrontmatter(fm, target.body ?? ''));
   return { handled: true, summary: `${item.name} opens ${target.name}.`, details: { unlocked: true } };
 };
 ```

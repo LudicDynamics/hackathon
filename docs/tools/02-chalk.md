@@ -582,8 +582,8 @@ details: { path, created: true, appended: false, name, layer, linkFailure: { to,
 | `packages/shared/src/actions/chalk.ts` | 新建 | `import { linkCards } from './canvas.js'`（§2.6 的顺手连线；**跨模块调用已获 `01` 许可**，见 `b1-design-01` 复核回执） |
 | `extensions/toolkit/chalk.ts` | 新建（本文 §8.2） | `deriveTitle(body)`（工具壳的推导，**不在动作层**：动作层按 `01 §5` 收 required `title`） |
 | `packages/shared/src/actions/service.ts` | 改（01 的骨架） | 绑定 `writeChalk: (i) => writeChalk(this.ctx, i)` |
-| `packages/shared/src/schemas/frontmatter.ts` | 改 | 新增 `yamlScalar` / `stringifyEntityFrontmatter` / `stringifyChalkFile`（§4.3）；修补 `parseFrontmatter` 的注释剥离与 `type` 判定（§4.3 注） |
-| `packages/shared/src/schemas/frontmatter.ts` | 改 | `ChalkFrontmatterSchema` → **保留**（向后兼容），但互动字段改由 `06` 的通用 `InteractiveFieldsSchema` 承担；`ChalkFrontmatterSchema = BaseEntitySchema.and(InteractiveFieldsSchema).passthrough()`（`doc-20 §2` 的形状） |
+| `packages/shared/src/actions/chalk.ts` | 新建 | **实现期落地**：`yamlScalar` / `stringifyEntityFrontmatter` / `stringifyChalkFile`（§4.3）落在 chalk 动作模块内（不在 `schemas/frontmatter.ts`——那是本文原设想；这三个是 chalk 专用的冻结键序整形器，与动作同生命周期）；另加一个**中性 writer** `stringifyFrontmatter(fm, body)`（peer 请求、给 10 的 handler 用）。`schemas/frontmatter.ts` 负责 `parseFrontmatter`（yaml 版，归 06）。 |
+| `packages/shared/src/schemas/frontmatter.ts` | 全量重写（归 06） | `ChalkFrontmatterSchema` / `ChalkStatus` / `ChalkFrontmatter` **删除**（保留它就会有人拿去 parse 非 chalk 实体 → 直接失败，`06 §11 冲突 7`）；互动字段改由通用 `InteractiveFieldsSchema` 承担。`02` 只保留一个**动作层输入类型** `ChalkFrontmatterInput`（`actions/chalk.ts:48`），不是 schema。 |
 | `packages/shared/src/index.ts` | 改 | 若 `actions/*` 需从包根导出（`writeChalk` 供 `extensions/` 用），加 `export * from './actions/service.js'`（`12` 的活；本文只登记依赖） |
 | `extensions/toolkit/chalk.ts` | **新建** | `registerChalkTool(pi)`：`Type.Object` 参数、`promptSnippet`/`promptGuidelines`、`execute` 里调 `createActionService(store, actor)` 的 `writeChalk`，`ActionError` → `isError:true` |
 | `extensions/tools.ts` | 改（`12` 的骨架） | import 并调用 `registerChalkTool(pi)` |
