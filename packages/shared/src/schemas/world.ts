@@ -16,6 +16,7 @@ export const LayerConfigSchema = z.object({
 
 export const CharacterConfigSchema = z.object({
   id: z.string(),
+  name: z.string().optional(),
   home: z.string(),
   role: z.enum(['companion', 'npc']).or(z.string()).optional(),
   avatar: z.string().optional(),

@@ -16,6 +16,7 @@ import { preloadAudio } from './lib/audio.js';
 
 interface WorldManifest {
   id: string;
+  locale?: 'en' | 'ja' | 'zh-CN';
   name: string;
   description: string;
   genre: string;
@@ -36,6 +37,7 @@ interface BackpackItem {
 
 interface CharacterView {
   id: string;
+  name?: string;
   home?: string;
   role?: string;
   avatar?: string;
@@ -46,6 +48,8 @@ interface CharacterView {
 type Attention = 'ambient' | 'authoring';
 
 function labelOf(value: string): string {
+  if (value === 'first-snow-jp') return '初雪ラジオ · 日本語';
+  if (value.startsWith('first-snow-jp-')) return `初雪ラジオ · ${value.slice('first-snow-jp-'.length)}`;
   const tail = value.split('/').filter(Boolean).at(-1) || value;
   return tail
     .split('-')
@@ -67,6 +71,9 @@ function sceneName(manifest: WorldManifest | null, layer: string): string {
 export function App() {
   const { locale, setLocale, t } = useLocale();
   const [manifest, setManifest] = useState<WorldManifest | null>(null);
+  useEffect(() => {
+    if (manifest?.locale === 'ja') setLocale('ja');
+  }, [manifest?.id, manifest?.locale, setLocale]);
   const [backpack, setBackpack] = useState<BackpackItem[]>([]);
   const [characters, setCharacters] = useState<CharacterView[]>([]);
   const [shelf, setShelf] = useState<WorldShelf>({ templates: [], worlds: [] });
@@ -344,7 +351,7 @@ export function App() {
         <section className="prototype-world" aria-label={t("Spatial story canvas")}>
           <Canvas
             key={manifest?.id || 'opening'}
-            openingComposition={['wuwu', 'whitechapel', 'divergence', 'firstsnow'].includes(manifest?.id || '')}
+            openingComposition={manifest?.locale === 'ja' || ['wuwu', 'whitechapel', 'divergence', 'firstsnow'].includes(manifest?.id || '')}
             effectsEnabled={effectsEnabled}
             currentLayer={layer}
             items={canvasItems}
@@ -413,11 +420,11 @@ export function App() {
                 key={character.id}
                 className="prototype-hand-orb"
                 onClick={() => openCharacter(character)}
-                title={t('Talk to {name}', { name: character.id })}
+                title={t('Talk to {name}', { name: character.name || character.id })}
                 style={assetUrl(character.avatar) ? { backgroundImage: `url("${assetUrl(character.avatar)}")` } : undefined}
               >
                 {!assetUrl(character.avatar) && <span>{character.id.charAt(0).toUpperCase()}</span>}
-                <small>{labelOf(character.id)}</small>
+                <small>{character.name || labelOf(character.id)}</small>
               </button>
             ))}
           </div>
@@ -457,10 +464,10 @@ export function App() {
               key={companion.id}
               className="prototype-companion-orb"
               onClick={() => openCharacter(companion)}
-              aria-label={t('Talk to {name}', { name: companion.id })}
+              aria-label={t('Talk to {name}', { name: companion.name || companion.id })}
               style={assetUrl(companion.avatar) ? { backgroundImage: `url("${assetUrl(companion.avatar)}")` } : undefined}
             >
-              {!assetUrl(companion.avatar) && companion.id.charAt(0).toUpperCase()}<i /><small>{labelOf(companion.id)}</small>
+              {!assetUrl(companion.avatar) && companion.id.charAt(0).toUpperCase()}<i /><small>{companion.name || labelOf(companion.id)}</small>
             </button>
           ))}
           </div>
@@ -494,7 +501,7 @@ export function App() {
           <section className="prototype-world-picker" role="dialog" aria-modal="true" aria-label={t("Choose a world")} onClick={(event) => event.stopPropagation()}>
             <span className="prototype-eyebrow">{t("WORLD SHELF")}</span>
             <h2>{t("Choose a world")}</h2>
-            {[...shelf.templates.map((id) => ({ id, path: `templates/${id}`, kind: 'Template' })), ...shelf.worlds.map((id) => ({ id, path: `worlds/${id}`, kind: 'Your world' }))].map((entry) => (
+            {[...shelf.templates.filter(id => id !== 'firstsnow' || !shelf.templates.includes('first-snow-jp')).map((id) => ({ id, path: `templates/${id}`, kind: 'Template' })), ...shelf.worlds.map((id) => ({ id, path: `worlds/${id}`, kind: 'Your world' }))].map((entry) => (
               <button key={entry.path} onClick={() => void loadWorld(entry.path)} disabled={loadingWorld !== null}>
                 <b>{labelOf(entry.id)}</b>
                 <span>{t(entry.kind)}{loadingWorld === entry.path ? t(' · opening…') : ''}</span>
@@ -510,6 +517,7 @@ export function App() {
       {activeCharacter && (
         <CharacterModal
           characterId={activeCharacter.id}
+          displayName={activeCharacter.name}
           avatar={assetUrl(activeCharacter.avatar)}
           bio={activeCharacter.bio || activeCharacter.description}
           onClose={closeCharacter}

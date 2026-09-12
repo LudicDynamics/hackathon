@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "first-snow-jp-sumi-yukimura",
+  "name": "雪村澄",
+  "description": "デビューしたばかりの歌手。今夜は、仕事ではない四十分を過ごしたい。",
+  "items": [
+    {
+      "kind": "slot",
+      "id": "character-instruction",
+      "slot": "system-char"
+    },
+    {
+      "kind": "slot",
+      "id": "world-language",
+      "slot": "file",
+      "options": {
+        "path": "language.md",
+        "baseDir": "cwd",
+        "onMissing": "skip"
+      }
+    },
+    {
+      "kind": "slot",
+      "id": "profile",
+      "slot": "file",
+      "options": {
+        "path": [
+          "README.md",
+          "identity.md",
+          "personality.md",
+          "memory.md"
+        ],
+        "baseDir": "characters/sumi-yukimura",
+        "stripFrontmatter": true,
+        "onMissing": "skip"
+      }
+    },
+    {
+      "kind": "slot",
+      "id": "chat-history",
+      "slot": "chat-history"
+    }
+  ]
+}
