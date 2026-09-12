@@ -137,11 +137,13 @@ wss.on('connection', (ws: WebSocket) => {
         }
       } else if (data.type === 'airp_init') {
         // Initialization trigger (docs/init/03): hand the request to the writer
-        // process as an extension command. Fire-and-forget: the RPC send timeout
-        // (~30s) is SHORTER than the 45–60s spawn the command runs, so awaiting
-        // the reply would report success as a timeout (docs/init/00 §2.3). The
-        // outcome returns through the events table (`layer_initialized`), which
-        // the client already consumes as a `world_event`.
+        // process as an extension command. Fire-and-forget: the command returns an
+        // ack as soon as it is recognised (pi-rp acknowledges on acceptance, not on
+        // handler completion — see docs/rpc.md), but the *result* only exists once
+        // the 45–60s generation lands, so blocking this WS handler on it would be
+        // wrong regardless. The outcome returns through the events table
+        // (`layer_initialized` / `layer_init_failed`), which the client already
+        // consumes as a `world_event`.
         const writer = lifecycle.getWriter();
         if (!writer) {
           ws.send(JSON.stringify({ type: 'error', source: 'writer', message: 'Writer agent is not running' }));
