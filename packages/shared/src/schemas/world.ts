@@ -33,6 +33,8 @@ export const WorldManifestSchema = z.object({
   tags: z.array(z.string()).default([]),
   genre: z.string(),
   material: z.string().default('parchment'),
+  /** First playable layer. `map` remains the filesystem root fallback. */
+  entry: z.string().min(1).default('map'),
   extensions: z.array(WorldExtensionSchema).default([]),
   // `layers` is DERIVED from the directory tree (see store/layers.ts), but the
   // manifest type still carries it for consumers. Not required in world.json:

@@ -14,6 +14,7 @@ import { useAudio } from './state/useAudio.js';
 import { useCamera } from './state/useCamera.js';
 import { useWorld } from './state/useWorld.js';
 import { preloadAudio } from './lib/audio.js';
+import { UI_COPY, type Locale } from './lib/i18n.js';
 
 interface WorldManifest {
   id: string;
@@ -23,6 +24,9 @@ interface WorldManifest {
   layers: Record<string, any>;
   characters: any[];
   audio?: { theme: string | null };
+  entry: string;
+  locale?: Locale;
+  player?: { id?: string; name?: string; avatar?: string };
 }
 
 export function App() {
@@ -31,6 +35,12 @@ export function App() {
   const [characters, setCharacters] = useState<any[]>([]);
   const [followingCharacters, setFollowingCharacters] = useState<Record<string, boolean>>({});
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [locale, setLocale] = useState<Locale>(() =>
+    navigator.language.toLowerCase().startsWith('ja') ? 'ja' : 'en'
+  );
+  const [worldTemplates, setWorldTemplates] = useState<string[]>([]);
+  const [activeTemplate, setActiveTemplate] = useState('whitechapel');
+  const copy = UI_COPY[locale];
 
   // Active Character Modal (Galgame Overlay)
   const [activeModalCharId, setActiveModalCharId] = useState<string | null>(null);
@@ -75,9 +85,13 @@ export function App() {
   // Camera memory around the modal mask (P0: save before opening, restore after).
   const openCharacterModal = (charId: string) => {
     camera.save('modal');
+    sendMessage({ type: 'character_start', characterId: charId });
     setActiveModalCharId(charId);
   };
   const closeCharacterModal = () => {
+    if (activeModalCharId) {
+      sendMessage({ type: 'character_stop', characterId: activeModalCharId });
+    }
     setActiveModalCharId(null);
     camera.restore('modal');
   };
@@ -91,6 +105,7 @@ export function App() {
   // Initial Data Fetch (layer itself is fetched by useWorld)
   useEffect(() => {
     fetchManifest();
+    fetchWorlds();
     fetchBackpack();
     fetchCharacters();
   }, []);
@@ -108,9 +123,45 @@ export function App() {
       if (res.ok) {
         const data = await res.json();
         setManifest(data);
+        if (data.locale === 'en' || data.locale === 'ja') setLocale(data.locale);
+        if (typeof data.entry === 'string' && data.entry !== '') enterLayer(data.entry);
       }
     } catch (err) {
       console.warn('Could not fetch manifest:', err);
+    }
+  };
+
+  const fetchWorlds = async () => {
+    try {
+      const res = await fetch('/api/worlds');
+      if (!res.ok) return;
+      const data = await res.json();
+      const playable = new Set(['whitechapel', 'firstsnow']);
+      setWorldTemplates(
+        Array.isArray(data.templates) ? data.templates.filter((name: string) => playable.has(name)) : []
+      );
+    } catch (err) {
+      console.warn('Could not fetch worlds:', err);
+    }
+  };
+
+  const handleWorldChange = async (template: string) => {
+    try {
+      const res = await fetch('/api/worlds/load', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ worldPath: `templates/${template}` }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not load world');
+      setActiveTemplate(template);
+      if (data.manifest?.locale === 'en' || data.manifest?.locale === 'ja') {
+        setLocale(data.manifest.locale);
+      }
+      enterLayer(data.manifest?.entry || 'map');
+      await Promise.all([fetchManifest(), fetchBackpack(), fetchCharacters()]);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -139,8 +190,22 @@ export function App() {
   };
 
   // Switch Layer / Gate
-  const handleEnterGate = (target: string) => {
-    enterLayer(target);
+  const handleEnterGate = async (target: string) => {
+    try {
+      const res = await fetch('/api/enter-layer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ layer: target }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'This scene is still locked.');
+        return;
+      }
+      enterLayer(target);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err));
+    }
   };
 
   // Back one level: follow the DERIVED parent (manifest layer graph), never
@@ -148,7 +213,7 @@ export function App() {
   // a non-existent pseudo-layer whose page held no children — the map's doors
   // vanished, leaving only the world README. `map` is the root (parent null).
   const handleReturnToParent = useCallback(() => {
-    if (currentLayer === 'map') return;
+    if (currentLayer === (manifest?.entry || 'map')) return;
     const parent = manifest?.layers?.[currentLayer]?.parent;
     enterLayer(typeof parent === 'string' && parent ? parent : 'map');
   }, [currentLayer, manifest, enterLayer]);
@@ -165,11 +230,39 @@ export function App() {
   }, [handleReturnToParent]);
 
   // Choice Selection
-  const handleSelectChoice = async (choice: string) => {
+  const handleSelectChoice = async (choicePath: string, choice: string) => {
     showToast(`You chose: "${choice}"`);
+    const res = await fetch('/api/choice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: choicePath, choice }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      showToast(data.error || 'The choice could not be recorded.');
+      return;
+    }
     sendToWriter(
-      `The player, in scene "${currentLayer}", chose the advancing option: "${choice}".`
+      `The player, in scene "${currentLayer}", chose "${choice}" on ${choicePath}. Continue from that concrete action and materialise any resulting change in the world files.`
     );
+  };
+
+  const handleTakeItem = async (itemPath: string) => {
+    const filename = itemPath.split('/').pop();
+    if (!filename) return;
+    try {
+      const res = await fetch('/api/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: itemPath, to: `player/${filename}` }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not take item');
+      showToast(`${copy.taken}: ${filename.replace('.md', '')}`);
+      await Promise.all([refresh(), fetchBackpack()]);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err));
+    }
   };
 
   // Point-and-Click item drop puzzle: use_item_on
@@ -181,9 +274,8 @@ export function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          itemPath: draggedItemPath,
-          targetPath,
-          targetType: 'card',
+          item: draggedItemPath,
+          target: targetPath,
         }),
       });
       const data = await res.json();
@@ -263,7 +355,7 @@ export function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'create',
-          filePath,
+          path: filePath,
           content: fileContent,
         }),
       });
@@ -301,6 +393,13 @@ export function App() {
       <header className="h-16 px-6 bg-paper-card/90 border-b border-ink/10 shadow-sm backdrop-blur-md flex items-center justify-between z-30 shrink-0">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
+            {manifest?.player?.avatar && (
+              <img
+                src={manifest.player.avatar}
+                alt={manifest.player.name || 'Player'}
+                className="w-9 h-9 rounded-full object-cover border border-rust/30 shadow-sm"
+              />
+            )}
             <Compass className="w-5 h-5 text-rust" />
             <h1 className="font-serif text-lg font-bold tracking-wide text-ink">
               {manifest?.name || 'AIRP · Infinite Canvas World'}
@@ -311,13 +410,26 @@ export function App() {
             {manifest?.genre || 'narrative'}
           </span>
 
+          <label className="flex items-center gap-1.5 font-mono text-[10px] text-ink/50">
+            <span>{copy.world}</span>
+            <select
+              value={activeTemplate}
+              onChange={(e) => void handleWorldChange(e.target.value)}
+              className="bg-paper-wall border border-ink/10 rounded-lg px-2 py-1 text-ink"
+            >
+              {worldTemplates.map((template) => (
+                <option key={template} value={template}>{template}</option>
+              ))}
+            </select>
+          </label>
+
           {/* Layer Breadcrumb Navigation */}
           <div className="flex items-center gap-2 pl-4 border-l border-ink/10">
-            {currentLayer !== 'map' && (
+            {currentLayer !== (manifest?.entry || 'map') && (
               <button
                 onClick={handleReturnToParent}
                 className="p-1 rounded-lg bg-paper-wall hover:bg-ink hover:text-white transition-all text-xs"
-                title="Back one layer"
+                title={copy.back}
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
               </button>
@@ -332,15 +444,28 @@ export function App() {
         {/* Center Minimalist World Timestamp Seal */}
         <div className="flex items-center gap-2 px-3.5 py-1 rounded-full bg-paper-wall/60 border border-ink/5 font-mono text-xs text-ink/70">
           <Clock className="w-3.5 h-3.5 text-rust" />
-          <span>Day 1 · Rain Subsides 17:40</span>
+          <span>{copy.timestamp}</span>
         </div>
 
         {/* Right God Mode + Mute */}
         <div className="flex items-center gap-3">
-          <MuteButton />
+          <button
+            type="button"
+            onClick={() => setLocale((value) => (value === 'en' ? 'ja' : 'en'))}
+            className="px-3 py-1.5 rounded-full bg-paper-wall border border-ink/10 text-xs font-mono hover:bg-ink hover:text-white transition-colors"
+          >
+            {copy.language}
+          </button>
+          <MuteButton muteLabel={copy.mute} unmuteLabel={copy.unmute} />
           <GodModeToolbar
             frozen={worldFrozen}
             onToggleFreeze={handleToggleFreeze}
+            labels={{
+              active: copy.godHand,
+              frozen: copy.worldFrozen,
+              pauseTitle: copy.pauseWorld,
+              thawTitle: copy.thawWorld,
+            }}
           />
         </div>
       </header>
@@ -353,6 +478,12 @@ export function App() {
             items={worldState?.items ?? []}
             links={worldState?.links ?? []}
             bg={worldState?.bg ?? { src: null, tone: 'warm', grain: 'parchment' }}
+            scene={worldState?.scene ?? null}
+            sceneCopy={{
+              label: copy.sceneChalk,
+              collapse: copy.collapseScene,
+              expand: copy.expandScene,
+            }}
             onMoveCard={moveCard}
             onSelectChoice={handleSelectChoice}
             onDiceRolled={(res, pass) => showToast(`Dice: ${res} (${pass ? 'Pass' : 'Fail'})`)}
@@ -360,6 +491,7 @@ export function App() {
             onOpenCharacterModal={openCharacterModal}
             onItemDropOnTarget={handleItemDropOnTarget}
             onDropItemToScene={handleDropItemToScene}
+            onTakeItem={handleTakeItem}
             onOpenRadialMenu={(x, y, wx, wy) => setRadialState({ x, y, worldX: wx, worldY: wy })}
           />
 
@@ -367,16 +499,19 @@ export function App() {
           <LayerBadge
             name={manifest?.layers?.[currentLayer]?.name || currentLayer}
             material={worldState?.bg?.grain ?? 'parchment'}
+            materialLabel={copy.material}
           />
-          <HintBar />
+          <HintBar text={copy.controls} showLabel={copy.showControls} hideLabel={copy.hideControls} />
           <WriterBar
             disabled={worldFrozen}
+            placeholder={copy.writerPlaceholder}
+            sendLabel={locale === 'ja' ? '送信' : 'Send'}
             onSend={(text) => {
               sendToWriter(text);
-              showToast('Sent to the writer');
+              showToast(copy.sentToWriter);
             }}
           />
-          <Minimap items={worldState?.items ?? []} camera={camera} />
+          <Minimap items={worldState?.items ?? []} camera={camera} label={copy.minimap} />
         </div>
 
 
@@ -385,7 +520,8 @@ export function App() {
           backpackItems={backpackItems}
           characters={characters}
           followingCharacters={followingCharacters}
-          onNavigateToCharacter={(home) => enterLayer(home)}
+          copy={copy}
+          onNavigateToCharacter={(home) => void handleEnterGate(home)}
           onChatWithCharacter={openCharacterModal}
           onToggleFollow={(charId) => {
             setFollowingCharacters((prev) => ({
@@ -403,6 +539,7 @@ export function App() {
           characterId={activeChar.id}
           avatar={activeChar.avatar}
           bio={activeChar.bio}
+          locale={locale}
           onClose={closeCharacterModal}
           onSendMessage={(msg) => {
             sendMessage({

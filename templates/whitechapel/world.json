@@ -1,0 +1,31 @@
+{
+  "id": "whitechapel-letters",
+  "name": "Letters from Whitechapel",
+  "version": "0.1.0",
+  "schema": 1,
+  "description": "You are Sherlock Holmes. Stop the fourth illustration before noon.",
+  "author": "AIRP",
+  "genre": "mystery",
+  "locale": "en",
+  "entry": "world/intro",
+  "cover": "/api/asset?path=assets/backgrounds/intro.webp",
+  "material": "parchment",
+  "audio": { "theme": "whitechapel" },
+  "tags": ["mystery", "victorian", "demo"],
+  "characters": [
+    {
+      "id": "watson",
+      "home": "world/intro",
+      "role": "companion",
+      "avatar": "/api/asset?path=assets/characters/watson.webp",
+      "description": "Your oldest friend, caught between a doctor's promise and a fourth murder."
+    }
+  ],
+  "player": {
+    "id": "sherlock-holmes",
+    "name": "Sherlock Holmes",
+    "avatar": "/api/asset?path=assets/characters/holmes.webp"
+  },
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z"
+}

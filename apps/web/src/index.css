@@ -1523,3 +1523,90 @@ body:before {
     box-shadow: none;
   }
 }
+/* Current-folder README: the scene's fixed entry Chalk. It floats above the
+   world transform so a player can always recover the scene premise after pan. */
+.scene-chalk {
+  position: absolute;
+  left: 28px;
+  top: 28px;
+  z-index: 22;
+  width: min(470px, calc(100% - 56px));
+  max-height: calc(100% - 130px);
+  overflow: auto;
+  padding: 18px 20px 20px;
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  border-radius: 6px 18px 8px 16px;
+  background: color-mix(in srgb, var(--cream) 91%, transparent);
+  box-shadow: 0 18px 52px rgba(43, 33, 23, 0.14);
+  backdrop-filter: blur(14px);
+  user-select: text;
+}
+
+.scene-chalk--folded {
+  width: auto;
+  max-height: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 13px;
+  color: var(--ink);
+  font: 600 10px/1.2 'DM Mono', monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.scene-chalk__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  color: color-mix(in srgb, var(--ink) 56%, transparent);
+  font: 600 10px/1.2 'DM Mono', monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.scene-chalk__head button {
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.scene-chalk__head button:hover {
+  color: var(--cream);
+  background: var(--ink);
+}
+
+.scene-chalk .chalk {
+  width: 100%;
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.note__take {
+  margin-top: 12px;
+  padding: 6px 11px;
+  border: 1px solid color-mix(in srgb, var(--rust) 55%, transparent);
+  border-radius: 999px;
+  color: var(--rust);
+  font: 600 10px/1 'DM Mono', monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.note__take:hover {
+  color: var(--cream);
+  background: var(--rust);
+}
+
+@media (max-width: 900px) {
+  .scene-chalk {
+    left: 16px;
+    top: 16px;
+    width: min(390px, calc(100% - 32px));
+  }
+}

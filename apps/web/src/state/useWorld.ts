@@ -31,6 +31,7 @@ export interface PresenceEntry {
 
 export interface LayerState {
   layer: string;
+  scene: LayerItem | null;
   bg: { src: string | null; tone: string; grain: string };
   audio: { ambient: string | null; bgm: string | null };
   items: LayerItem[];
@@ -86,6 +87,7 @@ export function useWorld(): UseWorldApi {
       if (seq !== reqSeqRef.current) return; // stale response (layer switched meanwhile)
       const next: LayerState = {
         layer: data.layer,
+        scene: data.scene ?? null,
         bg: data.bg ?? { src: null, tone: 'warm', grain: 'parchment' },
         audio: data.audio ?? { ambient: null, bgm: null },
         items: Array.isArray(data.items) ? data.items : [],

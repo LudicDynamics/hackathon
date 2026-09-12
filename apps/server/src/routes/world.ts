@@ -24,6 +24,10 @@ interface LayerItem {
   body: string;
 }
 
+interface SceneReadme extends LayerItem {
+  kind: 'scene';
+}
+
 /**
  * One HTTP request = one `turn` anchor (docs/tools/01 §3.7, C entry).
  *
@@ -345,14 +349,28 @@ export function createWorldRouter(
         };
       });
 
+      // The layer's own README is its entry Chalk as well as its scene config.
+      // It is returned separately from `items`: the same README is a gate on
+      // the parent page, so seating it again here would create one path with two
+      // incompatible positions.
+      let scene: SceneReadme | null = null;
+
       // bg + audio from the layer README frontmatter (doc-10 E0; docs/audio/00 §3).
       let bg: { src: string | null; tone: string; grain: string } = { src: null, tone: 'warm', grain: 'parchment' };
       let audio: { ambient: string | null; bgm: string | null } = { ambient: null, bgm: null };
       try {
         const readmePath = layer === 'map' ? 'world/README.md' : `${layer}/README.md`;
         const raw = await store.readFile(readmePath);
+        const parsedReadme = parseFrontmatter(raw);
+        scene = {
+          path: readmePath,
+          filename: 'README.md',
+          frontmatter: parsedReadme.frontmatter,
+          body: parsedReadme.body,
+          kind: 'scene',
+        };
         bg = readLayerBg(raw);
-        const ownFm = parseFrontmatter(raw).frontmatter;
+        const ownFm = parsedReadme.frontmatter;
         const own = readLayerAudio(ownFm, store, AUDIO_ROOT);
         audio = own;
         // Inheritance is keyed on DECLARATION, not on resolution: `??` cannot tell
@@ -398,7 +416,7 @@ export function createWorldRouter(
         following: Number(row.following) === 1,
       }));
 
-      res.json({ layer, bg, audio, items: enriched, links, presence, worldFrozen });
+      res.json({ layer, scene, bg, audio, items: enriched, links, presence, worldFrozen });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -409,7 +427,7 @@ export function createWorldRouter(
     const store = getActiveStore();
     if (!store) return res.status(400).json({ error: 'No active world' });
     try {
-      const allFiles = await store.listFiles('player');
+      const allFiles = (await store.listFiles('player')).filter((file) => file !== 'player/README.md');
       const items = await Promise.all(
         allFiles.map(async (file) => {
           const raw = await store.readFile(file);
@@ -576,6 +594,52 @@ export function createWorldRouter(
     if (typeof layer !== 'string' || layer === '') {
       return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'layer must be a non-empty layer id' });
     }
+    // P0 gate contract: a target README may require exact backpack paths.
+    // Later requirement axes (facts / companions / adjudicated RP) will extend
+    // this block without changing the README-as-gate source of truth.
+    const readmePath = layer === 'map' ? 'world/README.md' : `${layer}/README.md`;
+    if ((await store.statKind(readmePath)) === 'file') {
+      const parsed = parseFrontmatter(await store.readFile(readmePath));
+      if (parsed.errors.length > 0) {
+        return res.status(409).json({
+          ok: false,
+          code: 'invalid_gate',
+          error: `This scene cannot be entered because its README is invalid: ${parsed.errors[0]}`,
+        });
+      }
+      const rawItems = parsed.frontmatter?.requires?.items;
+      const requiredItems = Array.isArray(rawItems)
+        ? rawItems.filter((item): item is string => typeof item === 'string' && item !== '')
+        : [];
+      const invalidItem = requiredItems.find(
+        (item) => !item.startsWith('player/') || !item.endsWith('.md') || item.split('/').includes('..')
+      );
+      if (invalidItem) {
+        return res.status(409).json({
+          ok: false,
+          code: 'invalid_gate',
+          error: `Gate requirements must name player/*.md backpack paths, got: ${invalidItem}`,
+        });
+      }
+      const missing: string[] = [];
+      for (const item of requiredItems) {
+        if ((await store.statKind(item)) !== 'file') missing.push(item);
+      }
+      if (missing.length > 0) {
+        const blocked = parsed.frontmatter?.blocked;
+        return res.status(409).json({
+          ok: false,
+          code: 'requirements_not_met',
+          error:
+            typeof blocked === 'string' && blocked.trim() !== ''
+              ? blocked
+              : `This scene is still locked. Missing: ${missing.join(', ')}`,
+          missing,
+        });
+      }
+    }
+    // A stub has no README yet; entering it is what asks the world to
+    // materialise one, so absence must not become an artificial lock.
     await reply(res, () => serviceFor(store, { type: 'player' }).enterLayer({ layer }));
   });
 
