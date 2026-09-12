@@ -63,15 +63,17 @@ apps/
 packages/shared/src/    # schema + store + sqlite + 动作层
   schemas/              # world / frontmatter（互动字段通用化）/ components / events / forms / canvas
   store/                # local-store（fs + canvas.db + history.db）/ layers（层树派生）/ world-store（接口）
-  db/schema.ts          # 两库建表：cards / links / presence / entries / events(seq) / read_cursors
+  inject/               # 每轮注入：turn-cache（轮边界单槽缓存）/ collect（分节采集 + 备忘录 + 三步 fail-soft）
+  db/schema.ts          # 两库建表：cards / links / presence / viewpoint / entries / events(seq) / read_cursors
   rules/                # 零依赖纯规则：dice（expect 解析）/ interactive（choice 归一化）
-  render/               # 文本视图：spatial（人话方位）/ layer-page（目录展开）——look_at 与状态块共用
+  render/               # 文本视图：spatial（人话方位）/ layer-page（目录展开）/ state（注入块装配）/ sections（分节表）/ events（事件人话）/ next-step（"下一步"）/ viewpoint（视点量化）/ sanitise（注入面消毒）——look_at、状态块与前端共用
   components/           # 官方组件注册表（kind / schema / CARD_FORMS 联动 / use_item handler）
   actions/              # 动作层：createActionService(store, actor) —— server 路由与扩展工具的唯一共同入口
 presets/                # 提示词预设：writer, character, scene-init, nook-init
 extensions/
   instructions.ts       # 平台提示词正文（slot writer-char / system-char / scene-init-instruction / nook-init-instruction）
   tools.ts              # 唯一 registerTool 入口：注册 AIRP 动作工具（extensions/toolkit/ 是 jiti 直跑的薄壳）
+  context.ts            # 每轮注入（状态块 + 事件段 + "下一步"），挂 `context` 钩子（临时不落盘）；按 AIRP_AGENT_ROLE 分节（writer 6 节 / character 4 节）
   toolkit/              # 工具壳 + 共享 helper（deps/actor/turn/result）——子目录，不会被当扩展加载
 skills/                 # 项目级 skills：跨世界通用手艺（生图 / 组件叙事 / 节奏 / 玩法咬合）
 templates/              # 开箱世界模板；whitechapel（英文）/ firstsnow（日文）为首条可玩竖切
@@ -82,6 +84,8 @@ tools/probe-writer.mjs  # 全链路探针（pnpm probe）
 tools/probe-tools.mjs   # 工具面探针：jiti 载入 extensions/tools.ts，断言注册表 + 真执行（pnpm probe:tools）
 tools/probe-tools-engine.mjs # 工具面探针（强形式）：真 spawn 引擎，断言 AIRP 工具被引擎执行（pnpm probe:tools 的第二段）
 tools/pi-rp.mjs         # pi-rp 子模块工作流（pnpm pi status|build|update|commit，见 §7.2）
+tools/probe-inject.mjs  # 注入探针：真 spawn 作家引擎，断言每请求恰好一份注入块、且不落盘（pnpm probe:inject）
+tools/inject-probe-provider.ts # 注入探针的确定性 provider（把每个请求的 wire messages 落文件）
 docs/                   # 设计文档（真相源）；docs/tools/ 是 B1 工具面设计 + 评审报告
 vendor/pi-rp/           # 叙事引擎 submodule
 ```
@@ -98,17 +102,18 @@ graph LR
   S --> L["engine/lifecycle<br/>进程编排"]
   L -->|"JSONL commands / stdio（pi-rp RpcClient）"| P["vendor/pi-rp<br/>pi 引擎（作家 / 角色 agent）"]
   P -->|"extensions/tools.ts 注册 AIRP 工具"| A
+  P -->|"extensions/context.ts 挂 `context` 钩子"| SB["每轮注入状态块<br/>状态块 + 事件段 + 下一步<br/>临时不落盘"]
   A -->|"落盘 + 落账"| FS["世界目录<br/>*.md + world.json"]
   A --> DB[".airpworld/<br/>canvas.db + history.db"]
   P -.->|"读取"| PR["presets/*.json<br/>→ .airpworld/prompt-presets/"]
 ```
 
-**动作层是 UI 与 Agent 的唯一共同入口**（`docs/doc-20` §12）：server 路由与扩展工具**各自 new 一个 `WorldStore`**，但都调同一个 `createActionService(store, actor)` 的动作函数——所以玩家点击与作家/角色的工具调用不可能跑出两套骰子 / 移动 / choice 语义。动作函数是 transport-free 的（不碰 HTTP、不碰 WS），**工具自己落账**；扩展进程不假设连着 WS。
-
 ### 3.1 单轮管线（作家）
 
 Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → write/edit 演化场景物件 → 轻量收敛。
 **chat history 不进画布，只有 chalk 落板。**
+
+**注入挂 `context` 钩子（不是 `before_agent_start` 的 `message`——那个会被持久化并逐轮累积），只在本次 LLM 请求里存在、不落会话条目。** 每轮注入 = **一个自足的状态块**（当前值，全量）+ **一个事件段**（变化，游标增量）+ **一句"下一步"**（祈使，由事实推出）；三者拼成一条自定义消息追加到消息尾部。重活（扫目录 / 读库 / 渲染）只在**轮边界**（`agent_start`）算一次并缓存，`context` handler 只做字符串拼接与缓存读取。作家 6 节 / 角色 4 节，按 `AIRP_AGENT_ROLE` 选表。协议见 `docs/hooks/00…06`。
 
 ### 3.2 文件即真相
 
@@ -116,6 +121,8 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 分层存储：**内容走文件系统，架构状态与历史走 SQLite**（`canvas.db` / `history.db`）。
 
 **事件是唯一变更来源，`fs.watch` 不落账**：一切写世界的动作先落 `history.db` 的 `events` 表（`seq` 自增主键是唯一游标；五种 `actor`：player/god/writer/character/engine；十五个封闭 `type`，见 `docs/doc-21`）。经过动作函数的工具**自己落账**，扩展的 `tool_result` hook 只兜原生 `write`/`edit`（两份名单 MUST 互斥，否则 chalk 落两次）。`fs.watch` 只做前端重取的触发器。**扩展在 agent 进程、WS 在 server 进程，两者不通**——server 侧**尾部读 `events` 表**（`getEventsSince(lastSeq)`）再把新事件合成 `world_event` 帧广播给前端。
+
+**作家注入的轮边界在 `agent_start`，游标在注入成功后推进**：读取与渲染是轮边界的一次结算；作家游标在**注入成功后**推到 `getMaxSeq()`，角色游标在**关遮罩时**推进（**须 `actor.type === 'writer'` 守卫**，否则角色进程每轮也推作家语义）。详见 `docs/hooks/00` §1 §6。
 
 **state 绝对不做（架构不相容，非排期）**：不引入 `get_state` / `set_state` / `state_update` / `watch_state`，不引入状态文件、状态命名空间、状态栏。理由：那会产生第二个真相源——agent 绕过 `edit` 改状态时 `fs.watch` 与事件表都看不见，同时打穿"文件即真相"与"事件是唯一变更来源"两条地基。详见 `docs/doc-20` §2.3。
 
@@ -146,6 +153,7 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 | `docs/前端改造计划.md` | `apps/web/` 的施工单 |
 | `docs/后端实现计划.md` | `apps/server/` + `extensions/` 的施工单（引擎接通 / 工具面 / Hook 注入 / 角色上下文） |
 | `docs/tools/` | **B1 工具面设计与实现真相源**：`00-共同上下文.md` 是冻结契约（路径/事件/身份/存储/注册/反模式），`01`–`12` 逐个工具的设计，`REVIEW-评审报告.md` 是评审裁决。**动动作层 / 注册工具 / 改路由前必读** |
+| `docs/hooks/` | **B2/B3 每轮注入协议真相源**：`00-共同上下文.md` 是冻结契约（注入接缝/分节/游标/身份/消毒/barrel 反模式），`01`–`06` 逐篇设计，`AUDIT-doc-22体检.md` 记录 doc-22 哪些断言为假。**改 `extensions/context.ts`、注入块、视点链路前必读** |
 | `docs/doc-08~18` | 各专题（多为待完善），实现对应模块前再读 |
 
 **参考实现（都在本项目的兄弟目录，不进本仓库）**：
@@ -168,7 +176,7 @@ pnpm probe                                      # 全链路探针，PASSED 才�
 pnpm dev                                        # 全栈开发（web 5173 / server 3001）
 pnpm probe:tools                                # 工具面探针（注册表断言 + 真引擎执行 AIRP 工具），PASSED 才算工具面没坏
 pnpm typecheck:extensions                       # extensions/ 类型体检（jiti 直跑的 TS 不在 workspace 里）
-node --test packages/shared/test/ apps/server/test/   # 单元/集成测试（.mjs，跑的是已构建的 dist）
+pnpm probe:inject                               # 注入探针（真 spawn 作家引擎，断言每请求恰好一份注入块且不落盘）
 pnpm pi status                                  # pi-rp 子模块 + dist 新鲜度体检（见 §7.2）
 
 node tools/scaffold.mjs --template holmes-world --out worlds/my-holmes
@@ -238,13 +246,15 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 | 协议（frontmatter / WS 消息 / API 路由） | `packages/shared` schema + `docs/doc-09` 或 `doc-05` |
 | 提示词 / preset / 初始化流程 | `presets/*.json` + `docs/doc-11`（**骨架与文件必须逐字一致**） |
 | 交互 / 演出 / 视觉 | `docs/doc-06` / `doc-04`（视觉以 §10 为准） |
+| 注入协议 / 钩子接线 / 分节表 | `docs/hooks/00…06`（冻结契约 `00` 唯一真相源） |
+| 角色 preset 的 compaction | `presets/character.json` + **全部**模板/world 角色 preset（`pnpm test` 的 parity 测试会断言逐字一致） |
 
 文档里已被推翻的说法**直接改掉**，不要另起一段解释——`docs/archive/` 才是存废案的地方。
 
 ### 6.4 收工自检
 
 ```bash
-pnpm build && pnpm probe
+pnpm build && pnpm probe && pnpm probe:inject
 ```
 
 改动涉及引擎或 preset 时，额外确认探针里**没有 `not found` / `unknown slot` 警告**。

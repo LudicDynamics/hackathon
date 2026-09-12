@@ -75,6 +75,20 @@ export interface PresenceRecord {
   updatedAt: string;
 }
 
+/** The player's viewpoint row, decoded (00 §5.1 / 05 §2.3). `focus` is the view CENTRE. */
+export interface ViewpointRecord {
+  /** Layer id verbatim from the browser: 'map' or 'world/<dir>'. */
+  layer: string;
+  /** Viewport centre in world coords, or null when the browser reported no camera. */
+  focus: { x: number; y: number } | null;
+  /** Selected card paths (world-root relative). */
+  selected: string[];
+  /** Player's backpack size at report time; the LIST is section 02's `bag`. */
+  bagCount: number;
+  /** ISO report time, server clock. */
+  at: string;
+}
+
 /** Outcome of presence seating (05 §3.9.3); `exhausted` surfaces the fallback. */
 export interface SeatPresenceResult {
   x: number;
@@ -98,12 +112,12 @@ export interface WorldStore {
 
   // === Event layer (replaces appendWorldEvent; getEvents is kept, seq-ordered) ===
   appendEvent(args: AppendEventArgs): Promise<WorldEvent>;
-  getEventsSince(seq: number, opts?: { layer?: string; excludeActor?: ActorValue }): Promise<WorldEvent[]>;
+  getEventsSince(seq: number, opts?: { layer?: string; excludeActor?: ActorValue; limit?: number }): Promise<WorldEvent[]>;
   getMaxSeq(): Promise<number>;
   readCursor(reader: string): Promise<number>;
   writeCursor(reader: string, seq: number): Promise<void>;
   /** Newest-first, history panel only (doc-21 §3.1: seq is the cursor, never created_at). */
-  getEvents(limit?: number): Promise<WorldEvent[]>;
+  getEvents(limit?: number, opts?: { layer?: string }): Promise<WorldEvent[]>;
 
   // === Path / file helpers (01 §2.7) ===
   /**
@@ -176,6 +190,22 @@ export interface WorldStore {
   /** One character's row, or null when they have never been placed. */
   getPresenceOf(characterId: string): PresenceRecord | null;
   /**
+   * The singleton viewpoint row, or null when the table is absent / empty / stale
+   * (05 §2.3). SYNCHRONOUS: the only synchronous store read, matching
+   * `getPresence` (it goes through `queryCanvas`).
+   */
+  readViewpoint(now?: number): ViewpointRecord | null;
+  /**
+   * Overwrite the singleton viewpoint row (05 §2.5). The SERVER owns `at`.
+   * Returns the stamped ISO timestamp.
+   */
+  writeViewpoint(v: {
+    layer: string;
+    focus: { x: number; y: number; w: number; h: number } | null;
+    selected: string[];
+    bagCount: number;
+  }): string;
+  /**
    * Physical move the action layer orchestrates: reference rewrite, rename,
    * self-rebase of the moved file's own relative links (04 §3.1 steps 5–7).
    * Lands NO event — `moveEntity` does, with the real actor.
@@ -183,6 +213,11 @@ export interface WorldStore {
   moveFile(from: string, to: string): Promise<{ name: string; rewrote: string[]; dangling: DanglingRef[] }>;
   /** Markdown + child-door ids for a layer's page (see store/layers.ts). */
   pageOfLayer(layerId: string): Promise<{ cards: string[]; doorIds: string[] }>;
+  /**
+   * Newest-first files by mtime under `prefix` (world-relative), capped at `limit`.
+   * Powers `recent_chalk`'s cross-layer ordering (02 §3.1) — the only mtime read.
+   */
+  filesByMtime(prefix: string, limit: number): Promise<string[]>;
 
   // === Canvas state layer (doc-09 §4.2): `canvas.db` only, never an event ===
   /**

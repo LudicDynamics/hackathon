@@ -84,6 +84,26 @@ export function initCanvasDatabase(db: DatabaseSync): void {
   }
 
   db.exec('CREATE INDEX IF NOT EXISTS idx_links_layer ON links(layer, z_index, id);');
+
+  // The player's viewpoint (00 §5.1 / 05 §2.2). NOT part of the world: one
+  // singleton row, never snapshotted, never rolled back, dead after 10 minutes
+  // (the TTL lives in `readViewpoint`, not here). A single-player world
+  // (doc-05 §6) is why one row suffices. New table + `IF NOT EXISTS` — no
+  // shape-probing rebuild here (there is no history to reconcile).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS viewpoint (
+      id         TEXT PRIMARY KEY DEFAULT 'singleton',
+      layer      TEXT NOT NULL DEFAULT '',
+      focus      TEXT NOT NULL DEFAULT '',
+      focus_x    INTEGER NOT NULL DEFAULT 0,
+      focus_y    INTEGER NOT NULL DEFAULT 0,
+      focus_w    INTEGER NOT NULL DEFAULT 0,
+      focus_h    INTEGER NOT NULL DEFAULT 0,
+      selected   TEXT NOT NULL DEFAULT '[]',
+      bag_count  INTEGER NOT NULL DEFAULT 0,
+      at         TEXT NOT NULL
+    );
+  `);
 }
 
 export function initHistoryDatabase(db: DatabaseSync): void {
