@@ -93,6 +93,13 @@ tools/probe-prompt-character.mjs # 提示词 wire 探针（角色侧）：同款
 tools/prompt-dump-provider.ts # 提示词探针的确定性 provider（把每个请求的 wire payload 落文件）
 tools/check-skills.mjs  # skill 语料门禁（pnpm check:skills）：frontmatter 真解析 / 语言分层 / 命名 / 非法工具名
 tools/check-ws-contract.mjs # 跨端 WS 契约门禁（pnpm check:ws）：服务端发射面 ↔ 前端消费面 ↔ 契约表求 diff
+docs/init/              # 初始化执行设计（I1 批次；00 是冻结契约，01–04 分篇，REVIEW-* 三份独立评审）
+extensions/toolkit/init-command.ts # `airp-init` 初始化执行内核（R2 直唤：扩展命令 → ctx.spawnAgent）
+packages/shared/src/rules/characters.ts # 角色 id 校验 + nookIdOf / nookCardPaths（docs/nook §5.2 唯一实现）
+packages/shared/src/rules/emptiness.ts  # isLayerEmpty / isNookEmpty / hasInitProduct（doc-11 §3.1/§4.1）
+packages/shared/src/rules/init-fallback.ts # w2SceneTemplate：W2 零 AI 兜底模板（doc-11 §5）
+packages/shared/src/render/brief.ts # buildSceneInitBrief / buildNookInitBrief（I1 从 apps/server 下沉）
+docs/init/00-共同上下文.md # 初始化执行的冻结契约（命令 / 执行序 / brief 字段 / 边界）
 docs/前端接线体检.md   # 2026-09-12 跨端 WS 契约静默漂移的核实报告（含缺陷分级与文档漂移清单）
 docs/prompts/           # 提示词与 skill 体系设计（00 是冻结契约；01–05 分篇；REVIEW-* 评审报告）
 docs/                   # 设计文档（真相源）；docs/tools/ 是 B1 工具面设计 + 评审报告
@@ -191,6 +198,7 @@ pnpm probe:inject                               # 注入探针（真 spawn 作�
 pnpm check:ws                                   # 跨端 WS 契约门禁（服务端广播面 ↔ 前端消费面 ↔ docs/tools/12 §6.2）
 pnpm check:docs                                 # hooks 文档门禁（symbol ownership / barrel union / file:line 引用）
 pnpm probe:prompt                               # 提示词 wire 探针（作家 + 角色），断言补上的 slot 真的进了模型
+pnpm probe:init                                 # 初始化探针（真 spawn 作家，发 /airp-init，断言产物落盘 + 事件落账 + 幂等 + 零 AI 路径）
 pnpm check:skills                               # skill 语料门禁（frontmatter / 语言分层 / 命名）
 pnpm pi status                                  # pi-rp 子模块 + dist 新鲜度体检（见 §7.2）
 pnpm motion <绿幕.mp4> -o out.webm --scale 360   # 微动立绘 / 背景视频（见 assets/skills/motion-portrait）
@@ -267,13 +275,14 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 | 角色 preset 的 compaction | `presets/character.json` 是**唯一真源模板**（新角色从它复制）；改 `hiddenOverrides.compaction` 必须**同 commit** 铺到 **全部**模板/world 角色 preset，并跑 `apps/server/test/character-preset-parity.test.mjs`（逐字一致，缺一份即静默失效） |
 | 跨端 WS 帧契约（增删帧 / 改载荷 / 前端消费面） | `docs/tools/12` §6.2（唯一帧清单）+ `docs/前端接线体检.md`；跑 `pnpm check:ws`（门禁会因两端不一致而红） |
 | 角色来源的 WS 帧载荷（`characterId`） | `docs/wiring/00` §3（唯一形状源）+ `apps/server/src/engine/{lifecycle,event-bridge}.ts` 的 sink 链 |
+| 初始化执行（`airp-init` 命令 / brief 字段 / 空判定 / W2 兜底） | `docs/init/00`（冻结契约）+ `01…04`；`extensions/toolkit/init-command.ts`、`packages/shared/src/{render/brief,rules/emptiness,rules/init-fallback,rules/characters}.ts`；跑 `pnpm probe:init`（真 spawn 端到端）|
 
 文档里已被推翻的说法**直接改掉**，不要另起一段解释——`docs/archive/` 才是存废案的地方。
 
 ### 6.4 收工自检
 
 ```bash
-pnpm build && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:bodies && pnpm check:docs && pnpm probe:prompt && pnpm check:skills
+pnpm build && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:bodies && pnpm check:docs && pnpm probe:prompt && pnpm check:skills && pnpm probe:init
 ```
 
 `pnpm check:ws` 是**跨端 WS 契约门禁**：服务端广播面、前端消费面、`docs/tools/12 §6.2` 契约三集合求 diff。**改了任何 WS 帧（增删帧名 / 改载荷 / 前端 case）必须让它变绿**——它会把"两端各自绿、合起来死"的漂移抓出来（2026-09-12 实际抓到 14 条）。

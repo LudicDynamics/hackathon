@@ -91,8 +91,18 @@ check(
 check('AIRP_TOOLS is frozen/readonly-shaped', ns.AIRP_TOOL_NAMES.length === ns.AIRP_TOOLS.length);
 
 const container = new Map();
-factory({ registerTool: (t) => container.set(t.name, t), on: () => {} });
+const commands = new Map();
+factory({
+  registerTool: (t) => container.set(t.name, t),
+  registerCommand: (name, opts) => commands.set(name, opts),
+  on: () => {},
+});
 check('registerTool called once per tool', container.size === 15, `n=${container.size}`);
+check(
+  'airp-init command registered exactly once (docs/init/00 §2.2)',
+  commands.size === 1 && commands.has('airp-init') && typeof commands.get('airp-init').handler === 'function',
+  `commands=[${[...commands.keys()]}]`
+);
 check(
   'registry keys == AIRP_TOOL_NAMES (jiti keys by definition.name)',
   JSON.stringify([...container.keys()]) === JSON.stringify(EXPECTED_TOOLS)
@@ -198,7 +208,7 @@ async function passFor(role) {
   process.env.AIRP_AGENT_ROLE = role;
   const tools = new Map();
   const passFactory = await jiti.import(r('extensions/tools.ts'), { default: true });
-  passFactory({ registerTool: (t) => tools.set(t.name, t), on: () => {} });
+  passFactory({ registerTool: (t) => tools.set(t.name, t), registerCommand: () => {}, on: () => {} });
   const ctx = { cwd: root, sessionManager: { getSessionId: () => 'probe-session' } };
   return { call: (name, params) => tools.get(name).execute('probe-call', params, undefined, undefined, ctx) };
 }

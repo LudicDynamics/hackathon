@@ -1,0 +1,279 @@
+/**
+ * `airp-init` — the initialization execution kernel (docs/init/00, doc-11).
+ *
+ * Architecture (docs/init/00 §2.1): pi-rp's subagents are IN-PROCESS —
+ * `ctx.spawnAgent` exists only on the agent process's extension context, never on
+ * the server. So the server triggers initialization by sending the RPC command
+ * `/airp-init <json>` into this process, and this handler does the work here. The
+ * path reuses this process's extensions and skills, so R2's environment matches
+ * R1's (the writer's `subagent` tool) exactly, as doc-11 §2.4 requires.
+ *
+ * The command is the ONE kernel: parse → short-circuit when already filled →
+ * resolve context → build brief → spawn the initializer profile → record the
+ * outcome. R1 never runs this code (the writer delegates directly and shares the
+ * same preset); only the brief *builder* is shared, and it lives in
+ * `packages/shared/src/render/brief.ts`.
+ *
+ * Registration lives in `extensions/tools.ts` (same `initialize` as the tools),
+ * so presets and command share one entry point (docs/init/00 §2.2).
+ */
+import {
+  buildNookInitBrief,
+  buildSceneInitBrief,
+  dirOfLayer,
+  hasInitProduct,
+  isLayerEmpty,
+  isNookEmpty,
+  nookIdOf,
+  parseFrontmatter,
+  w2SceneTemplate,
+  type LocalWorldStore,
+  type WorldManifest,
+} from '../../packages/shared/dist/index.js';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { AIRP_TOOLS } from '../tools.js';
+import { getActionService, worldStore } from './deps.js';
+
+export const INIT_COMMAND = 'airp-init';
+
+/** doc-11 §6.2: a scene may take longer than a nook. Command constants for now. */
+const TIMEOUT_MS = { scene: 60_000, nook: 45_000 } as const;
+
+/** The command's single positional argument, JSON-encoded (docs/init/00 §2.2). */
+export interface InitArgs {
+  kind: 'scene' | 'nook';
+  target: string;
+  request?: string;
+  by: 'player' | 'engine';
+  /** Zero-AI path: land the W2 template without spawning (docs/init/00 §2.3.2). */
+  template?: boolean;
+}
+
+/**
+ * In-flight guard (docs/init/00 §2.3.1). pi-rp runs extension commands
+ * immediately even mid-stream and does NOT serialize prompts, so a double-click
+ * can put two `/airp-init` calls in flight; the emptiness short-circuit only
+ * covers the sequential case. One process, one Set — no cross-process lock needed.
+ */
+const inFlight = new Set<string>();
+
+/** Test seam (probe / unit tests). */
+export function resetInFlightForTests(): void {
+  inFlight.clear();
+}
+
+export function parseInitArgs(raw: string): InitArgs {
+  const parsed: unknown = JSON.parse(raw);
+  if (typeof parsed !== 'object' || parsed === null) throw new Error('args must be a JSON object');
+  const o = parsed as Record<string, unknown>;
+  if (o.kind !== 'scene' && o.kind !== 'nook') throw new Error("kind must be 'scene' or 'nook'");
+  if (typeof o.target !== 'string' || o.target === '') throw new Error('target must be a non-empty string');
+  if (o.by !== 'player' && o.by !== 'engine') throw new Error("by must be 'player' or 'engine'");
+  if (o.request !== undefined && typeof o.request !== 'string') throw new Error('request must be a string');
+  if (o.template !== undefined && typeof o.template !== 'boolean') throw new Error('template must be a boolean');
+  return {
+    kind: o.kind,
+    target: o.target,
+    by: o.by,
+    ...(o.request !== undefined ? { request: o.request } : {}),
+    ...(o.template !== undefined ? { template: o.template } : {}),
+  };
+}
+
+/**
+ * Files referenced by a character preset's file slots that are not on disk yet
+ * (docs/init/00 §4.2). Reads `items[].{slot:'file'}.options.path` — the real
+ * preset shape (`templates/holmes-world/characters/watson/preset.json:47`).
+ */
+async function missingFilesFor(store: LocalWorldStore, nookDir: string): Promise<string[]> {
+  let preset: { items?: Array<{ kind?: string; slot?: string; options?: { path?: unknown } }> };
+  try {
+    preset = JSON.parse(await store.readFile(`${nookDir}/preset.json`));
+  } catch {
+    return [];
+  }
+  const declared: string[] = [];
+  for (const item of Array.isArray(preset.items) ? preset.items : []) {
+    if (item?.kind !== 'slot' || item?.slot !== 'file') continue;
+    const paths = item.options?.path;
+    for (const p of Array.isArray(paths) ? paths : []) {
+      if (typeof p === 'string') declared.push(p);
+    }
+  }
+  if (declared.length === 0) return [];
+  const present = new Set((await store.listFiles(nookDir)).map((f) => f.slice(nookDir.length + 1)));
+  return [...new Set(declared)].filter((name) => !present.has(name));
+}
+
+/** README frontmatter `name`, falling back to the character id. */
+async function displayNameFor(store: LocalWorldStore, nookDir: string, characterId: string): Promise<string> {
+  try {
+    const name = parseFrontmatter(await store.readFile(`${nookDir}/README.md`)).frontmatter?.name;
+    return typeof name === 'string' && name !== '' ? name : characterId;
+  } catch {
+    return characterId;
+  }
+}
+
+/** Parent layer name/path from the derived manifest (docs/init/00 §4.1). */
+function parentLayerOf(
+  manifest: WorldManifest,
+  layer: string
+): { parentLayerName?: string; parentLayerPath?: string } | null {
+  const parent = manifest.layers?.[layer]?.parent ?? null;
+  if (!parent) return null;
+  const name = manifest.layers?.[parent]?.name;
+  return {
+    ...(typeof name === 'string' ? { parentLayerName: name } : {}),
+    parentLayerPath: dirOfLayer(parent),
+  };
+}
+
+/** Write the W2 template files (scene only — a nook failure writes nothing). */
+async function writeW2Scene(store: LocalWorldStore, dir: string, dirName: string): Promise<string[]> {
+  const files = w2SceneTemplate(dirName);
+  const written: string[] = [];
+  for (const [name, body] of Object.entries(files)) {
+    await store.writeFile(`${dir}/${name}`, body);
+    written.push(`${dir}/${name}`);
+  }
+  return written;
+}
+
+async function nookBrief(
+  store: LocalWorldStore,
+  manifest: WorldManifest,
+  characterId: string,
+  dir: string
+): Promise<string> {
+  const entry = manifest.characters.find((c) => c.id === characterId);
+  const displayName = await displayNameFor(store, dir, characterId);
+  const missingFiles = await missingFilesFor(store, dir);
+  return buildNookInitBrief({
+    characterId,
+    displayName,
+    manifest,
+    ...(entry?.description ? { roleDesc: entry.description } : {}),
+    ...(entry?.home ? { home: entry.home } : {}),
+    ...(entry?.role ? { role: entry.role } : {}),
+    ...(missingFiles.length > 0 ? { missingFiles } : {}),
+  });
+}
+
+function report(args: InitArgs, outcome: string): string {
+  return `[airp-init] ${args.kind} "${args.target}" (by ${args.by}): ${outcome}`;
+}
+
+export function registerInitCommand(pi: ExtensionAPI): void {
+  pi.registerCommand(INIT_COMMAND, {
+    description: 'Instantiate a stub scene layer or an empty character nook (docs/init).',
+    handler: async (rawArgs: string, ctx) => {
+      // The result line goes to the session log only (display:false) so the
+      // player's canvas is never touched by bookkeeping (docs/init/00 §2.2).
+      const emit = (text: string) =>
+        pi.sendMessage({ customType: 'airp_init', content: text, display: false }, { triggerTurn: false });
+
+      let args: InitArgs;
+      try {
+        args = parseInitArgs(rawArgs);
+      } catch (err) {
+        emit(`[airp-init] invalid args: ${msg(err)}`);
+        return;
+      }
+
+      const ext = ctx as unknown as ExtensionContext;
+      const store = worldStore(ext);
+      const isScene = args.kind === 'scene';
+      const dir = isScene ? dirOfLayer(args.target) : nookIdOf(args.target);
+      if (dir === null) {
+        emit(report(args, 'invalid character id'));
+        return;
+      }
+      // `layer` is the event/`FileRecord` key: a scene's id (world/… or map), or
+      // the nook id (`characters/<id>`) — the two id domains `local-store` uses
+      // (docs/nook/RESEARCH-初始化链路.md:122).
+      const layer = isScene ? args.target : dir;
+
+      // (1) Emptiness short-circuit — the sequential idempotency source.
+      const files = await store.listFiles();
+      const empty = isScene ? isLayerEmpty(files, dir) : isNookEmpty(files, dir);
+      if (!empty) {
+        emit(report(args, 'already initialized (no action)'));
+        return;
+      }
+
+      // (2) Concurrency guard — the parallel idempotency source.
+      const key = `${args.kind}:${args.target}`;
+      if (inFlight.has(key)) {
+        emit(report(args, 'initialization already in flight'));
+        return;
+      }
+      inFlight.add(key);
+
+      try {
+        const svc = getActionService(ext);
+
+        // (3) Zero-AI path (docs/init/00 §2.3.2): land the template, never spawn.
+        if (args.template === true && isScene) {
+          const dirName = dir.split('/').pop() ?? layer;
+          const written = await writeW2Scene(store, dir, dirName);
+          const res = await svc.recordLayerInitialized({ layer, by: 'engine', files: written });
+          emit(report(args, `template placed — ${res.text}`));
+          return;
+        }
+
+        // (4) Build the brief (shared module — docs/init/00 §4).
+        const manifest = await store.getManifest();
+        const brief = isScene
+          ? buildSceneInitBrief({
+              targetPath: dir,
+              manifest,
+              ...(parentLayerOf(manifest, layer) ?? {}),
+              ...(args.request ? { userPrompt: args.request } : {}),
+            })
+          : await nookBrief(store, manifest, args.target, dir);
+
+        // (5) Spawn the initializer in-process. `customTools` is required:
+        //     spawnAgent does not inherit the parent's extension tools (spawn.ts:97).
+        let result: { status: string; text?: string; error?: string };
+        try {
+          result = await ctx.spawnAgent({
+            profileId: isScene ? 'scene-init' : 'nook-init',
+            task: brief,
+            customTools: AIRP_TOOLS.map((t) => t.tool),
+            timeoutMs: TIMEOUT_MS[args.kind],
+          });
+        } catch (err) {
+          result = { status: 'failed', error: msg(err) };
+        }
+
+        // (6) Split: success needs BOTH 'completed' AND a product on disk.
+        const after = await store.listFiles();
+        if (result.status === 'completed' && hasInitProduct(after, dir, args.kind)) {
+          const produced = after.filter((f) => f.startsWith(`${dir}/`));
+          const res = await svc.recordLayerInitialized({ layer, by: args.by, files: produced });
+          emit(report(args, `done — ${res.text}`));
+          return;
+        }
+
+        const reason = result.status === 'completed' ? 'no product written' : result.status;
+        if (isScene) {
+          const dirName = dir.split('/').pop() ?? layer;
+          await writeW2Scene(store, dir, dirName);
+          await svc.recordLayerInitFailed({ layer, reason, fallback: 'template' });
+          emit(report(args, `failed (${reason}); scene fell back to template`));
+        } else {
+          // A nook that stays empty is a normal state — do not invent content.
+          await svc.recordLayerInitFailed({ layer, reason, fallback: 'none' });
+          emit(report(args, `failed (${reason}); nook left empty`));
+        }
+      } finally {
+        inFlight.delete(key);
+      }
+    },
+  });
+}
+
+function msg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}

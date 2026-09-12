@@ -104,6 +104,12 @@ export function hasExistingSession(worldRoot: string): boolean {
  */
 export function writerLaunch(repoRoot: string, worldRoot: string, vendorCliPath: string): LaunchSpec {
   const presetId = installPreset(worldRoot, path.join(repoRoot, 'presets', 'writer.json'));
+  // The two initializer profiles must exist in the WORLD's `.airpworld/prompt-presets/`
+  // so the writer process's `subagent_profiles` sees them (R1 delegation) and the
+  // `airp-init` command can spawn them (R2). Installed per launch — installPreset
+  // overwrites, so a stale world-side copy never wins (docs/init/00 §5).
+  installPreset(worldRoot, path.join(repoRoot, 'presets', 'scene-init.json'));
+  installPreset(worldRoot, path.join(repoRoot, 'presets', 'nook-init.json'));
   const sessionsDir = sessionsDirOf(worldRoot);
 
   const args = [
