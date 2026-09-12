@@ -21,3 +21,8 @@ worlds/
 .pi/agent/auth.json
 .pi/agent/models-store.json
 .pi/agent/sessions/
+
+# Agent-runtime scratch that any harness (omp / pi) drops into a project dir.
+# The MCP memory DB is per-machine state, never part of the artifact.
+.pi/memory.db*
+**/.pi/memory.db*
