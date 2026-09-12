@@ -10,7 +10,7 @@ the demo may be shown commercially.
 
 ---
 
-## 1. BGM — `bgm/` (3 moods, crossfaded by writer `mood` tag)
+## 1. BGM — `bgm/` (3 moods, selected by the layer README `bgm` field; crossfaded 1.5s)
 
 | File | Key | Title | Artist | ID | Dur | License |
 |---|---|---|---|---|---|---|
@@ -75,14 +75,36 @@ are used in any public/distributed build, credit them:
 | `foley/fumble-break.mp3` | fumble-break | Snap | Lucky_Diamond555 | 319730 | 2.0s | CC0 1.0 |
 | `foley/page-turn.mp3` | page-turn | Book page turning | eZZin | 641757 | 1.8s | CC0 1.0 |
 
+## 7. Stinger — `stinger/` (6 emotion one-shots, **PENDING**)
+
+| File | Key | Title | Artist | ID | Dur | License |
+|---|---|---|---|---|---|---|
+| `stinger/normal.mp3`   | normal   | TBD | TBD | TBD | <1.5s | TBD |
+| `stinger/smile.mp3`    | smile    | TBD | TBD | TBD | <1.5s | TBD |
+| `stinger/shock.mp3`    | shock    | TBD | TBD | TBD | <1.5s | TBD |
+| `stinger/sad.mp3`      | sad      | TBD | TBD | TBD | <1.5s | TBD |
+| `stinger/angry.mp3`    | angry    | TBD | TBD | TBD | <1.5s | TBD |
+| `stinger/thinking.mp3` | thinking | TBD | TBD | TBD | <1.5s | TBD |
+
+> Not yet produced. Once wired, `playStinger(emo)` maps to `stinger/<emo>.mp3`; a
+> missing file is a silent no-op (it never touches the BGM main track).
+
 ---
 
 ## Notes
 
 - **`worldlines-assets/` had no audio** — only images (375 PNG / 15 JPG). These
   files are the first audio produced for the assets workshop.
-- **Runtime status**: `apps/web/src/lib/audio.ts` still synthesizes placeholder
-  voices with Web Audio. Wiring these files in (sample playback with the synth
-  as offline fallback) is a separate follow-up — see `PLAN.md` §8.
+- **Runtime status**: wired — `apps/web/src/lib/audio.ts` plays these files
+  (sample-first, synth as offline fallback); the synth engine is retained as the
+  T3.8 degradation path. Layer selection comes from the layer README
+  `ambient`/`bgm` fields; world themes from `world.json` `audio.theme`
+  (docs/audio batch A1).
 - **Full upstream URLs** follow the pattern
   `https://cdn.freesound.org/previews/<id/1000>/<id>_<userid>-hq.mp3`.
+
+- **Coverage**: `bgm/` (3 moods) + `ambient/` (3 beds) + `ambient/pool/` (11 scene
+  beds) + `themes/` (5 world themes) + `foley/` (9 one-shots) = 31 files.
+  `gate-open` is downloaded but has **no callsite** this batch (reserved for the
+  T4.3 gate transition); `page-turn` likewise awaits the book/pages layer.
+  `stinger/` is defined but unproduced (6 files).

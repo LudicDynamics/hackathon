@@ -6,6 +6,8 @@ bg: "assets/scenes/abandoned-orchard/orchard-dusk.png"   # scene backdrop (READM
 bgStyle:
   tone: dusk
   grain: grain
+ambient: cellar-drip
+bgm: tense
 ---
 
 # Abandoned Orchard

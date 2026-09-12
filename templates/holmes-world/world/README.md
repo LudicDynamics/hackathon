@@ -7,6 +7,8 @@ bgStyle:
   tone: warm
   grain: parchment
 compass: true   # compass = a fixed style on top of bg, not a standalone component (see doc-10 E0)
+ambient: rain
+bgm: tense
 ---
 
 # Baker Street

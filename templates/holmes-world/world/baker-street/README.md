@@ -6,6 +6,8 @@ bg: "assets/scenes/baker-street/parchment-warm.png"   # scene backdrop/texture: 
 bgStyle:
   tone: warm
   grain: parchment
+ambient: fireplace
+bgm: calm
 ---
 
 # Baker Street

@@ -10,12 +10,14 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   initAudio,
   setAmbient as engineSetAmbient,
+  setBGM as engineSetBGM,
+  setTheme as engineSetTheme,
   setMuted as engineSetMuted,
   isMuted,
 } from '../lib/audio.js';
 
 let muted = isMuted();
-let ambient: string = 'rain';
+let ambient: string | null = null;
 const listeners = new Set<() => void>();
 
 function notify(): void {
@@ -25,8 +27,10 @@ function notify(): void {
 export function useAudio(): {
   muted: boolean;
   toggleMuted: () => void;
-  ambient: string;
-  setAmbient: (tone: string) => void;
+  ambient: string | null;
+  setAmbient: (ref: string | null) => void;
+  setBGM: (ref: string | null) => void;
+  setTheme: (ref: string | null) => void;
 } {
   const [, force] = useState(0);
 
@@ -45,11 +49,21 @@ export function useAudio(): {
     notify();
   }, []);
 
-  const setAmbient = useCallback((tone: string) => {
-    ambient = tone;
-    engineSetAmbient(tone);
+  const setAmbient = useCallback((ref: string | null) => {
+    ambient = ref;
+    engineSetAmbient(ref);
     notify();
   }, []);
 
-  return { muted, toggleMuted, ambient, setAmbient };
+  // `setBGM` / `setTheme` are pass-throughs: no module state and no `notify()`
+  // because nothing renders on them (00 §5.4, 03 §3.4).
+  const setBGM = useCallback((ref: string | null) => {
+    engineSetBGM(ref);
+  }, []);
+
+  const setTheme = useCallback((ref: string | null) => {
+    engineSetTheme(ref);
+  }, []);
+
+  return { muted, toggleMuted, ambient, setAmbient, setBGM, setTheme };
 }

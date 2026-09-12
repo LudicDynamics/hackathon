@@ -1,6 +1,8 @@
 ---
 material: parchment
 bg: "assets/scenes/arcane-library/reading-hall.png"
+ambient: library
+bgm: calm
 ---
 # The Arcane Library
 

@@ -1,10 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { createFrameLoop } from '../../lib/effects-clock.mjs';
+import { getParallax } from '../../lib/parallax.js';
 
 export interface ParticleLayerProps {
   tone?: string;
-  /** Normalized mouse parallax coordinates [-1, 1] */
-  parallaxRef: React.RefObject<{ x: number; y: number }>;
 }
 
 interface Particle {
@@ -23,10 +21,33 @@ interface Particle {
   wobbleRadius: number;
 }
 
-export const ParticleLayer: React.FC<ParticleLayerProps> = ({
-  tone = 'warm',
-  parallaxRef,
-}) => {
+/** Glow sprite edge in device px. The mote is drawn as this pre-rendered
+ *  bitmap instead of a fresh radial gradient every frame. */
+const GLOW_SPRITE_PX = 64;
+
+/**
+ * Pre-render the warm mote glow ONCE. The old loop called
+ * `createRadialGradient` + `addColorStop` ×3 for every mote every frame
+ * (48 × 60fps ≈ 2880 gradient allocations/s), which the drag profile showed up
+ * as steady GC pressure. One sprite + `drawImage` removes that entirely.
+ */
+function makeGlowSprite(): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = c.height = GLOW_SPRITE_PX;
+  const g = c.getContext('2d')!;
+  const r = GLOW_SPRITE_PX / 2;
+  const grad = g.createRadialGradient(r, r, 0, r, r, r);
+  grad.addColorStop(0, 'rgba(235, 205, 140, 1)');
+  grad.addColorStop(0.5, 'rgba(215, 160, 90, 0.5)');
+  grad.addColorStop(1, 'rgba(215, 160, 90, 0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, GLOW_SPRITE_PX, GLOW_SPRITE_PX);
+  return c;
+}
+
+let glowSprite: HTMLCanvasElement | null = null;
+
+export const ParticleLayer: React.FC<ParticleLayerProps> = ({ tone = 'warm' }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const toneRef = useRef(tone);
@@ -37,34 +58,19 @@ export const ParticleLayer: React.FC<ParticleLayerProps> = ({
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    if (!glowSprite) glowSprite = makeGlowSprite();
 
+    let animId = 0;
     let width = (canvas.width = window.innerWidth);
     let height = (canvas.height = window.innerHeight);
 
     const onResize = () => {
-      if (!canvas) return;
-      width = canvas.clientWidth || window.innerWidth;
-      height = canvas.clientHeight || window.innerHeight;
-      const scale = Math.min(1, 1600 / width, 1000 / height);
-      canvas.width = Math.round(width * scale);
-      canvas.height = Math.round(height * scale);
-      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
     };
     window.addEventListener('resize', onResize);
-    onResize();
 
-    // Cache one soft light texture instead of allocating gradients per particle/frame.
-    const mote = document.createElement('canvas');
-    mote.width = mote.height = 32;
-    const paint = mote.getContext('2d')!;
-    const glow = paint.createRadialGradient(16, 16, 0, 16, 16, 16);
-    glow.addColorStop(0, 'rgba(235, 205, 140, 1)');
-    glow.addColorStop(.5, 'rgba(215, 160, 90, .5)');
-    glow.addColorStop(1, 'rgba(215, 160, 90, 0)');
-    paint.fillStyle = glow;
-    paint.fillRect(0, 0, 32, 32);
-
-    const count = width < 700 ? 16 : 32;
+    const count = 48; // Lightweight particle budget (< 1% CPU)
     const particles: Particle[] = [];
 
     const isRain = toneRef.current.includes('rain');
@@ -87,70 +93,85 @@ export const ParticleLayer: React.FC<ParticleLayerProps> = ({
       });
     }
 
+    // Ambient drift is slow (wobble ~0.01–0.03, rain vy ~9–17px/frame); drawing
+    // it at 30fps is visually indistinguishable from 60fps but halves the
+    // cost of the full-screen layer this canvas forces the compositor to
+    // re-raster every frame — the measured dominant cost on this app.
+    const FRAME_MS = 1000 / 30;
     let time = 0;
-    const render = (delta: number) => {
-      const step = delta / (1000 / 60);
-      time += step;
+    let lastDraw = 0;
+    const render = (now: number) => {
+      animId = requestAnimationFrame(render);
+      // Ambient motion is pure decoration: also skip work while the tab is
+      // hidden (the old loop kept compositing a full-screen canvas in
+      // background tabs).
+      if (document.hidden || now - lastDraw < FRAME_MS) return;
+      lastDraw = now;
+
+      time += 1;
       ctx.clearRect(0, 0, width, height);
 
       const isCurrentRain = toneRef.current.includes('rain');
-      // Parallax foreground shift factor 1.35x
-      const shiftX = -parallaxRef.current.x * 24;
-      const shiftY = -parallaxRef.current.y * 24;
+      // Parallax foreground shift factor 1.35x — read imperatively from the
+      // module store, so pointer motion never re-renders this component.
+      const p = getParallax();
+      const shiftX = -p.x * 24;
+      const shiftY = -p.y * 24;
 
       for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
+        const part = particles[i];
 
         if (isCurrentRain) {
           // Rain streaks
-          p.x += p.vx * step;
-          p.y += p.vy * step;
-          if (p.y > height) {
-            p.y = -20;
-            p.x = Math.random() * (width + 100);
+          part.x += part.vx;
+          part.y += part.vy;
+          if (part.y > height) {
+            part.y = -20;
+            part.x = Math.random() * (width + 100);
           }
-          if (p.x < -20) p.x = width + 20;
+          if (part.x < -20) part.x = width + 20;
 
-          const drawX = p.x + shiftX;
-          const drawY = p.y + shiftY;
+          const drawX = part.x + shiftX;
+          const drawY = part.y + shiftY;
 
           ctx.beginPath();
-          ctx.strokeStyle = `rgba(180, 205, 225, ${p.alpha * 0.4})`;
+          ctx.strokeStyle = `rgba(180, 205, 225, ${part.alpha * 0.4})`;
           ctx.lineWidth = 1.2;
           ctx.moveTo(drawX, drawY);
-          ctx.lineTo(drawX + p.vx * 3, drawY + p.vy * 3);
+          ctx.lineTo(drawX + part.vx * 3, drawY + part.vy * 3);
           ctx.stroke();
         } else {
           // Warm floating motes / dust
-          p.baseY += p.vy * step;
-          if (p.baseY < -20) {
-            p.baseY = height + 20;
-            p.baseX = Math.random() * width;
+          part.baseY += part.vy;
+          if (part.baseY < -20) {
+            part.baseY = height + 20;
+            part.baseX = Math.random() * width;
           }
 
-          const wobble = Math.sin(time * p.wobbleSpeed + p.pulseOffset) * p.wobbleRadius;
+          const wobble =
+            Math.sin(time * part.wobbleSpeed + part.pulseOffset) * part.wobbleRadius;
           const currentAlpha =
-            (Math.sin(time * p.pulseSpeed + p.pulseOffset) * 0.5 + 0.5) * p.maxAlpha;
+            (Math.sin(time * part.pulseSpeed + part.pulseOffset) * 0.5 + 0.5) * part.maxAlpha;
 
-          const drawX = p.baseX + wobble + shiftX;
-          const drawY = p.baseY + shiftY;
-
-          const radius = p.size * 2.2;
+          // Glowing dust mote — one pre-rendered sprite, scaled and faded.
+          const d = part.size * 4.4; // sprite diameter in CSS px
           ctx.globalAlpha = currentAlpha;
-          ctx.drawImage(mote, drawX - radius, drawY - radius, radius * 2, radius * 2);
-          ctx.globalAlpha = 1;
+          ctx.drawImage(
+            glowSprite!,
+            part.baseX + wobble + shiftX - d / 2,
+            part.baseY + shiftY - d / 2,
+            d,
+            d
+          );
         }
       }
-
+      ctx.globalAlpha = 1;
     };
-    const loop = createFrameLoop(render);
-    const syncVisibility = () => { if (document.hidden) loop.stop(); else loop.start(); };
-    document.addEventListener('visibilitychange', syncVisibility);
-    syncVisibility();
+
+    animId = requestAnimationFrame(render);
 
     return () => {
-      loop.stop();
-      document.removeEventListener('visibilitychange', syncVisibility);
+      cancelAnimationFrame(animId);
       window.removeEventListener('resize', onResize);
     };
   }, []);

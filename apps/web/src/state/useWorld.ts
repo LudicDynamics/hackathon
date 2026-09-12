@@ -33,6 +33,7 @@ export interface PresenceEntry {
 export interface LayerState {
   layer: string;
   bg: { src: string | null; tone: string; grain: string };
+  audio: { ambient: string | null; bgm: string | null };
   items: LayerItem[];
   links: LayerLink[];
   presence: PresenceEntry[];
@@ -82,6 +83,7 @@ export function useWorld(): UseWorldApi {
       const next: LayerState = {
         layer: data.layer,
         bg: data.bg ?? { src: null, tone: 'warm', grain: 'parchment' },
+        audio: data.audio ?? { ambient: null, bgm: null },
         items: Array.isArray(data.items) ? data.items : [],
         links: Array.isArray(data.links) ? data.links : [],
         presence: Array.isArray(data.presence) ? data.presence : [],

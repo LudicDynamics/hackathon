@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import type { LayerLink } from '../../state/useWorld.js';
+import { elementBox } from '../../lib/measure.js';
 
 /**
  * Relationship-line layer (v2 prototype §1.3). A module-level registry maps
@@ -122,14 +123,10 @@ function elForPath(path: string): HTMLElement | null {
 }
 
 function readBox(el: HTMLElement): Box {
-  const rawLeft = el.style.left ? parseFloat(el.style.left) : NaN;
-  const rawTop = el.style.top ? parseFloat(el.style.top) : NaN;
-  return {
-    x: Number.isFinite(rawLeft) ? rawLeft : el.offsetLeft || 0,
-    y: Number.isFinite(rawTop) ? rawTop : el.offsetTop || 0,
-    w: el.offsetWidth || parseFloat(el.style.width) || 280,
-    h: el.offsetHeight || parseFloat(el.style.height) || 180,
-  };
+  // Cached measure: offsetWidth/Height here forced a reflow on every
+  // updateAllLinks() — which runs on each drag move.
+  const b = elementBox(el);
+  return { x: b.l, y: b.t, w: b.w, h: b.h };
 }
 
 /** Recompute every registered link's hand-drawn path from live DOM layout. */

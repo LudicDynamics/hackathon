@@ -11,6 +11,7 @@ import { airpGateway, type WorldShelf } from './lib/airp-gateway.js';
 import { initialShell, transitionShell, splitCharacters } from './lib/ui-shell.mjs';
 import { MarkdownText } from './lib/md.js';
 import { BookOpen, ChevronDown, ChevronUp, Maximize, Minimize, UserRound, Backpack, Sparkles } from 'lucide-react';
+import { preloadAudio } from './lib/audio.js';
 
 interface WorldManifest {
   id: string;
@@ -18,6 +19,7 @@ interface WorldManifest {
   description: string;
   genre: string;
   material: string;
+  audio?: { theme: string | null };
   cover?: string;
   player?: { id: string; name: string; avatar?: string };
   layers: Record<string, { name?: string; parent?: string | null; material?: string }>;
@@ -88,7 +90,9 @@ export function App() {
   const toastTimer = useRef<number | null>(null);
 
   const camera = useCamera();
-  const { setAmbient } = useAudio();
+  const { setAmbient, setBGM, setTheme } = useAudio();
+
+  // Canvas world state (layer payload, WS events, card persistence).
   const world = useWorld();
   const { state, layer, enterLayer, refresh, moveCard, sendToWriter, sendMessage } = world;
   const chromeVisible = !shell.immersive;
@@ -127,9 +131,17 @@ export function App() {
     };
   }, []);
 
+  const themeUrl = manifest?.audio?.theme ?? null;
   useEffect(() => {
-    setAmbient(state?.bg?.tone || 'rain');
-  }, [state?.bg?.tone, setAmbient]);
+    if (!state) return;
+    setAmbient(state.audio.ambient ?? null);
+    setBGM(state.audio.bgm ?? null);
+    const urls = [state.audio.ambient, state.audio.bgm, themeUrl].filter(
+      (url): url is string => typeof url === 'string' && url.length > 0
+    );
+    if (urls.length) void preloadAudio(urls);
+  }, [state?.audio?.ambient, state?.audio?.bgm, themeUrl, setAmbient, setBGM]);
+  useEffect(() => { setTheme(themeUrl); }, [themeUrl, setTheme]);
 
   useEffect(() => {
     const src = state?.bg?.src;

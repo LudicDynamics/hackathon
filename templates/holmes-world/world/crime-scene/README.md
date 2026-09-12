@@ -6,6 +6,8 @@ bg: "assets/scenes/crime-scene/crime-scene-sepia.png"   # scene backdrop (README
 bgStyle:
   tone: cold
   grain: rough-paper
+ambient: city-night
+bgm: tense
 ---
 
 # Crime Scene

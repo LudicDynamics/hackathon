@@ -7,6 +7,8 @@ bgStyle:
   tone: warm
   grain: parchment
 compass: true
+ambient: rain
+bgm: calm
 ---
 
 # Emberglass Academy
