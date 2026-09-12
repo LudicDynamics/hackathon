@@ -31,9 +31,9 @@ const lifecycle = new AgentLifecycleManager({
   vendorCliPath: VENDOR_CLI,
 });
 
-// Auto-load default holmes-world if available
+// Open the first curated world on a cold start.
 (async () => {
-  const defaultWorld = path.join(REPO_ROOT, 'templates/holmes-world');
+  const defaultWorld = path.join(REPO_ROOT, 'templates/wuwu');
   try {
     activeStore = new LocalWorldStore(defaultWorld);
     eventBridge.watchWorld(defaultWorld);

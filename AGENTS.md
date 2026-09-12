@@ -53,6 +53,8 @@ apps/
       brief-builder.ts  # buildSceneInitBrief / buildNookInitBrief（动态 brief）
       presets.ts        # preset 安装到 <worldRoot>/.airpworld/prompt-presets/；skillArgs 拼 --skill
   web/src/
+    lib/ui-shell.mjs       # Header / journal 独立显隐、人物分区与测量后排版
+    scene-shell.css        # 素材版世界 UI：暖纸栏、玩家身份与人物圆牌
     lib/                   # camera（插值相机）/ collide（软碰撞）/ seat（排座镜像）
     state/                 # useCamera（相机与层级记忆）/ useWorld（层数据 + WS + 落库）
     components/canvas/     # 无限画布（相机 / 卡片渲染 / 关系线）
@@ -97,6 +99,8 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 **chat history 不进画布，只有 chalk 落板。**
 
 ### 3.2 文件即真相
+
+默认服务入口载入 `templates/wuwu`（Fogwharf）。前端世界外 Header 与 journal 默认收起；场景画布首次显示测量实际内容边界，修正遮挡后通过原坐标 API 保存，初始镜头按窗口适配。素材版根场景采用叙事与证物分区；当前实现每次重新载入页面会重新整理根场景，保留手动排版是后续验收项。
 
 世界目录本身就是真相源，**没有独立状态文件**。状态收编在叙事 frontmatter 里（`status.data` / `choice` / `roll_dice`）。
 分层存储：**内容走文件系统，架构状态与历史走 SQLite**（`canvas.db` / `history.db`）。

@@ -6,9 +6,11 @@ import { useCamera } from '../../state/useCamera.js';
 import { clampZ, zoomAt } from '../../lib/camera.js';
 import { makeBox, pushFrom, relaxAll } from '../../lib/collide.js';
 import { unlock, playFoley } from '../../lib/audio.js';
+import { separateBounds } from '../../lib/ui-shell.mjs';
 import type { LayerItem, LayerLink } from '../../state/useWorld.js';
 
 interface CanvasProps {
+  openingComposition?: boolean;
   currentLayer: string;
   items: LayerItem[];
   links: LayerLink[];
@@ -70,6 +72,7 @@ function elSize(el: HTMLElement): { w: number; h: number } {
 }
 
 export const Canvas: React.FC<CanvasProps> = ({
+  openingComposition = false,
   currentLayer,
   items,
   links,
@@ -90,6 +93,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   const cardDragRef = useRef<CardDragSession | null>(null);
   const paperSlideRef = useRef<{ t: number; x: number; y: number } | null>(null);
   const prevLayerRef = useRef<string | null>(null);
+  const framedLayers = useRef(new Set<string>());
   const readmePath = currentLayer === 'map' ? 'world/README.md' : `${currentLayer}/README.md`;
   const itemsByPath = useMemo(() => new Map(items.map((it) => [it.path, it])), [items]);
   // Ordinal seal number per gate (01, 02, …) — the scene's position among the
@@ -112,6 +116,58 @@ export const Canvas: React.FC<CanvasProps> = ({
       camera.restore(currentLayer);
     }
   }, [currentLayer, camera]);
+
+  // Frame real rendered bounds once per scene, preserving subsequent pan/zoom.
+  useEffect(() => {
+    if (!items.length || framedLayers.current.has(currentLayer)) return;
+    let cancelled = false;
+    const frame = () => {
+      if (cancelled) return;
+      const viewport = camera.viewportRef.current;
+      const objects = [...(viewport?.querySelectorAll<HTMLElement>('.object') || [])];
+      if (!viewport || !objects.length) return;
+      const measured = objects.map(el => ({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: Math.max(el.offsetHeight, el.scrollHeight) }));
+      if (openingComposition && currentLayer === 'map') {
+        const narration = objects.findIndex(el => el.querySelector('.chalk'));
+        if (narration >= 0) {
+          const main = measured[narration];
+          main.x = 580;
+          main.y = 350;
+          let rowY = 350;
+          let rowHeight = 0;
+          let column = 0;
+          measured.forEach((box, index) => {
+            if (index === narration) return;
+            box.x = main.x + main.w + 80 + column * 260;
+            box.y = rowY;
+            rowHeight = Math.max(rowHeight, box.h);
+            if (++column === 2) { column = 0; rowY += rowHeight + 40; rowHeight = 0; }
+          });
+        }
+      }
+      const separated = separateBounds(measured);
+      framedLayers.current.add(currentLayer);
+      separated.forEach((box, index) => {
+        const el = objects[index];
+        if (box.y === el.offsetTop && box.x === el.offsetLeft) return;
+        el.style.left = `${box.x}px`;
+        el.style.top = `${box.y}px`;
+        if (el.dataset.path) void onMoveCard?.(el.dataset.path, box.x, box.y);
+      });
+      const left = Math.min(...objects.map(el => el.offsetLeft));
+      const top = Math.min(...objects.map(el => el.offsetTop));
+      const right = Math.max(...objects.map(el => el.offsetLeft + el.offsetWidth));
+      const bottom = Math.max(...objects.map(el => el.offsetTop + Math.max(el.offsetHeight, el.scrollHeight)));
+      const width = viewport.clientWidth;
+      const height = viewport.clientHeight;
+      const topSpace = width < 700 ? 175 : 110;
+      const bottomSpace = width < 700 ? 170 : 130;
+      const z = Math.min(.95, (width - (width < 700 ? 95 : 220)) / Math.max(1, right - left), (height - topSpace - bottomSpace) / Math.max(1, bottom - top));
+      camera.flyTo((left + right) / 2, (top + bottom) / 2 + (bottomSpace - topSpace) / (2 * z), z);
+    };
+    void document.fonts.ready.then(() => requestAnimationFrame(frame));
+    return () => { cancelled = true; };
+  }, [currentLayer, items, camera, openingComposition]);
 
   // Session z-lifts die with the payload that carries the server order: the
   // `links` array reference only changes on fetchLayer-driven refreshes (never

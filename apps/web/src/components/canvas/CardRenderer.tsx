@@ -164,7 +164,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
         </div>
         <div className="gate__body">
           <div className="gate__title">{title}</div>
-          <div className="gate__desc">{body}</div>
+          <div className="gate__desc"><MarkdownText text={body.replace(/^#\s+[^\n]+\n*/, '')} /></div>
           <div className="gate__meta">{meta}</div>
         </div>
       </div>

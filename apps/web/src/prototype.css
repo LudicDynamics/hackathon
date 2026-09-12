@@ -6,8 +6,8 @@
   --line: #ded9e3;
   --purple: #7853ae;
   --pink: #b75d8d;
-  --paper: #fffefa;
-  --cream: #fffefa;
+  --paper: #e8ddc9;
+  --cream: #f1e8d8;
   --wall: #f6f4f8;
   --rust: #b75d8d;
   --sage: #8f78a6;
@@ -126,7 +126,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: rgba(255, 254, 250, 0.985);
+  background: linear-gradient(110deg, #dfd1b8, #eee3cf 65%, #ddceb5);
   border-right: 1px solid var(--line);
   box-shadow: 18px 0 60px rgba(46, 32, 56, 0.1);
   transform: translateX(-104%);
@@ -171,7 +171,7 @@
   padding-left: 16px;
   border-left: 2px solid #c4aedc;
   color: #74538e;
-  font: 18px/1.8 'Long Cang', var(--serif);
+  font: 23px/1.5 'Caveat', var(--serif);
   white-space: pre-line;
 }
 

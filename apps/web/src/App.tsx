@@ -7,6 +7,9 @@ import { useAudio } from './state/useAudio.js';
 import { useCamera } from './state/useCamera.js';
 import { useWorld } from './state/useWorld.js';
 import { airpGateway, type WorldShelf } from './lib/airp-gateway.js';
+import { initialShell, transitionShell, splitCharacters } from './lib/ui-shell.mjs';
+import { MarkdownText } from './lib/md.js';
+import { BookOpen, ChevronDown, ChevronUp, Maximize, Minimize, UserRound, Backpack, Sparkles } from 'lucide-react';
 
 interface WorldManifest {
   id: string;
@@ -35,7 +38,7 @@ interface CharacterView {
   description?: string;
 }
 
-type Attention = 'immersive' | 'reading' | 'authoring';
+type Attention = 'ambient' | 'authoring';
 
 function labelOf(value: string): string {
   const tail = value.split('/').filter(Boolean).at(-1) || value;
@@ -61,7 +64,11 @@ export function App() {
   const [backpack, setBackpack] = useState<BackpackItem[]>([]);
   const [characters, setCharacters] = useState<CharacterView[]>([]);
   const [shelf, setShelf] = useState<WorldShelf>({ templates: [], worlds: [] });
-  const [attention, setAttention] = useState<Attention>('reading');
+  const [attention, setAttention] = useState<Attention>('ambient');
+  const [shell, setShell] = useState(initialShell);
+  const [encounters, setEncounters] = useState<Record<string, string[]>>({});
+  const [bagOpen, setBagOpen] = useState(false);
+  const toggleShell = (action: 'header' | 'journal' | 'immersion') => setShell(current => transitionShell(current, action));
   const [worldPickerOpen, setWorldPickerOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [activeCharacter, setActiveCharacter] = useState<CharacterView | null>(null);
@@ -75,7 +82,7 @@ export function App() {
   const { setAmbient } = useAudio();
   const world = useWorld();
   const { state, layer, enterLayer, refresh, moveCard, sendToWriter, sendMessage } = world;
-  const chromeVisible = attention !== 'immersive';
+  const chromeVisible = !shell.immersive;
   const isDusk = backdropReady;
 
   const notify = (message: string) => {
@@ -136,17 +143,20 @@ export function App() {
       if (event.key === 'Escape') {
         setWorldPickerOpen(false);
         setProfileOpen(false);
-        if (!activeCharacter) setAttention('immersive');
+        setBagOpen(false);
+        setAttention('ambient');
+        setShell(initialShell);
         return;
       }
       if (typing || activeCharacter) return;
       if (event.key === 'Tab') {
         event.preventDefault();
-        setAttention((current) => (current === 'immersive' ? 'reading' : 'immersive'));
+        toggleShell('immersion');
       }
       if (event.key === 'Enter') {
         event.preventDefault();
         setAttention('authoring');
+        setShell(current => ({ ...current, immersive: false }));
         window.setTimeout(() => writerRef.current?.focus(), 0);
       }
     };
@@ -162,10 +172,13 @@ export function App() {
     const expected = layer === 'map' ? 'world/README.md' : `${layer}/README.md`;
     return state?.items.find((item) => item.path === expected);
   }, [layer, state?.items]);
-  const companion = characters.find((character) => character.role === 'companion') || characters[0];
+  const encounteredIds = [...(encounters[manifest?.id || ''] || []), ...(state?.presence || []).map(person => person.characterId)];
+  const { resident, encountered } = splitCharacters(characters, encounteredIds);
   const handItems = backpack.filter((item) => item.filename.toLowerCase() !== 'readme.md');
   const canvasItems = (state?.items || []).filter((item) => item.path !== readme?.path);
-  const currentName = sceneName(manifest, layer);
+  const currentName = readme?.frontmatter?.title || sceneName(manifest, layer);
+  const playerRole = manifest?.id === 'wuwu' ? 'Harbor Investigator' : 'Traveler';
+  const sceneStatus = chalks.flatMap(chalk => Object.entries(chalk.frontmatter?.status?.data || {})).slice(0, 3);
   const breadcrumbs = layer === 'map' ? ['map'] : layer.split('/');
 
   const loadWorld = async (worldPath: string) => {
@@ -177,7 +190,10 @@ export function App() {
       await refresh();
       await loadChromeData();
       setWorldPickerOpen(false);
-      setAttention('reading');
+      setAttention('ambient');
+      setShell(initialShell);
+      setProfileOpen(false);
+      setBagOpen(false);
       notify(`Entered ${result.manifest.name}`);
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Could not load that world');
@@ -239,6 +255,8 @@ export function App() {
   };
 
   const openCharacter = (character: CharacterView) => {
+    const worldId = manifest?.id || '';
+    setEncounters(current => ({ ...current, [worldId]: [...new Set([...(current[worldId] || []), character.id])] }));
     camera.save('dialogue');
     setActiveCharacter(character);
     sendMessage({
@@ -255,19 +273,19 @@ export function App() {
   };
 
   return (
-    <div className={`airp-prototype${isDusk ? ' is-dusk' : ''}${attention === 'immersive' ? ' is-immersive' : ''}${attention === 'reading' ? ' is-reading' : ''}${attention === 'authoring' ? ' is-authoring' : ''}`}>
+    <div className={`airp-prototype${isDusk ? ' is-dusk' : ''}${shell.immersive ? ' is-immersive' : ''}${shell.journal ? ' is-reading' : ''}${shell.header ? ' has-header' : ''}${attention === 'authoring' ? ' is-authoring' : ''}`}>
       <main className="prototype-workspace">
-        <aside className={`prototype-narrative${attention === 'reading' ? ' is-open' : ''}`} aria-hidden={attention !== 'reading'}>
+        <aside className={`prototype-narrative${shell.journal ? ' is-open' : ''}`} aria-label="Story journal" aria-hidden={!shell.journal} inert={!shell.journal}>
           <div className="prototype-narrhead">
             <span className="prototype-eyebrow">THE STORY SO FAR</span>
-            <button className="prototype-quiet" onClick={() => setAttention('immersive')} aria-label="Close story page">‹</button>
+            <button className="prototype-quiet" onClick={() => toggleShell('journal')} aria-label="Close story page">‹</button>
           </div>
           <div className="prototype-journal">
             <div className="prototype-small">OPENING / {manifest?.genre || 'A LIVING WORLD'}</div>
             <h2 className="prototype-chapter">{manifest?.name || 'A world is waiting.'}</h2>
-            <div className="prototype-time-label">DAY 1 · THE FIRST MOMENT</div>
+            <div className="prototype-time-label">{layer === 'map' ? 'THE FIRST MOMENT' : 'THE STORY CONTINUES'}</div>
             <p className="prototype-narrline">{manifest?.description || 'Choose a world to begin.'}</p>
-            {readme?.body && <p className="prototype-narrline">{readme.body}</p>}
+            {readme?.body && <div className="prototype-narrline"><MarkdownText text={readme.body} /></div>}
             {chalks.slice(-4).map((chalk) => (
               <blockquote key={chalk.path} className="prototype-quote">{chalk.body}</blockquote>
             ))}
@@ -283,6 +301,8 @@ export function App() {
 
         <section className="prototype-world" aria-label="Spatial story canvas">
           <Canvas
+            key={manifest?.id || 'opening'}
+            openingComposition={['wuwu', 'whitechapel', 'divergence', 'firstsnow'].includes(manifest?.id || '')}
             currentLayer={layer}
             items={canvasItems}
             links={state?.links || []}
@@ -304,8 +324,8 @@ export function App() {
 
           <div className="prototype-vignette" aria-hidden="true" />
 
-          <div className="prototype-worldtop prototype-chrome">
-            <button className="prototype-quiet" onClick={() => setAttention('reading')} aria-label="Open story page">☷</button>
+          <header className="prototype-worldtop prototype-chrome" aria-label="World header" inert={!shell.header || shell.immersive}>
+            <span className="prototype-brand">World<span>lines</span></span>
             <nav className="prototype-crumbs" aria-label="Scene path">
               {breadcrumbs.map((part, index) => {
                 const target = index === 0 && part === 'map' ? 'map' : breadcrumbs.slice(0, index + 1).join('/');
@@ -317,13 +337,21 @@ export function App() {
             <span className="prototype-status">{handItems.length} ITEMS · {characters.length} PEOPLE</span>
             <button className="prototype-pill" onClick={() => setWorldPickerOpen(true)}>Worlds</button>
             <MuteButton />
-            <button className="prototype-quiet" onClick={() => setAttention('immersive')} aria-label="Hide interface">⌃</button>
+            <button className="prototype-quiet" onClick={() => toggleShell('header')} aria-label="Close header"><ChevronUp size={16} /></button>
+          </header>
+
+          <div className="prototype-edge-controls prototype-chrome">
+            <button onClick={() => toggleShell('journal')} aria-label="Toggle story journal" aria-expanded={shell.journal}><BookOpen size={17} /></button>
+            <button onClick={() => toggleShell('header')} aria-label="Toggle header" aria-expanded={shell.header}><ChevronDown size={17} /></button>
           </div>
 
+          <button className="prototype-immersion-toggle" onClick={() => toggleShell('immersion')} aria-label={shell.immersive ? 'Show interface' : 'Hide interface'} title="Toggle immersion · Tab">{shell.immersive ? <Minimize size={17} /> : <Maximize size={17} />}</button>
+
           <div className="prototype-world-meta prototype-chrome">
-            <div className="prototype-eyebrow">PLACE / {String(Object.keys(manifest?.layers || {}).indexOf(layer) + 1).padStart(2, '0')}</div>
+            <div className="prototype-eyebrow">{manifest?.name}</div>
             <h1>{currentName}</h1>
-            <p>{isDusk ? 'A painted scene · the world is present' : state?.bg?.grain || manifest?.material || 'parchment'}</p>
+            <p>{layer === 'map' ? 'The first moment' : 'The story continues'} · {state?.worldFrozen ? 'Time stands still' : 'Time flows'}</p>
+            {sceneStatus.map(([key, value]) => <span className="prototype-stat" key={key}>{labelOf(key)} · {String(value)}</span>)}
           </div>
 
           <div className="prototype-tools prototype-chrome" aria-label="Canvas tools">
@@ -332,8 +360,10 @@ export function App() {
             <button onClick={() => camera.restore(layer)} title="Return to scene">⌖</button>
           </div>
 
-          <div className="prototype-hand-tray prototype-chrome" aria-label="Hand">
-            {characters.map((character) => (
+          <div className="prototype-hand-tray prototype-chrome" aria-label="Encountered characters">
+            <span className="prototype-tray-label">PEOPLE YOU KNOW</span>
+            {encountered.length === 0 && <span className="prototype-tray-empty">Every stranger has a story.</span>}
+            {encountered.map((character) => (
               <button
                 key={character.id}
                 className="prototype-hand-orb"
@@ -341,11 +371,14 @@ export function App() {
                 title={`Talk to ${character.id}`}
                 style={assetUrl(character.avatar) ? { backgroundImage: `url("${assetUrl(character.avatar)}")` } : undefined}
               >
-                <span>{character.id.charAt(0).toUpperCase()}</span>
+                {!assetUrl(character.avatar) && <span>{character.id.charAt(0).toUpperCase()}</span>}
                 <small>{labelOf(character.id)}</small>
               </button>
             ))}
-            {handItems.map((item) => {
+          </div>
+          <div className="prototype-belongings prototype-chrome" aria-label="Belongings">
+            <button className="prototype-bag-toggle" onClick={() => setBagOpen(open => !open)} aria-label="Open belongings" aria-expanded={bagOpen}><Backpack size={19} /><span>{handItems.length}</span></button>
+            {bagOpen && <div className="prototype-bag-content"><span className="prototype-eyebrow">BELONGINGS</span>{handItems.length === 0 && <p>Nothing carried yet.</p>}{handItems.map((item) => {
               const image = assetUrl(item.frontmatter?.image || item.frontmatter?.cover);
               return (
                 <button
@@ -360,29 +393,33 @@ export function App() {
                   <small>{item.frontmatter?.title || labelOf(item.filename.replace(/\.md$/, ''))}</small>
                 </button>
               );
-            })}
+            })}</div>}
           </div>
 
-          <button className="prototype-player-orb prototype-chrome" onClick={() => setProfileOpen((open) => !open)} aria-label="Open player profile">YOU</button>
+          <button className="prototype-player-orb prototype-chrome" onClick={() => setProfileOpen((open) => !open)} aria-label="Open player profile" aria-expanded={profileOpen}><UserRound size={25} /><span className="prototype-player-label"><small>YOU</small>{playerRole}</span></button>
           {profileOpen && chromeVisible && (
             <div className="prototype-profile">
-              <b>You</b>
+              <b>{playerRole}</b>
               <div className="prototype-small">PLAYER CHARACTER</div>
-              <p>You are inside this world, not above it. The next action belongs to you.</p>
+              <p>{manifest?.id === 'wuwu' ? 'Newly posted to Fogwharf. Three commissions, one unfinished case. Your story begins here.' : `Your story unfolds in ${manifest?.name || 'this world'}.`}</p>
               <div>{currentName} · {handItems.length} carried items</div>
             </div>
           )}
 
-          {companion && (
+          <div className="prototype-residents prototype-chrome" aria-label="Resident companions">
+          {resident.map(companion => (
             <button
-              className="prototype-companion-orb prototype-chrome"
+              key={companion.id}
+              className="prototype-companion-orb"
               onClick={() => openCharacter(companion)}
               aria-label={`Talk to ${companion.id}`}
               style={assetUrl(companion.avatar) ? { backgroundImage: `url("${assetUrl(companion.avatar)}")` } : undefined}
             >
-              {companion.id.charAt(0).toUpperCase()}<i />
+              {!assetUrl(companion.avatar) && companion.id.charAt(0).toUpperCase()}<i /><small>{labelOf(companion.id)}</small>
             </button>
-          )}
+          ))}
+          </div>
+          <button className="prototype-action-toggle prototype-chrome" onClick={() => { setAttention(current => current === 'authoring' ? 'ambient' : 'authoring'); window.setTimeout(() => writerRef.current?.focus(), 0); }} aria-label="Write an action"><Sparkles size={17} /><span>What do you do?</span></button>
 
           <form className="prototype-dock prototype-chrome" onSubmit={submitWriter}>
             <div className="prototype-docktop">
@@ -400,11 +437,10 @@ export function App() {
           {attention === 'authoring' && (
             <div className="prototype-authoring">
               <GodModeToolbar frozen={state?.worldFrozen === true} onToggleFreeze={handleToggleFreeze} onCreateEntity={handleCreateEntity} />
-              <button className="prototype-quiet" onClick={() => setAttention('immersive')}>Close</button>
+              <button className="prototype-quiet" onClick={() => setAttention('ambient')}>Close</button>
             </div>
           )}
 
-          <button className="prototype-edge-wake" onClick={() => setAttention('reading')} aria-label="Show interface" />
         </section>
       </main>
 
