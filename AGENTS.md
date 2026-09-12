@@ -92,6 +92,8 @@ tools/                  # 单一职责脚本：探针（probe-*）/ 门禁（che
   pi-rp.mjs             # pi-rp 子模块工作流（pnpm pi status|build|update|commit，见 §7.2）
   motion-clip.mjs       # 微动立绘 / 背景视频生产（pnpm motion）：绿幕→透明 webm，成片→循环 webm
                         #   手艺包见 assets/skills/motion-portrait/SKILL.md（alpha 解码陷阱在彼）
+  flow-gen.mjs          # 生图 / 生视频（pnpm gen）：调本地反代 ../flow-proxy-api，封装异步轮询与降级告警
+                        #   手艺包见 assets/skills/flow-media/SKILL.md（认证链与静默降级在彼）
   probe-writer.mjs      # 全链路探针（pnpm probe）
   probe-tools.mjs       # 工具面探针：jiti 载入 extensions/tools.ts，断言注册表 + 真执行（probe:tools 第一段）
   probe-tools-engine.mjs # 工具面探针（强形式）：真 spawn 引擎，断言 AIRP 工具被引擎执行（probe:tools 第二段）
@@ -225,6 +227,8 @@ pnpm check:skills                               # skill 语料门禁（frontmatt
 pnpm check:voices                               # 音色门禁（角色 voice 解析到调色板；docs/tts/07）
 pnpm pi status                                  # pi-rp 子模块 + dist 新鲜度体检（见 §7.2）
 pnpm motion <绿幕.mp4> -o out.webm --scale 360   # 微动立绘 / 背景视频（见 assets/skills/motion-portrait）
+pnpm gen image --prompt "..." -o assets/_inbox/   # 生图 / 生视频（见 assets/skills/flow-media）
+pnpm gen video --prompt "..." --seconds 6 -o out.mp4
 node tools/scaffold.mjs --template holmes-world --out worlds/my-holmes
 pnpm --filter @airp/server dev                  # 只起后端
 ```
@@ -459,7 +463,7 @@ pnpm pi commit "fix(...): …" [--no-build]   # build 红线 → 子模块 commi
 | 子目录 | 入库 | 说明 |
 |---|---|---|
 | `assets/audio/**` | ✅ | 我们自己产出的音乐（Pixabay 免版税 BGM / 环境声 / 拟音）。**平台级音频池的真相源**就是这里——`routes/world.ts` 的 `AUDIO_ROOT` 指 `assets/audio`，`/api/audio?path=…` 从这里伺服。需求清单/缺口登记在 `assets/audio/PLAN.md`，授权信息在 `CREDITS.md` |
-| `assets/skills/**` | ✅ | 素材生产手艺包（纯文本，无大二进制），如 `motion-portrait` |
+| `assets/skills/**` | ✅ | 素材生产手艺包（纯文本，无大二进制），如 `motion-portrait`（抠像/循环）、`flow-media`（生图/生视频） |
 | `assets/worlds/**`、`assets/_inbox/**` | ❌ | AI 生图原始产出与筛选（**合计约 587MB**），只作生产参考。**发布位不是这里**——定稿后经平台上传端点落入 IP 包，runtime 读 IP 包 |
 
 **坑（2026-09-13 实际踩到）**：`assets/README.md` 写的是"本目录不进 git"，**这句已过期**——`audio/` 与 `skills/` 现在是入库的。找音频资产时**不要只查 `apps/web/public/` 或 `templates/**/`**，平台池在仓库根 `assets/audio/`；世界级样本则走 `templates/<world>/assets/`（`/api/asset` 伺服）。判据：平台池 = `/api/audio?path=…`，世界级 = `/api/asset?…`。
