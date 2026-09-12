@@ -13,38 +13,58 @@ export interface SceneBackdropBg {
 
 export interface SceneBackdropProps {
   bg: SceneBackdropBg;
+  /** Normalized mouse parallax coordinates [-1, 1] */
+  parallax?: { x: number; y: number };
 }
 
 /**
  * The layer's "paper" fills the viewport: a material skin (always present) →
- * optional painted scene image → warm-ink edge vignette. It sits behind the
+ * optional painted scene image or video → warm-ink edge vignette. It sits behind the
  * camera viewport (`absolute inset 0`, `z-0`, `pointer-events: none`), so it
  * never intercepts canvas clicks.
  *
- * Asset routing: `bg.src` is world-relative; the server serves it via
- * `GET /api/asset?path=<world-relative>` (404 when absent, 403 on traversal).
- * Templates ship no `assets/` directory, so the request misses and `onError`
- * drops the `<img>` — the material skin alone carries the scene. We deliberately
- * use `<img>` (not `background-image: url()`) so a missing asset is observable
- * and degrades gracefully instead of failing silently.
- *
- * `failedSrc` (not a boolean) is tracked so switching to a new layer's image
- * retries the fetch rather than inheriting the previous layer's failure.
+ * Parallax depth: 0.25x slow drift with camera & pointer.
+ * Video support: if src ends with .mp4 or .webm, renders an autoplaying loop video.
  */
-export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg }) => {
+export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg, parallax = { x: 0, y: 0 } }) => {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const src = bg.src;
-  const showImg = !!src && failedSrc !== src;
+  const isAvailable = !!src && failedSrc !== src;
+  const isVideo = !!src && /\.(mp4|webm)$/i.test(src);
+
+  // Parallax transform: 0.25x background drift (scaled up slightly so edges never bleed)
+  const shiftX = parallax.x * 16;
+  const shiftY = parallax.y * 16;
+  const parallaxStyle: React.CSSProperties = {
+    transform: `translate3d(${shiftX}px, ${shiftY}px, 0) scale(1.06)`,
+    transition: 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+  };
 
   return (
-    <div className={`scene-backdrop ${materialSkinOf(bg.grain)}`} data-tone={bg.tone}>
-      {showImg && (
-        <img
-          className="scene-backdrop__img"
-          src={`/api/asset?path=${encodeURIComponent(src)}`}
-          alt=""
-          onError={() => setFailedSrc(src)}
-        />
+    <div
+      className={`scene-backdrop ${materialSkinOf(bg.grain)}`}
+      data-tone={bg.tone}
+      style={parallaxStyle}
+    >
+      {isAvailable && (
+        isVideo ? (
+          <video
+            className="scene-backdrop__img object-cover"
+            autoPlay
+            loop
+            muted
+            playsInline
+            src={`/api/asset?path=${encodeURIComponent(src)}`}
+            onError={() => setFailedSrc(src)}
+          />
+        ) : (
+          <img
+            className="scene-backdrop__img"
+            src={`/api/asset?path=${encodeURIComponent(src)}`}
+            alt=""
+            onError={() => setFailedSrc(src)}
+          />
+        )
       )}
       <div className="scene-backdrop__vignette" />
     </div>

@@ -64,13 +64,13 @@ title（卡面标题） → preview（卡面摘要，画布上可见）
 ```
 
 - 这是 doc-10 #5 的原型答案：**组件进作家感知的形态 = note/letter 的"标题 + 前 N 字"摘要流**（不是全文），与 doc-12 #1 的"当前场景目录清单"同源；bg/compass 不进感知（bg 是 README config，随 README 一起读，见 E0）。
-- 背景建议：正文超限时全文靠 `read_canvas` 拉（doc-05 §9.1 已有"md 去 frontmatter 只展示正文"）。
+- 背景建议：正文超限时全文靠 `look_at` 拉；它隐藏原始 YAML，但会格式化组件的 status/choice/dice（doc-20 §3）。
 
 ### E7. holmes-world 证据（文件即真相）
 
 - `world/baker-street/evening.md` = chalk + choice + status + roll_dice 四件套同文件——frontmatter 收编的活样例；
-- `journal/*.md` 用的是 `type: chalk`（暂代，无独立 scenario type——正好印证 doc-08 定案 2 的"新增 type 留位"还没做）；
-- watson `preset.json` 有 `chat-history` slot 无 `memory` file slot——doc-13 #1（记忆写回）还没落位，角色连续性目前靠会话文件；
+- `journal/*.md` 用的是 `type: chalk`（暂代，无独立 scenario type——正好印证 doc-08 定案 2 的"新增 type 留位"还没做）。**2026-09-12 注**：`journal/` 这个目录本身已撤销（doc-12 文末），holmes-world 这几篇是历史遗留，将来并进它们所属的场景层；
+- watson `preset.json` 有 `chat-history` slot——角色连续性目前靠会话文件；AIRP 角色记忆系统已暂缓（doc-13）；
 - **2026-09-11 修正示范**：各场景 README frontmatter 已加 `bg`（+ 大地图 `compass: true`），落实"README = 场景 config、bg = README 字段、compass = bg 样式"（见 E0）——示例世界不再把 bg 当独立 asset。
 
 ### E8. v2 独有机制补遗（上一轮漏掉的 v2 专属证据）
@@ -99,7 +99,7 @@ title（卡面标题） → preview（卡面摘要，画布上可见）
 - **marginalia 批注**（`attachEliasMarginalia`）：角色在用户卡片下挂"— Elias"署名批注 + echo-play 回放键——**角色的"顺手写"**（doc-05 §4.1 三分情境①"场景单聊顺手写"）的呈现先例：写在别人的东西下面、带署名、可回放；
 - **lyric performance 歌词演出**：`playLyricPerformance`（enter-slam-zoom/rotate/float-up + brush underline + cadence-part 逐段延迟）——演出型组件（`show`）的动效词汇库：入场 slam、笔刷下划线、节奏性分段显现，doc-06 可直接引用；
 - **annotated-card**：用户留字（`createAnnotatedNote`）自动进 history（`registerNewHistoryNote`）+ Elias 1.1s 后批注——**"玩家留痕 → 角色实时回应"**（doc-05 §4.1 三分情境③）的完整回路，含 `relaxAllCollisions` 排座；
-- **sharedPiece 共同作品**（"Elias added the blue door"）：双署名物件——**小天地内"共同作品"**的类型先例，doc-13 #4（小天地与记忆分工）可用；
+- **sharedPiece 共同作品**（"Elias added the blue door"）：双署名物件——**小天地内"共同作品"**的类型先例；它是普通世界内容，不需要记忆专用协议；
 - **双语字**（英文 thought/status + 中文内容）：角色"想"的语言与"说"的语言可以分开——角色 preset 语气设计的参考（doc-03 AIRP 批注 2"角色自己写"）。
 
 ### E11. 三原型样式对照总表（同一语义，三套皮肤）
@@ -165,13 +165,13 @@ title（卡面标题） → preview（卡面摘要，画布上可见）
 |---|---|---|
 | 1 | **组件的总结 schema** | manifest frontmatter 字段（type / data / position / material…）、"万物皆 md"下组件如何表达（md 文件 + frontmatter？嵌入 chalk？）、组件与物件卡的关系。**原型建议**：三原型共同字段只有 `id/title/body/meta/x/y/rot`（v3 `WorldItem` 即最小超集），`preview/sign/fragments/lines/rewrite/image` 全是可选扩展——schema = **小内核 + kind 自带 extra**，不是大一统全字段（见 E2/E12） |
 | 2 | **官方组件清单** | 10-20 个候选逐个立项：信/书/谜题/机关/乐器/棋盘/天气/装置/过场特效应——每个的**用途、允许的交互、呈现示例、材质词汇**。**原型建议**：v3 一个房间就长出 11 种 kind——不该是全局封闭清单，而是"**内核 2 种（note/letter）+ 题材包按需注册 + 每个题材首批 3-5 个示例**"（见 E12） |
-| 3 | **组件的交互边界** | 组件**可以点击吗**？点击产生什么（事件？视觉替应？）——"装饰不承载玩法推进"的具体判定：什么算推进、什么算装饰；与骰子/choice 的边界（骰子是玩家参与的仪式，组件只是戏的背景）。**原型建议**：判定 = "点击后世界变不变"——变了就是推进（归叙事/choice）、不变就是装饰（**四级**：开阅读 / 续写说话 / 视觉替应如翻面发光 / 纯看，v3 DetailPanel 续写输入见 E9/E12） |
+| 3 | **组件的交互边界** | **方向已定**：所有落盘组件都可携带通用 `choice/status/roll_dice`；单实体动作由 `choose` 触发，物件作用于目标由 `use_item_on` 触发。待设计的是不同组件如何呈现这些通用字段，不再为每种组件造 `interact` 工具 |
 | 4 | **落地与渲染协议** | 幻影落地 → 物件卡 → 组件渲染的链路；组件能否被玩家拖进背包（移动语义 move() 是否适用）。**原型已答**：`BAG_TYPES = ['note','letter']`——**只有 note/letter 走 `move()`**（见 E5）；落地演出序 `bg→chalk→note/letter→buddy` + ghostWrite 座位过户（见 E3）；v3 补：**年龄 `age` 是一等属性**（deep 透明度 0.52），fold 后的 scenario 年龄直接进 `past`（见 E9/E12） |
-| 5 | **组件 vs read_canvas** | 组件如何被引擎"读"（read_canvas 只读 md 正文 + README，组件怎么进入作家的感知）。**原型已答**：标题 + 前 N 字摘要流（`memory()` 每条 ≤90 字最近 24 条 / `thingsSummary()` ≤300 字），全文靠 read_canvas 拉（见 E6）；v3 RECENT_EVENTS（最近 5 条 label+when+坐标）是同一份"最近动态"的前端件（见 E9） |
+| 5 | **组件 vs look_at** | **方向已定**：`look_at` 返回标题/正文摘要，并把 status/choice/dice 格式化成文本块；原始 frontmatter 隐藏，全文和原始 YAML 可再用 `look_at` / `read` 拉取（doc-20 §3） |
 
 ## 边界
 
-- 组件不承载玩法推进（推进靠 choice），不重复发明谜题关卡——**谜题类组件是装饰性谜题**（摆在桌上好看），真正的解谜推进靠叙事文本；
+- 组件可以承载玩法入口：自身动作写 `choice`，二元物件互动走 `use_item_on`，随机检定写 `roll_dice`。组件仍不自造另一套通用交互协议；
 - 不设组件市场专用 schema 之外的下文定义（市场见 doc-17）。
 
 > **标记：方向已收敛（2026-09-11 修正：演出型 = 一次性演出；bg = README frontmatter；compass = bg 样式；线条 = canvas.db 画布状态不归 md 派生）**。

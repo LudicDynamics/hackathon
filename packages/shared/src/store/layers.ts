@@ -92,15 +92,19 @@ export function deriveLayers(
 }
 
 /**
- * The markdown a layer's page shows DIRECTLY: files in its own directory. A
- * child layer's README is excluded here — it arrives as that child's door card
- * (see `childLayers`), so a sub-scene never leaks onto its parent's page.
+ * The markdown a layer's page shows DIRECTLY: files in its own directory,
+ * MINUS its own README. A directory's README is that layer's *config* (name,
+ * material, bg) — the scene's identity, which the badge/backdrop already carry.
+ * It is not a canvas object: rendering it produced an unclickable "ghost door"
+ * sitting on top of the scene's own content. Child layers still arrive as door
+ * cards via `childLayers`, so a sub-scene never leaks onto its parent's page.
  */
 export function cardsOfLayer(layerId: string, allFiles: string[]): string[] {
   const dir = dirOfLayer(layerId);
+  const ownReadme = `${dir}/README.md`;
   const cards: string[] = [];
   for (const f of allFiles) {
-    if (f.endsWith('.md') && dirOf(f) === dir) cards.push(f);
+    if (f.endsWith('.md') && dirOf(f) === dir && f !== ownReadme) cards.push(f);
   }
   return cards;
 }

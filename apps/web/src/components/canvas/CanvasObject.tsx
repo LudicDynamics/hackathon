@@ -68,8 +68,6 @@ const SpriteFig: React.FC = () => (
 
 export interface CanvasObjectProps {
   item: LayerItem;
-  /** Path of the current layer's own README — that card is drag-locked (plan §6.3). */
-  readmePath: string | null;
   /** Ordinal of this gate among the layer's gates (fallback for the seal). */
   index?: number;
   onSelectChoice?: (choice: string) => void;
@@ -81,7 +79,6 @@ export interface CanvasObjectProps {
 
 export const CanvasObject: React.FC<CanvasObjectProps> = ({
   item,
-  readmePath,
   index,
   onSelectChoice,
   onDiceRolled,
@@ -89,29 +86,72 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   onOpenCharacterModal,
   onItemDropOnTarget,
 }) => {
-  const locked = item.path === readmePath;
   const kind = item.kind;
+  const [isDragOver, setIsDragOver] = React.useState(false);
+  const [isItemDragging, setIsItemDragging] = React.useState(false);
+  const [isUnlockedEffect, setIsUnlockedEffect] = React.useState(false);
+
+  React.useEffect(() => {
+    const onDragStart = () => setIsItemDragging(true);
+    const onDragEnd = () => {
+      setIsItemDragging(false);
+      setIsDragOver(false);
+    };
+    window.addEventListener('airp:item-drag-start', onDragStart);
+    window.addEventListener('airp:item-drag-end', onDragEnd);
+    return () => {
+      window.removeEventListener('airp:item-drag-start', onDragStart);
+      window.removeEventListener('airp:item-drag-end', onDragEnd);
+    };
+  }, []);
+
+  const handleSpriteDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const draggedPath = e.dataTransfer.getData('text/plain');
+    if (draggedPath) {
+      setIsUnlockedEffect(true);
+      setTimeout(() => setIsUnlockedEffect(false), 800);
+      onItemDropOnTarget?.(draggedPath, item.path);
+    }
+  };
+
+  const spritePuzzleClasses = `${isItemDragging ? 'puzzle-target-ready' : ''} ${isDragOver ? 'puzzle-target-hover' : ''} ${isUnlockedEffect ? 'puzzle-unlock-burst' : ''}`.trim();
 
   return (
     <div
       data-path={item.path}
       onPointerEnter={() => highlightLinks(item.path, true)}
       onPointerLeave={() => highlightLinks(item.path, false)}
-      className={`object ink-form${locked ? ' object-locked' : ''}`}
+      className="object ink-form"
       style={
         {
           left: item.x,
           top: item.y,
           width: item.w,
-          height: item.h,
+          // No height: the shell hugs its card, so the painted box IS the real
+          // box (chalk runs far past form.h and used to overflow the shell).
           zIndex: liftFor(item.path, item.z),
-          ['--target-rot' as any]: `${item.rot}deg`,
+          // Rotation belongs to the shell alone. Narration (chalk) and the
+          // presence figure stay level; every paper form keeps its hand tilt.
+          ['--target-rot' as any]:
+            kind === 'chalk' || kind === 'sprite' ? '0deg' : `${item.rot}deg`,
         } as React.CSSProperties
       }
     >
         {kind === 'sprite' ? (
           <div
-            className={`sprite${chalkStyleOf(item.frontmatter).aged ? ' chalk--aged' : ''}`}
+            onClick={() => {
+              const charId = item.frontmatter?.id || item.frontmatter?.title || item.filename.replace('.md', '');
+              onOpenCharacterModal?.(charId);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragOver(true);
+            }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={handleSpriteDrop}
+            className={`sprite cursor-pointer transition-transform duration-200 ${chalkStyleOf(item.frontmatter).aged ? ' chalk--aged' : ''} ${spritePuzzleClasses}`}
           >
             <SpriteFig />
             <div className="sprite__name">
@@ -122,7 +162,6 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
           <CardRenderer
             item={item}
             index={index}
-            currentReadmePath={readmePath}
             onSelectChoice={onSelectChoice}
             onDiceRolled={onDiceRolled}
             onEnterGate={onEnterGate}

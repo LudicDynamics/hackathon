@@ -29,19 +29,24 @@ eventBridge.setWss(wss);
 const lifecycle = new AgentLifecycleManager({
   repoRoot: REPO_ROOT,
   vendorCliPath: VENDOR_CLI,
+  eventSink: (source, event) => eventBridge.emitEngine(source, event),
+  frameSink: (message) => eventBridge.broadcast(message),
 });
 
-// Open the first curated world on a cold start.
-(async () => {
-  const defaultWorld = path.join(REPO_ROOT, 'templates/wuwu');
-  try {
-    activeStore = new LocalWorldStore(defaultWorld);
-    eventBridge.watchWorld(defaultWorld);
-    console.log(`[AIRP Server] Default world loaded: ${defaultWorld}`);
-  } catch (err) {
-    console.warn('[AIRP Server] No default world found, waiting for user selection.');
-  }
-})();
+// Open the first curated world and start its writer.
+const DEFAULT_WORLD = path.join(REPO_ROOT, 'templates/wuwu');
+try {
+  activeStore = new LocalWorldStore(DEFAULT_WORLD);
+  eventBridge.watchWorld(DEFAULT_WORLD);
+  console.log(`[AIRP Server] Default world loaded: ${DEFAULT_WORLD}`);
+  // The frontend never calls /api/worlds/load, so without this the writer process
+  // simply would not exist on the default path.
+  lifecycle.startWriter(DEFAULT_WORLD).catch((err) => {
+    console.warn('[AIRP Server] writer start failed:', err);
+  });
+} catch (err) {
+  console.warn('[AIRP Server] No default world found, waiting for user selection.');
+}
 
 // API Routes
 app.use(
@@ -79,26 +84,59 @@ wss.on('connection', (ws: WebSocket) => {
       if (data.type === 'writer_prompt') {
         const writer = lifecycle.getWriter();
         if (!writer) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Writer agent is not running' }));
+          ws.send(JSON.stringify({ type: 'error', source: 'writer', message: 'Writer agent is not running' }));
           return;
         }
-        await writer.prompt(data.message);
+        try {
+          if (data.mode === 'steer') {
+            await writer.steer(data.message);
+          } else if (data.mode === 'followUp') {
+            await writer.followUp(data.message);
+          } else {
+            await writer.prompt(data.message);
+          }
+        } catch (err: any) {
+          console.error('[AIRP WS] Writer prompt failed:', err);
+          ws.send(JSON.stringify({ type: 'error', source: 'writer', message: err?.message || String(err) }));
+        }
+      } else if (data.type === 'writer_abort' || data.type === 'abort') {
+        const writer = lifecycle.getWriter();
+        if (writer) {
+          await writer.abort().catch((err) => console.warn('[AIRP WS] Writer abort failed:', err));
+        }
       } else if (data.type === 'character_start') {
-        const { characterId, recentContext } = data;
-        if (!activeStore) {
-          ws.send(JSON.stringify({ type: 'error', message: 'No active world' }));
+        try {
+          if (!activeStore) throw new Error('No active world');
+          await lifecycle.startCharacter(data.characterId, activeStore.worldRoot);
+        } catch (err: any) {
+          console.error('[AIRP WS] Character start failed:', err);
+          ws.send(JSON.stringify({ type: 'error', source: 'character', characterId: data.characterId, message: err?.message || String(err) }));
+        }
+      } else if (data.type === 'character_prompt') {
+        const character = lifecycle.getCharacter(data.characterId);
+        if (!character) {
+          ws.send(JSON.stringify({ type: 'error', source: 'character', characterId: data.characterId, message: `Character agent "${data.characterId}" is not running` }));
           return;
         }
-        await lifecycle.startCharacter(characterId, activeStore.worldRoot, String(recentContext || ''), (evt) => {
-          ws.send(JSON.stringify(evt));
-        });
-      } else if (data.type === 'character_prompt') {
-        const running = await lifecycle.promptCharacter(data.characterId, data.message);
-        if (!running) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Character agent is not running' }));
+        try {
+          if (data.mode === 'steer') {
+            await character.steer(data.message);
+          } else if (data.mode === 'followUp') {
+            await character.followUp(data.message);
+          } else {
+            await character.prompt(data.message);
+          }
+        } catch (err: any) {
+          console.error('[AIRP WS] Character prompt failed:', err);
+          ws.send(JSON.stringify({ type: 'error', source: 'character', characterId: data.characterId, message: err?.message || String(err) }));
+        }
+      } else if (data.type === 'character_abort') {
+        const character = lifecycle.getCharacter(data.characterId);
+        if (character) {
+          await character.abort().catch((err) => console.warn('[AIRP WS] Character abort failed:', err));
         }
       } else if (data.type === 'character_stop') {
-        lifecycle.stopCharacter(data.characterId);
+        await lifecycle.stopCharacter(data.characterId);
       }
     } catch (err: any) {
       console.error('[AIRP WS Error]', err);
@@ -114,3 +152,10 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[AIRP Server] Listening on http://0.0.0.0:${PORT} and http://localhost:${PORT}`);
 });
+
+// Retire every spawned agent on shutdown — otherwise pi-rp processes outlive the server.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, () => {
+    void lifecycle.stopAll().finally(() => process.exit(0));
+  });
+}

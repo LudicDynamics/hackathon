@@ -84,7 +84,7 @@ flowchart LR
 2. **架构同构护城河**（砍范围不砍形状）：砍掉的东西必须"将来加回来不用重构"。判据：所有砍掉的功能，其文件结构和接口形状必须与 doc-05 §8 完全一致。世界目录结构、`preset.json` 形状、`world.json` schema 一步到位。
 3. **风险前置护城河**（提前做风险大的，赛时做风险小的）：层级画布、角色 spawn、双 DB——三天内谁翻车都不好看，所以**全部进"提前准备"清单**（§4），赛前完成或验证过接法。
 
-**2026-09-10 架构简化的红利**：砍掉世界内角色编排（pass_mic/handoff/call_character/黑板路由）后，编排层不再是关键路径——AIRP 的赛时复杂度集中在**作家单进程 + 画布渲染 + 叙事 frontmatter 渲染**。角色只做"被点开时 spawn 遮罩对话"，P0 演示主线不再依赖多进程对话。
+**架构简化的红利**：砍掉角色进程通信与后台编排（pass_mic/handoff/call_character/黑板路由）后，编排层不再是关键路径。角色只在玩家直聊期间 spawn，但会在该会话中调用共享工具共同改变世界；作家调度角色位置直接使用 `move_to`。
 
 ---
 
@@ -95,21 +95,21 @@ flowchart LR
 
 | 能力 | 状态 | 对 AIRP 的意义 |
 |---|---|---|
-| RPC 模式（`pi --mode rpc`） | ✅ 已实现 | 作家/角色的宿主。prompt/abort/set_model/set_preset/set_thinking_level/get_state/get_session_stats 等全套命令 |
+| RPC 模式（`pi --mode rpc`） | ✅ 已实现 | 作家/角色的宿主。prompt/abort/set_model/set_preset/set_thinking_level/get_session_stats 等全套命令（`get_state` 属 pi-rp 的 state 系统，AIRP 不用，见下） |
 | 事件流（AgentSessionEvent） | ✅ 已实现 | message_update 流式、tool_execution_start/end、agent_settled——前端"舞台演出"的原始素材 |
 | prompt preset 体系（13 slot + 宏） | ✅ 已实现 | 作家/角色的"大脑"（doc-05 §4.1/§4.2）。JSON 定义角色，`file` slot 引用身份/性格 md，`system` slot 引用平台统一隐形提示词 |
 | subagent + delegatable preset | ✅ 已实现 | 作家委托 world subagent（doc-05 §4.3）。brief→生成→摘要回报的通道现成 |
-| **opening 开场播种器** | ✅ 已实现（内建扩展，`/opening` + `PI_OPENING` env，session_start 自动应用 + skipIfSeeded 防重播；预设 = `<config-dir>/openings/<id>.json`） | 角色"出生记忆"的官方路径：开场知识落成**角色自己的会话条目**，跨续档持久。门一打开角色就知道自己是谁。**AIRP 直接用** |
+| ~~opening 开场播种器（pi-rp 内建）~~ | ~~✅ 已实现（`/opening` + `PI_OPENING` env）~~ | **AIRP 不用（2026-09-12）**：它往会话里灌 chat history，而 AIRP 任何 agent 的 chat history 都不进画布。开场白 = 世界里的 `type: chalk` md（doc-11 §3.3）；角色靠 hook 给的文件清单 + 自己 `look_at` 知情（§3.5） |
 | ~~orchestration RPC 对（pass_mic 通道）~~ | ~~✅ 已实现（pi-rp `fa0910fa8`）~~ | ~~跨进程递话筒~~ **AIRP 不再需要（2026-09-10）**：砍掉角色间通信与世界内编排。角色只和玩家在遮罩内对话 |
-| **状态系统（StateManager / state_update / get_state / watch_state）** | ✅ 已实现 | **AIRP 明确不用**：pi-rp 的 state 与 AIRP 的 status 不是一回事。**2026-09-10 更进一步**：AIRP 的状态快照（status）= 叙事 frontmatter（`type: chalk` 的 `status.data`），作家直接 edit 写——不引入状态工具、不用 state 文件桥、**没有独立的状态文件/状态栏** |
-| Extension API（registerTool/registerSlot/registerMacro/registerCommand） | ✅ 已实现 | AIRP 的一切平台工具（chalk/read_canvas/generate_image…）都从这里注册 |
+| ~~状态系统（StateManager / state_update / get_state / watch_state / state 文件桥）~~ | ✅ 已实现 | **AIRP 绝对不用（不是暂缓，是架构不相容）**：pi-rp 的 state 与 AIRP 的 `status` 不是一回事。`status.data` 只是**某个组件（含 chalk）的一份快照**，随该实体的一篇 chalk/frontmatter 走；读它 = 读那个文件。引入状态工具就会出现第二个真相源，绕过 `edit`、绕开 `fs.watch` 与事件表——同时打穿"文件即真相"和"事件是唯一变更来源"。**没有独立状态文件、没有状态栏、永不引入**（doc-20 §2.3） |
+| Extension API（registerTool/registerSlot/registerMacro/registerCommand） | ✅ 已实现 | AIRP 的平台工具（chalk/look_at/move_to/move/choose/roll_dice…）都从这里注册 |
 | Provider 注册（registerProvider/registerNativeProvider） | ✅ 已实现 | 模型接入。registerProvider 的 model 定义是**原样 spread**（Nodesign 迁移文档防坑#14：input/cost/contextWindow/maxTokens 必须给全，否则 read.ts 会炸） |
 | SQLite session 后端（entries 表 + project_id） | ✅ 已实现 | history.db 的底座。AIRP 的 worldId 即 pi-rp 的 projectId |
 | `@earendil-works/pi-server`（packages/server） | ✅ 存在 | 多会话并发服务端组件。**不用**（学 wl：每会话一进程朴素拓扑足够） |
 | 高并发优化（daemon/多会话/RequestGateway） | ❌ plan 中（Phase 0-2） | 黑客松用不上 |
-| Knowledge base / memory 工具 | ❌ plan 中 | 黑客松不做，journal/角色 memory 目录即记忆 |
+| Knowledge base / memory 工具 | ❌ plan 中 | 不做角色记忆系统；世界内容**要看什么就直接读**，hook 只报本层有哪些文件与最近动态。与 state 系统一样属于"有第二个真相源"的设计，AIRP 不采用 |
 
-**结论**：pi-rp 给了"单 agent 进程"的全套成熟件；AIRP 要自己写的是**前端**（从零）+ **叙事 frontmatter 的渲染协议**（chalk 上 choice/status/roll_dice）+ **角色遮罩 spawn 的薄胶水**（把角色进程接到遮罩 UI 上）。
+**结论**：pi-rp 给了"单 agent 进程"的全套成熟件；AIRP 要自己写的是**前端**（从零）+ **实体通用互动字段协议** + **共享世界动作工具**（doc-20）+ **角色遮罩 spawn 的薄胶水**。
 
 **开源许可注意**：pi-rp 是 MIT（upstream Pi 相同），vendor 进来无 AGPL 传染问题。Nodesign（AGPL-3.0）一个字不能抄，只借鉴设计思路（doc-01~04 分析文档已拆好）。
 
@@ -127,14 +127,14 @@ flowchart LR
 - [ ] 空仓库 `git init`，pnpm workspace monorepo（apps/web + apps/server + packages/shared）
 - [ ] `git submodule add` pi-rp → `vendor/pi-rp`；跑通 `npm run build`
 - [ ] 拉起脚本：`tools/scaffold.mjs`——从模板世界目录拷贝出玩家世界（"拷目录即开世界"是 doc-05 §8 的 UGC 生态设计）
-- [ ] 世界模板 3 个（doc-05 §11：校园恋爱/魔法学院/克苏鲁各一）：`README.md` + `world.json` + `characters/` + `journal/` 骨架 + 初始场景目录。**模板内容质量 = 演示成败的一半**，赛前可在"提前准备"里把内容写好（§4.1 A1）
+- [ ] 世界模板 3 个（doc-05 §11：校园恋爱/魔法学院/克苏鲁各一）：`README.md` + `world.json` + `characters/` + 初始场景目录（**2026-09-12：不再预置 `journal/` 骨架**，剧情一律落在场景目录，见 doc-12 文末）。**模板内容质量 = 演示成败的一半**，赛前可在"提前准备"里把内容写好（§4.1 A1）
 - [ ] 世界目录扫描器（worldStore 最薄版）：`readFile/writeFile/listFiles` + manifest 读写。**接口形状按 doc-05 §8.3 WorldStore 定死**，云端版 S3 只换实现不换接口
 
 **下午（主攻：明月）**
 - [ ] RPC 编排骨架（apps/server）：仿 Nodesign 迁移文档的七模块拆法（lifecycle/rpc-client/event-bridge/sidecar），但全部自己写。**spawn 参数照抄 Nodesign 已验证的坑位**：`--mode rpc --approve --system-prompt "" -e <扩展列表> --no-extensions --no-skills ...`
 - [ ] **作家进程 P0 路径**：spawn 作家 → 玩家消息 → prompt → 流式回包 → 事件桥 → WS 推前端。跑通"玩家说一句话，作家用 chalk 写一段旁白（含 frontmatter）"即为 P0 达成
 - [ ] 前端画布底座：单 transform 世界层 + 相机（平移/缩放/焦点保持）+ 点阵纸背景。**照 doc-02 §1 的思路重写**（离散缩放档、屏幕=世界+相机偏移×缩放、除以缩放转世界单位），不抄实现
-- [ ] 前端渲染循环：fs.watch 场景目录 → 事件表记增量 → 渲染队列入队 → 节流上屏。chalk 卡片渲染（楷体、墨色、淡入）+ **frontmatter 渲染器（choice 选项卡组 / status 折叠表格 / roll_dice 结果）**
+- [ ] 前端渲染循环：fs.watch 场景目录 → 事件表记增量 → 渲染队列入队 → 节流上屏。chalk 卡片渲染（楷体、墨色、淡入）+ **实体通用 frontmatter 渲染器（choice 选项卡组 / status 折叠表格 / roll_dice 结果）**
 
 **D1 验收（睡眠线）**：玩家在对话框打一句话 → 作家进程回答并写一条 chalk（带 frontmatter）到场景目录 → 画布上淡入一条旁白 + 选项卡片组。**E2E 全链路（WS+RPC+文件投影）打通**。
 **D1 尾部收束**：列卡点清单，评估明日计划可信度；连续两小时无进展的线立即冻结，转支援主线。
@@ -148,13 +148,13 @@ flowchart LR
 - [ ] 前端角色头像：场景内在场角色列表（从画布投影读）——**类光标 + 圆形头像**（不做精灵动画）
 
 **下午**
-- [ ] **角色遮罩对话 P0**：单击角色头像 → 遮罩特写（画布压暗虚化 + 左右分屏大半身立绘）→ spawn 角色进程（`--preset <角色id>` + 最近场景情况注入）→ 角色流式对话 → Esc 退出回收。「第一句话才 spawn」的懒灵魂验证
+- [ ] **角色遮罩对话 P0**：单击角色头像 → 遮罩特写（画布压暗虚化 + 左右分屏大半身立绘）→ spawn 角色进程（`--preset <角色id>` + hook 报本层文件清单/最近动态）→ 角色流式对话 → Esc 退出回收。「第一句话才 spawn」的懒灵魂验证
 - [ ] 小球打开：README.md → 场景卡渲染（封面图+标题+摘要，材质随本层）；材质皮肤系统（material 词汇表，doc-04 §6 思路）
 - [ ] 快照回滚 P0：会话结束/剧情节点 → 打包 `.airpworld.zip` 快照（node:child_process 调 zip 即可，别用库）
 - [ ] 事件表前端可视化（可选，时间允许才做）：功能区"世界历史"面板
 
 **D2 验收（睡眠线）**：完整叙事循环（玩家输入 → 作家 chalk + frontmatter → 选项 → 下一轮）+ 进层/出层 + 角色遮罩对话一轮 + 上帝模式新增一件物品并看到世界回应。
-**D2 尾部收束**：同 D1。**若 D2 未达验收线，D3 计划自动降级**——砍掉演出层，把 D2 内容打磨到演示级（一场完整的"进酒馆→对话→拿走物品→写进 journal"的戏）。
+**D2 尾部收束**：同 D1。**若 D2 未达验收线，D3 计划自动降级**——砍掉演出层，把 D2 内容打磨到演示级（一场完整的"进酒馆→对话→拿走物品→作家落板书回应"的戏）。
 
 ### D3：演出日（体验层 + 稳定性 + 演示准备）
 
@@ -210,20 +210,19 @@ flowchart TB
 
 角色 preset.json 结构 doc-05 §4.1 已定稿。赛时关键在**遮罩 spawn 的协议**：
 
-- **入口**：单击角色头像 → 前端开遮罩（画布压暗虚化 + 左右分屏立绘）→ 服务端 spawn 角色进程（`--mode rpc --approve --config-dir <世界目录> --preset <角色id> --settings-file <world>/.airpworld/settings.json --session <角色会话文件> -e <角色扩展>`，env 注入 `PI_OPENING` 开场播种）
-- **上下文**：spawn 时注入**最近场景情况**（当前层目录里最近几条 chalk 摘要 + 玩家此刻视点）——角色"拿到最近场景情况但独立于作家"；角色想知道更多就自己 `read_canvas`
+- **入口**：单击角色头像 → 前端开遮罩（画布压暗虚化 + 左右分屏立绘）→ 服务端 spawn 角色进程（`--preset <角色id> --session-dir <世界>/.airpworld/sessions --session <角色会话文件> -e <扩展>`）
 - **对话流**：角色消息流式渲染在遮罩对话框（节奏=角色性格参数）；玩家输入走纸条通道；结束（Esc/说完）→ 进程回收，会话存角色自己的会话文件（跨次遮罩连续）
-- **输出归属**：角色的话**不进主聊天流**，只进遮罩 + 角色自己的 chalk 落盘（场景单聊时落场景目录，遮罩内落 `characters/<名>/` 根目录或场景目录按情境）
-- **角色出生上下文 = 更薄（2026-09-10 定版）**：
-  1. **opening 开场播种**（pi-rp 内建）：开场知识/初始记忆写成 `<config-dir>/openings/<角色id>.json`，spawn 时 `PI_OPENING` env 注入——跨续档持久；
-  2. **preset 引用**：`--preset <角色id>` + file slot 引 identity/appearance/personality/memory（doc-05 §4.1）；
-  3. **最近场景情况注入**：invoke 时给一段"此刻场景里发生了什么"的摘要（角色知道场景情况的唯一自动来源）。
-  无 `--schema`/`--strict`（AIRP 无 state 门禁）；env 只加角色标记。
-- **谈判型辅助**：roll_dice 是 frontmatter 字段（`type: chalk` 里声明），服务端真随机由渲染层执行；作家/角色都不需要独立工具。
+- **输出归属**：角色的话不进主聊天流，只进遮罩；角色调用工具造成的世界文件、物件与 presence 变化立即落地。角色可写自己的小天地，也可按剧情需要写世界其他位置
+- **角色出生上下文 = 更薄（2026-09-10 定版，2026-09-12 修正）**：
+  1. **preset 引用**：`--preset <角色id>` + file slot 引 identity/appearance/personality（doc-05 §4.1）；
+  2. **本层文件清单 + 最近世界动态**：由 hook 注入（事实来源是 event 表）——角色据此知道"这儿有什么"，其余自己 `look_at` / `read`。**不是独立的状态快照层（`status` 只是某篇 chalk 里的一个键）、不是摘要，更没有"场景简报"这种注入物**；
+  3. **自己的会话历史**：遮罩对话存角色自己的会话文件，跨次遮罩连续（doc-13）。
+  无 `--schema`/`--strict`（AIRP 无 state 门禁，也永不引入 state）；env 只加角色标记。
+- **互动能力**：choice/status/roll_dice 是所有实体通用 frontmatter；角色和作家可调用 `choose` / `roll_dice`，与玩家 UI 共用同一服务端动作。
 
 **2026-09-10 删除项**：~~直聊路由（@前缀）~~（角色只通过遮罩对话）；~~pass_mic + handoff 移植~~；~~call_character 搭线~~；~~黑板旁听路由~~。这些是旧架构的编排机制，AIRP 不再需要。
 
-**可提前准备（§4.1 A2/A2b/A4）**：角色 preset 骨架 + `system` slot 隐形提示词文本 + opening 开场播种预设 + 遮罩 UI 壳（纯静态可先画）——纯文本/纯资产，不依赖运行时。
+**可提前准备（§4.1 A2/A2b）**：角色 preset 骨架 + 角色 instruction slot 隐形象提示词文本 + 遮罩 UI 壳（纯静态可先画）——纯文本/纯资产，不依赖运行时。
 
 ---
 
@@ -251,22 +250,22 @@ flowchart TB
 |---|---|---|---|
 | A1 | **世界体验 Mock ×4**（雾坞镇中世纪冒险 / 福尔摩斯变体 / 时间线科幻 / 恋爱世界，详 doc-20） | 每个一整套可玩结构：README + world.json + 导言 folder / 入口 Chalk + 关卡骨架 + 生成语法 + 持久事实 + 初始场景 / 角色 / 物件 + 第一幕 Chalk 链 + 阶段结局 | **四个 Mock 既是可玩剧本，也是上帝之手的样板工程**。先用“我是谁 / 在哪里 / 为什么行动”建立情感动机，再以一次小操作和足量反馈把玩家送入主场景；第一篇章要精彩且能打完，越过预写边界后仍能按世界 Context 生长。3 个故事主线是当前负责人工作量，不是四选三的产品范围 |
 | A2 | **四个 preset 骨架** | `writer.json`（作家·主）/ `character.json`（角色）/ `scene-init.json`（场景初始化，`delegatable: true`）/ `nook-init.json`（小天地初始化，`delegatable: true`），后两者见 doc-11 | doc-05 §4.2 骨架已定稿，直接转成 pi-rp preset JSON。**格式铁律（2026-09-11 实测）**：① 顶层**没有 `system` 字段**，提示词一律进 `items`；② 不存在内建 `system` 这个 slot，但可通过扩展注册专属 instruction slot（AIRP 在 `extensions/instructions.ts` 注册了 `writer-char`、`system-char`、`scene-init-instruction`、`nook-init-instruction`，各 agent 职责隔离、slot id 与 name 互不混用）；③ `--preset` 只认 **id** 不认文件路径，且只扫 `<configDir>/prompt-presets/` 顶层。~~`world-subagent.json`~~ 与 `scene-init` 职责重叠，已合并删除（2026-09-11） |
-| A2b | **平台统一的 Agent 行为规则扩展** | 各 Agent 专用 instruction slots（`extensions/instructions.ts`），提供角色演出与情绪差分规范、作家单轮管线、场景与小天地初始化交付规约 | **无信息边界/守密内容**：AIRP 不做防备机制——角色知道什么 = preset 引用 + 最近场景情况注入 + 自己 read_canvas |
+| A2b | **平台统一的 Agent 行为规则扩展** | 各 Agent 专用 instruction slots（`extensions/instructions.ts`），提供角色演出与情绪差分规范、作家单轮管线、场景与小天地初始化交付规约 | **无信息边界/守密内容**：角色有完整世界创作能力；prompt 只约束其行动时机和人物视角，不约束写入范围 |
 | A2c | **world.json manifest schema** | TypeScript 类型 + JSON schema + 校验函数（纯函数可单测） | doc-05 §8.4 定稿，直接转代码。zod 写完可以单测 |
-| A2d | **前端渲染器映射表** | type→渲染器决策表（chalk/component/asset/readme/无 frontmatter）+ **chalk frontmatter 渲染器**（choice/status/roll_dice 的类 md 表格渲染） | doc-05 §7.4 + doc-06 §2.6 定稿。表格 + 分支逻辑，纯函数可单测 |
+| A2d | **前端渲染器映射表** | type→渲染器决策表 + **实体通用互动字段渲染器**（choice/status/roll_dice） | doc-05 §7.4 + doc-06 §2.6 + doc-20 定稿。类型渲染器与互动渲染器分层，纯函数可单测 |
 | A2e | **侧边栏 UI 壳（背包 + 角色双 tab）** | 右侧边栏组件：背包 tab（`player/` 目录列表 + 拖拽目标区）、角色 tab（`characters/` 头像列表 + 导航/聊天/跟随按钮，doc-06 §5） | 纯前端静态组件，先画好；拖拽落盘/跟随状态逻辑赛时接 fs/DB 事件。**演示卖点"收藏/拿出/跟随"，提前备壳** |
 | A3 | **`scaffold` 脚本** | 模板→玩家世界拷贝脚本（含 manifest 注入玩家名/时间戳） | 纯 Node 脚本，不依赖服务器。赛前写好赛时直接用 |
 | A3b | **布局/存档基础设施** | canvas.db 的 schema + 读写包装 | better-sqlite3 + "路径即 id"约束。**赛前写好 + 单测**，赛时直接 import |
-| A4 | **opening 开场播种预设** | 每个角色一个 `<世界>/.airpworld/openings/<角色id>.json`：出生记忆/开场白/初始状态（user/assistant/customType 消息序列） | pi-rp 内建播种器（`/opening` + `PI_OPENING`）现成。**纯 JSON 资产，赛前写**——角色"记得开场时的事"全靠它，是叙事质感的一部分 |
+| ~~A4~~ | ~~opening 开场播种预设~~ | **已废弃（2026-09-12）**：开场白是世界里的一篇 `type: chalk` md，随模板一起写（doc-11 §3.3），不需要给 agent 播种 chat history |
 
 ### 4.2 需要验证后才能提前做（依赖 pi-rp 现状）
 
 | # | 物料 | 验证什么 | 验证后能提前做什么 |
 |---|---|---|---|
-| B1 | vendored pi-rp 能力探针 | 源码已有 opening 播种 / RPC / event 能力（wl 生产在用）；赛前跑一次探针确认 dist 完整 | 确认后即可按 §3.5 写角色 spawn 胶水。**不再是关键路径（无 orchestration 依赖）** |
-| ~~B2~~ | ~~state 文件桥~~ | 已定案：**不用**。AIRP 的世界状态 = 叙事 frontmatter + 文件 | 黑板的免轮询推送改走**事件表 + 下一轮注入**（doc-05 §5.1）——世界目录就是真相源，作家不读 diff |
+| B1 | vendored pi-rp 能力探针 | 源码已有 RPC / event / preset / extension 能力（wl 生产在用）；赛前跑一次探针确认 dist 完整 | 确认后即可按 §3.5 写角色 spawn 胶水。**不再是关键路径（无 orchestration 依赖）** |
+| ~~B2~~ | ~~state 文件桥 / 状态同步~~ | 已定案：**绝对不用**（架构不相容，非暂缓）。AIRP 没有 state、没有独立状态文件——`status` 只是实体 frontmatter（某一篇 chalk/组件）的一份快照 | 黑板的免轮询推送改走**事件表 + 下一轮注入**（doc-05 §5.1）——世界目录就是真相源，作家不读 diff |
 | ~~B3~~ | ~~pi-server 包合用性~~ | 已定案：**不用**（学 wl）。直接 spawn 每会话一进程 + RpcClient | 不引入 pi-server |
-| ~~B4~~ | ~~view_canvas 截图链路~~ | 已定案：**参赛不做**。作家"看"画布 = read_canvas 文本感知足够 | 从参赛范围彻底移除；远期再评估（需 playwright + 无头浏览器基建） |
+| ~~B4~~ | ~~view_canvas 截图链路~~ | 已定案：**参赛不做**。作家/角色文本感知先用 `look_at` | 从参赛范围彻底移除；远期再评估（需 playwright + 无头浏览器基建） |
 
 ### 4.3 现场级：赛时只能现场写（无法提前）
 
@@ -276,7 +275,7 @@ flowchart TB
 | C2 | WS 事件桥 + 前端渲染管线 | 依赖后端事件形状定型 |
 | C2b | 角色遮罩 spawn 胶水（spawn 参数可赛前写好，遮罩 UI 壳可先画，**进程路由实现不能**） | 进程生命周期依赖最终 spawn 验证结果 |
 | C3 | 层级切换（穿越动画可降级为淡入淡出） | 依赖画布底座定型 |
-| C3b | **世界重载/恢复流程** | 依赖最终事件表形状。**特别注意**：演示中重启进程后，journal 需要正确恢复（作家预设里注入 journal 摘要的宏） |
+| C3b | **世界重载/恢复流程** | 依赖最终事件表形状（doc-21）。**2026-09-12 简化**：不再有 journal 要恢复；重启后作家靠 doc-22 状态块全量重注 + 事件段续读游标接上（doc-16 #4） |
 | C4 | 快照打点（zip 打包可以赛前写好，触发时机赛时定） | 触发时机依赖演示节奏 |
 
 ### 4.4 演示资产（赛前备好，赛时零成本使用）
@@ -285,7 +284,7 @@ flowchart TB
 |---|---|---|
 | D1 | **录屏备份** | 完整动线 2 分钟录屏（最好含无网络 fallback 演示）。**赛前一天录制**，赛时网络炸了直接放 |
 | D2 | 电梯演讲稿 | 30 秒版本：一句话定义（doc-05 §0）+ 三条哲学 + "文件即真相" |
-| D2b | 架构故事板 | 一页图（§3 的 mermaid 图打印版）+ 拓扑讲解词。评委问答用——**重点讲"叙事文本是唯一主角"**：为什么砍掉角色编排、组件为什么降级、状态为什么收进 frontmatter |
+| D2b | 架构故事板 | 一页图（§3 的 mermaid 图打印版）+ 拓扑讲解词。评委问答用——重点讲共同创作：作家是全局导演，角色是直聊期间醒来的局部作者，玩家/UI 与 Agent 共用同一世界动作层 |
 | D3 | 备用模型配置 | 2 个 provider（如 gpt + qwen），一个炸了切另一个。**fail-loud 原则**：模型不可用时界面明确报错，绝不静默 |
 | D3b | 世界模板的"演示脚本" | 每个模板的推荐玩法动线（第几步说什么、作家会怎么回）——演示者手册 |
 
@@ -316,10 +315,10 @@ flowchart TB
 
 | 风险 | 概率 | 影响 | 应对 |
 |---|---|---|---|
-| vendored pi-rp 的 dist 缺 opening/RPC 能力 | 低 | 中 | 源码已实现、wl 生产在用；赛前探针确认，缺则重建 dist（pi-rp 侧一条命令） |
+| vendored pi-rp 的 dist 缺 RPC / extension 能力 | 低 | 中 | 源码已实现、wl 生产在用；赛前探针确认，缺则重建 dist（pi-rp 侧一条命令） |
 | 三天写不完层级画布 | 中 | 中 | 降级：D2 只做"进层/出层"两步导航（面包屑 + 场景卡点击），不做平滑过渡动画 |
 | LLM 输出质量差（chalk 写成小说段落 / frontmatter 格式错） | 中 | 中 | 作家 preset 里写死板书纪律（一条 chalk ≤ 200 字 + frontmatter 注入在 Phase ② 的 edit 里）——**格式错由 Phase ② 的二次 edit 兜底，正文阶段不背格式责任**；彩排时微调 preset 文本 |
-| 角色遮罩对话质量差（角色记不住场景） | 中 | 中 | 最近场景情况注入 + opening 播种双重保障；demo 只展示单轮遮罩对话（问汤/问房/问常客） |
+| 角色遮罩对话质量差（角色记不住场景） | 中 | 中 | hook 报**本层文件清单 + 最近世界动态**（靠 event 表）+ 角色自己 `look_at` / `read`；demo 只展示单轮遮罩对话（问汤/问房/问常客） |
 | 模板内容平庸 | 低 | 高 | A1 赛前由明月亲自写第一幕，这是唯一不可外包的质量项 |
 | 前端性能卡顿（对象多时） | 低 | 中 | 单 transform + 节流渲染已防住大头；赛时世界规模小（单场景 <30 物件），实际风险低 |
 | 演示现场网络故障 | 低 | 高 | D1 录屏备份 + 本地模型备胎（qwen） |
@@ -340,4 +339,4 @@ flowchart TB
 8. hub / UGC 分享（.airpworld.zip 分发）
 9. 叙事 frontmatter 完整 schema 与折叠交互打磨（choice 多模态 / status 图表化）
 
-其中 1-2 是"架构已就位、界面未开放"的直接偿还；3-9 是新功能开发，按产品节奏排期。**2026-09-10 删除：角色编排（call_character/pass_mic/黑板路由/节拍推演）已从架构移除，永不偿还。**
+其中 1-2 是"架构已就位、界面未开放"的直接偿还；3-9 是新功能开发，按产品节奏排期。角色进程通信（call_character/pass_mic/黑板路由/节拍推演）已从架构移除；角色具身动作由 doc-20 的共享工具承担。

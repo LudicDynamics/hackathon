@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from './components/canvas/Canvas.js';
 import { CharacterModal } from './components/overlay/CharacterModal.js';
 import { GodModeToolbar } from './components/god/GodModeToolbar.js';
+import { RadialMenu, type RadialItemType } from './components/god/RadialMenu.js';
 import { MuteButton } from './components/chrome/MuteButton.js';
 import { useAudio } from './state/useAudio.js';
 import { useCamera } from './state/useCamera.js';
@@ -68,6 +69,8 @@ export function App() {
   const [shell, setShell] = useState(initialShell);
   const [encounters, setEncounters] = useState<Record<string, string[]>>({});
   const [bagOpen, setBagOpen] = useState(false);
+  const [effectsEnabled, setEffectsEnabled] = useState(false);
+  const [radialState, setRadialState] = useState<{ x: number; y: number; worldX: number; worldY: number } | null>(null);
   const toggleShell = (action: 'header' | 'journal' | 'immersion') => setShell(current => transitionShell(current, action));
   const [worldPickerOpen, setWorldPickerOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -179,7 +182,23 @@ export function App() {
   const currentName = readme?.frontmatter?.title || sceneName(manifest, layer);
   const playerRole = manifest?.id === 'wuwu' ? 'Harbor Investigator' : 'Traveler';
   const sceneStatus = chalks.flatMap(chalk => Object.entries(chalk.frontmatter?.status?.data || {})).slice(0, 3);
-  const breadcrumbs = layer === 'map' ? ['map'] : layer.split('/');
+  const breadcrumbs: string[] = [];
+  let crumb: string | null = layer;
+  while (crumb && !breadcrumbs.includes(crumb)) {
+    breadcrumbs.unshift(crumb);
+    crumb = manifest?.layers?.[crumb]?.parent || (crumb === 'map' ? null : 'map');
+  }
+
+  useEffect(() => {
+    const onBack = (event: KeyboardEvent) => {
+      if (event.altKey && event.key === 'ArrowLeft' && !activeCharacter) {
+        event.preventDefault();
+        enterLayer(manifest?.layers?.[layer]?.parent || 'map');
+      }
+    };
+    window.addEventListener('keydown', onBack);
+    return () => window.removeEventListener('keydown', onBack);
+  }, [layer, manifest, activeCharacter, enterLayer]);
 
   const loadWorld = async (worldPath: string) => {
     setLoadingWorld(worldPath);
@@ -215,6 +234,7 @@ export function App() {
   const handleItemDrop = async (itemPath: string, targetPath: string) => {
     try {
       await airpGateway.useItem(itemPath, targetPath);
+      await refresh();
       notify('The world noticed what you used.');
     } catch (error) {
       notify(error instanceof Error ? error.message : 'The item could not be used');
@@ -241,19 +261,6 @@ export function App() {
     }
   };
 
-  const handleCreateEntity = async (type: 'note' | 'chalk', title: string, content: string) => {
-    const safeTitle = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'new-note';
-    const filePath = `${layer === 'map' ? 'world' : layer}/${safeTitle}.md`;
-    const body = type === 'chalk' ? `---\ntype: chalk\ntitle: ${title}\n---\n${content}` : `---\ntype: note\ntitle: ${title}\n---\n${content}`;
-    try {
-      await airpGateway.godAction('create', filePath, body);
-      await refresh();
-      notify(`Created “${title}”`);
-    } catch (error) {
-      notify(error instanceof Error ? error.message : 'Could not create the object');
-    }
-  };
-
   const openCharacter = (character: CharacterView) => {
     const worldId = manifest?.id || '';
     setEncounters(current => ({ ...current, [worldId]: [...new Set([...(current[worldId] || []), character.id])] }));
@@ -264,6 +271,20 @@ export function App() {
       characterId: character.id,
       recentContext: chalks.slice(-3).map((chalk) => chalk.body).join('\n\n'),
     });
+  };
+
+  const createAt = async (type: RadialItemType, title: string, content: string, x: number, y: number) => {
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `creation-${Date.now()}`;
+    const base = layer === 'map' ? 'world' : layer;
+    const filePath = type === 'gate' ? `${base}/${slug}/README.md` : `${base}/${slug}.md`;
+    const form = type === 'character' ? 'sprite' : type;
+    try {
+      await airpGateway.godAction('create', filePath, `---\ntype: ${form}\ntitle: ${JSON.stringify(title)}\n---\n${content}`);
+      await moveCard(filePath, x, y);
+      await refresh();
+      setRadialState(null);
+      notify(`Created “${title}”`);
+    } catch (error) { notify(error instanceof Error ? error.message : 'Could not create the object'); }
   };
 
   const closeCharacter = () => {
@@ -303,6 +324,7 @@ export function App() {
           <Canvas
             key={manifest?.id || 'opening'}
             openingComposition={['wuwu', 'whitechapel', 'divergence', 'firstsnow'].includes(manifest?.id || '')}
+            effectsEnabled={effectsEnabled}
             currentLayer={layer}
             items={canvasItems}
             links={state?.links || []}
@@ -320,6 +342,7 @@ export function App() {
             }}
             onItemDropOnTarget={handleItemDrop}
             onDropItemToScene={handleReturnItem}
+            onOpenRadialMenu={(x, y, worldX, worldY) => { if (attention === 'authoring') setRadialState({ x, y, worldX, worldY }); }}
           />
 
           <div className="prototype-vignette" aria-hidden="true" />
@@ -327,9 +350,8 @@ export function App() {
           <header className="prototype-worldtop prototype-chrome" aria-label="World header" inert={!shell.header || shell.immersive}>
             <span className="prototype-brand">World<span>lines</span></span>
             <nav className="prototype-crumbs" aria-label="Scene path">
-              {breadcrumbs.map((part, index) => {
-                const target = index === 0 && part === 'map' ? 'map' : breadcrumbs.slice(0, index + 1).join('/');
-                return <button key={`${part}-${index}`} onClick={() => enterLayer(target)}>{labelOf(part)}</button>;
+              {breadcrumbs.map((part) => {
+                return <button key={part} onClick={() => enterLayer(part)}>{part === 'map' ? 'Map' : sceneName(manifest, part)}</button>;
               })}
             </nav>
             <div className="prototype-spacer" />
@@ -337,6 +359,7 @@ export function App() {
             <span className="prototype-status">{handItems.length} ITEMS · {characters.length} PEOPLE</span>
             <button className="prototype-pill" onClick={() => setWorldPickerOpen(true)}>Worlds</button>
             <MuteButton />
+            <button onClick={() => setEffectsEnabled(value => !value)} aria-pressed={effectsEnabled}>Motion {effectsEnabled ? 'on' : 'off'}</button>
             <button className="prototype-quiet" onClick={() => toggleShell('header')} aria-label="Close header"><ChevronUp size={16} /></button>
           </header>
 
@@ -436,7 +459,7 @@ export function App() {
 
           {attention === 'authoring' && (
             <div className="prototype-authoring">
-              <GodModeToolbar frozen={state?.worldFrozen === true} onToggleFreeze={handleToggleFreeze} onCreateEntity={handleCreateEntity} />
+              <GodModeToolbar frozen={state?.worldFrozen === true} onToggleFreeze={handleToggleFreeze} />
               <button className="prototype-quiet" onClick={() => setAttention('ambient')}>Close</button>
             </div>
           )}
@@ -459,6 +482,8 @@ export function App() {
           </section>
         </div>
       )}
+
+      {radialState && <RadialMenu {...radialState} onClose={() => setRadialState(null)} onCreate={createAt} />}
 
       {activeCharacter && (
         <CharacterModal

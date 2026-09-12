@@ -5,7 +5,7 @@ import path from 'node:path';
  * AIRP's project config directory name (a system directory inside the world; see doc-05 §7.4).
  *
  * It is also pi-rp's `PI_PROJECT_CONFIG_DIR`: only when it is set to this value
- * will pi-rp look under `<worldRoot>/.airpworld/{prompt-presets,openings}/`.
+ * will pi-rp look under `<worldRoot>/.airpworld/prompt-presets/`.
  */
 export const AIRP_CONFIG_DIR = '.airpworld';
 
@@ -41,18 +41,18 @@ export function installPreset(worldRoot: string, srcFile: string): string {
 /**
  * Builds the environment variables needed to spawn the pi-rp process.
  *
- * `PI_PROJECT_CONFIG_DIR` is the master switch: when set, prompt-presets and openings land
- * under the world's `.airpworld/`. `PI_OPENING` takes the **id of the opening preset** (not a
- * file path); it is set only when `<worldRoot>/.airpworld/openings/<id>.json` actually exists,
- * and left empty otherwise so the opening extension skips at zero cost.
+ * `PI_PROJECT_CONFIG_DIR` is the master switch: it is what makes pi-rp discover the
+ * world's `<worldRoot>/.airpworld/prompt-presets/`.
+ *
+ * Deliberately **no `PI_OPENING`**. pi-rp's opening seeder plants messages into the
+ * session's **chat history**, but in AIRP no agent's chat history is ever displayed:
+ * the player-facing opening *is* a `type: chalk` markdown file sitting in the layer
+ * directory (doc-05 §7.4), and a character learns the scene by `look_at` / `read`
+ * (the hook only lists which files exist; doc-07 §3.5, B3). Seeding chat would show
+ * the player nothing and burn a turn.
  */
-export function airpEnv(worldRoot: string, openingId?: string): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { PI_PROJECT_CONFIG_DIR: AIRP_CONFIG_DIR };
-  if (openingId) {
-    const openingFile = path.join(worldRoot, AIRP_CONFIG_DIR, 'openings', `${openingId}.json`);
-    if (fs.existsSync(openingFile)) env.PI_OPENING = openingId;
-  }
-  return env;
+export function airpEnv(): NodeJS.ProcessEnv {
+  return { PI_PROJECT_CONFIG_DIR: AIRP_CONFIG_DIR };
 }
 
 /**

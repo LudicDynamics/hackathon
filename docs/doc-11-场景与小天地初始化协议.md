@@ -135,7 +135,7 @@ Three lines: list of paths / one-sentence scene summary / one sentence on "what 
 | **C5** | 子会话用 **prepare 记录的 cwd**（不再是 `process.cwd()`） | ✅ **已修**（原"cwd 可能不一致"已失效） | `run.ts:56/59`（`ea310c9fc`） | 相对 file slot 路径与相对写盘解析到同一个 cwd；引擎仍应保证 cwd = 世界根，但不再是踩雷点 |
 | **C6** | **`spawnAgent` 不校验 `delegatable`**；`subagent` 工具与 `/subagent` 命令才校验 | ⚠️ **仍然成立（且是有意的）** | `spawn.ts` 的函数注释明写 "not gated on the preset being delegatable" vs `extension.ts:92` | 两个入口都能用同一个 profile，正合我们的 R1/R2 共用设计；`delegatable: true` 只为了让作家侧看得到。**同一段注释还写了 `spawnAgent` 不继承父会话扩展工具**——这一条留着（刻意隔离），但由它派生的那个静默坑（`tools` 预填导致 `customTools` 被滤掉）已在 `dfebadcd3` 修掉，见 §2.4 |
 | **C7** | **preset 目录递归**：`collectPresetFiles` 深度优先收集子目录的 `*.json` | ✅ **已递归**（原"只读顶层"已失效） | `loader.ts::collectPresetFiles`（`6c693a7f3`） | 递归范围仍限于 `<configDir>/prompt-presets/` 内部。`characters/<id>/preset.json` **不在这棵树上**，所以引擎侧的"安装到 prompt-presets"动作依然需要（见 §7.1 修订） |
-| **C8** | **子会话无扩展运行时**：扩展工具的定义会继承，但事件 handler 不触发 | ⚠️ **仍然成立** | `run.ts:76`（"Omit extensions to fulfill no extensions"） | 依赖 `agent_start`/`tool_result` 钩子的逻辑在 subagent 里不会跑；落账要写在工具实现**内部** |
+| **C8** | **子会话工具事件与 UI 透传**：工具事件转发，UI 上下文透传；会话级生命周期仍隔离 | ✅ **已升级**（原"完全无扩展运行时"已修） | `run.ts:100`（`5361105c3`） | 子代理现已继承父会话 `uiContext`（`ctx.ui.notify` 直通前端）并转发 5 项工具级事件（`tool_call`/`tool_result`/`tool_execution_*`）；会话级事件（`agent_start`/`session_start`）与 commands 保持隔离不污染。工具落账既可在工具 `execute` 内自闭环，也可被 `tool_result` 监听捕获 |
 | **C9** | 输出被 `truncateTail` 截断（2000 行 / 50KB） | ⚠️ **仍然成立** | `run.ts:136` | 回报格式必须短（§2.2 三行） |
 
 ### 2.3.1 vendored dist 的时间差（复核时发现，务必记住）
@@ -163,7 +163,7 @@ options.path   "/w/{{who}}.md"            → file not found "/w/{{who}}.md"  �
 
 > **2026-09-12 复核（本节已因一次上游修复重写）**：C1 修好之后**内建工具**两边默认对齐（`spawnAgent` 不传 `tools` 时落到同一个 `DEFAULT_SUBAGENT_TOOLS`）。扩展工具原本**不**对齐——`spawnAgent` 把 `tools` 预填成"只有内建集"，于是显式传进去的 `customTools` 因为名字不在白名单里被 `AgentSession._refreshToolRegistry` 静默滤掉。这违背了 pi 自己的工具语义（`tools` 是**收窄用的白名单**，省略即"全开"），已在 pi-rp `dfebadcd3` 修掉。
 
-| 入口 | 内建工具 | **扩展工具**（`chalk` / `read_canvas` / `link` …） |
+| 入口 | 内建工具 | **扩展工具**（`chalk` / `look_at` / `link` …） |
 |---|---|---|
 | **R1 作家委托**（`subagent` 工具） | 默认集，什么都不用做 | **自动继承**：`inheritExtensionTools` 默认 true，父会话注册的工具并进 `effectiveTools`（`prepare.ts:180`） |
 | **R2 引擎直唤**（`ctx.spawnAgent`） | 不传 `tools` 即同一默认集 | **传 `customTools` 即可用**（`dfebadcd3` 起）：省略 `tools` 时默认集自动并上 `customTools` 的名字。仍**不继承**父会话里别的扩展工具——那是 `inheritExtensionTools: false` 的刻意设计 |
@@ -179,7 +179,7 @@ options.path   "/w/{{who}}.md"            → file not found "/w/{{who}}.md"  �
 > 需要收窄的场景（例如初始化子代理不该有 `bash`）仍然照 pi 的语义写：
 >
 > ```ts
-> tools: ['read', 'write', 'edit', 'grep', 'find', 'ls', 'chalk', 'read_canvas', 'link', 'arrange']
+> tools: ['read', 'write', 'edit', 'grep', 'find', 'ls', 'chalk', 'look_at', 'link', 'arrange']
 > ```
 
 > 另一处两入口不同、但对 AIRP 无影响的点：`spawnAgent` 把 `strict: true` 写死（无 schema 的命名空间写入会被拒）。AIRP 不用 pi-rp 的 state，碰不到。
@@ -210,21 +210,23 @@ options.path   "/w/{{who}}.md"            → file not found "/w/{{who}}.md"  �
 ```
 world/baker-street/crime-scene/
 ├── README.md          # type: readme，material: scene，含 name + bg/bgStyle
-├── evening.md         # type: chalk —— 开场白（≤200 字，可带 status / initial choice）
+├── evening.md         # type: chalk —— 开场 chalk（≤200 字，可带 status / initial choice）
 └── rusted-key.md      # 物件（chalk / component，2~4 个）
 ```
 
 | 产出 | 要求 |
 |---|---|
 | **README.md** | `type: readme` + `material: scene` + `bg`（底图）+ 标题 + 一句话摘要。**覆盖掉 stub 占位**（原 stub README 里 `material: stub`） |
-| **开场白 chalk（可选，强烈建议）** | 这一层"被玩家看见"的那一下，**缺了它入戏效果会差很多**（2026-09-11 明月修正：早先写成"绝对不写"是错的）。一段环境叙事，≤200 字（doc-07 纪律）；**可以带 `status` 快照，也可以给一组 `initial choice`** 作为玩家起步的抓手 |
+| **开场 chalk（可选，强烈建议）** | 这一层"被玩家看见"的那一下，**缺了它入戏效果会差很多**（2026-09-11 明月修正：早先写成"绝对不写"是错的）。一段环境叙事，≤200 字（doc-07 纪律）；**可以带 `status` 快照，也可以给一组 `initial choice`** 作为玩家起步的抓手。**它就是开场白本体**——不是 agent 的 chat history 播种（那套已废弃，见 doc-05 §7.4） |
 | **物件 2~4 个** | 沉默细节优先（桌上的杯子、椅子的摆法、纸上的字），不是"线索大礼包"。可含 1 个可拿走的（给背包用） |
 
-> **"开场白可选"与"不预设剧情"不冲突**（两者是不同维度）：
+> **"开场 chalk 可选"与"不预设剧情"不冲突**（两者是不同维度）：
 > - **允许**：写"你站在这里看到什么"、给起步选项、给状态快照——这些是**入口的手感**；
 > - **禁止**：下剧情结论、揭示真相、预定结局、替作家把这段戏写完——那些是**叙事主体（作家）的活**。
 >
 > 换句话说：初始化可以**开门**，不可以**演戏**。
+>
+> **术语边界（2026-09-12）**："开场 chalk" 是**世界里的文件**，玩家直接看到；pi-rp 的 "opening 播种器" 是往 **agent 会话**里灌 chat history——AIRP 不用后者。两者都译作"开场白"极易混淆，本文一律写"开场 chalk"。
 
 ### 3.4 时机与呈现（幻影先行）
 
@@ -298,7 +300,7 @@ characters/旅店老板/
 ### 4.4 初始化后
 
 - 目录不再为空 → **不会二次初始化**（判据同 §3.1）；
-- 角色第一次被点开 spawn 时，`read` 自己的目录 → 这些陈设成为它的记忆底座，**它天然认领**（doc-13 §4）；
+- 角色第一次被点开 spawn 时可 `look_at` / `read` 自己的目录，这些陈设成为它理解自身生活的现场材料；现阶段不把它们收编进角色记忆系统；
 - 之后角色"顺手写"的增量（doc-05 §4.1 情境一）叠加在上面，看不出接缝。
 
 ---
@@ -381,7 +383,7 @@ doc-05 §7.4 早先的 `.airpworld/agent/main/` + `.airpworld/agent/subagent/` �
 原文要求 AIRP 扩展注册一个 `write_world_file` 之类的写工具，理由是子代理的默认工具集不含 `write`/`edit`。**这个前提已经不成立**（C1，`402ccc59b`）：初始化器开箱就有 `write`/`edit`。
 
 - 落地时**不要**再造 `write_world_file`——多一层同义工具只会让模型犹豫用哪个；
-- AIRP 扩展该注册的是**引擎独有能力**（`chalk` / `read_canvas` / `link` / `arrange`），不是内建工具的替身；
+- AIRP 扩展该注册的是**引擎独有能力**（`chalk` / `look_at` / `move_to` / `move` / `choose` / `roll_dice` / `link` / `arrange`），不是内建工具的替身；
 - 这些扩展工具经 `inheritExtensionTools`（默认 true）进 R1；R2 经 `customTools` 交出定义即可，只在显式收窄 `tools` 时才要把名字一并带上（§2.4）。
 
 ---
@@ -483,7 +485,7 @@ doc-05 §7.4 早先的 `.airpworld/agent/main/` + `.airpworld/agent/subagent/` �
 
 ## 边界（2026-09-11 修订）
 
-- 初始化**不预设剧情结论**——不下真相、不预定结局、不替作家把戏写完（开放性原则）；但**开场白是可选的正经产出**，"不预设剧情"不等于"不许写开场白"，见 §3.3；
+- 初始化**不预设剧情结论**——不下真相、不预定结局、不替作家把戏写完（开放性原则）；但**开场 chalk 是可选的正经产出**，"不预设剧情"不等于"不许写开场"，见 §3.3；
 - 角色小天地初始化 ≠ 角色 spawn（点开聊天才 spawn），两者独立（doc-06 §5.4）；
 - **角色 agent 永远不参与初始化**（§1.3）——先有空间，后有灵魂；
 - **初始化 profile 只有一个**：`scene-init`（场景）/ `nook-init`（小天地）；旧的 `world-subagent` 已并入 `scene-init` 删除（2026-09-11）。

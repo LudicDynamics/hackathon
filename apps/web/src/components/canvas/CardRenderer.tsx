@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChalkCard } from '../narrative/ChalkCard.js';
-import { MarkdownText } from '../../lib/md.js';
+import { MarkdownText, plainExcerpt, stripLeadingTitle, leadingTitleOf } from '../../lib/md.js';
+import { playFoley } from '../../lib/audio.js';
 
 interface CardRendererProps {
   item: {
@@ -11,8 +12,6 @@ interface CardRendererProps {
   };
   /** Ordinal of this gate among the layer's gates (Main computes it). */
   index?: number;
-  /** The current layer's own README path — it renders as a placard, not a door. */
-  currentReadmePath?: string | null;
   onSelectChoice?: (choice: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
   onEnterGate?: (targetLayer: string) => void;
@@ -82,7 +81,6 @@ const GatePin: React.FC = () => (
 export const CardRenderer: React.FC<CardRendererProps> = ({
   item,
   index = 1,
-  currentReadmePath,
   onSelectChoice,
   onDiceRolled,
   onEnterGate,
@@ -92,6 +90,36 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
   const { frontmatter, body, filename, path } = item;
   const [letterOpen, setLetterOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isItemDragging, setIsItemDragging] = useState(false);
+  const [isUnlockedEffect, setIsUnlockedEffect] = useState(false);
+
+  useEffect(() => {
+    const onDragStart = () => setIsItemDragging(true);
+    const onDragEnd = () => {
+      setIsItemDragging(false);
+      setIsDragOver(false);
+    };
+    window.addEventListener('airp:item-drag-start', onDragStart);
+    window.addEventListener('airp:item-drag-end', onDragEnd);
+    return () => {
+      window.removeEventListener('airp:item-drag-start', onDragStart);
+      window.removeEventListener('airp:item-drag-end', onDragEnd);
+    };
+  }, []);
+
+  const handleTargetDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const draggedPath = e.dataTransfer.getData('text/plain');
+    if (draggedPath) {
+      playFoley('unlock');
+      setIsUnlockedEffect(true);
+      setTimeout(() => setIsUnlockedEffect(false), 800);
+      onItemDropOnTarget?.(draggedPath, path);
+    }
+  };
+
+  const puzzleClasses = `${isItemDragging ? 'puzzle-target-ready' : ''} ${isDragOver ? 'puzzle-target-hover' : ''} ${isUnlockedEffect ? 'puzzle-unlock-burst' : ''}`.trim();
 
   // 1. Chalk Card — ink on the canvas (bare by default).
   if (frontmatter?.type === 'chalk') {
@@ -104,13 +132,11 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
     );
   }
 
-  // 2. Gate Card (sub-scene portal) — the directory made into a door.
-  //    The CURRENT layer's own README is not a door: it is the scene's own
-  //    placard, so it renders as a scene card with no navigation (clicking a
-  //    card that pointed at itself would land on the pseudo-layer 'world').
+  // 2. Gate Card (sub-scene portal) — a sub-directory's README, the door that
+  //    walks into that scene. The current layer's own README is never a card
+  //    (see cardsOfLayer), so every gate here genuinely navigates somewhere.
   if (frontmatter?.type === 'gate' || filename === 'README.md') {
     const isStub = frontmatter?.stub || false;
-    const isCurrent = path === currentReadmePath;
     // Title: frontmatter title, else the scene name, else the parent directory
     // name — never the literal filename "README".
     const title =
@@ -127,15 +153,13 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
     const order = /^\d+$/.test(String(orderNum))
       ? String(orderNum).padStart(2, '0')
       : orderNum;
-    const meta = isCurrent
-      ? 'CURRENT SCENE'
-      : isStub
-        ? 'UNWRITTEN · walk in, and it will be written →'
-        : 'SCENE · ENTRANCE';
+    const meta = isStub ? 'UNWRITTEN · walk in, and it will be written →' : 'SCENE · ENTRANCE';
+    // The card face shows a clean one-line excerpt; the raw README markdown
+    // (# heading, line breaks) stays in the hover sheet. Never spill source.
+    const excerpt = plainExcerpt(body);
     return (
       <div
         onClick={() => {
-          if (isCurrent) return; // the scene placard does not walk into itself
           const target = frontmatter?.target || path.replace('/README.md', '');
           onEnterGate?.(target);
         }}
@@ -144,29 +168,26 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
           setIsDragOver(true);
         }}
         onDragLeave={() => setIsDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDragOver(false);
-          const draggedPath = e.dataTransfer.getData('text/plain');
-          if (draggedPath) onItemDropOnTarget?.(draggedPath, path);
-        }}
-        className={`gate${isStub ? ' gate--stub' : ''}`}
-        style={
-          isDragOver
-            ? { outline: '2px solid var(--rust)', outlineOffset: '2px' }
-            : undefined
-        }
+        onDrop={handleTargetDrop}
+        className={`gate${isStub ? ' gate--stub' : ''} ${puzzleClasses}`}
       >
         <GateNum n={order} />
         <GatePin />
         <div className="gate__cover">
           <GateIcon />
         </div>
+        {/* The card face keeps a two-line teaser; the full README detail lives
+            in a floating sheet on hover (never spills past the card). */}
         <div className="gate__body">
           <div className="gate__title">{title}</div>
-          <div className="gate__desc"><MarkdownText text={body.replace(/^#\s+[^\n]+\n*/, '')} /></div>
+          <div className="gate__desc">{excerpt}</div>
           <div className="gate__meta">{meta}</div>
         </div>
+        {excerpt !== '' && (
+          <div className="gate__detail">
+            <MarkdownText text={stripLeadingTitle(body)} />
+          </div>
+        )}
       </div>
     );
   }
@@ -177,30 +198,22 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
       <>
         <div
           onClick={() => setLetterOpen(true)}
-          className="letter"
-          style={
-            isDragOver
-              ? { outline: '2px solid var(--rust)', outlineOffset: '2px' }
-              : undefined
-          }
+          className={`letter ${puzzleClasses}`}
           onDragOver={(e) => {
             e.preventDefault();
             setIsDragOver(true);
           }}
           onDragLeave={() => setIsDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setIsDragOver(false);
-            const draggedPath = e.dataTransfer.getData('text/plain');
-            if (draggedPath) onItemDropOnTarget?.(draggedPath, path);
-          }}
+          onDrop={handleTargetDrop}
         >
           <div className="letter__head">
             <span className="letter__seal" />
             {frontmatter.title || 'Letter'}
           </div>
           <div className="letter__preview">
-            {frontmatter.preview || body}
+            {/* frontmatter.preview is authored copy; the body fallback is raw
+                markdown, so flatten it — a card face never shows source. */}
+            {frontmatter.preview || plainExcerpt(body)}
           </div>
           <div className="letter__meta">
             <span>{frontmatter.sign || 'Click to open and read'}</span>
@@ -245,6 +258,8 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
       </>
     );
   }
+  const noteTitle =
+    frontmatter?.title || leadingTitleOf(body) || filename.replace('.md', '');
 
   // 4. Note / clue (default) — a sticky sheet, no white rounded card.
   return (
@@ -254,24 +269,12 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
         setIsDragOver(true);
       }}
       onDragLeave={() => setIsDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setIsDragOver(false);
-        const draggedPath = e.dataTransfer.getData('text/plain');
-        if (draggedPath) onItemDropOnTarget?.(draggedPath, path);
-      }}
-      className="note"
-      style={
-        isDragOver
-          ? { outline: '2px solid var(--rust)', outlineOffset: '2px' }
-          : undefined
-      }
+      onDrop={handleTargetDrop}
+      className={`note ${puzzleClasses}`}
     >
       <span className="note__clip" />
-      <div className="note__title">
-        {frontmatter?.title || filename.replace('.md', '')}
-      </div>
-      <MarkdownText text={body} className="note__body" />
+      <div className="note__title">{noteTitle}</div>
+      <MarkdownText text={stripLeadingTitle(body)} className="note__body" />
     </div>
   );
 };

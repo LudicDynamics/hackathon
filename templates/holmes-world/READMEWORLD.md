@@ -49,7 +49,7 @@ The player takes on the role of **Sherlock Holmes**, investigating **the disappe
 | `characters/watson/preset.json` | pi-rp preset | Watson prompt preset |
 | `characters/constable/README.md` | type: readme | Constable character profile |
 | `characters/constable/preset.json` | pi-rp preset | Constable prompt preset |
-| `player/README.md` | type: readme | Player's own space |
+| `world/README.md` | type: readme | Player's own space |
 | `player/old-boat-ticket.md` | type: note | Starting item (inventory) |
 | `journal/README.md` | type: readme | Journal directory notes |
 | `journal/01-fog-day-one-arriving-on-baker-street.md` | type: chalk | Case journal |

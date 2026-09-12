@@ -93,3 +93,41 @@ export const MarkdownText: React.FC<{ text: string; className?: string }> = ({ t
   }, [node]);
   return React.createElement('div', { ref, className });
 };
+
+/**
+ * Flatten markdown to a single plain-text line for card previews.
+ * Strips the structural markers the mini-markdown parser hides (`#` headings,
+ * `<b>` titles) plus inline emphasis, and collapses all whitespace — a card
+ * face shows an excerpt, never raw markdown source. Prefers the first real
+ * body paragraph, so a README's heading line doesn't become the excerpt.
+ */
+export function plainExcerpt(body: string): string {
+  const src = stripLeadingTitle(body)
+    .replace(/[*`]/g, '') // inline emphasis markers
+    .replace(/^[-*+]\s+/gm, '') // list bullets
+    .replace(/\s+/g, ' ');
+  return src.trim();
+}
+
+/**
+ * Drop a README/note's leading title line (`<b>Title</b>` or `# Title`) so a
+ * rendering that already shows the title elsewhere never repeats it.
+ */
+export function stripLeadingTitle(body: string): string {
+  return String(body ?? '')
+    .trim()
+    .replace(/^<b>([\s\S]*?)<\/b>\s*\n*/, '')
+    .replace(/^#+\s+[^\n]*\n*/, '')
+    .trim();
+}
+
+/**
+ * The leading title text of a note/README body (`<b>Title</b>` or `# Title`),
+ * or '' when the body has none. Lets a card reuse the authored title instead
+ * of showing it twice (once as a card title, once as the first body block).
+ */
+export function leadingTitleOf(body: string): string {
+  const src = String(body ?? '').trim();
+  const m = src.match(/^<b>([\s\S]*?)<\/b>/) || src.match(/^#+\s+([^\n]+)/);
+  return m ? m[1].replace(/[*`]/g, '').trim() : '';
+}
