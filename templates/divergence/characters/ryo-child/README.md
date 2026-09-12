@@ -1,7 +1,8 @@
 ---
 type: "readme"
 name: "Ryo Tokiwa · Age 7"
-avatar: "assets/characters/ryo-child.webp"
+avatar: "assets/motion/seedance/characters/ryo-transparent.webp"
+avatarVideo: "assets/motion/seedance/characters/ryo-transparent.webm"
 ---
 
 # Ryo Tokiwa · Age 7

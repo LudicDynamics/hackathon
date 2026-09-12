@@ -7,6 +7,7 @@ tone: "warm"
 grain: "parchment"
 order: 1
 bg: "assets/scenes/fleet-street-press.webp"
+bgVideo: "assets/motion/seedance/backgrounds/press.webm"
 ---
 
 # Fleet Street Press

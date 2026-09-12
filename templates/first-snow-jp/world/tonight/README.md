@@ -11,7 +11,7 @@ requires:
   items:
     - player/request-sheet.md
 blocked: "まず放送室のリクエスト用紙を持っていこう。消し跡には、今夜の約束が残っている。"
-bgVideo: assets/scenes/winter-schedule.mp4
+bgVideo: "assets/motion/seedance/backgrounds/map.webm"
 ---
 
 放送室の七海。琥珀カフェで待つ澄。二人で毎年会うと決めた屋上。

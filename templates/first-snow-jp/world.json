@@ -1,5 +1,8 @@
 {
   "id": "first-snow-jp",
+  "audio": {
+    "theme": "canvas-firstsnow"
+  },
   "locale": "ja",
   "entry": "map",
   "name": "初雪ラジオ",
@@ -28,8 +31,9 @@
       "name": "七海",
       "home": "world/tonight/radio-studio",
       "role": "companion",
-      "avatar": "assets/characters/nanami.webp",
-      "description": "七海。十年来の友人で、番組「初雪アワー」のパーソナリティ。"
+      "avatar": "assets/motion/seedance/characters/nanami-transparent.webp",
+      "description": "七海。十年来の友人で、番組「初雪アワー」のパーソナリティ。",
+      "avatarVideo": "assets/motion/seedance/characters/nanami-transparent.webm"
     },
     {
       "id": "sumi-yukimura",

@@ -1,7 +1,8 @@
 ---
 type: "readme"
 name: "Vera"
-avatar: "assets/characters/vera.webp"
+avatar: "assets/motion/seedance/characters/viola-transparent.webp"
+avatarVideo: "assets/motion/seedance/characters/viola-transparent.webm"
 ---
 
 # Vera

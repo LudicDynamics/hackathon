@@ -7,6 +7,7 @@ tone: "rose"
 grain: "parchment"
 order: 1
 bg: "assets/scenes/radio-studio.webp"
+bgVideo: "assets/motion/seedance/backgrounds/studio.webm"
 ---
 
 # Act I · Ninety Seconds in the Studio

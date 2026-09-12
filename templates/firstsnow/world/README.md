@@ -6,7 +6,7 @@ material: "warm"
 tone: "rose"
 grain: "parchment"
 bg: "assets/scenes/intro.webp"
-bgVideo: assets/scenes/intro.webm
+bgVideo: "assets/motion/seedance/backgrounds/intro.webm"
 ---
 
 # Episode 47 · Live

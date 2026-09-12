@@ -7,6 +7,7 @@ tone: "blue"
 grain: "parchment"
 order: 2
 bg: "assets/scenes/whitechapel-morgue.webp"
+bgVideo: "assets/motion/seedance/backgrounds/morgue.webm"
 ---
 
 # Whitechapel Morgue

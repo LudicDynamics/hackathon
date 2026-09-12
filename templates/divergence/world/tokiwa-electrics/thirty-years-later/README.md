@@ -7,6 +7,7 @@ tone: "blue"
 grain: "dust"
 bg: "assets/scenes/thirty-years-later.webp"
 order: 3
+bgVideo: "assets/motion/seedance/backgrounds/ruins.webm"
 ---
 
 # Thirty Years Later · Rain

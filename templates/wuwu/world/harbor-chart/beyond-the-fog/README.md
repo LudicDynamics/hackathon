@@ -8,6 +8,7 @@ grain: "parchment"
 bg: "assets/scenes/beyond-the-fog.webp"
 order: 4
 stub: true
+bgVideo: "assets/motion/seedance/backgrounds/beyond.webm"
 ---
 
 # Beyond the Fog

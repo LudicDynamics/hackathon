@@ -8,6 +8,7 @@ grain: "dust"
 bg: "assets/scenes/convergence.webp"
 order: 4
 stub: true
+bgVideo: "assets/motion/seedance/backgrounds/converge.webm"
 ---
 
 # Divergence Point · Convergence

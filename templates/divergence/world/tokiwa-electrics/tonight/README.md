@@ -7,6 +7,7 @@ tone: "blue"
 grain: "parchment"
 bg: "assets/scenes/tonight.webp"
 order: 2
+bgVideo: "assets/motion/seedance/backgrounds/tonight.webm"
 ---
 
 # Tonight · 23:47

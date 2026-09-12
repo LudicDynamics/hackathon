@@ -10,6 +10,7 @@ choice:
   - Compare the crime scene with the illustration
   - Check who saw the plate before publication
   - Ask Watson what the body contradicts
+bgVideo: "assets/motion/seedance/backgrounds/map.webm"
 ---
 London is no longer a backdrop; it is your evidence board.
 

@@ -7,6 +7,7 @@ tone: "blue"
 grain: "parchment"
 bg: "assets/scenes/tokiwa-electrics.webp"
 order: 1
+bgVideo: "assets/motion/seedance/backgrounds/map.webm"
 ---
 
 # Tokiwa Electrics · Time Table

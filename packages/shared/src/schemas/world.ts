@@ -20,6 +20,7 @@ export const CharacterConfigSchema = z.object({
   home: z.string(),
   role: z.enum(['companion', 'npc']).or(z.string()).optional(),
   avatar: z.string().optional(),
+  avatarVideo: z.string().optional(),
   description: z.string().optional(),
 });
 

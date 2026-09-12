@@ -6,6 +6,7 @@ material: "warm"
 tone: "blue"
 grain: "parchment"
 bg: "assets/scenes/intro.webp"
+bgVideo: "assets/motion/seedance/backgrounds/intro.webm"
 ---
 
 # Regret · First Page

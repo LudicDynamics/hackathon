@@ -9,6 +9,7 @@ blocked: You still lack the object that turns suspicion into a trap.
 choice:
   - Fit the brass cap back onto Wayne's drawing tube
   - Call Watson out of the painted composition
+bgVideo: "assets/motion/seedance/backgrounds/fourth.webm"
 ---
 Edith changed one address in the fourth chapter to a street that does not exist. Tonight, Wayne arrives to correct the world—and finds you waiting inside the error.
 

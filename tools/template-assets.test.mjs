@@ -16,7 +16,14 @@ for (const [id, config] of Object.entries(mappings)) {
     }
     for (const job of jobsFor(config)) {
       if (job.scene) assert.ok((await fs.readFile(new URL(`${job.scene}/README.md`, root), 'utf8')).includes(`bg: "${job.target}"`));
-      if (job.character && manifest.characters.some(c => c.id === job.character)) assert.equal(manifest.characters.find(c => c.id === job.character).avatar, job.target);
+      if (job.character && manifest.characters.some(c => c.id === job.character)) {
+        const character = manifest.characters.find(c => c.id === job.character);
+        if (character.avatarVideo) {
+          assert.match(character.avatar, /assets\/motion\/seedance\/characters\/.+-transparent\.webp$/);
+          await fs.access(new URL(character.avatar, root));
+          await fs.access(new URL(character.avatarVideo, root));
+        } else assert.equal(character.avatar, job.target);
+      }
     }
     assert.equal(manifest.player.id, config.player[0]);
     await fs.access(new URL(manifest.player.avatar, root));

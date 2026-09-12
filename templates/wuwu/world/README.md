@@ -6,6 +6,7 @@ material: "warm"
 tone: "warm"
 grain: "parchment"
 bg: "assets/scenes/intro.webp"
+bgVideo: "assets/motion/seedance/backgrounds/intro.webm"
 ---
 
 # Investigator Office · First Day

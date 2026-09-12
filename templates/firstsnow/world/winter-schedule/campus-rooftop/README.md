@@ -7,6 +7,7 @@ tone: "blue"
 grain: "parchment"
 order: 3
 bg: "assets/scenes/campus-rooftop.webp"
+bgVideo: "assets/motion/seedance/backgrounds/rooftop.webm"
 ---
 
 # Act III · The Rooftop Promise

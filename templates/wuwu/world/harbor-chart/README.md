@@ -7,6 +7,7 @@ tone: "warm"
 grain: "parchment"
 bg: "assets/scenes/harbor-chart.webp"
 order: 1
+bgVideo: "assets/motion/seedance/backgrounds/map.webm"
 ---
 
 # Fogwharf · Harbor Chart

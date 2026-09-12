@@ -75,13 +75,16 @@ test('optional growth is player-led and writes playable text before a single ima
   assert.equal((await files(root)).some(p => p.includes('snow-shelter/')), false);
 });
 
-test('only the nine graphics are reused; no runtime or English asset docs are copied', async () => {
+test('nine original graphics and approved motion posters are reused without runtime files', async () => {
   const all = await files(root);
   assert.ok(all.every(p => !p.split('/').some(part => ['.pi', '.airpworld'].includes(part))));
-  const images = all.filter(p => p.endsWith('.webp'));
+  const images = all.filter(p => p.endsWith('.webp') && !p.startsWith('assets/motion/'));
   assert.equal(images.length, 9);
   const hash = b => createHash('sha256').update(b).digest('hex');
   for (const p of images) assert.equal(hash(await fs.readFile(path.join(root, p))), hash(await fs.readFile(path.join(legacy, p))), p);
+  for (const p of all.filter(p => p.startsWith('assets/motion/seedance/') && /\.(webm|webp)$/.test(p))) {
+    assert.equal(hash(await fs.readFile(path.join(root, p))), hash(await fs.readFile(path.join(legacy, p))), p);
+  }
   for (const p of all.filter(p => p.endsWith('README.md'))) {
     const { frontmatter: fm } = parseFrontmatter(await read(p));
     if (fm?.bg) await fs.access(path.join(root, fm.bg));

@@ -1,6 +1,8 @@
 {
   "id": "firstsnow",
-  "audio": { "theme": "canvas-firstsnow" },
+  "audio": {
+    "theme": "canvas-firstsnow"
+  },
   "name": "First Snow Radio",
   "version": "1.0.0",
   "schema": 1,
@@ -31,8 +33,9 @@
       "id": "nanami",
       "home": "world/winter-schedule/radio-studio",
       "role": "companion",
-      "avatar": "assets/characters/nanami.webp",
-      "description": "The host of First Snow Hour and your friend of ten years."
+      "avatar": "assets/motion/seedance/characters/nanami-transparent.webp",
+      "description": "The host of First Snow Hour and your friend of ten years.",
+      "avatarVideo": "assets/motion/seedance/characters/nanami-transparent.webm"
     },
     {
       "id": "sumi-yukimura",

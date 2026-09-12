@@ -7,7 +7,7 @@ tone: "rose"
 grain: "parchment"
 order: 1
 bg: "assets/scenes/winter-schedule.webp"
-bgVideo: assets/scenes/winter-schedule.mp4
+bgVideo: "assets/motion/seedance/backgrounds/map.webm"
 ---
 
 # This Winter · Scene List

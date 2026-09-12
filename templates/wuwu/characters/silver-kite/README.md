@@ -1,7 +1,8 @@
 ---
 type: "readme"
 name: "Silver Kite"
-avatar: "assets/characters/silver-kite.webp"
+avatar: "assets/motion/seedance/characters/silverkite-transparent.webp"
+avatarVideo: "assets/motion/seedance/characters/silverkite-transparent.webm"
 ---
 
 # Silver Kite

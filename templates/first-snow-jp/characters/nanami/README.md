@@ -1,7 +1,8 @@
 ---
 type: readme
 name: 七海
-avatar: assets/characters/nanami.webp
+avatar: "assets/motion/seedance/characters/nanami-transparent.webp"
+avatarVideo: "assets/motion/seedance/characters/nanami-transparent.webm"
 ---
 
 # 七海

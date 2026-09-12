@@ -1,16 +1,17 @@
 ---
-name: この冬の約束
+name: This Winter's Promises
 type: readme
 bg: assets/backgrounds/map.webp
 bgm: firstsnow
 requires:
   items: [player/request-slip.md]
-blocked: リクエスト票を手に取ってください。今夜の二つの約束は、そこから始まります。
+blocked: Take the request slip first. Tonight's two promises begin there.
 choice:
-  - 七海の台本の余白を読む
-  - 澄を駅まで送る
-  - 十年前の屋上へ向かう
+  - Read the margin of Nanami's script
+  - Walk Sumi to the station
+  - Return to the rooftop from ten years ago
+bgVideo: "assets/motion/seedance/backgrounds/map.webm"
 ---
-あなたが中央にいる。左には七海との十年、右には澄との今夜。どちらも本物で、どちらかへ近づけば、もう片方には具体的な不在が残る。
+You stand between ten years with Nanami and this one evening with Sumi. Both are real. Moving closer to one leaves an absence the other will notice.
 
-この世界の地図は場所ではなく、**関係の距離**でできている。
+This world's map measures **distance between people**, not places.

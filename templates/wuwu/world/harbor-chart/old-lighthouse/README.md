@@ -7,6 +7,7 @@ tone: "warm"
 grain: "parchment"
 bg: "assets/scenes/old-lighthouse.webp"
 order: 3
+bgVideo: "assets/motion/seedance/backgrounds/lighthouse.webm"
 ---
 
 # The Old Lighthouse

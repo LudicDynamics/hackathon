@@ -7,6 +7,7 @@ tone: "warm"
 grain: "parchment"
 bg: "assets/scenes/1994-11-02.webp"
 order: 1
+bgVideo: "assets/motion/seedance/backgrounds/y1994.webm"
 ---
 
 # 2 November 1994 · 19:12

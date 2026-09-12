@@ -11,6 +11,7 @@ requires:
   items:
     - player/tonight-letter.md
 blocked: "まだ、今夜の返事が形になっていない。七海か澄のいる場所で、どう過ごしたいか伝えてみよう。"
+bgVideo: "assets/motion/seedance/backgrounds/snowfall.webm"
 ---
 
 雪は、同じ街に降る。ここには、今夜あなたが伝えた言葉と、その返事が残る。

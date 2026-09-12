@@ -1,6 +1,8 @@
 {
   "id": "wuwu",
-  "audio": { "theme": "canvas-wuwu" },
+  "audio": {
+    "theme": "canvas-wuwu"
+  },
   "name": "Fogwharf",
   "version": "1.0.0",
   "schema": 1,
@@ -31,15 +33,17 @@
       "id": "vera",
       "home": "world/harbor-chart/workshop",
       "role": "companion",
-      "avatar": "assets/characters/vera.webp",
-      "description": "A quick-talking mechanic with a violet-lit prosthetic arm and a private interest in the missing rudder pin."
+      "avatar": "assets/motion/seedance/characters/viola-transparent.webp",
+      "description": "A quick-talking mechanic with a violet-lit prosthetic arm and a private interest in the missing rudder pin.",
+      "avatarVideo": "assets/motion/seedance/characters/viola-transparent.webm"
     },
     {
       "id": "silver-kite",
       "home": "world/harbor-chart/seventh-berth",
       "role": "npc",
-      "avatar": "assets/characters/silver-kite.webp",
-      "description": "An elven knight guarding the gangplank and an empty case."
+      "avatar": "assets/motion/seedance/characters/silverkite-transparent.webp",
+      "description": "An elven knight guarding the gangplank and an empty case.",
+      "avatarVideo": "assets/motion/seedance/characters/silverkite-transparent.webm"
     },
     {
       "id": "old-mo",

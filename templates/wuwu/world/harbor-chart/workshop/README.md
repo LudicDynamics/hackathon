@@ -7,6 +7,7 @@ tone: "warm"
 grain: "parchment"
 bg: "assets/scenes/workshop.webp"
 order: 2
+bgVideo: "assets/motion/seedance/backgrounds/workshop.webm"
 ---
 
 # Vera’s Workshop

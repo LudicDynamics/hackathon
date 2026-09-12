@@ -7,6 +7,7 @@ tone: "warm"
 grain: "parchment"
 bg: "assets/scenes/seventh-berth.webp"
 order: 1
+bgVideo: "assets/motion/seedance/backgrounds/dock.webm"
 ---
 
 # Seventh Berth · The Crewless Ship

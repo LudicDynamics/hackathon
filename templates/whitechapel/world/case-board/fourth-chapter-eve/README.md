@@ -8,6 +8,7 @@ grain: "parchment"
 order: 3
 stub: true
 bg: "assets/scenes/fourth-chapter-eve.webp"
+bgVideo: "assets/motion/seedance/backgrounds/fourth.webm"
 ---
 
 # Chapter Four · The Night Before

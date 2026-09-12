@@ -1,6 +1,8 @@
 {
   "id": "divergence",
-  "audio": { "theme": "canvas-divergence" },
+  "audio": {
+    "theme": "canvas-divergence"
+  },
   "name": "Divergence Point",
   "version": "1.0.0",
   "schema": 1,
@@ -31,8 +33,9 @@
       "id": "ryo-child",
       "home": "world/tokiwa-electrics/1994-11-02",
       "role": "companion",
-      "avatar": "assets/characters/ryo-child.webp",
-      "description": "The shopkeeper’s seven-year-old daughter, doing homework at the counter in 1994."
+      "avatar": "assets/motion/seedance/characters/ryo-transparent.webp",
+      "description": "The shopkeeper’s seven-year-old daughter, doing homework at the counter in 1994.",
+      "avatarVideo": "assets/motion/seedance/characters/ryo-transparent.webm"
     },
     {
       "id": "shopkeeper",

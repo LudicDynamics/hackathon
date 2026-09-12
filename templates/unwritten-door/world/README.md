@@ -6,6 +6,7 @@ bgStyle:
   tone: dark
   grain: wood
 ambient: rain
+bgVideo: "assets/motion/seedance/backgrounds/intro.webm"
 ---
 # The Cabin
 

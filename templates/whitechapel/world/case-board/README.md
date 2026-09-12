@@ -7,6 +7,7 @@ tone: "warm"
 grain: "parchment"
 order: 1
 bg: "assets/scenes/case-board.webp"
+bgVideo: "assets/motion/seedance/backgrounds/map.webm"
 ---
 
 # 221B Baker Street · Case Board

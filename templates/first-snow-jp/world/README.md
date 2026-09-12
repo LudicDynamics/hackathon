@@ -6,7 +6,7 @@ material: warm
 tone: rose
 grain: parchment
 bg: assets/scenes/intro.webp
-bgVideo: assets/scenes/intro.webm
+bgVideo: "assets/motion/seedance/backgrounds/intro.webm"
 ---
 
 赤い放送ランプが、ガラスに小さく映っている。最後の曲を送るまで、あと九十秒。

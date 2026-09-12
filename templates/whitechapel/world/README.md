@@ -6,6 +6,7 @@ material: "kraft"
 tone: "sepia"
 grain: "parchment"
 bg: "assets/scenes/intro.webp"
+bgVideo: "assets/motion/seedance/backgrounds/intro.webm"
 ---
 
 # 221B Baker Street · Morning
