@@ -774,7 +774,7 @@ doc-10 正文点名的候选是"信/书/谜题/机关/乐器/棋盘/天气/装�
 |---|---|---|---|---|---|---|---|---|---|
 | `clock` | `visual` | status, choice, dice | 否 | `read` | `panel`（仪表） | **是**（校准它） | 钟/表/计时器：**世界时间的可见载体**（doc-19 §3.2 的"时间印章"在场景里的实体形态）。允许：`choice` 调整、`use_item_on` 上发条、`status.data` 报时。 | `status.data.time`、`status.data.running` | ✅ |
 | `tape` | `read` | status, choice | **是** | `read`（可回放） | `panel`（磁带） | 否 | 录音带/日记账/记录仪。允许：`choice` 播放/倒带、`status.data.position` 记位置。**"回放过去"的动作载体**——回放是读，不是时间旅行。 | `duration?`、`status.data.position` | ✅ |
-| `anchor` | `visual` | status, choice | **是** | `read` | `slab`（金属） | **是**（用它） | 时间锚：**跨时间线保留的物件**（doc-20四世界 §5.2 的"主玩法动词：改写/对照"）。允许：被携带（`move`）、被 `use_item_on` 到终局门、`status.data.linked_to` 记它锚定的时间层。 | `status.data.linked_to`、`accepts` | ✅ |
+| `anchor` | `visual` | status, choice | **是** | `read` | `slab`（金属） | **是**（用它） | 时间锚：**跨时间线保留的物件**（doc-24 §5 的“主玩法动词：改写 / 对照 / 选择”）。允许：被携带（`move`）、被 `use_item_on` 到终局门、`status.data.linked_to` 记它锚定的时间层。 | `status.data.linked_to`、`accepts` | ✅ |
 
 #### craft pack —— 手作 / 学院 / 休闲题材
 
