@@ -1,7 +1,7 @@
 ---
 name: この冬の約束
 type: readme
-bg: assets/backgrounds/map.webp
+bg: assets/backgrounds/map.webm
 bgm: firstsnow
 requires:
   items: [player/request-slip.md]

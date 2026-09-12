@@ -1,7 +1,7 @@
 ---
 name: 第47回 · 生放送中
 type: readme
-bg: assets/backgrounds/intro.webp
+bg: assets/backgrounds/intro.webm
 bgm: firstsnow
 choice:
   - 七海に一言返す
