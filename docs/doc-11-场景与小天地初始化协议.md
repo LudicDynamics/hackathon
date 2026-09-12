@@ -202,7 +202,7 @@ world/baker-street/crime-scene/
 
 | 产出 | 要求 |
 |---|---|
-| **README.md** | `type: readme` + **`material` 取 brief 注入的默认材质**（`brief-builder.ts:15` 的 `default material: <世界默认>`）+ `bg`（底图）+ 标题 + 一句话摘要。**覆盖掉 stub 占位**（原 stub README 里 `material: stub`） |
+| **README.md** | `type: readme` + **`material` 取 brief 注入的默认材质**（`packages/shared/src/render/brief.ts` 的 `default material: <世界默认>`）+ `bg`（底图）+ 标题 + 一句话摘要。**覆盖掉 stub 占位**（原 stub README 里 `material: stub`） |
 | **开场 chalk（可选，强烈建议）** | 这一层"被玩家看见"的那一下，**缺了它入戏效果会差很多**（2026-09-11 明月修正：早先写成"绝对不写"是错的）。一段环境叙事，≤200 字（doc-07 纪律）；**可以带 `status` 快照，也可以给一组 `initial choice`** 作为玩家起步的抓手。**它就是开场白本体**——不是 agent 的 chat history 播种（那套已废弃，见 doc-05 §7.4） |
 | **物件 2~4 个** | 沉默细节优先（桌上的杯子、椅子的摆法、纸上的字），不是"线索大礼包"。可含 1 个可拿走的（给背包用） |
 
@@ -276,7 +276,7 @@ characters/旅店老板/
 └── 一张旧照片.md        # 沉默细节（与内容文件合计 2~4 个）
 ```
 
-**"若缺则补"很关键，但当前 brief 不传这个信息（登记，2026-09-12）**：holmes-world 的 `characters/watson/` 至今只有 `README.md` + `preset.json`，而 preset 引用了 `identity.md` / `personality.md`（**两个文件都不存在**）。按 C4，只要 slot 用默认的 `onMissing: skip`，这不会报错——但角色 spawn 时就少了履历。**初始化顺带补齐 preset 引用的缺失文件**是本意，然而 `buildNookInitBrief`（`apps/server/src/engine/brief-builder.ts:46-57`）**没有"缺失文件"字段**（且该函数当前**无调用点**，`docs/后端实现计划.md:81`），所以这条纪律目前**永不触发**。修法二选一：给 brief 增一个 `[Missing Files]` 字段，或删掉这条纪律——勿让其悬空（详见 `docs/prompts/03-初始化器提示词.md` §⑨ 冲突 2）。
+**"若缺则补"很关键**：holmes-world 的 `characters/watson/` 至今只有 `README.md` + `preset.json`，而 preset 引用了 `identity.md` / `personality.md`（**两个文件都不存在**）。按 C4，只要 slot 用默认的 `onMissing: skip`，这不会报错——但角色 spawn 时就少了履历。**初始化顺带补齐 preset 引用的缺失文件**是本意。**已修（I1 批次）**：`buildNookInitBrief`（`packages/shared/src/render/brief.ts`）新增 `[Missing Files]` 字段（非空时输出），由 `airp-init` 命令从 `preset.json` 的 file 槽差集算出并传入——纪律不再"永不触发"。
 
 **内容纪律**：写"痕迹"不写"设定"。
 
