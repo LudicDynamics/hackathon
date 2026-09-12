@@ -86,6 +86,8 @@ tools/probe-tools-engine.mjs # 工具面探针（强形式）：真 spawn 引擎
 tools/pi-rp.mjs         # pi-rp 子模块工作流（pnpm pi status|build|update|commit，见 §7.2）
 tools/probe-inject.mjs  # 注入探针：真 spawn 作家引擎，断言每请求恰好一份注入块、且不落盘（pnpm probe:inject）
 tools/inject-probe-provider.ts # 注入探针的确定性 provider（把每个请求的 wire messages 落文件）
+tools/check-ws-contract.mjs # 跨端 WS 契约门禁（pnpm check:ws）：服务端发射面 ↔ 前端消费面 ↔ 契约表求 diff
+docs/前端接线体检.md   # 2026-09-12 跨端 WS 契约静默漂移的核实报告（含缺陷分级与文档漂移清单）
 docs/                   # 设计文档（真相源）；docs/tools/ 是 B1 工具面设计 + 评审报告
 vendor/pi-rp/           # 叙事引擎 submodule
 ```
@@ -154,6 +156,7 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 | `docs/后端实现计划.md` | `apps/server/` + `extensions/` 的施工单（引擎接通 / 工具面 / Hook 注入 / 角色上下文） |
 | `docs/tools/` | **B1 工具面设计与实现真相源**：`00-共同上下文.md` 是冻结契约（路径/事件/身份/存储/注册/反模式），`01`–`12` 逐个工具的设计，`REVIEW-评审报告.md` 是评审裁决。**动动作层 / 注册工具 / 改路由前必读** |
 | `docs/hooks/` | **B2/B3 每轮注入协议真相源**：`00-共同上下文.md` 是冻结契约（注入接缝/分节/游标/身份/消毒/barrel 反模式），`01`–`06` 逐篇设计，`AUDIT-doc-22体检.md` 记录 doc-22 哪些断言为假。**改 `extensions/context.ts`、注入块、视点链路前必读** |
+| `docs/前端接线体检.md` | 动 WS 帧 / 前端消费面 / `useWorld.ts` 前必读——冻结契约的机械核验（`pnpm check:ws`）与已知漂移清单 |
 | `docs/doc-08~18` | 各专题（多为待完善），实现对应模块前再读 |
 
 **参考实现（都在本项目的兄弟目录，不进本仓库）**：
@@ -177,6 +180,8 @@ pnpm dev                                        # 全栈开发（web 5173 / serv
 pnpm probe:tools                                # 工具面探针（注册表断言 + 真引擎执行 AIRP 工具），PASSED 才算工具面没坏
 pnpm typecheck:extensions                       # extensions/ 类型体检（jiti 直跑的 TS 不在 workspace 里）
 pnpm probe:inject                               # 注入探针（真 spawn 作家引擎，断言每请求恰好一份注入块且不落盘）
+pnpm check:ws                                   # 跨端 WS 契约门禁（服务端广播面 ↔ 前端消费面 ↔ docs/tools/12 §6.2）
+pnpm check:docs                                 # hooks 文档门禁（symbol ownership / barrel union / file:line 引用）
 pnpm pi status                                  # pi-rp 子模块 + dist 新鲜度体检（见 §7.2）
 
 node tools/scaffold.mjs --template holmes-world --out worlds/my-holmes
@@ -248,6 +253,7 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 | 交互 / 演出 / 视觉 | `docs/doc-06` / `doc-04`（视觉以 §10 为准） |
 | 注入协议 / 钩子接线 / 分节表 | `docs/hooks/00…06`（冻结契约 `00` 唯一真相源） |
 | 角色 preset 的 compaction | `presets/character.json` 是**唯一真源模板**（新角色从它复制）；改 `hiddenOverrides.compaction` 必须**同 commit** 铺到 **全部**模板/world 角色 preset，并跑 `apps/server/test/character-preset-parity.test.mjs`（逐字一致，缺一份即静默失效） |
+| 跨端 WS 帧契约（增删帧 / 改载荷 / 前端消费面） | `docs/tools/12` §6.2（唯一帧清单）+ `docs/前端接线体检.md`；跑 `pnpm check:ws`（门禁会因两端不一致而红） |
 
 文档里已被推翻的说法**直接改掉**，不要另起一段解释——`docs/archive/` 才是存废案的地方。
 
