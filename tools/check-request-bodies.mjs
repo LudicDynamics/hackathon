@@ -36,6 +36,12 @@ const BODIES = [
     keys: ['path'],
     doc: 'docs/wiring/00-共同上下文.md §6',
   },
+  {
+    route: '/api/tts',
+    file: 'apps/web/src/components/overlay/CharacterModal.tsx',
+    keys: ['text', 'voice', 'language'],
+    doc: 'docs/wiring/00-共同上下文.md §6',
+  },
 ];
 
 /**

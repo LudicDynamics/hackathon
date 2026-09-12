@@ -121,7 +121,7 @@ flowchart LR
      - `world/旅馆`：`fireplace`（室内暖火噼啪）；
      - `world/旅馆/密室`：`cellar-drip`（潮湿水滴 + 幽闭空灵）。
 2. **叙事配乐（Layer 2：Dynamic BGM）**：
-   - 预制 3 首高情绪契合度短曲（日常悬疑 / 心理博弈 / 危机高潮），按当前层 README 的 `bgm` 字段（`calm` / `tense` / `crisis`）平滑切换音轨增益；角色台词句首的 `[emo: tag]` 只触发与主轨正交、播完即止的瞬时 stinger，绝不改 BGM 主轨。
+   - 预制 3 首高情绪契合度短曲（日常悬疑 / 心理博弈 / 危机高潮），按当前层 README 的 `bgm` 字段（`calm` / `tense` / `crisis`）平滑切换音轨增益；角色台词句首的 `[emo: tag]` 只触发与主轨正交、播完即止的瞬时 stinger，绝不改 BGM 主轨。**自 2026-09-13 起，角色直聊遮罩的页面带语音朗读（`docs/tts/00`）：有语音的页不再播 stinger**（人声与音效叠加会打架）；无语音时（TTS 未配置 / 失败）保留 stinger 作为情绪提示。
 3. **实体物理拟音（Layer 3：Tactile Foley）**：
    - 为玩家和作家的每一个动作配上高质感音效（键名 = `assets/audio/foley/<name>.mp3`，全小写 kebab）：
      - **拖拽卡片**：厚磅道林纸在木桌上的沙沙摩擦声（`paper-slide`）；

@@ -103,6 +103,7 @@ docs/init/00-共同上下文.md # 初始化执行的冻结契约（命令 / 执�
 docs/前端接线体检.md   # 2026-09-12 跨端 WS 契约静默漂移的核实报告（含缺陷分级与文档漂移清单）
 docs/prompts/           # 提示词与 skill 体系设计（00 是冻结契约；01–05 分篇；REVIEW-* 评审报告）
 docs/                   # 设计文档（真相源）；docs/tools/ 是 B1 工具面设计 + 评审报告
+docs/tts/               # 角色语音（TTS）批次真相源：00 是冻结契约（端点/请求响应体/页语义/env），01–06 分篇
 vendor/pi-rp/           # 叙事引擎 submodule
 ```
 
@@ -174,6 +175,7 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 | `docs/hooks/` | **B2/B3 每轮注入协议真相源**：`00-共同上下文.md` 是冻结契约（注入接缝/分节/游标/身份/消毒/barrel 反模式），`01`–`06` 逐篇设计，`AUDIT-doc-22体检.md` 记录 doc-22 哪些断言为假。**改 `extensions/context.ts`、注入块、视点链路前必读** |
 | `docs/前端接线体检.md` | 动 WS 帧 / 前端消费面 / `useWorld.ts` 前必读——冻结契约的机械核验（`pnpm check:ws`）与已知漂移清单 |
 | `docs/wiring/` | **前端接线 A 档（止血 + 文档回写）真相源**：`00-共同上下文.md` 是冻结契约（角色身份/去重/转发集合/请求体），`01`–`04` 逐模块设计，`05-文档回写.md` 是回写清单。**动 `useWorld.ts` WS switch / `CharacterModal` / `DiceRoller` / 角色帧载荷前必读** |
+| `docs/tts/` | **角色语音 TTS 批次真相源**：`00-共同上下文.md` 是冻结契约（`POST /api/tts` 请求/响应体、缓存 key、角色 `voice` frontmatter、前端 `playVoice`/`stopVoice`/`isVoicing`、页语义、env），`01`–`06` 逐模块设计。**动 `routes/tts.ts` / `lib/audio.ts` 语音面 / `CharacterModal` 分页前必读** |
 | `docs/doc-08~18` | 各专题（多为待完善），实现对应模块前再读 |
 
 **参考实现（都在本项目的兄弟目录，不进本仓库）**：

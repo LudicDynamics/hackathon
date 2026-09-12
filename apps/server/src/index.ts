@@ -9,12 +9,30 @@ import { LocalWorldStore, createActionService, settleTurnCursor } from '@airp/sh
 import { AgentLifecycleManager } from './engine/lifecycle.js';
 import { EventBridge } from './engine/event-bridge.js';
 import { createWorldRouter } from './routes/world.js';
+import { createTtsRouter } from './routes/tts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const VENDOR_CLI = path.join(REPO_ROOT, 'vendor/pi-rp/packages/coding-agent/dist/cli.js');
 const WEB_DIST = path.join(REPO_ROOT, 'apps/web/dist');
+
+// Load .env before ANY AIRP_* / DASHSCOPE_* read. Node native, no dotenv
+// dependency (docs/tts/00 §3.3). A missing file is normal (CI / first checkout),
+// and a malformed one degrades to the ambient env rather than refusing to boot.
+try {
+  process.loadEnvFile(path.join(REPO_ROOT, '.env'));
+} catch {
+  /* no .env → ambient env */
+}
+
+// Config is read per request and the failure reaches the client as 503, so this
+// startup warn is a convenience, not the only signal (docs/tts/00 §4.5).
+if (!process.env.DASHSCOPE_API_KEY) {
+  console.warn(
+    '[AIRP TTS] DASHSCOPE_API_KEY not set; /api/tts returns 503 (character voice disabled).'
+  );
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -71,6 +89,12 @@ app.use(
     (s) => { activeStore = s; }
   )
 );
+
+// TTS rides the same /api prefix. Express matches in order and the two routers
+// own disjoint paths (/api/tts* vs /api/worlds… /api/asset…), so the second
+// never shadows the first. Only getActiveStore is shared: TTS is HTTP-only and
+// must never touch the WS fan-out (docs/tts/00 §10.1).
+app.use('/api', createTtsRouter(REPO_ROOT, () => activeStore));
 
 // Serve static frontend files from apps/web/dist
 app.use(express.static(WEB_DIST));
