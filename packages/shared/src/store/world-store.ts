@@ -1,5 +1,13 @@
 import type { WorldManifest } from '../schemas/world.js';
-import type { MoveResult, WorldEvent } from '../schemas/events.js';
+import type { LinkRecord } from '../schemas/canvas.js';
+import type {
+  ActorValue,
+  AppendEventArgs,
+  DanglingRef,
+  MoveResult,
+  WorldEvent,
+} from '../schemas/events.js';
+export type { LinkRecord };
 
 /** Canvas card state row (id == repository-relative path of the card file). */
 export interface CardRecord {
@@ -19,10 +27,31 @@ export interface SeatFile {
   h?: number;
 }
 
+/**
+ * A character's standing on the canvas (05 §2.1). Presence is a POINT: `x`/`y`
+ * are the avatar's CENTRE, not a card's top-left corner.
+ */
+export interface PresenceRecord {
+  characterId: string;
+  layer: string;
+  x: number;
+  y: number;
+  following: boolean;
+  updatedAt: string;
+}
+
+/** Outcome of presence seating (05 §3.9.3); `exhausted` surfaces the fallback. */
+export interface SeatPresenceResult {
+  x: number;
+  y: number;
+  seat: { gx: number; gy: number; tries: number; exhausted: boolean };
+}
+
 export interface WorldStore {
   worldRoot: string;
   readFile(relPath: string): Promise<string>;
-  writeFile(relPath: string, content: string): Promise<void>;
+  /** Widened to Buffer for binary assets (generate_image, 01 §10.1). */
+  writeFile(relPath: string, content: string | Buffer): Promise<void>;
   deleteFile(relPath: string): Promise<void>;
   listFiles(prefix?: string): Promise<string[]>;
   move(from: string, to: string): Promise<MoveResult>;
@@ -31,14 +60,115 @@ export interface WorldStore {
   queryCanvas(sql: string, params?: any[]): any[];
   execCanvas(sql: string, params?: any[]): void;
   appendHistoryEntry(sessionId: string, type: string, content: string): Promise<void>;
-  appendWorldEvent(type: string, payload: Record<string, any>): Promise<WorldEvent>;
+
+  // === Event layer (replaces appendWorldEvent; getEvents is kept, seq-ordered) ===
+  appendEvent(args: AppendEventArgs): Promise<WorldEvent>;
+  getEventsSince(seq: number, opts?: { layer?: string; excludeActor?: ActorValue }): Promise<WorldEvent[]>;
+  getMaxSeq(): Promise<number>;
+  readCursor(reader: string): Promise<number>;
+  writeCursor(reader: string, seq: number): Promise<void>;
+  /** Newest-first, history panel only (doc-21 §3.1: seq is the cursor, never created_at). */
   getEvents(limit?: number): Promise<WorldEvent[]>;
+
+  // === Path / file helpers (01 §2.7) ===
+  /**
+   * Layer id a world path belongs to, or null when the path is NOT in the layer
+   * tree (`player/**`, `characters/<id>/**`, `world.json`). `world/**` →
+   * layerOfDir. Mapping a bag path to 'map' would be a lie (doc-22 §3.2 expects
+   * it excluded).
+   */
+  resolveLayer(path: string): Promise<string | null>;
+  statKind(relPath: string): Promise<'file' | 'dir' | 'missing'>;
+  /** Same-dir temp file + rename; original untouched on failure; throws on error. */
+  writeFileAtomic(relPath: string, content: string | Buffer): Promise<void>;
+  /** Binary read — `readFile` is utf-8 only; PNG/asset tiers need base64. */
+  readFileBase64(relPath: string): Promise<string>;
+
+  // === Read cursors ===
+  /** Every cursor row — rollback must push them ALL to the max seq (doc-21 §6). */
+  getAllReadCursors(): Promise<Array<{ reader: string; seq: number }>>;
+
   getLayerCards(paths: string[]): CardRecord[];
   seatUnplaced(layerId: string, files: SeatFile[]): Promise<CardRecord[]>;
   reseatLayer(layerId: string, files: SeatFile[]): Promise<CardRecord[]>;
   saveCardPosition(id: string, x: number, y: number): Promise<CardRecord>;
   renameCardPosition(from: string, to: string): Promise<void>;
+  /** Seat one new card next to an anchor card; `exhausted` when no clean cell (04 §3.9.3). */
+  seatNear(layerId: string, file: SeatFile, anchorPath: string): Promise<CardRecord & { exhausted: boolean }>;
+  /** Drop a card + every line touching it (04 §3.2 step 4 / 09 §4.4). */
+  dropCard(path: string): { cards: number; links: number };
+  /** Every card path seated on a layer (the seatNear occupancy set). */
+  cardsInLayer(layerId: string): string[];
+
+  // === Presence (05 §2.1: character standing on the canvas, `canvas.db` only) ===
+  /**
+   * Seat a character presence near `near` (a card path) or at the global
+   * anchor; avoids the layer's cards AND its other presences. `x`/`y` are the
+   * avatar centre.
+   */
+  seatPresence(
+    layerId: string,
+    opts?: { near?: string; excludeCharacter?: string }
+  ): Promise<SeatPresenceResult>;
+  /**
+   * UPSERT one row keyed by `character_id`. `following` omitted keeps the
+   * current value (05 §3.4). Returns the row as stored.
+   */
+  upsertPresence(p: {
+    characterId: string;
+    layer: string;
+    x: number;
+    y: number;
+    following?: boolean;
+  }): Promise<PresenceRecord>;
+  /** Presence rows for one layer, or the whole world when `layer` is omitted. */
+  getPresence(layer?: string): PresenceRecord[];
+  /** One character's row, or null when they have never been placed. */
+  getPresenceOf(characterId: string): PresenceRecord | null;
+  /**
+   * Physical move the action layer orchestrates: reference rewrite, rename,
+   * self-rebase of the moved file's own relative links (04 §3.1 steps 5–7).
+   * Lands NO event — `moveEntity` does, with the real actor.
+   */
+  moveFile(from: string, to: string): Promise<{ name: string; rewrote: string[]; dangling: DanglingRef[] }>;
   /** Markdown + child-door ids for a layer's page (see store/layers.ts). */
   pageOfLayer(layerId: string): Promise<{ cards: string[]; doorIds: string[] }>;
+
+  // === Canvas state layer (doc-09 §4.2): `canvas.db` only, never an event ===
+  /**
+   * Create/overwrite one line. `layer`/`from`/`to` are required; omitted
+   * fields keep the row's current values (create starts from the style
+   * defaults). `id` omitted → `lnk-` + sha1(layer|from|to)[0:8], which is what
+   * makes `create` idempotent for the same endpoint pair (doc-09 §3.1).
+   */
+  upsertLink(link: {
+    id?: string;
+    layer: string;
+    from: string;
+    to: string;
+    style?: LinkRecord['style'];
+    color?: LinkRecord['color'];
+    directed?: boolean;
+    z?: number;
+    label?: string | null;
+  }): Promise<LinkRecord>;
+  /** Delete one line; `false` when there was nothing to delete. */
+  deleteLink(id: string): Promise<boolean>;
+  /**
+   * Overwrite x/y/z of one card. `layer` is resolved by the CALLER via
+   * `resolveLayer` (`cards.layer` is NOT NULL); w/h are never touched — they
+   * are a pure function of kind (doc-09 §11 冲突 1, m-11).
+   */
+  placeCard(
+    layer: string,
+    path: string,
+    box: { x?: number; y?: number; z?: number }
+  ): Promise<CardRecord>;
+  /** Batch seating for `layout`, in ONE transaction (no torn frames). */
+  placeCards(
+    rows: Array<{ layer: string; path: string; x: number; y: number; z?: number }>
+  ): Promise<CardRecord[]>;
+  /** Lines of one layer (or the whole canvas when `layer` is omitted). */
+  getLayerLinks(layer?: string): Promise<LinkRecord[]>;
   close(): void;
 }

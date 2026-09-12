@@ -192,3 +192,44 @@
 - 5 个子代理独立评审 → 62 条原始 findings → 主控对照原文与真实代码逐条核实 → 去重为 4 blocker + 9 major + 24 minor + 10 defer + 5 reject。
 - 所有 `文件:行` 与代码断言均经主控在真实仓库中复核（`probe-writer.mjs:67`、`CharacterModal.tsx:158`、`index.ts` 六个分支、`HTTP_STATUS` 字面量、`DROP TABLE` 行等）。
 - 一致性问题高度重复（`arrangeCards` 被 11 条 findings 命中、`set_following` no-op 被 3 个视角独立命中），说明不是个案而是系统性未对齐。
+
+
+---
+
+## 8. 实现期口径漂移登记（2026-09-12 落地后回写）
+
+评审发生在**实现之前**。实现阶段又暴露出第三类问题：**子代理在代码里对齐了口径，但没有回写文档**——于是"契约只对在代码里，文档就漂了"，正是 §0 那条系统性问题的翻版。以下逐条登记**发现 → 处理 → 回写位置**，全部已同步。
+
+### 8.1 实现期新发现的缺口（文档完全没预料）
+
+| # | 发现 | 处理 | 回写位置 |
+|---|---|---|---|
+| **I-1** | `01 §5` 方法表**引用了** `EnterLayerInput` / `NoteCharacterTalkedInput` / `RecordLayerInitializedInput` / `RecordLayerInitFailedInput` 等类型，但**没有任何文档给出它们定义**（各工具文档按工具切、都不认领 C/E 入口的五个方法：`enterLayer` / `noteCharacterTalked` / `recordLayerInitialized` / `recordLayerInitFailed` / `createEntity`）。路由调用会拿到 `ActionError: unsupported (501)` | 主控亲自实现 `actions/create.ts` / `layer.ts` / `talk.ts`（5 个 handler）+ `test/wiring.test.mjs`（10 用例）；类型定义补进文档 | `12 §3.5.1`（新增，含两处语义冻结：`first` 判据、initialized/failed 恒 `actor=engine`） |
+| **I-2** | handler 查找 helper 实际叫 `componentDefOf(kind)`，但 08 伪代码写 `getComponent(kind)`——`getComponent` 是**工具动作名**（给模型看 schema），同名会误导实现者 | 确认代码用 `componentDefOf` / `useItemTargetOf`；文档改正 | `08 §3.4`、`10 §15.3` |
+| **I-3** | `EntityRef` 实现期加 `body?: string`（handler 要原地重写并保留正文），文档未记 | 登记为实现期**加法**，语义写清 | `08 §3.4`、`10 §15.3` |
+| **I-4** | `actions/look-at.ts` 落地了但 `index.ts` 漏导出 → `extensions/`（整桶 import）看不到 `lookAt`/`viewCanvas` | slice A 补一行 `export * from './actions/look-at.js'` | 已落代码；`01 §8` 的导出清单本就要求 |
+| **I-5** | 实现期新增**中性 writer** `stringifyFrontmatter(fm, body)`（`schemas/frontmatter.ts`），给 10 的 handler 用——02 原设想只有 chalk 专用的 `stringifyEntityFrontmatter` | 10 的 handler 改用中性 writer；02 的专用整形器落在 `actions/chalk.ts`（不在原设想的 `schemas/`） | `02 §8.1`、`10 §15.3` |
+| **I-11** | `12 §8.3` 把 helper 都归给 `deps.ts`，实现期拆成 `deps.ts`（`worldStore`/`getActionService`/`currentLayer`/`resetDepsForTests`）+ `actor.ts`（`agentActor`/`resetActorForTests`）——actor 解析独立成文件的理由是它与 `00 §3` 的身份契约一对一，且 `resolveAgentActor` 的 warn-once 需要自己的模块态 | 登记组织性差异（**非行为差异**，导出名与签名不变） | `12 §8.3`、`12 §8.2` |
+
+### 8.2 实现期暴露的文档内部矛盾
+
+| # | 矛盾 | 裁决 | 回写位置 |
+|---|---|---|---|
+| **I-6** | `09 §2.7` 声明 `dropCard(path): Promise<{card: boolean; links: number}>`，实现是**同步** `dropCard(path): { cards: number; links: number }`（一条 `BEGIN IMMEDIATE`，无 await；字段名也不对） | 以代码为准改文档（同步 + `{cards, links}`）——与同文件 `placeCard`/`getLayerLinks` 等 `Promise` 接口的差异是刻意的：`dropCard` 不碰文件系统 | `09 §2.7` |
+| **I-7** | `02 §8.1` 说 `ChalkFrontmatterSchema` **保留**（向后兼容），`06 §11 冲突 7` 说**应当删除**（保留它就会有人拿去 parse 非 chalk 实体 → 直接失败）。实现按 06 删了 | 以 **06 为准**（删除）；02 只保留动作层输入类型 `ChalkFrontmatterInput` | `02 §8.1` |
+| **I-8** | `12 §2.4.1` 的 `CreateEntityInput` 写 `body: string`（必需）且无 `content`，但实现期加了逃生舱 `content?: string` 并把 `body` 改可选 | 以代码为准改文档 | `12 §2.4.1` |
+| **I-9** | 文档多处写 `stringifyEntityFrontmatter`，10 的 handler 实际用 `stringifyFrontmatter` | 同 I-5 | `10 §15.3` |
+
+### 8.3 实现期清理的技术债
+
+| # | 债 | 处理 |
+|---|---|---|
+| **I-10** | `packages/shared/test/canvas.test.mjs:473` 有一条 `t.skip('dropCard ... has not landed yet')`——04 落地后 `dropCard` 已存在，但 skip 没摘，测试会**永远静默跳过**（少一条覆盖） | 摘掉 skip 分支，`dropCard` 级联断言转为常跑；`canvas.test.mjs` 23/23 pass、0 skipped |
+
+### 8.4 复核后的结论
+
+- **接口字段级**：37 个 `Input`/`Details` 类型的**字段集合**逐一 diff 代码 vs 文档 → **零漂移**（`WriteChalkDetails.event` 是 `ActionResult` 交叉类型提供的，非独立字段，已注明）。
+- **符号名级**：`LinkInput`/`ArrangeInput`/`ShowInput`/`ShowDetails` 等命名漂移已修（`01 §5`）。
+- **事件层**：15 个事件类型的 `detail` 键与 `doc-21 §4` / `00 §5.2` 一致。
+- **WS 帧**：代码实际发出的帧集 ⊇ `12 §3.4` 的表（`00 §5.3` 只举例、非穷举，不构成漂移）。
+- **教训**：**"在代码里对齐"不算对齐**。凡是实现期改了口径，必须当次回写文档，否则下一次读文档的人会照着错的做。这也是本批次最后补这一节的原因。

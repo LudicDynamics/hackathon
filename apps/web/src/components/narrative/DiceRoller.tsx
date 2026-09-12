@@ -1,7 +1,7 @@
 /**
  * DiceRoller.tsx — fullscreen dice ceremony (T2.3).
  *
- * The server contract is untouched: POST {filePath, rollType, expect} →
+ * The shared action contract is POST {path} →
  * {result, passed}, posted the moment the roll releases (authoritative first,
  * doc-06 §roll order). The 3D tween is purely visual. Pipeline:
  * overlay opens (warm-black dim) → hold a charge bar (~1.2s, rising tone)
@@ -149,9 +149,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            filePath,
-            rollType: rollDice.type || '1d100',
-            expect: rollDice.expect,
+            path: filePath,
           }),
         });
         const verdict = parseDiceVerdict(await res.json());

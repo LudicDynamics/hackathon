@@ -82,6 +82,8 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   const [isItemDragging, setIsItemDragging] = React.useState(false);
   const [isUnlockedEffect, setIsUnlockedEffect] = React.useState(false);
   const anchorCleanup = React.useRef<(() => void) | undefined>(undefined);
+  const [hovered, setHovered] = React.useState(false);
+  const [focused, setFocused] = React.useState(false);
   React.useEffect(() => () => anchorCleanup.current?.(), [item.path, item.frontmatter?.anchor]);
   const highlight = (element: HTMLElement, active: boolean) => {
     highlightLinks(item.path, active);
@@ -123,10 +125,10 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
     <div
       data-path={item.path}
       tabIndex={0}
-      onPointerEnter={event => highlight(event.currentTarget, true)}
-      onPointerLeave={event => highlight(event.currentTarget, false)}
-      onFocus={event => highlight(event.currentTarget, true)}
-      onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) highlight(event.currentTarget, false); }}
+      onPointerEnter={event => { setHovered(true); highlight(event.currentTarget, true); }}
+      onPointerLeave={event => { setHovered(false); highlight(event.currentTarget, false); }}
+      onFocus={event => { setFocused(true); highlight(event.currentTarget, true); }}
+      onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) { setFocused(false); highlight(event.currentTarget, false); } }}
       className="object ink-form"
       style={
         {
@@ -139,7 +141,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
           // Rotation belongs to the shell alone. Narration (chalk) and the
           // presence figure stay level; every paper form keeps its hand tilt.
           ['--target-rot' as any]:
-            kind === 'chalk' || kind === 'sprite' ? '0deg' : `${item.rot}deg`,
+            kind === 'sprite' ? '0deg' : `${item.rot}deg`,
         } as React.CSSProperties
       }
     >
@@ -173,7 +175,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             onItemDropOnTarget={onItemDropOnTarget}
           />
         )}
-        <EntityInteractions item={item} onChoice={onSelectChoice} onDiceRolled={onDiceRolled} />
+        <EntityInteractions item={item} active={hovered || focused} onChoice={onSelectChoice} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate} onOpenCharacter={onOpenCharacterModal} />
     </div>
   );
 };

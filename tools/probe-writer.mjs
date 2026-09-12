@@ -64,8 +64,14 @@ async function runProbe() {
   const files = await store.listFiles();
   console.log(`✓ Files listed: ${files.length} items found in world.`);
 
-  const testEvt = await store.appendWorldEvent('probe_test', { timestamp: Date.now() });
-  console.log(`✓ SQLite history event created: [${testEvt.type}] id: ${testEvt.id}`);
+  // History events now go through appendEvent(AppendEventArgs) — the old
+  // appendWorldEvent(type, payload) is gone (docs/tools/01 §9, REVIEW m-7).
+  const testEvt = await store.appendEvent({
+    type: 'world_snapshot',
+    actor: { type: 'engine' },
+    detail: { snapshot: 'probe', reason: 'probe gate: history.db is writable' },
+  });
+  console.log(`✓ SQLite history event created: [${testEvt.type}] id: ${testEvt.id} seq: ${testEvt.seq}`);
 
   store.close();
 

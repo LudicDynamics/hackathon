@@ -16,7 +16,9 @@
 
 ### 当前前端接线（2026-09-12）
 
-所有画布 Markdown 形态由 `CanvasObject → EntityInteractions` 接一次通用互动区；类型渲染器只负责外观，不能只有 Chalk 才能显示骰子、选项、状态。互动区 hover / 键盘聚焦展开，点击钉住；没有字段就不生成互动内容。`actions: string[]` 兼容 Canvas 的文字行动箭头，发送时携带实体文件路径，暂走既有 writer_prompt，不能把字符串解释为自动切层、任意代码或已安装技能调用。`choice` 当前也仍通过 writer_prompt 进入作家；统一 `choose` 落账通道尚待与 main 的动作层整合，不能宣称已完成事件协议。
+所有画布 Markdown 形态由 `CanvasObject → EntityInteractions` 接一次通用互动区；类型渲染器只负责外观。整块实体 hover / 键盘聚焦显露行动，字段可钉住；容器透明、优先在右侧浮出，按视口与其他实体占用比较左侧/下方，不占正文高度。普通文档提供查看/收取，门提供进入，人物提供交谈；`portable: false` 禁止默认收取。收取走 `/api/move`，同名目标拒绝覆盖。没有字段也可提供类型默认行动。
+
+`actions: string[]` 仍是带源文件路径的文字请求，走 writer_prompt，不解释成代码、移动或已安装技能。`choice` 走 `POST /api/choice { path, choice }`：玩家与 Agent 共用 `createActionService().chooseOption`，重读源文件、按 status 条件验证可见选项，落 `choice_selected` 并通过 `world_event` 广播；路由不强启 Writer。前端共享 `buildInteractiveFields` 归一化规则，显示 label/index/hint，优先提交稳定 id；骰子只提交 `{ path }`，裁决规则从文件读取。自由输入专用入口与 multi 的完整呈现仍待补齐。
 
 Chalk 的 `anchor` 仅控制临时高亮与虚线，可指向同层文件路径或文件名（省略 `.md` 兼容）；悬停离开与卸载清理。与持久关系线分开，不是正文阅读 tooltip。
 

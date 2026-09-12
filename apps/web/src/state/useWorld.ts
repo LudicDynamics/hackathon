@@ -150,6 +150,7 @@ export function useWorld(): UseWorldApi {
     const onMessage = (msg: Record<string, unknown>) => {
       if (
         msg.type === 'file_changed' ||
+        msg.type === 'world_event' ||
         msg.type === 'item_moved' ||
         msg.type === 'god_action'
       ) {
@@ -157,6 +158,7 @@ export function useWorld(): UseWorldApi {
       }
       switch (msg.type) {
         case 'file_changed':
+        case 'world_event':
         case 'item_moved':
         case 'god_action':
           void fetchLayer(layerRef.current);

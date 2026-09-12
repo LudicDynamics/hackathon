@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Activity, ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react';
 import { DiceRoller } from '../components/narrative/DiceRoller.js';
-import { InteractionFieldsSchema } from '@airp/shared/frontmatter';
+import { buildInteractiveFields, visibleChoiceOptions, type NormalizedOption } from '@airp/shared/frontmatter';
 
 /**
  * Shared frontmatter widgets for every Markdown entity (doc-20 §2).
@@ -16,6 +16,7 @@ import { InteractionFieldsSchema } from '@airp/shared/frontmatter';
  * half-rendered widget.
  */
 export interface FrontmatterWidgetOptions {
+  reveal?: boolean;
   filePath?: string;
   onChoice?: (choice: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
@@ -27,31 +28,20 @@ export function renderFrontmatterWidgets(
 ): React.ReactElement | null {
   try {
     if (!frontmatter || typeof frontmatter !== 'object') return null;
-    if (!InteractionFieldsSchema.safeParse(frontmatter).success) return null;
-
-    // status.data (or the whole status map when data is absent) — show all keys.
-    const rawStatus =
-      frontmatter.status && typeof frontmatter.status === 'object' ? frontmatter.status : null;
-    const statusData =
-      rawStatus &&
-      rawStatus.data &&
-      typeof rawStatus.data === 'object' &&
-      !Array.isArray(rawStatus.data)
-        ? rawStatus.data
-        : rawStatus;
+    const interactive = buildInteractiveFields(frontmatter);
+    const statusData = interactive.status?.data ?? null;
     const statusKeys = statusData ? Object.keys(statusData).length : 0;
 
-    const choices = Array.isArray(frontmatter.choice) ? frontmatter.choice : [];
-    const dice =
-      frontmatter.roll_dice && typeof frontmatter.roll_dice === 'object'
-        ? frontmatter.roll_dice
-        : null;
+    const choices = interactive.choice ? visibleChoiceOptions(interactive.choice) : [];
+    const dice = interactive.roll_dice;
 
     if (statusKeys === 0 && choices.length === 0 && !dice) return null;
 
     return (
       <FrontmatterWidgets
         statusData={statusData}
+        statusLabel={interactive.status?.label}
+        reveal={opts.reveal}
         choices={choices}
         dice={dice}
         filePath={opts.filePath}
@@ -66,8 +56,10 @@ export function renderFrontmatterWidgets(
 }
 
 interface FrontmatterWidgetsProps {
+  reveal?: boolean;
   statusData: Record<string, unknown> | null;
-  choices: unknown[];
+  statusLabel?: string;
+  choices: NormalizedOption[];
   dice: Record<string, any> | null;
   filePath?: string;
   onChoice?: (choice: string) => void;
@@ -75,7 +67,9 @@ interface FrontmatterWidgetsProps {
 }
 
 const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
+  reveal = false,
   statusData,
+  statusLabel,
   choices,
   dice,
   filePath,
@@ -91,12 +85,12 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
   const [pinned, setPinned] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
-  const open = pinned || hovered || focused;
+  const open = pinned || hovered || focused || reveal;
   const statusKeys = statusData ? Object.keys(statusData).length : 0;
 
   return (
     <div className="fm-block" onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)} onFocus={() => setFocused(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setFocused(false); }}>
-      <button type="button" className="fm-head" aria-expanded={open} onClick={() => setPinned(value => !value)}>
+      <button type="button" className="fm-head" aria-expanded={open} aria-pressed={pinned} onClick={() => setPinned(value => !value)}>
         {pinned ? '▾ Pinned' : '▸ Interact'}{choices.length > 0 ? ` · ${choices.length} choices` : ''}{dice ? ' · Dice' : ''}{statusKeys ? ' · Status' : ''}
       </button>
       <div className="fm-body" hidden={!open}>
@@ -112,7 +106,7 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
           >
             {statusOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             <Activity className="w-3.5 h-3.5" />
-            <span>World State Snapshot ({statusKeys})</span>
+            <span>{statusLabel ?? 'Status'} ({statusKeys})</span>
             {statusOpen && statusPinned && <span className="text-ink/40">· pinned</span>}
           </button>
 
@@ -152,7 +146,7 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
               <button
                 key={idx}
                 disabled={!onChoice}
-                onClick={() => onChoice?.(String(choice))}
+                onClick={() => onChoice?.(choice.id ?? choice.label)}
                 onPointerEnter={() => setHoverChoice(idx)}
                 onPointerLeave={() => setHoverChoice(null)}
                 // Ink-reverse hover: no `.ink-reverse` utility in CSS yet and the
@@ -161,7 +155,7 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
                 style={hovered ? { background: 'var(--ink)', color: '#fbf8f1' } : undefined}
                 className="w-full text-left px-4 py-2.5 rounded-2xl bg-paper-wall/70 border border-ink/10 text-sm font-sans text-ink transition-all flex items-center justify-between group hover:translate-x-1"
               >
-                <span>{String(choice)}</span>
+                <span>{choice.index}. {choice.label}{choice.hint && <small className="block opacity-60">{choice.hint}</small>}</span>
                 <CornerDownRight
                   className={`w-4 h-4 transition-colors ${
                     hovered ? 'text-[#fbf8f1]' : 'text-ink/30 group-hover:text-rust'

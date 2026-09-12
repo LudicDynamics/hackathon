@@ -10,6 +10,8 @@
     "build": "pnpm --filter @airp/shared build && pnpm --filter @airp/server build && pnpm --filter @airp/web build",
     "scaffold": "node tools/scaffold.mjs",
     "probe": "node tools/probe-writer.mjs",
+    "probe:tools": "node tools/probe-tools.mjs && node tools/probe-tools-engine.mjs",
+    "typecheck:extensions": "tsc -p extensions/tsconfig.json",
     "pi": "node tools/pi-rp.mjs"
   },
   "devDependencies": {

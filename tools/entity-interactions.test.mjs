@@ -16,8 +16,12 @@ for (const type of ['chalk', 'note', 'character', 'gate', 'component']) {
     assert.deepEqual(parseFrontmatter(stringifyChalk(frontmatter, body)).frontmatter.actions, frontmatter.actions);
   });
 }
-test('invalid interaction data degrades to original text, not a partial widget', () => {
+test('invalid interaction data preserves the entity but hides the malformed block', () => {
   const text = '---\ntype: note\nchoice: [42]\n---\nOriginal';
-  assert.deepEqual(parseFrontmatter(text), { frontmatter: null, body: text });
+  const parsed = parseFrontmatter(text);
+  assert.equal(parsed.body, 'Original');
+  assert.deepEqual(parsed.frontmatter.choice, [42]);
+  assert.equal(parsed.interactive.choice, null);
+  assert.ok(parsed.errors.length > 0);
   assert.equal(InteractionFieldsSchema.safeParse({ choice: [{}] }).success, false);
 });

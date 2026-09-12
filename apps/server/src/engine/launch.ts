@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { airpEnv, extensionArgs, installPreset, skillArgs } from './presets.js';
+import { CHARACTER_ROLE_PREFIX } from '@airp/shared';
 
 /**
  * Spawn parameters for a pi-rp agent process — the **single source** of truth.
@@ -85,7 +86,9 @@ export function writerLaunch(repoRoot: string, worldRoot: string, vendorCliPath:
     cliPath: vendorCliPath,
     cwd: worldRoot,
     args,
-    env: toEnv(airpEnv(), agentDirEnv(repoRoot), { PI_CODING_AGENT_SESSION_DIR: sessionsDir }),
+    env: toEnv(airpEnv({ role: 'writer' }), agentDirEnv(repoRoot), {
+      PI_CODING_AGENT_SESSION_DIR: sessionsDir,
+    }),
   };
 }
 
@@ -123,7 +126,7 @@ export function characterLaunch(
       path.join(sessionsDir, `char-${characterId}.jsonl`),
       ...extensionArgs(repoRoot, worldRoot),
     ],
-    env: toEnv(airpEnv(), agentDirEnv(repoRoot), {
+    env: toEnv(airpEnv({ role: `${CHARACTER_ROLE_PREFIX}${characterId}` }), agentDirEnv(repoRoot), {
       PI_CODING_AGENT_SESSION_DIR: sessionsDir,
     }),
   };

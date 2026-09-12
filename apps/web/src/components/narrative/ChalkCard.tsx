@@ -34,9 +34,7 @@ export const ChalkCard: React.FC<ChalkCardProps> = ({
   if (style.aged) classes.push('chalk--aged');
 
   const size = Number(frontmatter?.size);
-  const sizeStyle = Number.isFinite(size)
-    ? ({ '--chalk-size': `${size}px` } as React.CSSProperties)
-    : undefined;
+  const sizeStyle = { '--chalk-size': `${Number.isFinite(size) && size > 0 ? size : style.big ? 29 : 26}px` } as React.CSSProperties;
 
   return (
     <div className={classes.join(' ')} style={sizeStyle}>

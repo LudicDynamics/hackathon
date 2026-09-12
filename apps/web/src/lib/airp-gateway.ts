@@ -37,6 +37,7 @@ export const airpGateway = {
   characters: <TCharacters = unknown[]>() =>
     request<{ characters: TCharacters }>('/api/characters'),
   move: (from: string, to: string) => request('/api/move', json('POST', { from, to })),
+  choose: (path: string, choice: string) => request('/api/choice', json('POST', { path, choice })),
   moveCard: (path: string, x: number, y: number) =>
     request('/api/card/position', json('POST', { path, x, y })),
   rollDice: (filePath: string, rollType: string, expect: string) =>

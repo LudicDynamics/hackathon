@@ -86,6 +86,55 @@ flowchart LR
 
 **架构简化的红利**：砍掉角色进程通信与后台编排（pass_mic/handoff/call_character/黑板路由）后，编排层不再是关键路径。角色只在玩家直聊期间 spawn，但会在该会话中调用共享工具共同改变世界；作家调度角色位置直接使用 `move_to`。
 
+### 0.1 当前 Fri–Tue 冲刺看板（覆盖旧三天叙述的执行优先级）
+
+当前冲刺先评审**五个世界的整体体验骨架**，再逐个搭一条 6–10 分钟短 Demo；不以完整后日谈、全结局或下一章作为完成标准。TTS、GPT Live L1、Voice Agent 与 Voice Agent 操作光标 / 角色原点都保留在工作池，但不作为世界内容成立的前置条件。
+
+| 日期 | 里程碑 | 当天结束时必须证明 |
+|---|---|---|
+| **09-11 Fri** | **Core Game Ready** | 基础底座可进入世界、完成一次 Writer Chalk 循环，并能切换到 Character Agent |
+| **09-12 Sat** | **Multi-modal Ready** | 玩家眼前直接出现的图片、立绘、关键特效与声音有可用资产或接入路径；世界骨架和 CG 构图已反推资产需求 |
+| **09-13 Sun** | **Sample World Game Play Ready** | 至少一个世界可在 6–10 分钟内从导言玩到 punch line / 短结算，能够重复演示 |
+| **09-14 Mon** | **Extended + Tutorial Ready** | 结尾能带 Context 生成 / 解锁一个后续钩子；新玩家无需口头讲解可完成首轮，不要求实现完整下一章 |
+| **09-15 Tue** | **Video Edit** | 产品功能冻结，录制素材完整，只修阻断录制的问题 |
+
+```mermaid
+flowchart LR
+    F["Fri<br/>Core Game"] --> S["Sat<br/>Multi-modal"]
+    S --> U["Sun<br/>Sample World"]
+    U --> M["Mon<br/>Extended + Tutorial"]
+    M --> T["Tue<br/>Video Edit"]
+```
+
+执行纪律：前一天验收线未过，后一天先补主线；“Ready”按可演示结果而非模块完成度定义；Tuesday 默认不再改架构。
+
+### 0.2 当前分工
+
+**明月**：
+
+- 跑通“红十月”生图仓库；
+- 视觉迁移；
+- Mock 内容；
+- 3 个 world 的故事主线。
+
+**Yoshi**：
+
+- 打地基；
+- PoC 基础 demo 视觉；
+- Writer Agent 与 Character Agent 的切换。
+
+“3 个 world 故事主线”是当前工作量，不是五选三的产品范围。五个世界的设计真相与主观流程见 doc-24；实现可以按风险与展示价值分批。
+
+### 0.3 未分配工作池与优先级
+
+| 优先级 | 工作 | 前置依赖 |
+|---|---|---|
+| **P0：世界骨架后立即接** | 生 / 搜资源 pipeline、搜索 BGM pipeline（3 主题）、生 Codex 图、骰子打磨、特效打磨、生图等待动效与 friction、游戏基础流程打磨 ×3、真实游玩素材 / 关卡设计 / 生成 | 五世界主观流程、至少一条可玩主线、资产 Prompt |
+| **P1：主线可玩后** | Tutorial 流程与实现、创意工坊手感、多世界入口 / launcher 判断 | 首局流程稳定、上帝模式最小闭环 |
+| **P2：世界骨架之后再评估** | 接 TTS、GPT Live L1、Voice Agent、Voice Agent 操作光标与角色原点 | Writer / Character 通路稳定，文字与物件关卡已能完整跑通 |
+
+暂缓语音不是否定多模态，而是避免用语音掩盖世界关卡尚未连通。当前验收先看：玩家是否知道自己是谁、能否在 25 秒内行动、世界是否物化回应、角色是否记得、10–30 分钟是否抵达明确回报。
+
 ---
 
 ## 1. 基础事实：pi-rp 已提供什么（我们不用写的）

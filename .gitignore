@@ -10,6 +10,13 @@ dist/
 .env.*.local
 .artifacts/
 worlds/
+
+# --- assets/ : worldlines-assets 素材车间 ---
+# AI 生图候选（PNG/JPG）合计约 587MB，作为生产参考太占库，整树不追踪。
+# 只追踪我们自己产出的音乐（assets/audio/**，Pixabay 免版税 BGM / 环境声）。
+assets/**
+!assets/audio/
+!assets/audio/**
 # Runtime copies installed from presets/ by installPreset; not the source of truth
 **/.airpworld/prompt-presets/
 # pi-rp session memory is runtime state, never template content truth
@@ -23,3 +30,8 @@ worlds/
 .pi/agent/auth.json
 .pi/agent/models-store.json
 .pi/agent/sessions/
+
+# Agent-runtime scratch that any harness (omp / pi) drops into a project dir.
+# The MCP memory DB is per-machine state, never part of the artifact.
+.pi/memory.db*
+**/.pi/memory.db*
