@@ -34,7 +34,7 @@ test('Japanese manifest preserves stable IDs and localized display names', async
 
 test('all authored Markdown is Japanese, including choices and visible labels', async () => {
   const docs = (await files(root)).filter(p => p.endsWith('.md'));
-  assert.equal(docs.length, 35);
+  assert.ok(docs.length >= 37);
   for (const p of docs) {
     const text = await read(p);
     const { frontmatter: fm, body } = parseFrontmatter(text);
@@ -45,6 +45,34 @@ test('all authored Markdown is Japanese, including choices and visible labels', 
     if (Array.isArray(fm?.choice)) for (const choice of fm.choice) assert.ok(japanese.test(choice), p);
     assert.doesNotMatch(text, /First Snow Radio|Voice and boundaries|Persistent memory|No shared experience/);
   }
+});
+
+test('arrival choices and result gate use real world documents, not a pre-issued ending', async () => {
+  const main = parseFrontmatter(await read('world/tonight/README.md')).frontmatter;
+  const ending = parseFrontmatter(await read('world/tonight/first-snow/README.md')).frontmatter;
+  assert.deepEqual(main.requires.items, ['player/request-sheet.md']);
+  assert.deepEqual(ending.requires.items, ['player/tonight-letter.md']);
+  assert.ok(japanese.test(ending.blocked));
+  assert.equal((await files(root)).includes('player/tonight-letter.md'), false);
+  for (const scene of ['radio-studio', 'amber-cafe']) {
+    const fm = parseFrontmatter(await read(`world/tonight/${scene}/README.md`)).frontmatter;
+    assert.equal(fm.choice.length, 2);
+    assert.match(fm.choice[0], /一緒/);
+  }
+  assert.doesNotMatch(await read('world/tonight/campus-rooftop/01-city-lights.md'), /ポケットの中で/);
+});
+
+test('optional growth is player-led and writes playable text before a single image', async () => {
+  const skill = await read('skills/first-snow-jp-continuity/SKILL.md');
+  const growth = skill.slice(skill.indexOf('## 任意の一〜二分'));
+  assert.match(growth, /頼まれたときだけ/);
+  assert.match(growth, /resident\.md/);
+  assert.match(growth, /arrival\.md/);
+  assert.match(growth, /generate_image を一度だけ/);
+  assert.match(growth, /文字が揃ってから/);
+  assert.match(growth, /未登録の characterId/);
+  assert.match(growth, /自動再試行しない/);
+  assert.equal((await files(root)).some(p => p.includes('snow-shelter/')), false);
 });
 
 test('only the nine graphics are reused; no runtime or English asset docs are copied', async () => {

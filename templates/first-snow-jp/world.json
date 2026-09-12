@@ -1,6 +1,7 @@
 {
   "id": "first-snow-jp",
   "locale": "ja",
+  "entry": "map",
   "name": "初雪ラジオ",
   "version": "1.0.0",
   "schema": 1,
