@@ -33,6 +33,7 @@ import { getComponentTool } from './toolkit/component.js';         // doc-tools/
 import { showTool } from './toolkit/show.js';                      // doc-tools/10
 import { generateImageTool } from './toolkit/generate-image.js';   // doc-tools/11
 import { registerTurnTracking } from './toolkit/turn.js';          // doc-tools/12
+import { registerInitCommand } from './toolkit/init-command.js';   // docs/init/00
 
 /**
  * The complete AIRP tool face, in registration order.
@@ -65,11 +66,15 @@ export const AIRP_TOOLS: ReadonlyArray<{ name: string; tool: ToolDefinition }> =
 
 /** The names alone, in registration order — what the model sees and what `tools.allow` filters on. */
 export const AIRP_TOOL_NAMES: readonly string[] = AIRP_TOOLS.map((entry) => entry.name);
-
 export default function registerAirpTools(pi: ExtensionAPI): void {
   // Turn anchor for the A entry (docs/tools/01 §3.7). Registered BEFORE the tools
   // so the very first tool call of the first turn already has an anchor.
   registerTurnTracking(pi);
+
+  // Initialization execution kernel (docs/init/00 §2.2). Registered here — the
+  // same `initialize` as the tools — so presets and command share one entry point.
+  registerInitCommand(pi);
+
 
   for (const { name, tool } of AIRP_TOOLS) {
     // Guard against a copy/paste slip between AIRP_TOOLS and the definition:

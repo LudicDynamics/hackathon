@@ -30,7 +30,8 @@ export const getComponentTool = defineTool({
     },
     { additionalProperties: false }
   ),
-  promptSnippet: "Look up a component kind's frontmatter contract before writing one",
+  promptSnippet:
+    "get_component(component?) — look up a component kind's frontmatter contract before writing one",
   promptGuidelines: [
     'Use get_component before writing or editing any file with frontmatter "type: component" — it returns the exact fields for that kind.',
     'Use show for one-off performances (spotlight, lights_out, fireworks). show writes nothing; to place a letter or a lock on the canvas, use chalk or write instead.',

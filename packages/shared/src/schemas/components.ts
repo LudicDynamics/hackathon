@@ -34,6 +34,7 @@ export const COMPONENT_KINDS = [
   // room — a character's private nook
   'diary',
   'thread',
+  'portrait',
 ] as const;
 
 export type ComponentKind = (typeof COMPONENT_KINDS)[number];
@@ -212,6 +213,19 @@ export const ThreadKindSchema = ComponentCoreSchema.extend({
 });
 
 /**
+ * Room: a living portrait — a looping silent clip of someone, plus the still
+ * it falls back to. `video` / `poster` are WORLD-ROOT-RELATIVE paths (contract
+ * §5.4: the frontend turns them into `/api/asset?path=…`); deliberately NOT the
+ * legacy `avatar`-style `/api/asset?…` spelling.
+ */
+export const PortraitKindSchema = ComponentCoreSchema.extend({
+  component: z.literal('portrait'),
+  video: z.string().optional(),
+  poster: z.string().optional(),
+  caption: z.string().optional(),
+});
+
+/**
  * One schema per registered kind, keyed by the kind id. The registry and this
  * map MUST stay in step; the test asserts their key sets are equal.
  */
@@ -234,4 +248,5 @@ export const COMPONENT_SCHEMAS: Record<string, z.ZodTypeAny> = {
   board: BoardKindSchema,
   diary: DiaryKindSchema,
   thread: ThreadKindSchema,
+  portrait: PortraitKindSchema,
 };

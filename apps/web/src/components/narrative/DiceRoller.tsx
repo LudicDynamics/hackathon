@@ -1,9 +1,9 @@
 /**
  * DiceRoller.tsx — fullscreen dice ceremony (T2.3).
  *
- * The shared action contract is POST {path} →
- * {result, passed}, posted the moment the roll releases (authoritative first,
- * doc-06 §roll order). The 3D tween is purely visual. Pipeline:
+ * The server contract: POST { path } → {result, passed, crit, fumble}, posted
+ * the moment the roll releases (authoritative first, doc-06 §roll order).
+ * The 3D tween is purely visual. Pipeline:
  * overlay opens (warm-black dim) → hold a charge bar (~1.2s, rising tone)
  * → release → 1.2s cube tumble + dice-roll foley → settled result with
  * crit bloom / fumble crack effects. A plain tap auto-fills the bar instead
@@ -25,7 +25,6 @@ const FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 interface DiceRollerProps {
   filePath: string;
   rollDice: {
-    type?: string;
     desc: string;
     expect: string;
     result?: number;
@@ -40,14 +39,29 @@ type Effect = 'crit' | 'fumble' | null;
 interface DiceVerdict {
   result: number;
   passed: boolean;
+  /** 引擎算好的暴击 / 大失败（roll-dice.ts:168-169）。字段缺失（老 / 畸形响应）时
+   *  保留 undefined，结算处回落旧阈值作防御。 */
+  crit?: boolean;
+  fumble?: boolean;
 }
 
 /** Boundary guard for the authoritative /api/dice response (untrusted JSON). */
 function parseDiceVerdict(raw: unknown): DiceVerdict | null {
+  // 判定式不变（只要求 result / passed）；crit / fumble 另带出来，缺失则 undefined。
   if (!raw || typeof raw !== 'object' || !('result' in raw) || !('passed' in raw)) return null;
-  const { result, passed } = raw;
+  const { result, passed, crit, fumble } = raw as {
+    result: unknown;
+    passed: unknown;
+    crit?: unknown;
+    fumble?: unknown;
+  };
   if (typeof result !== 'number' || typeof passed !== 'boolean') return null;
-  return { result, passed };
+  return {
+    result,
+    passed,
+    crit: typeof crit === 'boolean' ? crit : undefined,
+    fumble: typeof fumble === 'boolean' ? fumble : undefined,
+  };
 }
 
 export const DiceRoller: React.FC<DiceRollerProps> = ({
@@ -66,6 +80,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
   const [effect, setEffect] = useState<Effect>(null);
   const [charge, setCharge] = useState(0);
   const [rotation, setRotation] = useState(IDLE_TILT);
+  const [error, setError] = useState<string | null>(null);
 
   const heldRef = useRef(false);
   const chargeStartRef = useRef(0);
@@ -104,6 +119,8 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
     setCharge(0);
     setEffect(null);
     setRotation(IDLE_TILT);
+    // 清场同时清掉上一次的失败文案，避免跨次状态污染。
+    setError(null);
     completeRef.current = false;
     pendingRef.current = { anim: false, verdict: null };
   };
@@ -117,16 +134,23 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
     setRolled(verdict);
     setPhase('settled');
 
-    // Effects fire once, at settlement, per the doc order.
-    if (verdict.passed && verdict.result >= 95) {
+    // Effects fire once, at settlement, per the doc order. crit / fumble come from
+    // the engine's own response (roll-dice.ts:168-169); only when the field is
+    // absent (legacy / malformed body) do we fall back to the old thresholds.
+    const crit = verdict.crit ?? (verdict.passed && verdict.result >= 95);
+    const fumble = verdict.fumble ?? (!verdict.passed && verdict.result <= 5);
+    if (crit) {
       setEffect('crit');
       playFoley('crit-chime');
-    } else if (!verdict.passed && verdict.result <= 5) {
+    } else if (fumble) {
       setEffect('fumble');
       playFoley('fumble-break');
     } else {
       setEffect(null);
     }
+
+    // 落定即回报，接活 App 的 toast（本批 A-D3）。
+    onRollComplete?.(verdict.result, verdict.passed);
 
     timersRef.current.push(window.setTimeout(closeOverlay, SETTLE_MS));
   };
@@ -144,22 +168,41 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
 
     // Verdict is posted immediately — the tween is pure theater.
     void (async () => {
+      // 空路径前置守卫：不发请求，直接走可见失败（服务端只认非空 path）。
+      if (filePath === '') {
+        closeOverlay();
+        setError('Could not roll: this card has no world-relative path.');
+        return;
+      }
       try {
         const res = await fetch('/api/dice', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            path: filePath,
-          }),
+          // 冻结请求体（docs/wiring/00 §6）：服务端只读 path；rollType / expect 由服务端从
+          // frontmatter 自己解析，前端不发（避免第二份真相）。
+          body: JSON.stringify({ path: filePath }),
         });
-        const verdict = parseDiceVerdict(await res.json());
-        if (!verdict) throw new Error('Malformed /api/dice response');
+        // Body 只能读一次：先整块取出 JSON，再分别判失败 / 成功。
+        const raw = await res.json().catch(() => null);
+        const rawObj = raw as Record<string, unknown> | null;
+        // 先判失败：非 2xx，或动作层 ok:false（含无 ok 字段的路由兜底体）。文案逐字透传。
+        if (!res.ok || rawObj?.ok === false) {
+          const msg =
+            typeof rawObj?.error === 'string' ? rawObj.error : `/api/dice → ${res.status}`;
+          throw new Error(msg);
+        }
+        const verdict = parseDiceVerdict(raw);
+        if (!verdict) {
+          throw new Error(`/api/dice → ${res.status} (response was not the expected shape)`);
+        }
         pendingRef.current.verdict = verdict;
         settleIfReady();
       } catch (err) {
         console.error('Failed to roll dice:', err);
-        // No verdict → back to the card so the player can retry.
+        // 失败必须可见：先 closeOverlay（内含 setError(null)）再 setError，
+        // 顺序不可反，否则重置会覆盖失败文案。rolled 仍为 null → 卡片回到可点状态。
         closeOverlay();
+        setError(`Could not roll: ${err instanceof Error ? err.message : String(err)}`);
       }
     })();
 
@@ -272,16 +315,23 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
           </div>
         </div>
       ) : (
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={openOverlay}
-              className="px-4 py-1.5 rounded-full bg-rust hover:bg-rust-light text-white text-xs font-medium tracking-wide shadow-sm transition-all"
-            >
-              Roll the Dice
-            </button>
-            <span className="text-xs text-ink/50">Hold the die to charge the roll</span>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={openOverlay}
+                className="px-4 py-1.5 rounded-full bg-rust hover:bg-rust-light text-white text-xs font-medium tracking-wide shadow-sm transition-all"
+              >
+                Roll the Dice
+              </button>
+              <span className="text-xs text-ink/50">Hold the die to charge the roll</span>
+            </div>
           </div>
+          {error && (
+            <p role="alert" className="text-xs text-rose-700">
+              {error}
+            </p>
+          )}
         </div>
       )}
 

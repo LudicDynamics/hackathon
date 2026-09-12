@@ -13,21 +13,34 @@
       "branchSummaryPrompt": "<conversation>\n{conversation}\n</conversation>\n\nSummarize this abandoned branch so it can be restored later without the Writer re-reading it. Keep, at most:\n\n## Where the branch turned\n[The last state of the world in this branch.]\n\n## What was promised or resolved\n[Promises, pacts, dice outcomes, relationship changes — verbatim.]\n\n## Why it was abandoned\n[One line, or \"(unknown)\".]\n\nPreserve exact paths and names."
     }
   },
+  "tools": {
+    "deny": [
+      "recall",
+      "retrieve",
+      "memorize",
+      "revise",
+      "forget",
+      "relocate",
+      "associate",
+      "trigger",
+      "consolidate",
+      "retrace",
+      "set_time",
+      "awaken",
+      "get_state",
+      "state_update"
+    ]
+  },
   "items": [
+    { "kind": "slot", "id": "writer-instruction", "slot": "writer-char" },
+    { "kind": "slot", "id": "tools", "slot": "tools", "options": { "onlyWithSnippets": true } },
     {
       "kind": "slot",
-      "id": "writer-instruction",
-      "slot": "writer-char"
+      "id": "tool-guidelines",
+      "slot": "tool-guidelines",
+      "options": { "includePiDefaultGuidelines": false, "heading": "Guidelines:" }
     },
-    {
-      "kind": "slot",
-      "id": "skills",
-      "slot": "skills"
-    },
-    {
-      "kind": "slot",
-      "id": "chat-history",
-      "slot": "chat-history"
-    }
+    { "kind": "slot", "id": "skills", "slot": "skills" },
+    { "kind": "slot", "id": "chat-history", "slot": "chat-history" }
   ]
 }

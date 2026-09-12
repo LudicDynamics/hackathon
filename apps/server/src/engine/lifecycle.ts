@@ -1,19 +1,39 @@
 import { RpcClient } from '../../../../vendor/pi-rp/packages/coding-agent/dist/index.js';
 import type { JsonAgentSessionEvent } from '../../../../vendor/pi-rp/packages/coding-agent/dist/index.js';
 
+import { CHARACTER_ROLE_PREFIX } from '@airp/shared';
+
 import { characterLaunch, hasExistingSession, writerLaunch } from './launch.js';
 import { readModelPreferences, writeModelPreferences, type ModelPreference } from './model-preferences.js';
 
 /** Raw WS frame produced by lifecycle itself (warmup replay), not by the engine event map. */
 export type FrameSink = (message: Record<string, any>) => void;
 /** Engine event sink — `eventBridge.emitEngine`. */
-export type EventSink = (source: 'writer' | 'character', event: JsonAgentSessionEvent, characterId?: string) => void;
+export type EventSink = (
+  source: 'writer' | 'character',
+  event: JsonAgentSessionEvent,
+  characterId?: string
+) => void;
 
 export interface AgentLifecycleManagerOptions {
   repoRoot: string;
   vendorCliPath: string;
   eventSink?: EventSink;
   frameSink?: FrameSink;
+}
+
+/**
+ * `'character:nanami'` → `'nanami'`. Anything else (writer, empty id, other
+ * keys) → `undefined`. Pure and exported so the derivation is unit-testable
+ * without a live agent.
+ *
+ * Empty id returns `undefined` on purpose: the frontend falls back with
+ * `detail.characterId ?? openOverlayId`, and `''` is not nullish.
+ */
+export function characterIdFromClientKey(clientKey: string): string | undefined {
+  if (!clientKey.startsWith(CHARACTER_ROLE_PREFIX)) return undefined;
+  const id = clientKey.slice(CHARACTER_ROLE_PREFIX.length);
+  return id === '' ? undefined : id;
 }
 
 /** Warmup delay: give the engine a moment to finish restoring the resumed session. */
@@ -191,7 +211,7 @@ export class AgentLifecycleManager {
       env: spec.env,
     });
     client.onEvent((event) =>
-      this.handleEngineEvent('character', event, `character:${characterId}`, client)
+      this.handleEngineEvent('character', event, `${CHARACTER_ROLE_PREFIX}${characterId}`, client)
     );
 
     await client.start();
@@ -268,7 +288,7 @@ export class AgentLifecycleManager {
     } else if (this.turnStartedAt.has(clientKey) && ['message_update', 'tool_execution_start', 'tool_execution_update', 'tool_execution_end'].includes(event.type)) {
       this.armTurnTimeout(clientKey, client, source);
     }
-    this.eventSink?.(source, event, source === 'character' ? clientKey.slice('character:'.length) : undefined);
+    this.eventSink?.(source, event, characterIdFromClientKey(clientKey));
   }
 
   private armTurnTimeout(clientKey: string, client: RpcClient, source: 'writer' | 'character'): void {

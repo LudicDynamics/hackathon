@@ -1,7 +1,7 @@
 ---
 name: This Winter's Promises
 type: readme
-bg: assets/backgrounds/map.webp
+bg: assets/backgrounds/map.webm
 bgm: firstsnow
 requires:
   items: [player/request-slip.md]

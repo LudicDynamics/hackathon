@@ -33,7 +33,8 @@ export const useItemOnTool = defineTool({
     },
     { additionalProperties: false }
   ),
-  promptSnippet: 'Apply an item to a target entity (key to lock, evidence to a character)',
+  promptSnippet:
+    'use_item_on(item, target) — apply one entity to another (key to lock, evidence to a character)',
   promptGuidelines: [
     'Use use_item_on when one thing in the world is applied to another; use choose when a single entity offers its own public actions.',
     'use_item_on never consumes or moves the item — call move separately if the story needs the item handed over.',

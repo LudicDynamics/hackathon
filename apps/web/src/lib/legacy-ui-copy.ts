@@ -1,4 +1,4 @@
-type Locale = 'en' | 'ja';
+export type Locale = 'en' | 'ja';
 
 export const UI_COPY = {
   en: {
@@ -34,6 +34,16 @@ export const UI_COPY = {
     timestamp: 'Day 1 · Rain Subsides 17:40',
     material: 'material',
     minimap: 'MINIMAP',
+
+    nook: 'Nook',
+    nookBack: 'Leave the nook',
+    nookEmptyTitle: 'Nothing here yet',
+    nookEmptyBody: 'Traces of moving in, and nothing else.',
+    nookEmptyPrompt: 'What should there be, here?',
+    nookEmptyHint: 'Leave it blank — what fits their history will appear.',
+    nookError: 'Could not open this nook',
+    nookRetry: 'Try again',
+    nookCoreStatus: 'Currently here',
   },
   ja: {
     sceneChalk: 'シーン・チョーク',
@@ -68,6 +78,16 @@ export const UI_COPY = {
     timestamp: '一日目 · 雨上がり 17:40',
     material: '素材',
     minimap: 'ミニマップ',
+
+    nook: '小天地',
+    nookBack: '小天地を出る',
+    nookEmptyTitle: 'まだ何もない部屋',
+    nookEmptyBody: '引っ越してきた跡だけが残っている。',
+    nookEmptyPrompt: 'ここには、何があるべきだろう？',
+    nookEmptyHint: '空欄のままなら、彼/彼女の来歴にふさわしいものが現れる。',
+    nookError: '小天地を開けませんでした',
+    nookRetry: '再試行',
+    nookCoreStatus: 'ここに居る',
   },
 } as const;
 

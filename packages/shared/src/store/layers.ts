@@ -38,8 +38,12 @@ export function layerOfDir(dir: string): string {
   return dir === WORLD_DIR ? MAP_LAYER : dir;
 }
 
-/** Directory part of a path ('' when the path has no slash). */
-function dirOf(p: string): string {
+/**
+ * Directory part of a path ('' when the path has no slash). Exported so the
+ * init rules (`rules/emptiness.ts`) and the nook validation share the ONE
+ * implementation instead of each writing a third copy (docs/init/00 §3.4).
+ */
+export function dirOf(p: string): string {
   const i = p.lastIndexOf('/');
   return i === -1 ? '' : p.slice(0, i);
 }

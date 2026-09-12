@@ -29,6 +29,11 @@ assets/**
 # pi-rp session memory is runtime state, never template content truth
 **/.pi/*.db*
 
+# TTS audio cache lives at <worldRoot>/.airpworld/tts-cache/ (docs/tts/00 §2.3).
+# A per-world runtime product — never committed. NOT `**/.airpworld/`, which
+# would blur the prompt-presets rule above and block any future tracked content.
+**/.airpworld/tts-cache/
+
 # pi-rp agent config (PI_CODING_AGENT_DIR -> .pi/agent). models.json holds real API keys
 # and settings.json holds per-machine prefs — this repo is a public hackathon artifact,
 # so neither is committed. Copy them from a teammate's checkout to run a real provider.

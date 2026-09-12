@@ -121,6 +121,30 @@ wss.on('connection', (ws: WebSocket) => {
           console.error('[AIRP WS] Writer prompt failed:', err);
           ws.send(JSON.stringify({ type: 'error', source: 'writer', message: err instanceof Error ? err.message : String(err) }));
         }
+      } else if (data.type === 'airp_init') {
+        // Initialization trigger (docs/init/03): hand the request to the writer
+        // process as an extension command. Fire-and-forget: the RPC send timeout
+        // (~30s) is SHORTER than the 45–60s spawn the command runs, so awaiting
+        // the reply would report success as a timeout (docs/init/00 §2.3). The
+        // outcome returns through the events table (`layer_initialized`), which
+        // the client already consumes as a `world_event`.
+        const writer = lifecycle.getWriter();
+        if (!writer) {
+          ws.send(JSON.stringify({ type: 'error', source: 'writer', message: 'Writer agent is not running' }));
+          return;
+        }
+        const initPayload = {
+          kind: data.kind,
+          target: data.target,
+          by: data.by === 'player' ? 'player' : 'engine',
+          ...(typeof data.request === 'string' && data.request !== '' ? { request: data.request } : {}),
+          ...(data.template === true ? { template: true } : {}),
+        };
+        void writer
+          .prompt(`/airp-init ${JSON.stringify(initPayload)}`)
+          .catch((err: unknown) =>
+            console.warn('[AIRP WS] airp_init dispatch failed:', err instanceof Error ? err.message : String(err))
+          );
       } else if (data.type === 'writer_abort' || data.type === 'abort') {
         const writer = lifecycle.getWriter();
         if (writer) {

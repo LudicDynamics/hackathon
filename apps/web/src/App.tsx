@@ -1,5 +1,7 @@
 import { useLocale } from './lib/i18n.js';
 import { AgentSettings } from './components/AgentSettings.js';
+import { NookView } from './components/nook/NookView.js';
+import { useViewpointReport } from './hooks/useViewpointReport.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from './components/canvas/Canvas.js';
 import { CharacterModal } from './components/overlay/CharacterModal.js';
@@ -98,6 +100,7 @@ export function App() {
   const [worldPickerOpen, setWorldPickerOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [activeCharacter, setActiveCharacter] = useState<CharacterView | null>(null);
+  const [nookChar, setNookChar] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [loadingWorld, setLoadingWorld] = useState<string | null>(null);
   const [backdropReady, setBackdropReady] = useState(false);
@@ -242,6 +245,7 @@ export function App() {
   const encounteredIds = [...(encounters[manifest?.id || ''] || []), ...(state?.presence || []).map(person => person.characterId)];
   const { resident, encountered } = splitCharacters(characters, encounteredIds);
   const handItems = backpack.filter((item) => item.filename.toLowerCase() !== 'readme.md');
+  useViewpointReport({ camera, layer, bagCount: handItems.length, enabled: nookChar === null });
   const canvasItems = (state?.items || []).filter((item) => item.path !== readme?.path);
   const currentName = readme?.frontmatter?.title || sceneName(manifest, layer);
   const playerRole = manifest?.player?.name || (manifest?.id === 'wuwu' ? 'Harbor Investigator' : 'Traveler');
@@ -270,6 +274,7 @@ export function App() {
     setWorldPickerOpen(false);
     setSelectedBagPath(null);
     setActiveCharacter(null);
+    setNookChar(null);
     setWriterWorking(false);
     try {
       const result = await airpGateway.loadWorld<WorldManifest>(worldPath);
@@ -323,6 +328,11 @@ export function App() {
       notify(error instanceof Error ? error.message : 'The item could not be placed');
       return false;
     }
+  };
+
+  const handleTakeItem = async (itemPath: string) => {
+    try { await airpGateway.move(itemPath, `player/${itemPath.split('/').pop()}`); await loadChromeData(); }
+    catch (error) { notify(String(error)); }
   };
 
   const handleToggleFreeze = async () => {
@@ -558,6 +568,7 @@ export function App() {
 
       {activeCharacter && (
         <CharacterModal
+          key={activeCharacter.id}
           characterId={activeCharacter.id}
           displayName={activeCharacter.name}
           avatar={assetUrl(activeCharacter.avatar)}
@@ -565,9 +576,12 @@ export function App() {
           effectsEnabled={effectsEnabled}
           bio={activeCharacter.bio || activeCharacter.description}
           onClose={closeCharacter}
+          onOpenNook={() => { const id = activeCharacter.id; closeCharacter(); camera.save(layer); setNookChar(id); }}
           onSendMessage={(message) => sendMessage({ type: 'character_prompt', characterId: activeCharacter.id, message })}
         />
       )}
+
+      {nookChar && <div className="prototype-nook"><NookView characterId={nookChar} locale={locale === 'ja' ? 'ja' : 'en'} onClose={() => { setNookChar(null); camera.restore(layer); void refresh(); }} onMoveCard={moveCard} onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }} onTakeItem={path => { void handleTakeItem(path); }} /></div>}
 
       {toast && <div className="prototype-toast" role="status">{toast}</div>}
     </div>

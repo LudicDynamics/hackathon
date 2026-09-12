@@ -22,6 +22,7 @@ import { ActionError, fail } from './errors.js';
 import { registerAction } from './service.js';
 import type { CardRecord, SeatFile, WorldStore } from '../store/world-store.js';
 import { SEAT_ANCHOR, SEAT_PAD, SEAT_STEP } from '../store/local-store.js';
+import { characterIdOfPath, nookCardPaths, nookIdOf } from '../rules/characters.js';
 
 const MAX_COORD = 4000;
 const MAX_LABEL = 40;
@@ -455,7 +456,16 @@ export async function arrangeCards(
     }
 
     await assertCardExists(store, place.path);
-    const layer = await store.resolveLayer(place.path);
+    // A nook is NOT a layer (`resolveLayer` returns null for `characters/**`,
+    // local-store.ts:550-556), so it is a SIBLING branch — `resolveLayer`'s own
+    // semantics are untouched (docs/nook/00 §3.7). `arrangeCards` is the one
+    // entry shared by the player UI (routes/world.ts) and the agent tool
+    // (extensions/toolkit/arrange.ts), so the branch lives here once.
+    // `characterIdOfPath` accepts any path under `characters/<id>/`, including
+    // subdirectory cards (docs/nook/01 §2.2) — a bare prefix test would accept
+    // `characters/../evil`, which this rejects by id shape.
+    const nookId = nookIdOf(characterIdOfPath(place.path) ?? '');
+    const layer = nookId ?? (await store.resolveLayer(place.path));
     if (layer === null) {
       fail(
         'not_found',
@@ -487,7 +497,14 @@ export async function arrangeCards(
   let layer = layout.layer;
   let paths = layout.paths;
 
-  if (layer !== undefined) {
+  // A nook is not in the derived `manifest.layers` tree (`characters/**` is not
+  // a layer, local-store.ts:550-556), so it is a SIBLING case here too
+  // (docs/nook/01 §6.3.1). `characterIdOfPath` accepts the bare directory
+  // (`characters/ryo`), so the `layer` argument needs no reshaping, and it
+  // nulls anything that is not a legal `characters/<id>` — a real layer never
+  // enters this branch.
+  const nook = layer !== undefined ? nookIdOf(characterIdOfPath(layer) ?? '') : null;
+  if (layer !== undefined && nook === null) {
     const layers = (await store.getManifest()).layers;
     if (layer !== 'map' && !(layer in layers)) {
       fail('not_found', `Unknown layer "${layer}".`);
@@ -498,8 +515,13 @@ export async function arrangeCards(
     if (layer === undefined) {
       fail('invalid_argument', 'arrange: a layout without "paths" needs a "layer".');
     }
-    // `pageOfLayer` is the one reader that knows what a page shows.
-    paths = (await store.pageOfLayer(layer)).cards;
+    // `pageOfLayer` reads the LAYER tree; a nook's page is its own direct-child
+    // markdown, exactly what `GET /api/nook` assembles (docs/nook/01 §③ step 4).
+    // `nookCardPaths` takes TWO args — a one-arg call compiles but silently
+    // returns [].
+    paths = nook === null
+      ? (await store.pageOfLayer(layer)).cards
+      : nookCardPaths(await store.listFiles(nook), nook);
   }
 
   paths = [...paths].sort((a, b) => a.localeCompare(b)); // deterministic order
@@ -509,7 +531,7 @@ export async function arrangeCards(
     if (paths.length === 0) {
       fail('invalid_argument', 'arrange: cannot infer a layer from an empty "paths".');
     }
-    const inferred = await store.resolveLayer(paths[0]);
+    const inferred = nookIdOf(characterIdOfPath(paths[0]) ?? '') ?? (await store.resolveLayer(paths[0]));
     if (inferred === null) {
       fail(
         'not_found',
@@ -519,7 +541,6 @@ export async function arrangeCards(
     layer = inferred;
   }
 
-  // All-or-nothing: a half-reflowed layout is worse than none (doc-09 §3.2).
   for (const p of paths) {
     try {
       await store.readFile(p);
@@ -527,7 +548,12 @@ export async function arrangeCards(
       if (err instanceof ActionError && err.code === 'invalid_path') throw err;
       fail('not_found', `Card not found: "${p}". Use look_at / view_canvas to list the current layer's cards.`);
     }
-    if ((await store.resolveLayer(p)) !== layer) {
+    // All-or-nothing: a half-reflowed layout is worse than none (doc-09 §3.2).
+    // Judged per path: a nook path belongs to its `characters/<id>`, so a path
+    // from ANOTHER nook still fails here — the check is not relaxed for nooks
+    // (docs/nook/01 §6.3.1 卡点③).
+    const owner = nookIdOf(characterIdOfPath(p) ?? '') ?? (await store.resolveLayer(p));
+    if (owner !== layer) {
       fail('not_found', `"${p}" is not on layer "${layer}".`);
     }
   }

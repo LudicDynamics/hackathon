@@ -248,10 +248,11 @@ AnotherBall 强调的“Obsession”，本质是玩家对角色产生的情感�
     4. `sad`（悲伤/低落/愧疚）
     5. `angry`（愤怒/严肃/戒备）
     6. `thinking`（思索/沉吟/心虚）
-  - **驱动机制：Prompt 显式格式约束（非关键词匹配）**：
-    - 坚决不用脆弱的后处理剧情关键词猜测，而是在角色 `preset.json` 的隐形提示词中定死输出格式规范：
-      > *“你在输出每句台词时，必须在句首附带情绪标签，格式形如 `【emo: shock】` 或 `[emo: smile]`。”*
-    - 前端遮罩在逐字流式渲染时，即时捕获首部 `[emo: <tag>]` 标签并平滑切换到对应的立绘切图，同时从用户可见台词中过滤该标签，保证 100% 精准的情绪-立绘咬合；
+  - **驱动机制：Prompt 显式格式约束（非关键词匹配）**：坚决不用脆弱的后处理剧情关键词猜测，而是在**平台提示词**（`extensions/instructions.ts` 的 `CHARACTER_INSTRUCTION`，slot `system-char`）里定死输出格式规范；**不逐世界抄进 `preset.json`**（否则改一处漏 N-1 处，见 `docs/prompts/00 §4.1`）：
+    > *"Tag the first line, and tag any line whose mood differs from the line before it, written exactly `[emo: tag]`."*
+    - **写法真源 = `apps/web/src/components/overlay/CharacterModal.tsx:61` 的解析正则** `/^\[emo:\s*([a-z]+)\]\s*/`——**只认半角方括号 + 小写 tag**；全角 `【emo: shock】` 不匹配（本节旧稿的 `【emo: shock】` 示例已删）。闭集真源 = `apps/web/src/lib/audio.ts:37` 的 `Emotion` 六值。
+  - 前端遮罩在逐字流式渲染时，捕获**行首**的 `[emo: <tag>]` 标签并切到对应立绘，同时把标签从玩家可见台词中过滤；**注意：当前 `CharacterModal` 尚未接入真实角色输出**（读的是本地 `FALLBACK_REPLIES`，`CharacterModal.tsx:176-184`），链路接线见 `docs/prompts/00 §5.1`。
+  - **逐行**：角色每句独占一行（`[emo: tag]` 亦按行首锚定），多行回话需**先按 `\n` 切行再逐行解析**——现实现只解析一次（`CharacterModal.tsx:182`），接线时须一并改。
   - 配合立绘的缓慢呼吸微动（Scale 1.02 循环），角色的戏剧在场感瞬间立起。
 
 ---

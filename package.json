@@ -14,9 +14,13 @@
     "probe:image": "node tools/probe-image.mjs",
     "probe:tools": "node tools/probe-tools.mjs && node tools/probe-tools-engine.mjs",
     "probe:inject": "node tools/probe-inject.mjs",
+    "probe:init": "node tools/probe-init.mjs",
+    "probe:prompt": "node tools/probe-prompt.mjs && node tools/probe-prompt-character.mjs",
+    "check:skills": "node tools/check-skills.mjs",
     "typecheck:extensions": "tsc -p extensions/tsconfig.json",
     "check:docs": "node tools/check-hooks-docs.mjs",
     "check:ws": "node tools/check-ws-contract.mjs",
+    "check:bodies": "node tools/check-request-bodies.mjs",
     "pi": "node tools/pi-rp.mjs"
   },
   "devDependencies": {

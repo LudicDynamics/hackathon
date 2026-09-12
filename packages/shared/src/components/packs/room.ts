@@ -51,4 +51,31 @@ lines:
 ---
 The page smells faintly of tobacco.`,
   },
+  {
+    kind: 'portrait',
+    pack: 'room',
+    label: 'Portrait',
+    purpose: 'A living portrait: a looping silent clip of someone, with a still fallback.',
+    // Same predicate shape as the two entries above (room.ts:10 / :35).
+    match: (fm) => fm.component === 'portrait',
+    fields: [
+      { name: 'video', type: 'string', required: false, desc: 'World-relative path to the alpha VP9 clip.', example: 'assets/characters/ryo/ryo.webm' },
+      { name: 'poster', type: 'string', required: false, desc: 'World-relative still, shown before/without the clip.', example: 'assets/characters/ryo/base-transparent.png' },
+      { name: 'caption', type: 'string', required: false, desc: 'One line pinned on the lower edge of the frame.', example: 'Ryo, mid-thought.' },
+    ],
+    click: 'look',
+    channels: { status: true },
+    movable: true,
+    secondLayer: 'none',
+    example: `---
+type: component
+component: portrait
+title: Ryo at the Window
+preview: Barely moving — only the breath.
+video: assets/characters/ryo/ryo.webm
+poster: assets/characters/ryo/base-transparent.png
+caption: Ryo, mid-thought.
+---
+A figure by the window, caught between two breaths.`,
+  },
 ];

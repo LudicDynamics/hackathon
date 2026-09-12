@@ -170,20 +170,22 @@ flowchart LR
 > 每天收尾前一小时固定为**收束时间**：跑一遍完整演示动线，写下一处卡点，卡点优先级高于新功能。
 > 原则：**作战状态不佳时守住已跑通的主线；状态好时才开新线**。演示动线跑不通的版本不能睡觉。
 
+> **状态复核（2026-09-12）**：D1 全部已落地；D2 除快照打点外全部落地；D3 演出层大部落地，仍缺情绪精灵表、AI 工坊、小天地、WS 断线重连、世界重载、开局引导与演示彩排。以下勾选以复核为准。
+
 ### D1：地基日（monorepo + 引擎骨架 + 画布底座）
 
 **上午（主攻：明月）**
-- [ ] 空仓库 `git init`，pnpm workspace monorepo（apps/web + apps/server + packages/shared）
-- [ ] `git submodule add` pi-rp → `vendor/pi-rp`；跑通 `npm run build`
-- [ ] 拉起脚本：`tools/scaffold.mjs`——从模板世界目录拷贝出玩家世界（"拷目录即开世界"是 doc-05 §8 的 UGC 生态设计）
-- [ ] 世界模板 3 个（doc-05 §11：校园恋爱/魔法学院/克苏鲁各一）：`README.md` + `world.json` + `characters/` + 初始场景目录（**2026-09-12：不再预置 `journal/` 骨架**，剧情一律落在场景目录，见 doc-12 文末）。**模板内容质量 = 演示成败的一半**，赛前可在"提前准备"里把内容写好（§4.1 A1）
-- [ ] 世界目录扫描器（worldStore 最薄版）：`readFile/writeFile/listFiles` + manifest 读写。**接口形状按 doc-05 §8.3 WorldStore 定死**，云端版 S3 只换实现不换接口
+- [x] 空仓库 `git init`，pnpm workspace monorepo（apps/web + apps/server + packages/shared）
+- [x] `git submodule add` pi-rp → `vendor/pi-rp`；跑通 `npm run build`
+- [x] 拉起脚本：`tools/scaffold.mjs`——从模板世界目录拷贝出玩家世界（"拷目录即开世界"是 doc-05 §8 的 UGC 生态设计）
+- [x] 世界模板 3 个（doc-05 §11：校园恋爱/魔法学院/克苏鲁各一）：`README.md` + `world.json` + `characters/` + 初始场景目录（**2026-09-12：不再预置 `journal/` 骨架**，剧情一律落在场景目录，见 doc-12 文末）。**模板内容质量 = 演示成败的一半**，赛前可在"提前准备"里把内容写好（§4.1 A1）。`templates/` 实交付 6 个：school-romance / magic-academy / cthulhu / holmes-world / whitechapel / firstsnow
+- [x] 世界目录扫描器（worldStore 最薄版）：`readFile/writeFile/listFiles` + manifest 读写。**接口形状按 doc-05 §8.3 WorldStore 定死**，云端版 S3 只换实现不换接口
 
 **下午（主攻：明月）**
-- [ ] RPC 编排骨架（apps/server）：仿 Nodesign 迁移文档的七模块拆法（lifecycle/rpc-client/event-bridge/sidecar），但全部自己写。**spawn 参数照抄 Nodesign 已验证的坑位**：`--mode rpc --approve --system-prompt "" -e <扩展列表> --no-extensions --no-skills ...`
-- [ ] **作家进程 P0 路径**：spawn 作家 → 玩家消息 → prompt → 流式回包 → 事件桥 → WS 推前端。跑通"玩家说一句话，作家用 chalk 写一段旁白（含 frontmatter）"即为 P0 达成
-- [ ] 前端画布底座：单 transform 世界层 + 相机（平移/缩放/焦点保持）+ 点阵纸背景。**照 doc-02 §1 的思路重写**（离散缩放档、屏幕=世界+相机偏移×缩放、除以缩放转世界单位），不抄实现
-- [ ] 前端渲染循环：fs.watch 场景目录 → 事件表记增量 → 渲染队列入队 → 节流上屏。chalk 卡片渲染（楷体、墨色、淡入）+ **实体通用 frontmatter 渲染器（choice 选项卡组 / status 折叠表格 / roll_dice 结果）**
+- [x] RPC 编排骨架（apps/server）：仿 Nodesign 迁移文档的七模块拆法（lifecycle/rpc-client/event-bridge/sidecar），但全部自己写。**spawn 参数照抄 Nodesign 已验证的坑位**：`--mode rpc --approve --system-prompt "" -e <扩展列表> --no-extensions --no-skills ...`
+- [x] **作家进程 P0 路径**：spawn 作家 → 玩家消息 → prompt → 流式回包 → 事件桥 → WS 推前端。跑通"玩家说一句话，作家用 chalk 写一段旁白（含 frontmatter）"即为 P0 达成
+- [x] 前端画布底座：单 transform 世界层 + 相机（平移/缩放/焦点保持）+ 点阵纸背景。**照 doc-02 §1 的思路重写**（离散缩放档、屏幕=世界+相机偏移×缩放、除以缩放转世界单位），不抄实现
+- [x] 前端渲染循环：事件表为唯一变更来源（server 尾部读 `events` → 合成 `world_event`；`fs.watch` 仅作前端重取触发器）→ 前端整层重取。chalk 卡片渲染（楷体、墨色、淡入）+ **实体通用 frontmatter 渲染器（choice 选项卡组 / status 折叠表格 / roll_dice 结果）**
 
 **D1 验收（睡眠线）**：玩家在对话框打一句话 → 作家进程回答并写一条 chalk（带 frontmatter）到场景目录 → 画布上淡入一条旁白 + 选项卡片组。**E2E 全链路（WS+RPC+文件投影）打通**。
 **D1 尾部收束**：列卡点清单，评估明日计划可信度；连续两小时无进展的线立即冻结，转支援主线。
@@ -191,14 +193,14 @@ flowchart LR
 ### D2：世界日（层级 + 交互 + 角色遮罩）
 
 **上午**
-- [ ] 层级画布：场景目录嵌套 → 层级导航（点场景卡进入下一层；面包屑+小地图）。单 transform 底座上叠加"当前层"概念（doc-02 §1.5：导航控件不是第二种视图）
-- [ ] 上帝模式 P0：模式切换开关 → 冻结世界（toast 提示"世界已冻结"）→ 右键新增物件（写 md 文件）→ 作家现编理由。**只做"新增物件"一种手势**，编辑/删除/圈选留 D3
-- [ ] 单轮管线补全：作家的 chalk → edit 回写 frontmatter（status/choice/roll_dice）→ write/edit 演化场景物件的完整流程跑通（doc-05 §5）
-- [ ] 前端角色头像：场景内在场角色列表（从画布投影读）——**类光标 + 圆形头像**（不做精灵动画）
+- [x] 层级画布：场景目录嵌套 → 层级导航（点场景卡进入下一层；面包屑+小地图）。单 transform 底座上叠加"当前层"概念（doc-02 §1.5：导航控件不是第二种视图）
+- [x] 上帝模式 P0：模式切换开关 → 冻结世界（toast 提示"世界已冻结"）→ 右键新增物件（写 md 文件）→ 作家现编理由。**只做"新增物件"一种手势**，编辑/删除/圈选留 D3
+- [x] 单轮管线补全：作家的 chalk → edit 回写 frontmatter（status/choice/roll_dice）→ write/edit 演化场景物件的完整流程跑通（doc-05 §5）
+- [x] 前端角色头像：场景内在场角色列表（从画布投影读）——**类光标 + 圆形头像**（不做精灵动画）
 
 **下午**
-- [ ] **角色遮罩对话 P0**：单击角色头像 → 遮罩特写（画布压暗虚化 + 左右分屏大半身立绘）→ spawn 角色进程（`--preset <角色id>` + hook 报本层文件清单/最近动态）→ 角色流式对话 → Esc 退出回收。「第一句话才 spawn」的懒灵魂验证
-- [ ] 小球打开：README.md → 场景卡渲染（封面图+标题+摘要，材质随本层）；材质皮肤系统（material 词汇表，doc-04 §6 思路）
+- [x] **角色遮罩对话 P0**：单击角色头像 → 遮罩特写（画布压暗虚化 + 左右分屏大半身立绘）→ spawn 角色进程（`--preset <角色id>` + hook 报本层文件清单/最近动态）→ 角色流式对话 → Esc 退出回收。「第一句话才 spawn」的懒灵魂验证
+- [x] 小球打开：README.md → 场景卡渲染（封面图+标题+摘要，材质随本层）；材质皮肤系统（material 词汇表，doc-04 §6 思路）
 - [ ] 快照回滚 P0：会话结束/剧情节点 → 打包 `.airpworld.zip` 快照（node:child_process 调 zip 即可，别用库）
 - [ ] 事件表前端可视化（可选，时间允许才做）：功能区"世界历史"面板
 
@@ -208,16 +210,16 @@ flowchart LR
 ### D3：演出日（体验层 + 稳定性 + 演示准备）
 
 **上午**
-- [ ] **演出层升级（doc-19）**：
-  - 音频引擎挂载（Howler.js）：预置 3 个场景 ambient（雨/火/风）+ 1 首悬疑 BGM + 实体拟音（拖拽/开锁/背包/掷骰）；
-  - 2.5D 视差纸雕空间：CSS 3D perspective (1200px) + Canvas 浮尘粒子浮层；
-  - 大号物理掷骰：纯 CSS 3D Cube 翻滚动画组件 + 撞击拟音 + 金色大成功/猩红失败结算大标；
-  - 作家写字 → 画布 chalk 直播 + 纸条意象 + 红杆铅笔 liveness
-- [ ] **角色遮罩 6 表情差分**：遮罩立绘全套 6 情绪差分（normal/smile/shock/sad/angry/thinking），角色 Prompt 约束输出句首 `[emo: <tag>]` 标签，前端即时流式切图；呼吸动效
-- [ ] **玩家背包（以物解谜）+ 角色 tab**：右侧边栏双 tab——除场景 ↔ 背包搬移外，**支持将背包道具拖到门/卡片/NPC 触发 `use_item_on` 解谜**（派发事件，作家即时叙事回应）；角色 tab 导航/聊天/跟随
+- [x] **演出层升级（doc-19）**：
+  - [x] 音频引擎（自研 Web Audio：sample-first + synth 保底，非 Howler）：ambient / BGM / theme 三主轨 + 拟音（拖拽/开锁/背包/掷骰/写板）。**样本资产未落地**（`templates/**` 不带 `assets/`，世界级样本 404 时由 synth 保底）；
+  - [x] 2.5D 视差纸雕空间：CSS 3D perspective (1200px) + Canvas 浮尘粒子浮层；
+  - [x] 大号物理掷骰：纯 CSS 3D Cube 翻滚动画组件 + 撞击拟音 + 金色大成功/猩红失败结算大标；
+  - [ ] 作家写字 → 画布 chalk 直播 + 纸条意象 + 红杆铅笔 liveness（`chalk_writing` / `chalk_landed` 帧已广播、前端未消费，见 `pnpm check:ws` 残余 DARK）
+- [ ] **角色遮罩 6 表情差分**：遮罩立绘全套 6 情绪差分（normal/smile/shock/sad/angry/thinking），角色 Prompt 约束输出句首 `[emo: <tag>]` 标签，前端即时流式切图；呼吸动效（`[emo: tag]` 协议与 CSS 情绪差分已落地；**6 张精灵表未落地**）
+- [x] **玩家背包（以物解谜）+ 角色 tab**：右侧边栏双 tab——除场景 ↔ 背包搬移外，**支持将背包道具拖到门/卡片/NPC 触发 `use_item_on` 解谜**（派发事件，作家即时叙事回应）；角色 tab 导航/聊天/跟随
 - [ ] 上帝模式升维：包装为 **AI 游戏工坊（Tool Creation Pipeline）**，右键空白处一键并发生成 NPC/场景/道具卡片
 - [ ] 角色小天地（窥探感）：根目录初始化、草稿划掉痕迹透光可见、玩家留言角色专属红墨水批注
-- [ ] 稳定性：进程守护（崩溃重启，孤儿回收）、WS 断线重连、世界重载（世界状态恢复）
+- [ ] 稳定性：进程守护（崩溃重启，孤儿回收）、WS 断线重连、世界重载（世界状态恢复）（**进程守护已落地**：`lifecycle.ts` 退避重启；**WS 断线重连与世界重载未做**）
 - [ ] **演示动线彩排**：按 doc-19 §7 的“3 分钟黄金动线”跑 3 遍。断网演练（无 API key 场景的 fallback 文案）+ 网络慢时 loading 态
 
 **下午**

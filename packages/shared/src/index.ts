@@ -10,6 +10,13 @@ export * from './schemas/forms.js';
 export * from './store/layers.js';
 export * from './db/schema.js';
 
+// Init (I1) rules. Same no-glob discipline as below: a missing line is a silent
+// unreachable module. These are consumed by the server routes and the `airp-init`
+// extension command.
+export * from './rules/characters.js';    // isValidCharacterId / nookIdOf / characterIdOfPath (docs/nook/00 §5.2)
+export * from './rules/emptiness.js';     // isLayerEmpty / isNookEmpty / hasInitProduct (docs/init/00 §3.1)
+export * from './rules/init-fallback.js'; // w2SceneTemplate (docs/init/00 §3.3)
+
 // Action layer public surface (01 §8). Extensions import the whole barrel from
 // `shared/dist/index.js`, so anything they call MUST be exported here.
 export * from './actions/types.js';
@@ -51,6 +58,7 @@ export * from './render/events.js';       // renderEventWindow / EventWindowLine
 export * from './render/next-step.js';    // computeNextStep / NextStepFacts (04)
 export * from './render/viewpoint.js';    // ViewRect / quantiseViewRect / encodeViewRect / decodeViewRect / viewpointKey / VIEWPOINT_* (05)
 export * from './render/sanitise.js';     // sanitiseForBlock (00 §14)
+export * from './render/brief.js';        // buildSceneInitBrief / buildNookInitBrief (docs/init/00 §4)
 export * from './inject/turn-cache.js';   // readTurnBlock / writeTurnBlock (01)
 export * from './inject/collect.js';      // collectSections / makeSectionDeps / buildNextStepFacts (01)
 export * from './store/cursor.js';        // settleTurnCursor (03; shared by writer extension and character server side)

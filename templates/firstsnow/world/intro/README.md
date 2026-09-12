@@ -1,7 +1,7 @@
 ---
 name: Episode 47 · On Air
 type: readme
-bg: assets/backgrounds/intro.webp
+bg: assets/backgrounds/intro.webm
 bgm: firstsnow
 choice:
   - Say something to Nanami

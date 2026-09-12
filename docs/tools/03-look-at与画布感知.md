@@ -983,7 +983,7 @@ listDirs()                    →  ['world','world/abandoned-orchard',…,'world
 
 | 前端位置 | 它在做什么 | 与本文的关系 |
 |---|---|---|
-| `apps/web/src/state/useWorld.ts:65` `useWorld()` | 拉 `GET /api/layer`，管当前层与重取 | **`view_canvas` 与它读同一批数据**（`pageOfLayer`），但 payload 不同（§6.4） |
+| `apps/web/src/state/useWorld.ts` 的 `useWorld()` | 拉 `GET /api/layer`，管当前层与重取 | **`view_canvas` 与它读同一批数据**（`pageOfLayer`），但 payload 不同（§6.4） |
 | `apps/web/src/lib/fm.tsx:23` `renderFrontmatterWidgets` | 把 `status` / `choice` / `roll_dice` 渲染成**可折叠表格 / 选项卡组 / 骰子卡** | **与本文 §5.3 是同一份语义的两种呈现**（前端视觉、`look_at` 文本）。两侧必须同义——这正是 `doc-22 §2` 第 9 条要的，本文 §5.1 定了归属 |
 | `apps/web/src/lib/md.ts:110` `leadingTitleOf` | 从正文提标题 | 与 `06 §3.7` 的 `entityName` 同款正则。本文调 `entityName`，**不自己实现** |
 | `apps/web/src/components/canvas/CardRenderer.tsx:209` | letter 的四段体（`title` / `preview` / `sign` + 点开全文） | 与本文 §4.1 示例 B 一致 |

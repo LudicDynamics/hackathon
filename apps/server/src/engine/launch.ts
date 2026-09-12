@@ -105,6 +105,12 @@ export function hasExistingSession(worldRoot: string): boolean {
  */
 export function writerLaunch(repoRoot: string, worldRoot: string, vendorCliPath: string): LaunchSpec {
   const presetId = installPreset(worldRoot, path.join(repoRoot, 'presets', 'writer.json'));
+  // The two initializer profiles must exist in the WORLD's `.airpworld/prompt-presets/`
+  // so the writer process's `subagent_profiles` sees them (R1 delegation) and the
+  // `airp-init` command can spawn them (R2). Installed per launch — installPreset
+  // overwrites, so a stale world-side copy never wins (docs/init/00 §5).
+  installPreset(worldRoot, path.join(repoRoot, 'presets', 'scene-init.json'));
+  installPreset(worldRoot, path.join(repoRoot, 'presets', 'nook-init.json'));
   const sessionsDir = sessionsDirOf(worldRoot);
 
   const args = [
@@ -137,8 +143,11 @@ export function writerLaunch(repoRoot: string, worldRoot: string, vendorCliPath:
  * character overlay's memory survives shutdown and rides along with the world.
  *
  * A character's own `characters/<id>/preset.json` wins over the repo's generic
- * character preset (same choice `lifecycle` made before). Characters get no
- * `--skill`: unlike the writer they carry no craft skills.
+ * character preset (same choice `lifecycle` made before). Characters get the
+ * same two skill tiers as the writer (`skillArgs`): the platform tier teaches
+ * how to act with the tools they have, the world tier teaches this world's voice.
+ * The `skills` slot in the preset is what puts those descriptions into the
+ * prompt — without it the `--skill` flags load nothing the model can see.
  */
 export function characterLaunch(
   repoRoot: string,
@@ -168,6 +177,7 @@ export function characterLaunch(
       ...ISOLATION_ARGS,
       ...extensionArgs(repoRoot, worldRoot),
       ...modelPreferenceArgs(worldRoot, 'character'),
+      ...skillArgs(repoRoot, worldRoot),
     ],
     env: toEnv(airpEnv({ role: `${CHARACTER_ROLE_PREFIX}${characterId}` }), agentDirEnv(repoRoot), {
       PI_CODING_AGENT_SESSION_DIR: sessionsDir,

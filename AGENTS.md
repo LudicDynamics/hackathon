@@ -103,8 +103,20 @@ tools/probe-tools-engine.mjs # 工具面探针（强形式）：真 spawn 引擎
 tools/pi-rp.mjs         # pi-rp 子模块工作流（pnpm pi status|build|update|commit，见 §7.2）
 tools/probe-inject.mjs  # 注入探针：真 spawn 作家引擎，断言每请求恰好一份注入块、且不落盘（pnpm probe:inject）
 tools/inject-probe-provider.ts # 注入探针的确定性 provider（把每个请求的 wire messages 落文件）
+tools/probe-prompt.mjs  # 提示词 wire 探针：真 spawn 作家，断言 messages[0] 含正文/工具清单/skills、不含记忆工具与 Pi 默认 guideline（pnpm probe:prompt）
+tools/probe-prompt-character.mjs # 提示词 wire 探针（角色侧）：同款断言 + [emo: tag] 六标签都在（pnpm probe:prompt 的第二段）
+tools/prompt-dump-provider.ts # 提示词探针的确定性 provider（把每个请求的 wire payload 落文件）
+tools/check-skills.mjs  # skill 语料门禁（pnpm check:skills）：frontmatter 真解析 / 语言分层 / 命名 / 非法工具名
 tools/check-ws-contract.mjs # 跨端 WS 契约门禁（pnpm check:ws）：服务端发射面 ↔ 前端消费面 ↔ 契约表求 diff
+docs/init/              # 初始化执行设计（I1 批次；00 是冻结契约，01–04 分篇，REVIEW-* 三份独立评审）
+extensions/toolkit/init-command.ts # `airp-init` 初始化执行内核（R2 直唤：扩展命令 → ctx.spawnAgent）
+packages/shared/src/rules/characters.ts # 角色 id 校验 + nookIdOf / nookCardPaths（docs/nook §5.2 唯一实现）
+packages/shared/src/rules/emptiness.ts  # isLayerEmpty / isNookEmpty / hasInitProduct（doc-11 §3.1/§4.1）
+packages/shared/src/rules/init-fallback.ts # w2SceneTemplate：W2 零 AI 兜底模板（doc-11 §5）
+packages/shared/src/render/brief.ts # buildSceneInitBrief / buildNookInitBrief（I1 从 apps/server 下沉）
+docs/init/00-共同上下文.md # 初始化执行的冻结契约（命令 / 执行序 / brief 字段 / 边界）
 docs/前端接线体检.md   # 2026-09-12 跨端 WS 契约静默漂移的核实报告（含缺陷分级与文档漂移清单）
+docs/prompts/           # 提示词与 skill 体系设计（00 是冻结契约；01–05 分篇；REVIEW-* 评审报告）
 docs/                   # 设计文档（真相源）；docs/tools/ 是 B1 工具面设计 + 评审报告
 vendor/pi-rp/           # 叙事引擎 submodule
 ```
@@ -161,6 +173,8 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 
 `world.json.entry` 指定打开世界后的 0 级导入层（缺省 `map`）。当前层自己的 `README.md` 由 `/api/layer` 单独作为 `scene` 返回并显示为入场 Chalk；它在父层仍是 Gate，不进入普通卡片排座。P0 Gate 可用 README 的 `requires.items` 要求玩家背包中的精确文件路径，详见 `docs/doc-15` 与 `docs/doc-20`。
 
+**角色小天地（nook）是与「层」并列的一条通路，不是层**（2026-09-13 落地）。`characters/<id>/` 根目录本身就是小天地（doc-06 §4.1 / doc-11 §4），但它**被层派生显式排除**（`layers.ts` 只收 `world/` 子树；`resolveLayer()` 对 `characters/**` 返回 `null`）。因此它走**独立端点** `GET /api/nook?character=<id>`——返回体与 `LayerState` 同形（`layer` 字段填 `characters/<id>`、`scene` 为角色 README、`items` 只含**直接子级 md**（`nookCardPaths`）、`links`/`presence` 为空）。前端入口在**角色 tab 每行的第 4 个按钮**，视图是 `apps/web/src/components/nook/NookView.tsx`（复用 `Canvas`，**不自己 `useWorld()`**，避免第二个 WebSocket）。小天地里的卡片同样有 `cards` 行（`layer` 列存完整 nookId）、同样走 `POST /api/card/footprint` 回写（该路由对 `characters/<id>` 有并列分支）；拖卡走 `arrangeCards`（其 place/layout 两条分支均有 nook 分支）。微动立绘是 `portrait` kind（room pack，`component: portrait` + `video:` + `poster:`，透明 VP9 webm 由 `tools/motion-clip.mjs` 从绿幕产出）。设计真相源：`docs/nook/00…05`。
+
 ---
 
 ## 4. 文档导航
@@ -208,6 +222,9 @@ pnpm typecheck:extensions                       # extensions/ 类型体检（jit
 pnpm probe:inject                               # 注入探针（真 spawn 作家引擎，断言每请求恰好一份注入块且不落盘）
 pnpm check:ws                                   # 跨端 WS 契约门禁（服务端广播面 ↔ 前端消费面 ↔ docs/tools/12 §6.2）
 pnpm check:docs                                 # hooks 文档门禁（symbol ownership / barrel union / file:line 引用）
+pnpm probe:prompt                               # 提示词 wire 探针（作家 + 角色），断言补上的 slot 真的进了模型
+pnpm probe:init                                 # 初始化探针（真 spawn 作家，发 /airp-init，断言产物落盘 + 事件落账 + 幂等 + 零 AI 路径）
+pnpm check:skills                               # skill 语料门禁（frontmatter / 语言分层 / 命名）
 pnpm pi status                                  # pi-rp 子模块 + dist 新鲜度体检（见 §7.2）
 pnpm motion <绿幕.mp4> -o out.webm --scale 360   # 微动立绘 / 背景视频（见 assets/skills/motion-portrait）
 node tools/scaffold.mjs --template holmes-world --out worlds/my-holmes
@@ -276,21 +293,26 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 | 目录 / 模块职责 / 数据流 | 本文（`AGENTS.md`）§2 §3 |
 | 协议（frontmatter / WS 消息 / API 路由） | `packages/shared` schema + `docs/doc-09` 或 `doc-05` |
 | 提示词 / preset / 初始化流程 | `presets/*.json` + `docs/doc-11`（**骨架与文件必须逐字一致**） |
+| 提示词正文 / slot 装配 | `docs/prompts/01…03`（正文逐字源）+ `presets/*.json` + **全部 9 份** `templates/*/characters/*/preset.json`；跑 `pnpm probe:prompt`（作家 + 角色 wire 断言）|
+| skill 体系（平台级 / 世界级） | `docs/prompts/04` + `skills/**` + `templates/*/skills/**`；跑 `pnpm check:skills`（frontmatter 真解析 / 语言分层 / 命名 / 非法工具名）|
 | 交互 / 演出 / 视觉 | `docs/doc-06` / `doc-04`（视觉以 §10 为准） |
 | 注入协议 / 钩子接线 / 分节表 | `docs/hooks/00…06`（冻结契约 `00` 唯一真相源） |
 | 角色 preset 的 compaction | `presets/character.json` 是**唯一真源模板**（新角色从它复制）；改 `hiddenOverrides.compaction` 必须**同 commit** 铺到 **全部**模板/world 角色 preset，并跑 `apps/server/test/character-preset-parity.test.mjs`（逐字一致，缺一份即静默失效） |
 | 跨端 WS 帧契约（增删帧 / 改载荷 / 前端消费面） | `docs/tools/12` §6.2（唯一帧清单）+ `docs/前端接线体检.md`；跑 `pnpm check:ws`（门禁会因两端不一致而红） |
 | 角色来源的 WS 帧载荷（`characterId`） | `docs/wiring/00` §3（唯一形状源）+ `apps/server/src/engine/{lifecycle,event-bridge}.ts` 的 sink 链 |
+| 初始化执行（`airp-init` 命令 / brief 字段 / 空判定 / W2 兜底） | `docs/init/00`（冻结契约）+ `01…04`；`extensions/toolkit/init-command.ts`、`packages/shared/src/{render/brief,rules/emptiness,rules/init-fallback,rules/characters}.ts`；跑 `pnpm probe:init`（真 spawn 端到端）|
 
 文档里已被推翻的说法**直接改掉**，不要另起一段解释——`docs/archive/` 才是存废案的地方。
 
 ### 6.4 收工自检
 
 ```bash
-pnpm build && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:docs
+pnpm build && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:bodies && pnpm check:docs && pnpm probe:prompt && pnpm check:skills && pnpm probe:init
 ```
 
 `pnpm check:ws` 是**跨端 WS 契约门禁**：服务端广播面、前端消费面、`docs/tools/12 §6.2` 契约三集合求 diff。**改了任何 WS 帧（增删帧名 / 改载荷 / 前端 case）必须让它变绿**——它会把"两端各自绿、合起来死"的漂移抓出来（2026-09-12 实际抓到 14 条）。
+
+`pnpm check:bodies` 是**HTTP 请求体门禁**（`tools/check-request-bodies.mjs`）：比对前端 `fetch('<route>', … JSON.stringify({...}))` 的键集合与 `docs/wiring/00 §6` 冻结的请求体。WS 门禁管帧名，这条管 body——`/api/dice` 曾因前端发 `{filePath,rollType,expect}` 而服务端只读 `body.path` 静默 400（2026-09-12 修复）。
 
 改动涉及引擎或 preset 时，额外确认探针里**没有 `not found` / `unknown slot` 警告**。
 

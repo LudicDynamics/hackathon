@@ -58,9 +58,86 @@ const SpriteFig: React.FC<{ avatar?: string; name: string }> = ({ avatar, name }
   </div>;
 };
 
+/** World-root-relative asset path → URL (contract §5.4, same as SceneBackdrop). */
+const assetUrl = (p: string): string => `/api/asset?path=${encodeURIComponent(p)}`;
+
+interface PortraitProps {
+  video?: string;
+  poster?: string;
+  caption?: string;
+  /** Visible end of the fallback chain when nothing decodes. */
+  title: string;
+  /** true = never mount <video> (L1 cap / L3 reduced motion — nook 03 §③-6). */
+  still: boolean;
+}
+
+/**
+ * A living portrait: a looping silent alpha clip with a still fallback.
+ * `failedSrc` is a string, not a boolean, so a changed `video:`/`poster:` value
+ * resets the fallback automatically (SceneBackdrop.tsx:29-33, same paradigm).
+ * The `<video>` / `<img>` are mutually exclusive branches of ONE ternary:
+ * `document.hidden` unmounts the element entirely, so a poster `<img>` must be
+ * re-created there rather than relying on the vanished `<video poster=>`.
+ */
+const PortraitFig: React.FC<PortraitProps> = ({ video, poster, caption, title, still }) => {
+  const [failedSrc, setFailedSrc] = React.useState<string | null>(null);
+  const [visible, setVisible] = React.useState(() => !document.hidden);
+
+  React.useEffect(() => {
+    const onVis = () => setVisible(!document.hidden);
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+
+  const videoOk = !!video && !still && failedSrc !== video;
+  const posterOk = !!poster && failedSrc !== poster;
+
+  return (
+    <div className="portrait" data-title={title}>
+      <div className="portrait__media">
+        {videoOk ? (
+          visible ? (
+            <video
+              className="portrait__video"
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="metadata"
+              poster={posterOk ? assetUrl(poster!) : undefined}
+              src={assetUrl(video!)}
+              onError={() => setFailedSrc(video!)}
+            />
+          ) : posterOk ? (
+            <img
+              className="portrait__still"
+              src={assetUrl(poster!)}
+              alt=""
+              onError={() => setFailedSrc(poster!)}
+            />
+          ) : null
+        ) : posterOk ? (
+          <img
+            className="portrait__still"
+            src={assetUrl(poster!)}
+            alt=""
+            onError={() => setFailedSrc(poster!)}
+          />
+        ) : (
+          <div className="portrait__missing" role="img" aria-label={title}>
+            <span>{title}</span>
+          </div>
+        )}
+      </div>
+      {caption && <div className="portrait__caption">{caption}</div>}
+    </div>
+  );
+};
+
 export interface CanvasObjectProps {
   item: LayerItem;
-  /** Ordinal of this gate among the layer's gates (fallback for the seal). */
+  /** true = this card never mounts <video> (L1 cap / L3 reduced motion, nook 03 §③-6). */
+  still?: boolean;
   index?: number;
   onSelectChoice?: (path: string, choice: string) => void;
   onEntityAction?: (prompt: string) => void;
@@ -73,6 +150,7 @@ export interface CanvasObjectProps {
 
 export const CanvasObject: React.FC<CanvasObjectProps> = ({
   item,
+  still = false,
   index,
   onSelectChoice,
   onEntityAction,
@@ -160,7 +238,15 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
         } as React.CSSProperties
       }
     >
-        {reading ? <BagItemDialog inline item={item} onClose={() => setReading(false)} /> : kind === 'sprite' ? (
+        {reading ? <BagItemDialog inline item={item} onClose={() => setReading(false)} /> : kind === 'portrait' ? (
+          <PortraitFig
+            video={item.frontmatter?.video}
+            poster={item.frontmatter?.poster}
+            caption={item.frontmatter?.caption}
+            title={item.frontmatter?.title || item.filename.replace('.md', '')}
+            still={still}
+          />
+        ) : kind === 'sprite' ? (
           <div
             onClick={() => {
               const charId = item.frontmatter?.characterId || item.frontmatter?.id || item.filename.replace('.md', '');

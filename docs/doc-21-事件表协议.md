@@ -22,7 +22,7 @@
 |---|---|---|
 | 1 | **它改变了世界吗？**（文件内容 / 文件位置 / 画布关系 / 在场 / 一次随机裁决的结果） | 相机平移、hover、展开折叠、滚动——这些只改变"我在看哪儿" |
 | 2 | **它是不可推导的吗？**——即：光看世界目录的当前状态**推不出来** | "柜台上有铜钥匙"不是事件（`look_at` 看得见）；"铜钥匙**刚刚被玩家从柜台拿走了**"才是 |
-| 3 | **有人会需要在事后被告知吗？** | 没有消费者的事件不落。现有枚举里的 `world_frozen` / `world_thawed` 既无写入点也无消费者，按此条删除 |
+| 3 | **有人会需要在事后被告知吗？** | 没有消费者的事件不落 |
 
 ### 1.1 四类东西长得像事件，但不是
 
@@ -201,7 +201,7 @@ CREATE TABLE read_cursors (
 | 删掉的 | 为什么 |
 |---|---|
 | `agent_speech` / `agent_settled` | 传输帧，不是世界变化（§1.1 第一行） |
-| `world_frozen` / `world_thawed` | 无写入点、无消费者（准入第 3 问） |
+| `world_frozen` / `world_thawed` | **不是事件类型，是演出帧**——由 `/freeze` 路由直接广播（`routes/world.ts:806`）、前端消费（`useWorld.ts`），不落事件表（`docs/tools/12` 列为保留帧）。**2026-09-12 更正**：本节原写"无写入点、无消费者，按准入第 3 问删除"，已被实现证伪 |
 | `scene_transition` | 与 `layer_entered` 重复 |
 | `god_action` / `god_patched_file` | 身份×动作的叉乘；改成 `entity_edited` + `actor_type: god` |
 | `writer_chalk` | 同上；改成 `entity_created` + `kind: chalk` + `actor_type: writer` |

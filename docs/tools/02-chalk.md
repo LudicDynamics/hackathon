@@ -452,7 +452,7 @@ export interface WriteChalkDetails {
 理由链：
 
 1. `doc-21 §7` / `00 §5.3` 冻结「帧名与事件 type 不共用一个命名空间」——演出帧是瞬时传输帧，世界事件统一包在 `world_event` 里。
-2. `chalk_landed` / `chalk_writing` 是**既有帧**（`后端实现计划.md:209-211` 已把它们列为合成帧清单的一部分），前端 `useWorld.ts` 现在**不消费**它们（只认 `file_changed` / `item_moved` / `god_action`，`useWorld.ts:171-181`），消费落在 `前端改造计划.md §T3.4` 的演出通道。
+2. `chalk_landed` / `chalk_writing` 是**既有帧**（`后端实现计划.md:209-211` 已把它们列为合成帧清单的一部分），前端 `useWorld.ts` 现在**不消费**它们（只认 `file_changed` / `item_moved` / `god_action`，见 `useWorld.ts` 的 WS `onmessage` switch），消费落在 `前端改造计划.md §T3.4` 的演出通道。
 3. 工具想推帧只能靠 `details` 或落事件（`00` 硬约束），而 `details` 经 `tool_execution_end.result` 流到 server 的 `onEvent`（`00 §1` 图）——**这正是 `event-bridge.ts:83` 已经在读的字段**。
 
 **唯一要补的**：`event-bridge.ts:84` 的 `args?.path ?? resultPath`——当 `chalk` 默认命名（无 `args.path`）时，`resultPath` 必须来自 `details.path`。现状 `result.path` 直读顶层，而 `details` 在 `result.details` 里。**修法**（归 `12`，本文只登记）：
@@ -476,11 +476,13 @@ const resultPath = r?.path ?? r?.details?.path ?? undefined;
 | `writer_delta` | chalk 逐字湿墨流式 | `event-bridge.ts:46-50`、`doc-06 §2.1` |
 | `chalk_landed`（带 `path`） | 幻影壳 → 内容落地 → 座位过户；湿墨洇干 | `doc-10 E3`、`前端改造计划.md §T3.4` |
 
-**画布刷新走的是另一条**：`chalk` 落盘后 `fs.watch` 触发 `file_changed`（`event-bridge.ts:136-148`）→ `useWorld.fetchLayer` 重取本层（`useWorld.ts:179-181`）→ 新文件出现在 `items` 里 → 未排座卡片经 `seatUnplaced` 得到座位（`world.ts:164-169`）→ `ChalkCard` 渲染（`ChalkCard.tsx`）。**演出帧与数据刷新是两条独立通道**，这正是 `doc-21 §1.1` 第一行的意思（帧是动画，不是变化）。
+**画布刷新走的是另一条**：`chalk` 落盘后 `fs.watch` 触发 `file_changed`（`event-bridge.ts:136-148`）→ `useWorld.fetchLayer` 重取本层（`useWorld.ts` 的 `file_changed` 分支）→ 新文件出现在 `items` 里 → 未排座卡片经 `seatUnplaced` 得到座位（`world.ts:164-169`）→ `ChalkCard` 渲染（`ChalkCard.tsx`）。**演出帧与数据刷新是两条独立通道**，这正是 `doc-21 §1.1` 第一行的意思（帧是动画，不是变化）。
 
 ### 6.5 收起 / 风化不由工具管（划界）
 
 **收起（`collapsed` / `aged`）不由工具管**：`doc-10 E2` 的「记忆风化」是前端按「年龄」渲染（`chalkStyleOf` 的 `collapsed` / `aged`，`forms.ts:95-100`）。工具在这一环只提供一个事实——**文件的 mtime**（它决定「年龄」），不写任何 `collapsed` / `aged` 键。`doc-08` 的 `fold_chalk` / `type: scenario` 是**赛后**的治理工具，B1 不做（`doc-08` 文末标记）。
+
+> **读侧 vs 写侧（2026-09-12 厘清）**：渲染器**确实会读** frontmatter 里的 `collapsed` / `aged`（`forms.ts:187-188`），所以作家手写了**不算错**——但设计意图是**年龄驱动**，这两个键不该由 agent 写（写了会出现"刚落的 chalk 就折叠"这种与 mtime 打架的画面）。**提示词不得教作家手写**（`docs/prompts/04-skill体系.md` §3.2 已按此措辞）。是否要在动作层对这两个键报错，见该文 §⑩-3（待拍板）。
 
 
 ---
