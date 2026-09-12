@@ -239,6 +239,11 @@ pnpm --filter @airp/server dev                  # 只起后端
 - `.pi/agent/models.json` = provider 与 API key；**不入库**（本仓是公开的黑客松产物，钥匙不能进 git）。从队友的 checkout 拷一份，或指向 wl 的 `~/.projects/worldlines-rivet/.pi/agent/`。
 - 缺这个文件不报错：pi-rp `ModelConfig.load` 对 `ENOENT` 静默回落内建 provider（只是没有自定义模型可选）。`pnpm probe` 走离线确定性 provider，**不需要**它。
 - 探针的真模型分支（`AIRP_PROBE_REAL=1`）与手工全链路演示才需要真 provider。
+- **`.pi/agent/settings.json` = 默认模型**（另两个文件是 `models.json`（provider 与 key）、`auth.json`）。三者互相独立：`models.json` 只说"有哪些模型可选"，**选哪个**由 `settings.json` 的 `defaultProvider` + `defaultModel` 决定。同样不入库。
+- 当前实际生效的是 **`GG / gemini-2.5-pro`**（会话首行 `model_change` 记录为证）。`launch.ts` **不传 `--model`**，所以每个 agent 都走这份默认。
+- **模型解析顺序**（`sdk.ts:240` → `model-resolver.ts:621`）：① 已有会话 → 恢复会话里记的模型；② 否则 `settings.json` 的 `defaultProvider`/`defaultModel`（**须该 provider 有 auth**）；③ 否则 `defaultModelPerProvider` 表里第一个有 key 的；④ 否则第一个可用模型。所以**换默认模型对已存在的会话无效**——要删 `char-<id>.jsonl` 才会重新解析。
+- **改哪个 settings**：全局落点 `<PI_CODING_AGENT_DIR>/settings.json`（即 `.pi/agent/`，对所有世界生效）；世界级落点 `<worldRoot>/<PI_PROJECT_CONFIG_DIR>/settings.json`（即 `<world>/ .airpworld/settings.json`，随世界走、覆盖全局）。**两者都已 gitignore**。实测 world 级能覆盖 global（project > global），global 能切到 `models.json` 里任一 provider。
+- `~/.pi/agent/settings.json` **读不到**：`PI_CODING_AGENT_DIR` 已 pin 到仓库内，user scope 整个指向那里——改自己 home 下的默认模型对 AIRP 无影响（实测：`~/.pi` 写的是 `clineFree`，AIRP 实际跑 `GG`）。
 
 **资源发现必须隔离**（`launch.ts::ISOLATION_ARGS`）：两条 launch spec 都带
 `--no-extensions --no-skills --no-context-files --no-prompt-templates --no-themes`。
