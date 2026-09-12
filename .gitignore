@@ -29,6 +29,14 @@ assets/**
 # would blur the prompt-presets rule above and block any future tracked content.
 **/.airpworld/tts-cache/
 
+# Agent session transcripts live at <worldRoot>/.airpworld/sessions/ (launch.ts
+# `sessionsDirOf`): per-machine conversation history, not part of the artifact.
+# Tracked templates WERE picking these up (the world-scoped *.db*/presets rules
+# above don't cover a plain directory), so a `git add .` after a dev run would
+# commit real dialogue. Same three-dir policy as above — deliberately not
+# `**/.airpworld/`, which would block future tracked content.
+**/.airpworld/sessions/
+
 # pi-rp agent config (PI_CODING_AGENT_DIR -> .pi/agent). models.json holds real API keys
 # and settings.json holds per-machine prefs — this repo is a public hackathon artifact,
 # so neither is committed. Copy them from a teammate's checkout to run a real provider.
