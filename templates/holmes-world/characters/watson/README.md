@@ -2,7 +2,7 @@
 type: readme
 name: Watson
 material: parchment
-voice: Eldric
+voice: wise-elder
 ---
 
 # Watson

@@ -2,7 +2,7 @@
 type: readme
 name: The Constable
 material: kraft
-voice: Neil
+voice: news-anchor
 ---
 
 # The Constable

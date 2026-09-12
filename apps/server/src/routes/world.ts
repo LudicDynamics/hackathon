@@ -673,8 +673,10 @@ export function createWorldRouter(
             if (frontmatter?.avatar) avatar = frontmatter.avatar;
             if (!bio) bio = body.slice(0, 100);
             // `voice` is a character property declared in the README frontmatter
-            // (docs/tts/00 §3.1) — passed through as a bare name. Absent ⇒ the key
-            // is omitted and the client falls back to the server default (§15.5).
+            // (docs/tts/00 §3.1) — passed through VERBATIM, alias or raw id, and
+            // resolved exactly once, in `POST /api/tts` (docs/tts/07 §3: one
+            // resolver). Absent ⇒ the key is omitted and the client falls back to
+            // the server default (§15.5).
             if (typeof frontmatter?.voice === 'string' && frontmatter.voice.trim() !== '') {
               voice = frontmatter.voice.trim();
             }

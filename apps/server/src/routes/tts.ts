@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import type { LocalWorldStore } from '@airp/shared';
+import { resolveVoice, type LocalWorldStore } from '@airp/shared';
 
 /**
  * Server-side TTS: the ONE synthesis point (docs/tts/00 §1, docs/tts/01).
@@ -23,8 +23,12 @@ import type { LocalWorldStore } from '@airp/shared';
 
 /** DashScope caps `text` at 512 tokens ≈ 600 chars; 500 is the conservative pick. */
 const MAX_TEXT_CHARS = 500;
-/** A voice is a single bare DashScope id token — no spaces (docs/tts/00 §15.1). */
-const VOICE_RE = /^[A-Za-z0-9_-]+$/;
+/**
+ * Structural sanity gate only. The palette lookup below is what decides, so a
+ * space is legal here: `Eldric Sage` is ONE DashScope voice, and the old
+ * no-space regex silently rewrote it to the default (docs/tts/07 §0).
+ */
+const VOICE_RE = /^[A-Za-z0-9][A-Za-z0-9 _-]*$/;
 /** Content-addressed cache file: `hashOf(...)` output (docs/tts/00 §2.2/§3.2). */
 const FILE_RE = /^[a-f0-9]{20}\.wav$/;
 /** World locale short code → DashScope `language_type` (docs/tts/00 §4.4). */
@@ -266,14 +270,28 @@ export function createTtsRouter(
       truncated = true;
     }
 
-    // Step 4 — validate the voice shape; a malformed id would 400 upstream and
-    // mute the whole page. Fail loud in the log, but never widen the response.
+    // Step 4 — resolve the declared voice through the palette (docs/tts/07 §3).
+    // Two vocabularies reach here: an effect alias from world content
+    // (`wise-elder`) or a raw id already in the palette (`Eldric Sage`).
+    // A typo is NOT silently accepted — the page still plays on the default,
+    // but `check:voices` fails the build so it never ships (07 §3).
     const requestedVoice = typeof rawVoice === 'string' ? rawVoice.trim() : '';
-    const voice = VOICE_RE.test(requestedVoice) ? requestedVoice : config.defaultVoice;
-    if (requestedVoice !== '' && !VOICE_RE.test(requestedVoice)) {
-      console.warn(
-        `[AIRP TTS] reject malformed voice "${requestedVoice}"; falling back to "${config.defaultVoice}"`
-      );
+    const defaultVoice = resolveVoice(config.defaultVoice) ?? config.defaultVoice;
+    let voice = defaultVoice;
+    if (requestedVoice !== '') {
+      if (!VOICE_RE.test(requestedVoice)) {
+        console.warn(
+          `[AIRP TTS] reject malformed voice "${requestedVoice}"; falling back to "${config.defaultVoice}"`
+        );
+      } else {
+        voice = resolveVoice(requestedVoice) ?? defaultVoice;
+        if (voice === defaultVoice && requestedVoice !== config.defaultVoice) {
+          console.warn(
+            `[AIRP TTS] unknown voice "${requestedVoice}" (not in the palette, docs/tts/07); ` +
+              `falling back to "${config.defaultVoice}"`
+          );
+        }
+      }
     }
 
     // Step 5 — world locale short code → DashScope `language_type`.

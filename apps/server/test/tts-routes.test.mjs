@@ -167,16 +167,26 @@ test('C2 en → "English"；未列出短码 / 缺省 → "Auto"', async () => {
   await h.close();
 });
 
-test('C3 请求 voice 透传；畸形 voice 回落默认且不 400（§15.1 正则不变）', async () => {
+test('C3 alias / 裸 id / 畸形 / 未知 四种 voice 的解析与回落', async () => {
   const h = await harness();
-  await post(h.base, { text: 'v1', voice: 'Eric' });
-  assert.equal(h.ds.calls[0].body.input.voice, 'Eric');
-  const r = await post(h.base, { text: 'v2', voice: '../evil' });
-  assert.equal(r.status, 200);
-  assert.equal(h.ds.calls[1].body.input.voice, DEFAULT_VOICE);
-  // §15.1: 含空格的拼接 ID 非法 → 回落默认（Eldric Sage 不是音色）
+  // 效果别名 → 线上 id（docs/tts/07 §2/§3）
+  await post(h.base, { text: 'v1', voice: 'wise-elder' });
+  assert.equal(h.ds.calls[0].body.input.voice, 'Eldric Sage');
+  // 已在调色板里的裸 id → 原样透传（向后兼容）
+  await post(h.base, { text: 'v2', voice: 'Vincent' });
+  assert.equal(h.ds.calls[1].body.input.voice, 'Vincent');
+  // 含空格的合法 id：旧 /^[A-Za-z0-9_-]+$/ 会把它静默改成默认（07 §0 回归）
   await post(h.base, { text: 'v3', voice: 'Eldric Sage' });
-  assert.equal(h.ds.calls[2].body.input.voice, DEFAULT_VOICE);
+  assert.equal(h.ds.calls[2].body.input.voice, 'Eldric Sage');
+  // 近失 typo（Eldric / Sage 各是 Eldric Sage 的一半）→ 回落默认，不 400
+  await post(h.base, { text: 'v4', voice: 'Eldric' });
+  assert.equal(h.ds.calls[3].body.input.voice, DEFAULT_VOICE);
+  await post(h.base, { text: 'v5', voice: 'Sage' });
+  assert.equal(h.ds.calls[4].body.input.voice, DEFAULT_VOICE);
+  // 结构性畸形（路径穿越）→ 同样回落，不泄漏成上游参数
+  const r = await post(h.base, { text: 'v6', voice: '../evil' });
+  assert.equal(r.status, 200);
+  assert.equal(h.ds.calls[5].body.input.voice, DEFAULT_VOICE);
   await h.close();
 });
 
