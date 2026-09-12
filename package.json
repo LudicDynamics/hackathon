@@ -9,6 +9,7 @@
     "dev:web": "pnpm --filter @airp/web dev",
     "build": "pnpm --filter @airp/shared build && pnpm --filter @airp/server build && pnpm --filter @airp/web build",
     "scaffold": "node tools/scaffold.mjs",
+    "motion": "node tools/motion-clip.mjs",
     "probe": "node tools/probe-writer.mjs",
     "probe:tools": "node tools/probe-tools.mjs && node tools/probe-tools-engine.mjs",
     "probe:inject": "node tools/probe-inject.mjs",
