@@ -6,6 +6,7 @@ material: "warm"
 tone: "rose"
 grain: "parchment"
 order: 1
+bg: "assets/scenes/winter-schedule.webp"
 ---
 
 # This Winter · Scene List

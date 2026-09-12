@@ -1,6 +1,7 @@
 ---
 type: "readme"
 name: "Mr. Blackburn"
+avatar: "assets/characters/blackburn.webp"
 ---
 
 # Mr. Blackburn

@@ -3,6 +3,10 @@ import { CardRenderer } from './CardRenderer.js';
 import { highlightLinks } from './LinkLayer.js';
 import { chalkStyleOf } from '@airp/shared/forms';
 import type { LayerItem } from '../../state/useWorld.js';
+import { UserRound } from 'lucide-react';
+import { EntityInteractions } from '../narrative/EntityInteractions.js';
+import { highlightChalkAnchor } from '../../lib/chalk-anchor.js';
+import { airpGateway } from '../../lib/airp-gateway.js';
 
 /**
  * Absolute-positioned card shell inside the world transform layer (v2 `.object`
@@ -44,27 +48,14 @@ export function pruneLifts(paths: Set<string>): void {
 }
 
 /** Presence figure — the world's people. Ink sketch + a name strip (proto `.sprite`). */
-const SpriteFig: React.FC = () => (
-  <div className="sprite__halo">
-    <svg
-      viewBox="0 0 72 64"
-      width={72}
-      height={64}
-      fill="none"
-      stroke="#2B2117"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="36" cy="16" r="11" fill="#FFFEF6" />
-      <path d="M22 60 Q22 30 36 30 Q50 30 50 60 Z" fill="#FFFEF6" />
-      <path d="M28 44 L44 44" strokeDasharray="3 3" />
-      <circle cx="31" cy="15" r="1.2" fill="#2B2117" />
-      <circle cx="41" cy="15" r="1.2" fill="#2B2117" />
-      <path d="M33 20 q3 2.4 6 0" />
-    </svg>
-  </div>
-);
+const SpriteFig: React.FC<{ avatar?: string; name: string }> = ({ avatar, name }) => {
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => setFailed(false), [avatar]);
+  const src = avatar && (/^(?:https?:|data:|blob:|\/)/.test(avatar) ? avatar : airpGateway.assetUrl(avatar));
+  return <div className="presence-orb" role="img" aria-label={name}>
+    {src && !failed ? <img src={src} alt="" onError={() => setFailed(true)} /> : <UserRound size={30} strokeWidth={1.3} aria-hidden="true" />}
+  </div>;
+};
 
 export interface CanvasObjectProps {
   item: LayerItem;
@@ -90,6 +81,16 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   const [isDragOver, setIsDragOver] = React.useState(false);
   const [isItemDragging, setIsItemDragging] = React.useState(false);
   const [isUnlockedEffect, setIsUnlockedEffect] = React.useState(false);
+  const anchorCleanup = React.useRef<(() => void) | undefined>(undefined);
+  React.useEffect(() => () => anchorCleanup.current?.(), [item.path, item.frontmatter?.anchor]);
+  const highlight = (element: HTMLElement, active: boolean) => {
+    highlightLinks(item.path, active);
+    anchorCleanup.current?.();
+    anchorCleanup.current = undefined;
+    if (active && item.frontmatter?.type === 'chalk') {
+      anchorCleanup.current = highlightChalkAnchor(element, item.path, item.frontmatter.anchor);
+    }
+  };
 
   React.useEffect(() => {
     const onDragStart = () => setIsItemDragging(true);
@@ -121,8 +122,11 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   return (
     <div
       data-path={item.path}
-      onPointerEnter={() => highlightLinks(item.path, true)}
-      onPointerLeave={() => highlightLinks(item.path, false)}
+      tabIndex={0}
+      onPointerEnter={event => highlight(event.currentTarget, true)}
+      onPointerLeave={event => highlight(event.currentTarget, false)}
+      onFocus={event => highlight(event.currentTarget, true)}
+      onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) highlight(event.currentTarget, false); }}
       className="object ink-form"
       style={
         {
@@ -142,7 +146,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
         {kind === 'sprite' ? (
           <div
             onClick={() => {
-              const charId = item.frontmatter?.id || item.frontmatter?.title || item.filename.replace('.md', '');
+              const charId = item.frontmatter?.characterId || item.frontmatter?.id || item.filename.replace('.md', '');
               onOpenCharacterModal?.(charId);
             }}
             onDragOver={(e) => {
@@ -153,7 +157,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             onDrop={handleSpriteDrop}
             className={`sprite cursor-pointer transition-transform duration-200 ${chalkStyleOf(item.frontmatter).aged ? ' chalk--aged' : ''} ${spritePuzzleClasses}`}
           >
-            <SpriteFig />
+            <SpriteFig avatar={item.frontmatter?.avatar} name={item.frontmatter?.title || item.filename.replace('.md', '')} />
             <div className="sprite__name">
               {item.frontmatter?.title || item.filename.replace('.md', '')}
             </div>
@@ -169,6 +173,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             onItemDropOnTarget={onItemDropOnTarget}
           />
         )}
+        <EntityInteractions item={item} onChoice={onSelectChoice} onDiceRolled={onDiceRolled} />
     </div>
   );
 };

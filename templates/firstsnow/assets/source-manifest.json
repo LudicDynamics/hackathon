@@ -1,0 +1,60 @@
+{
+  "sourceRepository": "worldlines-assets",
+  "encoding": "webp-q82",
+  "assets": [
+    {
+      "source": "firstsnow-demo/backgrounds/intro.png",
+      "target": "assets/scenes/intro.webp",
+      "sourceSha256": "cac4cb32b505dc8561650ab8b7e0c00eec087584b95a80d3525b50c77af476a8",
+      "targetSha256": "787c1fa3cce9fb1d7ae172f693046ba7dc4052b46e38b4ab581299e8107a2b57"
+    },
+    {
+      "source": "firstsnow-demo/backgrounds/map.png",
+      "target": "assets/scenes/winter-schedule.webp",
+      "sourceSha256": "1dababc80fe3c6004b9f2b117d96c06dcbcf87f0992dfb8621e2ba56ede299ac",
+      "targetSha256": "e90b462eb947e52ffae37b4c5cd87d8f6f4bc7e5c3599bd0d7c1ee3d3179b8c5"
+    },
+    {
+      "source": "firstsnow-demo/backgrounds/studio.png",
+      "target": "assets/scenes/radio-studio.webp",
+      "sourceSha256": "6a76afe1a90082867f088303599054bd3df4ff78b35fc7c260943226d1a78d6d",
+      "targetSha256": "b39378c9f623a4cc292f53ac7cfccecaad1839964ecf29651033119f43369e82"
+    },
+    {
+      "source": "firstsnow-demo/backgrounds/cafe.png",
+      "target": "assets/scenes/amber-cafe.webp",
+      "sourceSha256": "254c2c5ab7e860bd16671a48c4661e630489f0ea51108cc8e72eee503dc9d9cf",
+      "targetSha256": "fb61fb02d06c9453efb6502cc154a96eaa05e11432e655e0bc62fd20f9a6c593"
+    },
+    {
+      "source": "firstsnow-demo/backgrounds/rooftop.png",
+      "target": "assets/scenes/campus-rooftop.webp",
+      "sourceSha256": "391006ae66eefe32f60e0ade90fdefb7c250d1e311c3dc8042a6142b0a0d774d",
+      "targetSha256": "950f63b9524b82bd36f24f6560d65bb1a98c926b45108f0c382c53a184958faf"
+    },
+    {
+      "source": "firstsnow-demo/backgrounds/snowfall.png",
+      "target": "assets/scenes/first-snow.webp",
+      "sourceSha256": "8e5a11868c57c90b0bdfe0ad880fcb00bebf6d615d549869acca30f0012cd13e",
+      "targetSha256": "27717b50e1effd18c4a0cc7b3a0036f189448e0a4739344c3e12f91535046a0a"
+    },
+    {
+      "source": "firstsnow-demo/characters/nanami/base.png",
+      "target": "assets/characters/nanami.webp",
+      "sourceSha256": "1a13b30ae56fe68aa8844c82c1c02c13088a21f1780e1cfedc9ba7761b4dd740",
+      "targetSha256": "2cde03a9503a537bbd4dab6a58a473f5c64da6d0ed44709cf9a5134dee05b6b6"
+    },
+    {
+      "source": "firstsnow-demo/characters/sumi/base.png",
+      "target": "assets/characters/sumi-yukimura.webp",
+      "sourceSha256": "513c80630a6503b7d228cf9b113738d72124ab45c465a1a6a28be98d116ced84",
+      "targetSha256": "d37dd186e7eb1cd11227dbf6c83703b3b72f5dd3269892991c9b3352431c4ebd"
+    },
+    {
+      "source": "firstsnow-demo/characters/director/base.png",
+      "target": "assets/characters/radio-director.webp",
+      "sourceSha256": "e5e226331958646f9ace136e83bacec80fd0bc43b17b7b2e0edfb1bfde489d50",
+      "targetSha256": "c9404d072cd641796cf1890488c3b91a8c7bf575702bdbd5a638a7e5e16efa8a"
+    }
+  ]
+}

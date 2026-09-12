@@ -30,6 +30,11 @@ export const WorldManifestSchema = z.object({
   description: z.string(),
   author: z.string(),
   cover: z.string().optional(),
+  player: z.object({
+    id: z.string(),
+    name: z.string(),
+    avatar: z.string().optional(),
+  }).optional(),
   tags: z.array(z.string()).default([]),
   genre: z.string(),
   material: z.string().default('parchment'),

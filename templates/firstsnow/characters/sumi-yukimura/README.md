@@ -1,6 +1,7 @@
 ---
 type: "readme"
 name: "Sumi Yukimura"
+avatar: "assets/characters/sumi-yukimura.webp"
 ---
 
 # Sumi Yukimura

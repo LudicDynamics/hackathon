@@ -12,11 +12,15 @@ export const StatusSchema = z.object({
   data: z.record(z.string(), z.any()),
 });
 
-export const ChalkFrontmatterSchema = z.object({
-  type: z.literal('chalk'),
+export const InteractionFieldsSchema = z.object({
   roll_dice: RollDiceSchema.optional(),
   choice: z.array(z.string()).optional(),
   status: StatusSchema.optional(),
+  actions: z.array(z.string()).optional(),
+}).passthrough();
+
+export const ChalkFrontmatterSchema = InteractionFieldsSchema.extend({
+  type: z.literal('chalk'),
   title: z.string().optional(),
   link_to: z.string().optional(),
   append_to: z.string().optional(),
@@ -54,9 +58,15 @@ export function parseFrontmatter(rawContent: string): { frontmatter: Record<stri
         const key = line.slice(0, colonIdx).trim();
         const val = line.slice(colonIdx + 1).trim();
         currentKey = key;
-        if (key === 'choice') {
+        if (key === 'choice' || key === 'actions') {
           inChoice = true;
-          frontmatter.choice = [];
+          if (val) {
+            try {
+              const list = JSON.parse(val);
+              if (!Array.isArray(list) || !list.every(item => typeof item === 'string')) return { frontmatter: null, body: rawContent };
+              frontmatter[key] = list;
+            } catch { return { frontmatter: null, body: rawContent }; }
+          } else frontmatter[key] = [];
         } else if (key === 'status') {
           frontmatter.status = { data: {} };
         } else if (key === 'roll_dice') {
@@ -86,7 +96,7 @@ export function parseFrontmatter(rawContent: string): { frontmatter: Record<stri
 
     if (inChoice && (line.trim().startsWith('- '))) {
       const item = line.trim().slice(2).trim().replace(/^["']|["']$/g, '');
-      frontmatter.choice.push(item);
+      frontmatter[currentKey!].push(item);
       continue;
     }
 
@@ -117,15 +127,16 @@ export function parseFrontmatter(rawContent: string): { frontmatter: Record<stri
     }
   }
 
+  if (!InteractionFieldsSchema.safeParse(frontmatter).success) return { frontmatter: null, body: rawContent };
   return { frontmatter, body };
 }
 
 export function stringifyChalk(frontmatter: Record<string, any>, body: string): string {
   const lines: string[] = ['---'];
   for (const [k, v] of Object.entries(frontmatter)) {
-    if (k === 'choice' && Array.isArray(v)) {
-      lines.push('choice:');
-      for (const item of v) lines.push(`  - "${item}"`);
+    if ((k === 'choice' || k === 'actions') && Array.isArray(v)) {
+      lines.push(`${k}:`);
+      for (const item of v) lines.push(`  - ${JSON.stringify(item)}`);
     } else if (k === 'status' && typeof v === 'object' && v?.data) {
       lines.push('status:');
       lines.push('  data:');

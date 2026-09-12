@@ -56,7 +56,7 @@ function parseEmoTag(raw: string): { text: string; emo: Emotion } {
 
 export const CharacterModal: React.FC<CharacterModalProps> = ({
   characterId,
-  avatar = '/assets/characters/portraits/lady_1.png',
+  avatar,
   bio,
   onClose,
   onSendMessage,

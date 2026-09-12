@@ -12,7 +12,7 @@
     "victorian london"
   ],
   "material": "kraft",
-  "cover": "assets/characters/watson.webp",
+  "cover": "assets/scenes/intro.webp",
   "extensions": [
     {
       "id": "airp:letter",
@@ -37,25 +37,29 @@
       "id": "edith",
       "home": "world/case-board",
       "role": "npc",
-      "description": "The frightened novelist who changed the fourth chapter’s address."
+      "description": "The frightened novelist who changed the fourth chapter’s address.",
+      "avatar": "assets/characters/edith.webp"
     },
     {
       "id": "wayne",
       "home": "world/case-board/fleet-street-press",
       "role": "npc",
-      "description": "The illustrator whose ultramarine cuff and injured right wrist connect art to the crimes."
+      "description": "The illustrator whose ultramarine cuff and injured right wrist connect art to the crimes.",
+      "avatar": "assets/characters/wayne.webp"
     },
     {
       "id": "blackburn",
       "home": "world/case-board/fleet-street-press",
       "role": "npc",
-      "description": "The editor who controls manuscript circulation and locks proofs in his desk."
+      "description": "The editor who controls manuscript circulation and locks proofs in his desk.",
+      "avatar": "assets/characters/blackburn.webp"
     },
     {
       "id": "tom",
       "home": "world/case-board/fleet-street-press",
       "role": "npc",
-      "description": "A typesetter with blackened hands and a complete night-shift ledger."
+      "description": "A typesetter with blackened hands and a complete night-shift ledger.",
+      "avatar": "assets/characters/tom.webp"
     },
     {
       "id": "porter",
@@ -65,5 +69,10 @@
     }
   ],
   "createdAt": "2026-09-12T00:00:00Z",
-  "updatedAt": "2026-09-12T00:00:00Z"
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "player": {
+    "id": "sherlock-holmes",
+    "name": "Sherlock Holmes",
+    "avatar": "assets/characters/sherlock-holmes.webp"
+  }
 }

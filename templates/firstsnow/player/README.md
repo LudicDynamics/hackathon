@@ -1,6 +1,7 @@
 ---
 type: "readme"
-name: "Player"
+name: "Radio Director"
+avatar: "assets/characters/radio-director.webp"
 ---
 
 # Player

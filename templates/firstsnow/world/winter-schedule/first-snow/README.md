@@ -7,6 +7,7 @@ tone: "blue"
 grain: "parchment"
 order: 4
 stub: true
+bg: "assets/scenes/first-snow.webp"
 ---
 
 # Final Act · First Snow

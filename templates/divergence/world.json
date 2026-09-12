@@ -42,5 +42,10 @@
     }
   ],
   "createdAt": "2026-09-12T00:00:00Z",
-  "updatedAt": "2026-09-12T00:00:00Z"
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "player": {
+    "id": "returner",
+    "name": "Returning Visitor",
+    "avatar": "assets/characters/returner.webp"
+  }
 }

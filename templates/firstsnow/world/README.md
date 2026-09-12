@@ -5,6 +5,7 @@ title: "Episode 47 · Live"
 material: "warm"
 tone: "rose"
 grain: "parchment"
+bg: "assets/scenes/intro.webp"
 ---
 
 # Episode 47 · Live

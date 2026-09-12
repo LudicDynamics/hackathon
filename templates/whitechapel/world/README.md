@@ -5,6 +5,7 @@ title: "221B Baker Street · Morning"
 material: "kraft"
 tone: "sepia"
 grain: "parchment"
+bg: "assets/scenes/intro.webp"
 ---
 
 # 221B Baker Street · Morning

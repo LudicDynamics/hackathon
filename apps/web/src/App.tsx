@@ -19,6 +19,7 @@ interface WorldManifest {
   genre: string;
   material: string;
   cover?: string;
+  player?: { id: string; name: string; avatar?: string };
   layers: Record<string, { name?: string; parent?: string | null; material?: string }>;
   characters: CharacterView[];
 }
@@ -185,7 +186,8 @@ export function App() {
   const handItems = backpack.filter((item) => item.filename.toLowerCase() !== 'readme.md');
   const canvasItems = (state?.items || []).filter((item) => item.path !== readme?.path);
   const currentName = readme?.frontmatter?.title || sceneName(manifest, layer);
-  const playerRole = manifest?.id === 'wuwu' ? 'Harbor Investigator' : 'Traveler';
+  const playerRole = manifest?.player?.name || (manifest?.id === 'wuwu' ? 'Harbor Investigator' : 'Traveler');
+  const playerAvatar = assetUrl(manifest?.player?.avatar);
   const sceneStatus = chalks.flatMap(chalk => Object.entries(chalk.frontmatter?.status?.data || {})).slice(0, 3);
   const breadcrumbs: string[] = [];
   let crumb: string | null = layer;
@@ -424,7 +426,7 @@ export function App() {
             })}</div>}
           </div>
 
-          <button className="prototype-player-orb prototype-chrome" onClick={() => setProfileOpen((open) => !open)} aria-label="Open player profile" aria-expanded={profileOpen}><UserRound size={25} /><span className="prototype-player-label"><small>YOU</small>{playerRole}</span></button>
+          <button className="prototype-player-orb prototype-chrome" style={playerAvatar ? { backgroundImage: `url("${playerAvatar}")`, backgroundSize: 'cover', backgroundPosition: 'center 25%' } : undefined} onClick={() => setProfileOpen((open) => !open)} aria-label="Open player profile" aria-expanded={profileOpen}>{!playerAvatar && <UserRound size={25} />}<span className="prototype-player-label"><small>YOU</small>{playerRole}</span></button>
           {profileOpen && chromeVisible && (
             <div className="prototype-profile">
               <b>{playerRole}</b>

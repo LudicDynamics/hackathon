@@ -1,6 +1,6 @@
 import React from 'react';
 import { chalkStyleOf } from '@airp/shared/forms';
-import { renderFrontmatterWidgets } from '../../lib/fm.js';
+import { MarkdownText } from '../../lib/md.js';
 
 interface ChalkCardProps {
   item: {
@@ -21,20 +21,9 @@ interface ChalkCardProps {
  */
 export const ChalkCard: React.FC<ChalkCardProps> = ({
   item,
-  onSelectChoice,
-  onDiceRolled,
 }) => {
-  const { frontmatter, body, path } = item;
+  const { frontmatter, body } = item;
   const style = chalkStyleOf(frontmatter);
-
-  // status (hover-to-peek / click-to-pin fold) + choice group + dice card —
-  // all widget rendering lives in lib/fm.ts; any broken frontmatter shape
-  // degrades there to null, leaving this card as plain narration text.
-  const widgets = renderFrontmatterWidgets(frontmatter, {
-    filePath: path,
-    onChoice: onSelectChoice,
-    onDiceRolled,
-  });
 
   const classes = ['chalk', 'chalk--bare'];
   if (style.hand) classes.push('chalk--hand');
@@ -52,9 +41,8 @@ export const ChalkCard: React.FC<ChalkCardProps> = ({
   return (
     <div className={classes.join(' ')} style={sizeStyle}>
       {/* Chalk narration body — transparent ink, pre-wrap preserved. */}
-      <div className="whitespace-pre-wrap">{body}</div>
+      <MarkdownText text={body} className="chalk__body" />
 
-      {widgets}
     </div>
   );
 };

@@ -6,6 +6,7 @@ material: "warm"
 tone: "rose"
 grain: "parchment"
 order: 1
+bg: "assets/scenes/radio-studio.webp"
 ---
 
 # Act I · Ninety Seconds in the Studio

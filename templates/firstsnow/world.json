@@ -12,7 +12,7 @@
     "relationship memory"
   ],
   "material": "warm",
-  "cover": "assets/characters/nanami.webp",
+  "cover": "assets/scenes/intro.webp",
   "extensions": [
     {
       "id": "airp:letter",
@@ -37,9 +37,15 @@
       "id": "sumi-yukimura",
       "home": "world/winter-schedule/amber-cafe",
       "role": "npc",
-      "description": "A newly debuted singer who asks for forty minutes without work."
+      "description": "A newly debuted singer who asks for forty minutes without work.",
+      "avatar": "assets/characters/sumi-yukimura.webp"
     }
   ],
   "createdAt": "2026-09-12T00:00:00Z",
-  "updatedAt": "2026-09-12T00:00:00Z"
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "player": {
+    "id": "radio-director",
+    "name": "Radio Director",
+    "avatar": "assets/characters/radio-director.webp"
+  }
 }

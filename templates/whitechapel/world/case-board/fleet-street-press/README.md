@@ -6,6 +6,7 @@ material: "kraft"
 tone: "warm"
 grain: "parchment"
 order: 1
+bg: "assets/scenes/fleet-street-press.webp"
 ---
 
 # Fleet Street Press

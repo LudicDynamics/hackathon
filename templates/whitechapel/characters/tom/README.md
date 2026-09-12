@@ -1,6 +1,7 @@
 ---
 type: "readme"
 name: "Tom Hale"
+avatar: "assets/characters/tom.webp"
 ---
 
 # Tom Hale

@@ -1,6 +1,7 @@
 ---
 type: "readme"
-name: "Player"
+name: "Harbor Investigator"
+avatar: "assets/characters/investigator.webp"
 ---
 
 # Player

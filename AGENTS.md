@@ -71,6 +71,7 @@ templates/              # 开箱世界模板；含 wuwu / whitechapel / divergen
   <world>/skills/       # 世界级 skills：该世界自己的文风与剧情，与 world/ 同级、随包分发
 worlds/                 # 脚手架产出的玩家世界（.gitignore）
 tools/scaffold.mjs      # 模板 → 新世界
+tools/sync-template-assets.mjs # 正式素材 → 模板图片、场景/角色引用与校验清单（不重建剧情）
 tools/migrate-canvas-worlds.mjs # worldlines-canvas 四世界 → AIRP 文件系统模板 + WebP 素材
 tools/probe-writer.mjs  # 全链路探针（pnpm probe）
 tools/pi-rp.mjs         # pi-rp 子模块工作流（pnpm pi status|build|update|commit，见 §7.2）
@@ -100,6 +101,10 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 **chat history 不进画布，只有 chalk 落板。**
 
 ### 3.2 文件即真相
+
+前端 Markdown 类型渲染与互动分离：`CanvasObject` 统一挂载 `EntityInteractions`，共享 `InteractionFieldsSchema` 校验 `choice / status / roll_dice / actions`。Chalk 锚点为临时呈现态。实现边界与尚未接通的 choose 事件通道见 `docs/doc-09`。
+
+模板玩家身份可用 `world.json.player`（id / name / avatar）声明；角色列表仍只承载 NPC。图片随世界放在 `assets/`，同步来源与 SHA-256 见 `assets/source-manifest.json`。同步范围与未决剧情见 `docs/模板资源对齐清单.md`。
 
 默认服务入口载入 `templates/wuwu`（Fogwharf）。前端世界外 Header 与 journal 默认收起；场景画布首次显示测量实际内容边界，修正遮挡后通过原坐标 API 保存，初始镜头按窗口适配。素材版根场景采用叙事与证物分区；当前实现每次重新载入页面会重新整理根场景，保留手动排版是后续验收项。
 

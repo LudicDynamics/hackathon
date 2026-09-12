@@ -7,6 +7,7 @@ tone: "blue"
 grain: "parchment"
 order: 3
 stub: true
+bg: "assets/scenes/fourth-chapter-eve.webp"
 ---
 
 # Chapter Four · The Night Before

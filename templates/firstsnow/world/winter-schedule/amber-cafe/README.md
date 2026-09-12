@@ -6,6 +6,7 @@ material: "warm"
 tone: "rose"
 grain: "parchment"
 order: 2
+bg: "assets/scenes/amber-cafe.webp"
 ---
 
 # Act II · Forty Minutes at Amber Café

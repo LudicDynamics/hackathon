@@ -1,6 +1,7 @@
 ---
 type: "readme"
-name: "Player"
+name: "Returning Visitor"
+avatar: "assets/characters/returner.webp"
 ---
 
 # Player

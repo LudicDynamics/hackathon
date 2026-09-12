@@ -1,6 +1,7 @@
 ---
 type: "readme"
-name: "Player"
+name: "Sherlock Holmes"
+avatar: "assets/characters/sherlock-holmes.webp"
 ---
 
 # Player

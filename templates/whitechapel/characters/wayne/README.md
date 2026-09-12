@@ -1,6 +1,7 @@
 ---
 type: "readme"
 name: "Arthur Wayne"
+avatar: "assets/characters/wayne.webp"
 ---
 
 # Arthur Wayne

@@ -49,5 +49,10 @@
     }
   ],
   "createdAt": "2026-09-12T00:00:00Z",
-  "updatedAt": "2026-09-12T00:00:00Z"
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "player": {
+    "id": "investigator",
+    "name": "Harbor Investigator",
+    "avatar": "assets/characters/investigator.webp"
+  }
 }

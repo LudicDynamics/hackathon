@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Activity, ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react';
 import { DiceRoller } from '../components/narrative/DiceRoller.js';
+import { InteractionFieldsSchema } from '@airp/shared/frontmatter';
 
 /**
- * Frontmatter widgets for `type: chalk` (doc-06 §2.6 / doc-05 §3.1).
+ * Shared frontmatter widgets for every Markdown entity (doc-20 §2).
  * Renders the choice / status / roll_dice trio below the chalk body:
  *   - status  → collapsible key-value table; EVERY key is shown (unknown keys
  *     are never dropped); hover peeks it open, click pins it open.
@@ -26,6 +27,7 @@ export function renderFrontmatterWidgets(
 ): React.ReactElement | null {
   try {
     if (!frontmatter || typeof frontmatter !== 'object') return null;
+    if (!InteractionFieldsSchema.safeParse(frontmatter).success) return null;
 
     // status.data (or the whole status map when data is absent) — show all keys.
     const rawStatus =
@@ -86,10 +88,18 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
   const statusOpen = statusPinned || statusHover;
 
   const [hoverChoice, setHoverChoice] = useState<number | null>(null);
+  const [pinned, setPinned] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const open = pinned || hovered || focused;
   const statusKeys = statusData ? Object.keys(statusData).length : 0;
 
   return (
-    <>
+    <div className="fm-block" onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)} onFocus={() => setFocused(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setFocused(false); }}>
+      <button type="button" className="fm-head" aria-expanded={open} onClick={() => setPinned(value => !value)}>
+        {pinned ? '▾ Pinned' : '▸ Interact'}{choices.length > 0 ? ` · ${choices.length} choices` : ''}{dice ? ' · Dice' : ''}{statusKeys ? ' · Status' : ''}
+      </button>
+      <div className="fm-body" hidden={!open}>
       {statusKeys > 0 && (
         <div
           className="mt-4 pt-3 border-t border-ink/10"
@@ -141,6 +151,7 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
             return (
               <button
                 key={idx}
+                disabled={!onChoice}
                 onClick={() => onChoice?.(String(choice))}
                 onPointerEnter={() => setHoverChoice(idx)}
                 onPointerLeave={() => setHoverChoice(null)}
@@ -161,6 +172,7 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
           })}
         </div>
       )}
-    </>
+      </div>
+    </div>
   );
 };

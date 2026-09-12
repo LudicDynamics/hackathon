@@ -6,6 +6,7 @@ material: "warm"
 tone: "blue"
 grain: "parchment"
 order: 2
+bg: "assets/scenes/whitechapel-morgue.webp"
 ---
 
 # Whitechapel Morgue

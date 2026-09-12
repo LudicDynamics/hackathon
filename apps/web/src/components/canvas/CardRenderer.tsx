@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ChalkCard } from '../narrative/ChalkCard.js';
 import { MarkdownText, plainExcerpt, stripLeadingTitle, leadingTitleOf } from '../../lib/md.js';
 import { playFoley } from '../../lib/audio.js';
+import { DoorOpen } from 'lucide-react';
 
 interface CardRendererProps {
   item: {
@@ -18,29 +19,6 @@ interface CardRendererProps {
   onOpenCharacterModal?: (charId: string) => void;
   onItemDropOnTarget?: (draggedItemPath: string, targetPath: string) => void;
 }
-
-/**
- * Hand-drawn scene icon (prototype `ICONS.inn`, canvas-stack-mingyue.html L681).
- * Inline SVG, ink stroke, deliberately uneven paths.
- */
-const GateIcon: React.FC = () => (
-  <svg
-    viewBox="0 0 72 72"
-    width={72}
-    height={72}
-    fill="none"
-    stroke="#2B2117"
-    strokeWidth={2}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M14 58 L58 58" />
-    <path d="M20 58 L20 34 Q36 20 52 34 L52 58" />
-    <path d="M28 58 L28 42 h16 v16" />
-    <path d="M36 6 l0 8 M32 10 h8" />
-    <circle cx="36" cy="14" r="2.4" />
-  </svg>
-);
 
 /** Hand-drawn ordinal seal (prototype `numCircle`, L692-695). */
 const GateNum: React.FC<{ n: number | string }> = ({ n }) => (
@@ -174,7 +152,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
         <GateNum n={order} />
         <GatePin />
         <div className="gate__cover">
-          <GateIcon />
+          <DoorOpen size={36} strokeWidth={1.2} aria-hidden="true" />
         </div>
         {/* The card face keeps a two-line teaser; the full README detail lives
             in a floating sheet on hover (never spills past the card). */}

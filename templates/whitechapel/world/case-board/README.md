@@ -6,6 +6,7 @@ material: "kraft"
 tone: "warm"
 grain: "parchment"
 order: 1
+bg: "assets/scenes/case-board.webp"
 ---
 
 # 221B Baker Street · Case Board
