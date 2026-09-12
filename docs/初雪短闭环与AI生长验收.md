@@ -55,3 +55,26 @@ flowchart TD
 - 构建、七项模板回归、离线 HTTP 流程测试（两处赴约、道具门槛、无效选项不落账、扩展派发）、离线 Writer 探针与注入探针通过；文档校验通过。
 - 当时真实 Writer + 生图实玩未执行，审核要求明确外部服务与费用授权，未产生结果存档或测速结论。用户随后指定了 OpenAI 生图方向；本次文档整理不运行外部模型，不将后续授权等同测试通过。
 - 当时全仓 `check:ws` 报告 12 项跨端接线问题，属于并行施工范围。这是历史记录，不能据此断言当前仍有 12 项；当前状态须另跑检查。
+
+### 2026-09-13：OpenAI 配置后的首次真实样本
+
+用户已将密钥放入被 Git 忽略的 `.env.local`。本次只在测试进程临时指定模型，不修改该文件；目的地为 `https://api.openai.com/v1`，没有使用其他网关，也不把密钥写入文档或报告。
+
+| 检查 | 本次实测 | 结论 |
+|---|---|---|
+| 日语模板静态回归 | 7 项通过 | 只证明静态约束 |
+| 七海路线真实 Writer | `openai/gpt-4.1`；一轮 18,356 ms | API 可用，但短闭环失败 |
+| 独立生图工具 | `openai/gpt-image-2.5-flare`，`low`，1536×1024；总耗时 18,619 ms | 返回真实 PNG，约 2.58 MB；不是缓存复用 |
+| 主线 → 扩展 → 生图 | 主线文件断言失败，未进入扩展回合 | 不算整条玩法生成成功 |
+
+Writer 在新存档 `worlds/first-snow-jp-demo-nanami-ca2d5457/` 写出了日语 Chalk，并移除了现场的赴约选项，但没有更新人物记忆、两份约定或初雪结果 README，也没有生成缺席物和 `player/tonight-letter.md`。期间一次 `edit` 把字段写成 `old_text/new_text` 被拒，随后自行改为 `oldText/newText` 成功；最终仍提前结束。这证明阻塞已从“缺少服务配置”变成“真实 Writer 没有完成全部结果物化”，不能把文字回应当通关。
+
+证据保存在该存档的 `.airpworld/rehearsal.json` 与 `.airpworld/sessions/`；模板及原有玩家存档未改。当前生成内容还指向尚未满足门槛的初雪场景，所以此存档用于复盘，不是可展示的已通关样板。
+
+为隔离图像链路，另运行现有 `tools/probe-image.mjs`，只发一次图片请求，结果在 `.artifacts/image-probe/result.json`。实际文件为 `.artifacts/image-probe/.airpworld/assets/gen/a-small-covered-waiting-nook-bes-ba0f60c263ebfd5c.png`；图中是学校旁的有顶候车角、木长椅、暖灯与初雪，已目视确认无人物、无可读文字或 UI。没有把这张独立测试图挂进未生成的雪宿场景，避免假装玩法链已完成。
+
+本次直接 API / 项目工具调用的生图 Prompt：
+
+> A small covered waiting nook beside a Japanese school on the first snowy evening of winter. A warm lamp, a wooden bench and snow drifting beyond the roof. Warm anime illustration matching a gentle school radio romance game, wide quiet composition with space for narrative cards, no people, no readable text, no UI, no watermark.
+
+模型选择依据为 [OpenAI 的 Flare 模型说明](https://developers.openai.com/api/docs/models/gpt-image-2.5-flare)。**18.6 秒是单张图片的单次样本，未达到 10 秒，不是稳定延迟、整段扩展耗时或实际费用结论。** 下一步应先让 Writer 的记忆、缺席物、结果与信完整落盘，再重新验自然扩展与浏览器动线；不靠手写一封信绕过 Gate。
