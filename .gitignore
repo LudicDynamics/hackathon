@@ -20,6 +20,8 @@ assets/**
 # 素材生产的手艺包（文本，无大二进制）——工具见 tools/motion-clip.mjs
 !assets/skills/
 !assets/skills/**
+# 车间入口说明（纯文本；AGENTS.md §7.8 引用它作为 assets/ 的入库口径真相源）
+!assets/README.md
 **/.airpworld/prompt-presets/
 
 # TTS audio cache lives at <worldRoot>/.airpworld/tts-cache/ (docs/tts/00 §2.3).

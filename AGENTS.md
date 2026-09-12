@@ -44,29 +44,34 @@
 ```text
 apps/
   server/src/
-    index.ts            # Express + WS 入口（/api、静态托管 apps/web/dist、端口 3001）
-    routes/world.ts     # 玩家 UI 路由 → 动作服务（/move, /dice, /use-item, /choice, /enter-layer, /god-action, …）
+    index.ts            # Express + WS 入口（/api、静态托管 apps/web/dist、端口 3001）；入站 WS 分流（writer_prompt / airp_init）
+    routes/world.ts     # 玩家 UI 路由 → 动作服务（/move, /dice, /use-item, /choice, /enter-layer, /layer, /nook, /card/*, /god-action, /audio, …）
+    routes/tts.ts       # POST /api/tts 合成 + GET /api/tts/audio/:file 回放；唯一合成点，无模块级状态（docs/tts/01）
     engine/
       launch.ts         # spawn 参数单一来源（preset / --session-dir / --continue / env / AIRP_AGENT_ROLE / --no-* 资源隔离），服务端与探针共用
       lifecycle.ts      # Agent 生命周期编排（单例复用 / spawn / warmup / 崩溃退避重启 / stopAll）
       event-bridge.ts   # 引擎事件 → WS 帧；尾部读 events 表 → world_event 广播（见 §3.2）
-      brief-builder.ts  # buildSceneInitBrief / buildNookInitBrief（动态 brief）
+      chalk-delta.ts    # chalk 落墨的逐字差分，`writer_delta` 演出源（docs/perform/01）
       presets.ts        # preset 安装到 <worldRoot>/.airpworld/prompt-presets/；extensionArgs/skillArgs/airpEnv
   web/src/
-    lib/                   # camera（插值相机）/ collide（软碰撞）/ seat（排座镜像）/ measure（卡片盒尺寸缓存）/ parallax（指针视差模块态，走 DOM 不触发 React 渲染）
-    state/                 # useCamera（相机与层级记忆）/ useWorld（层数据 + WS + 落库）
+    lib/                   # 纯前端库：camera（插值相机）/ collide（软碰撞）/ seat（排座镜像）/ measure（卡片盒尺寸缓存）/ parallax（指针视差模块态，走 DOM 不触发 React 渲染）/ footprint（实测盒回写）/ audio（采样优先声场，synth 兜底）
+                           #   phantom + phantom-seat + ghost（生成中占位与座位过户，docs/perform/03）/ canvas-patch（增量合并）/ writer-state（笔尖状态机）/ chalk-reveal / dice-ceremony / motion / i18n / md / fm
+    state/                 # useCamera（相机与层级记忆）/ useWorld（层数据 + WS + 落库；唯一 WebSocket）/ useAudio（声场主轨）
     components/canvas/     # 无限画布（相机 / 卡片渲染 / 关系线 / CanvasGrid 视口网格 / ParticleLayer 粒子）
     components/narrative/  # chalk 叙事卡、骰子
     components/overlay/    # 角色特写遮罩
     components/sidebar/    # 右侧边栏（背包 + 角色）
+    components/nook/       # 小天地视图（NookView，复用 Canvas，不自己 useWorld）
+    components/chrome/     # 画布外框件（指南针 / 小地图 / 提示条 / 层徽 / 静音钮 / 作家栏）
     components/god/        # 上帝模式工具栏
+    components/performance/ # 演出层（DiceCeremony 骰子仪式 / WriterInkLayer 湿墨）
 packages/shared/src/    # schema + store + sqlite + 动作层
   schemas/              # world / frontmatter（互动字段通用化）/ components / events / forms / canvas
   store/                # local-store（fs + canvas.db + history.db）/ layers（层树派生）/ world-store（接口）
   inject/               # 每轮注入：turn-cache（轮边界单槽缓存）/ collect（分节采集 + 备忘录 + 三步 fail-soft）
   db/schema.ts          # 两库建表：cards / links / presence / viewpoint / entries / events(seq) / read_cursors
-  rules/                # 零依赖纯规则：dice（expect 解析）/ interactive（choice 归一化）
-  render/               # 文本视图：spatial（人话方位）/ layer-page（目录展开）/ state（注入块装配）/ sections（分节表）/ events（事件人话）/ next-step（"下一步"）/ viewpoint（视点量化）/ sanitise（注入面消毒）——look_at、状态块与前端共用
+  rules/                # 零依赖纯规则：dice（expect 解析）/ interactive（choice 归一化）/ characters（角色 id + nookIdOf + nookCardPaths，docs/nook §5.2 唯一实现）/ emptiness（isLayerEmpty / isNookEmpty / hasInitProduct）/ init-fallback（w2SceneTemplate）/ voices（音色调色板）
+  render/               # 文本视图：spatial（人话方位）/ layer-page（目录展开）/ state（注入块装配）/ sections（分节表）/ events（事件人话）/ next-step（"下一步"）/ viewpoint（视点量化）/ sanitise（注入面消毒）/ brief（buildSceneInitBrief / buildNookInitBrief，I1 从 apps/server 下沉）——look_at、状态块与前端共用
   components/           # 官方组件注册表（kind / schema / CARD_FORMS 联动 / use_item handler）
   actions/              # 动作层：createActionService(store, actor) —— server 路由与扩展工具的唯一共同入口
 presets/                # 提示词预设：writer, character, scene-init, nook-init
@@ -74,38 +79,43 @@ extensions/
   instructions.ts       # 平台提示词正文（slot writer-char / system-char / scene-init-instruction / nook-init-instruction）
   tools.ts              # 唯一 registerTool 入口：注册 AIRP 动作工具（extensions/toolkit/ 是 jiti 直跑的薄壳）
   context.ts            # 每轮注入（状态块 + 事件段 + "下一步"），挂 `context` 钩子（临时不落盘）；按 AIRP_AGENT_ROLE 分节（writer 6 节 / character 4 节）
-  toolkit/              # 工具壳 + 共享 helper（deps/actor/turn/result）——子目录，不会被当扩展加载
-skills/                 # 项目级 skills：跨世界通用手艺（生图 / 组件叙事 / 节奏 / 玩法咬合）
+  toolkit/              # 工具壳 + 共享 helper（deps/actor/turn/result）；init-command.ts = `airp-init` 初始化执行内核（R2 直唤：扩展命令 → ctx.spawnAgent）——子目录，不会被当扩展加载
+skills/                 # 项目级 skills：跨世界通用手艺（生图 / 组件叙事 / 音色选角 / 节奏 / 玩法咬合）
+                        #   component-narration / tool-craft / voice-casting（音色选角，docs/tts/08）
 templates/              # 开箱世界模板；whitechapel（英文）/ firstsnow（日文）为首条可玩竖切
   <world>/skills/       # 世界级 skills：该世界自己的文风与剧情，与 world/ 同级、随包分发
 worlds/                 # 脚手架产出的玩家世界（.gitignore）
-tools/scaffold.mjs      # 模板 → 新世界
-tools/motion-clip.mjs   # 微动立绘 / 背景视频生产（pnpm motion）：绿幕→透明 webm，成片→循环 webm
-                        #   手艺包见 assets/skills/motion-portrait/SKILL.md（alpha 解码陷阱在彼）
-tools/probe-writer.mjs  # 全链路探针（pnpm probe）
-tools/probe-tools.mjs   # 工具面探针：jiti 载入 extensions/tools.ts，断言注册表 + 真执行（pnpm probe:tools）
-tools/probe-tools-engine.mjs # 工具面探针（强形式）：真 spawn 引擎，断言 AIRP 工具被引擎执行（pnpm probe:tools 的第二段）
-tools/pi-rp.mjs         # pi-rp 子模块工作流（pnpm pi status|build|update|commit，见 §7.2）
-tools/probe-inject.mjs  # 注入探针：真 spawn 作家引擎，断言每请求恰好一份注入块、且不落盘（pnpm probe:inject）
-tools/inject-probe-provider.ts # 注入探针的确定性 provider（把每个请求的 wire messages 落文件）
-tools/probe-prompt.mjs  # 提示词 wire 探针：真 spawn 作家，断言 messages[0] 含正文/工具清单/skills、不含记忆工具与 Pi 默认 guideline（pnpm probe:prompt）
-tools/probe-prompt-character.mjs # 提示词 wire 探针（角色侧）：同款断言 + [emo: tag] 六标签都在（pnpm probe:prompt 的第二段）
-tools/prompt-dump-provider.ts # 提示词探针的确定性 provider（把每个请求的 wire payload 落文件）
-tools/check-skills.mjs  # skill 语料门禁（pnpm check:skills）：frontmatter 真解析 / 语言分层 / 命名 / 非法工具名
-tools/check-voices.mjs  # 音色门禁（pnpm check:voices）：角色 voice 必须解析到调色板（docs/tts/07），含空格的合法音色回归
-tools/check-ws-contract.mjs # 跨端 WS 契约门禁（pnpm check:ws）：服务端发射面 ↔ 前端消费面 ↔ 契约表求 diff
-docs/init/              # 初始化执行设计（I1 批次；00 是冻结契约，01–04 分篇，REVIEW-* 三份独立评审）
-extensions/toolkit/init-command.ts # `airp-init` 初始化执行内核（R2 直唤：扩展命令 → ctx.spawnAgent）
-packages/shared/src/rules/characters.ts # 角色 id 校验 + nookIdOf / nookCardPaths（docs/nook §5.2 唯一实现）
-packages/shared/src/rules/emptiness.ts  # isLayerEmpty / isNookEmpty / hasInitProduct（doc-11 §3.1/§4.1）
-packages/shared/src/rules/init-fallback.ts # w2SceneTemplate：W2 零 AI 兜底模板（doc-11 §5）
-packages/shared/src/render/brief.ts # buildSceneInitBrief / buildNookInitBrief（I1 从 apps/server 下沉）
-docs/init/00-共同上下文.md # 初始化执行的冻结契约（命令 / 执行序 / brief 字段 / 边界）
-docs/前端接线体检.md   # 2026-09-12 跨端 WS 契约静默漂移的核实报告（含缺陷分级与文档漂移清单）
-docs/prompts/           # 提示词与 skill 体系设计（00 是冻结契约；01–05 分篇；REVIEW-* 评审报告）
-docs/                   # 设计文档（真相源）；docs/tools/ 是 B1 工具面设计 + 评审报告
-docs/tts/               # 角色语音（TTS）批次真相源：00 是冻结契约（端点/请求响应体/页语义/env），01–06 分篇
 vendor/pi-rp/           # 叙事引擎 submodule
+
+tools/                  # 单一职责脚本：探针（probe-*）/ 门禁（check-*）/ 工作流
+  scaffold.mjs          # 模板 → 新世界（pnpm scaffold）
+  pi-rp.mjs             # pi-rp 子模块工作流（pnpm pi status|build|update|commit，见 §7.2）
+  motion-clip.mjs       # 微动立绘 / 背景视频生产（pnpm motion）：绿幕→透明 webm，成片→循环 webm
+                        #   手艺包见 assets/skills/motion-portrait/SKILL.md（alpha 解码陷阱在彼）
+  probe-writer.mjs      # 全链路探针（pnpm probe）
+  probe-tools.mjs       # 工具面探针：jiti 载入 extensions/tools.ts，断言注册表 + 真执行（probe:tools 第一段）
+  probe-tools-engine.mjs # 工具面探针（强形式）：真 spawn 引擎，断言 AIRP 工具被引擎执行（probe:tools 第二段）
+  probe-inject.mjs      # 注入探针：真 spawn 作家引擎，断言每请求恰好一份注入块、且不落盘（pnpm probe:inject）
+  probe-prompt.mjs / probe-prompt-character.mjs # 提示词 wire 探针（作家 + 角色），断言 slot 真进了模型、[emo: tag] 六标签在（pnpm probe:prompt）
+  probe-init.mjs        # 初始化探针：真 spawn 作家，发 /airp-init，断言产物落盘 + 事件落账 + 幂等 + 零 AI 路径（pnpm probe:init）
+  *-probe-provider.ts / prompt-dump-provider.ts # 各探针的确定性 provider（把 wire payload 落文件供断言）
+  check-ws-contract.mjs # 跨端 WS 契约门禁（pnpm check:ws）：服务端发射面 ↔ 前端消费面 ↔ 契约表求 diff
+  check-request-bodies.mjs # HTTP 请求体门禁（pnpm check:bodies）：前端 body 键集 ↔ docs/wiring/00 §6 冻结形状
+  check-hooks-docs.mjs  # hooks 文档门禁（pnpm check:docs）：symbol ownership / barrel union / file:line 引用
+  check-skills.mjs      # skill 语料门禁（pnpm check:skills）：frontmatter 真解析 / 语言分层 / 命名 / 非法工具名
+  check-voices.mjs      # 音色门禁（pnpm check:voices）：角色 voice 必须解析到调色板（docs/tts/07）
+
+assets/                 # worldlines-assets 素材车间；整树 .gitignore，**只白名单 audio/ 与 skills/**（见 §7.8）
+  audio/                # 平台级音频池（已入库）：bgm（3 情绪主线）/ themes（逐世界主题曲）/ ambient（基础三轨 + pool/ 声场族）/ foley（拟音）+ PLAN.md 需求清单 + CREDITS.md
+  skills/               # 素材生产手艺包（文本，无大二进制）：motion-portrait 等
+  worlds/ _inbox/       # AI 生图原始产出与筛选（约 587MB，不入库）——发布位是平台 IP 包，不是这里
+
+docs/                   # 设计文档（真相源）；各实现批次目录见 §4
+  init/                 # 初始化执行（I1）：00 冻结契约 + 01–04 分篇 + REVIEW-*
+  nook/ footprint/      # 角色小天地 N1 / 卡片占位尺寸
+  audio/                # 音频接线（A1）：00 契约 + 01 服务端路由与解析 / 02 采样链与主轨 / 03 前端贯通 / 04 Foley 与 stinger / 05 素材缺口 / 06 回写
+  tools/ hooks/ wiring/ perform/ prompts/ tts/ # 各实现批次：00 冻结契约 + 分篇 + REVIEW-*（§4 有逐批说明）
+  前端接线体检.md        # 2026-09-12 跨端 WS 契约静默漂移的核实报告（含缺陷分级与文档漂移清单）
 ```
 
 ---
@@ -176,13 +186,18 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 | `docs/hooks/` | **B2/B3 每轮注入协议真相源**：`00-共同上下文.md` 是冻结契约（注入接缝/分节/游标/身份/消毒/barrel 反模式），`01`–`06` 逐篇设计，`AUDIT-doc-22体检.md` 记录 doc-22 哪些断言为假。**改 `extensions/context.ts`、注入块、视点链路前必读** |
 | `docs/前端接线体检.md` | 动 WS 帧 / 前端消费面 / `useWorld.ts` 前必读——冻结契约的机械核验（`pnpm check:ws`）与已知漂移清单 |
 | `docs/wiring/` | **前端接线 A 档（止血 + 文档回写）真相源**：`00-共同上下文.md` 是冻结契约（角色身份/去重/转发集合/请求体），`01`–`04` 逐模块设计，`05-文档回写.md` 是回写清单。**动 `useWorld.ts` WS switch / `CharacterModal` / `DiceRoller` / 角色帧载荷前必读** |
-| `docs/tts/` | **角色语音 TTS 批次真相源**：`00-共同上下文.md` 是冻结契约（`POST /api/tts` 请求/响应体、缓存 key、角色 `voice` frontmatter、前端 `playVoice`/`stopVoice`/`isVoicing`、页语义、env），`01`–`06` 逐模块设计。**动 `routes/tts.ts` / `lib/audio.ts` 语音面 / `CharacterModal` 分页前必读** |
+| `docs/perform/` | **演出通道（残余 9 条 DARK 接线）真相源**：`00-共同上下文.md` 是冻结契约（`writer_delta` 来源流 / 幻影与座位过户 / `show_frame` 分发 / `canvas_patched` 归属 / 声响落点 / phantom 字段集），`01`–`05` 逐帧设计 + `06-文档回写.md` 回写清单 + `REVIEW-R1..R5` 五视角评审。**动 `event-bridge.ts` 帧映射 / `useWorld.ts` WS switch / `lib/{phantom,phantom-seat,writer-state,ghost,canvas-patch}.ts` / 演出组件前必读** |
+| `docs/tts/` | **角色语音 TTS 批次真相源**：`00-共同上下文.md` 是冻结契约（`POST /api/tts` 请求/响应体、缓存 key、角色 `voice` frontmatter、前端 `playVoice`/`stopVoice`/`isVoicing`、页语义、env），`01`–`06` 逐模块设计，**`07` 音色别名映射 + `08` 音色 skill/门禁**。**动 `routes/tts.ts` / `lib/audio.ts` 语音面 / `CharacterModal` 分页 / `skills/voice-casting` / `voices.ts` 前必读** |
 | `docs/doc-08~18` | 各专题（多为待完善），实现对应模块前再读 |
+| `docs/init/` | **初始化执行（I1）真相源**：`00-共同上下文.md` 是冻结契约（`airp-init` 命令形状 / 执行序 / 并发防线 / brief 字段 / 边界），`01`–`04` 逐模块设计，`REVIEW-{Consistency,Semantics,Implementability}` 三份独立评审。**动 `init-command.ts` / brief / 空判定 / 前端 `first` 消费前必读** |
+| `docs/nook/` | **角色小天地（N1）真相源**：`00-共同上下文.md` 是冻结契约（`GET /api/nook` 形状 / nookId = `characters/<id>` / `layer` 列 / footprint 门禁分支），`01`–`05` 分篇（取数 / 视图入口 / 立绘 / 占位回写 / 验收）+ `RESEARCH-初始化链路.md` + 三份评审。**动 `routes/world.ts` 的 nook 分支 / `NookView` / `portrait` kind / 排座 nook 分支前必读** |
+| `docs/footprint/` | **卡片占位尺寸真相源**：`00-共同上下文.md` 是冻结契约（`cards` 行写入路径 / measuredAt 与 formVersion / reseat 漂移判据），`01`–`05` 分篇。**动 `cards` 行建行 / `/api/card/footprint` / `lib/{measure,footprint}.ts` 前必读**（与 AGENTS §7.5 配套）|
+| `docs/audio/` | **音频接线（A1）真相源**：`00-共同上下文.md` 是冻结契约（`ambient`/`bgm` frontmatter / `/api/audio` 路径解析 / 采样优先合成兜底 / stinger 触发），`01`–`06` 分篇。素材清单在 `assets/audio/PLAN.md`（P0 已完成，P1/P2 缺口逐条登记）。**动 `lib/audio.ts` / `routes/world.ts` 的 `/audio` / 世界主题曲声明前必读** |
+| `docs/prompts/` | **提示词与 skill 体系真相源**：`00-共同上下文.md` 是冻结契约，`01`–`03` 是作家/角色/初始化器**正文逐字源**（`extensions/instructions.ts` 与之对应），`04` skill 体系，`05` 装配与验证 + 四份评审。**改任何 preset / skill / instruction slot 前必读** |
 
 **参考实现（都在本项目的兄弟目录，不进本仓库）**：
 
 | 项目 | 是什么 | 学什么 |
-|---|---|---|
 | `~/projects/worldlines-rivet` | 同构架构：世界包 + 多 agent + pi-rp 引擎，已跑生产 | **后端**：`services/gateway/` 的协议单一事实源 / WS 外壳 / 会话域三层切法、`launch.mjs` 启动参数单一来源。**注意：它的"角色上下文分层"（state/knowledge/scene_brief 组装）是它自己的多角色编排配套，AIRP 明确不搬**（逐条取舍见 `docs/后端实现计划.md` §2） |
 | `~/projects/infini-canvas` | 前端原型与旧设计文档（已退休） | **前端**视觉语汇与交互机制。它的 `worldlines-canvas/` 用的是另一套 harness + Python 后端，**引擎部分不迁移** |
 
@@ -195,16 +210,18 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 ```bash
 pnpm install                                    # 装依赖（含 submodule）
 pnpm build                                      # 编译全仓库
+pnpm test                                       # 单元/集成测试（shared + server + web + tools 门禁单测）
 pnpm probe                                      # 全链路探针，PASSED 才算地基没坏
 pnpm dev                                        # 全栈开发（web 5173 / server 3001）
 pnpm probe:tools                                # 工具面探针（注册表断言 + 真引擎执行 AIRP 工具），PASSED 才算工具面没坏
 pnpm typecheck:extensions                       # extensions/ 类型体检（jiti 直跑的 TS 不在 workspace 里）
 pnpm probe:inject                               # 注入探针（真 spawn 作家引擎，断言每请求恰好一份注入块且不落盘）
 pnpm check:ws                                   # 跨端 WS 契约门禁（服务端广播面 ↔ 前端消费面 ↔ docs/tools/12 §6.2）
+pnpm check:bodies                               # HTTP 请求体门禁（前端 fetch body 键集 ↔ docs/wiring/00 §6）
 pnpm check:docs                                 # hooks 文档门禁（symbol ownership / barrel union / file:line 引用）
 pnpm probe:prompt                               # 提示词 wire 探针（作家 + 角色），断言补上的 slot 真的进了模型
 pnpm probe:init                                 # 初始化探针（真 spawn 作家，发 /airp-init，断言产物落盘 + 事件落账 + 幂等 + 零 AI 路径）
-pnpm check:skills                               # skill 语料门禁（frontmatter / 语言分层 / 命名）
+pnpm check:skills                               # skill 语料门禁（frontmatter / 语言分层 / 命名 / 平台清单与触发词）
 pnpm check:voices                               # 音色门禁（角色 voice 解析到调色板；docs/tts/07）
 pnpm pi status                                  # pi-rp 子模块 + dist 新鲜度体检（见 §7.2）
 pnpm motion <绿幕.mp4> -o out.webm --scale 360   # 微动立绘 / 背景视频（见 assets/skills/motion-portrait）
@@ -275,7 +292,7 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 | 协议（frontmatter / WS 消息 / API 路由） | `packages/shared` schema + `docs/doc-09` 或 `doc-05` |
 | 提示词 / preset / 初始化流程 | `presets/*.json` + `docs/doc-11`（**骨架与文件必须逐字一致**） |
 | 提示词正文 / slot 装配 | `docs/prompts/01…03`（正文逐字源）+ `presets/*.json` + **全部 9 份** `templates/*/characters/*/preset.json`；跑 `pnpm probe:prompt`（作家 + 角色 wire 断言）|
-| skill 体系（平台级 / 世界级） | `docs/prompts/04` + `skills/**` + `templates/*/skills/**`；跑 `pnpm check:skills`（frontmatter 真解析 / 语言分层 / 命名 / 非法工具名）|
+| skill 体系（平台级 / 世界级） | `docs/prompts/04` + `skills/**` + `templates/*/skills/**`；跑 `pnpm check:skills`（frontmatter 真解析 / 语言分层 / 命名 / 非法工具名 / **平台清单与按 skill 分触发词**）。**新增平台级 skill 必须同步登记**（`tools/check-skills.mjs` 的 `EXPECTED_PLATFORM` 与 `TRIGGERS_BY_SKILL`）|
 | 角色语音 / 音色（`voice:` 声明、调色板、TTS 引擎） | `docs/tts/**`（`00` 冻结契约 + `07` 音色映射唯一真相源）+ `packages/shared/src/rules/voices.ts`；跑 `pnpm check:voices`（**增删音色 MUST 先实测出声**）|
 | 交互 / 演出 / 视觉 | `docs/doc-06` / `doc-04`（视觉以 §10 为准） |
 | 注入协议 / 钩子接线 / 分节表 | `docs/hooks/00…06`（冻结契约 `00` 唯一真相源） |
@@ -283,14 +300,19 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 | 跨端 WS 帧契约（增删帧 / 改载荷 / 前端消费面） | `docs/tools/12` §6.2（唯一帧清单）+ `docs/前端接线体检.md`；跑 `pnpm check:ws`（门禁会因两端不一致而红） |
 | 角色来源的 WS 帧载荷（`characterId`） | `docs/wiring/00` §3（唯一形状源）+ `apps/server/src/engine/{lifecycle,event-bridge}.ts` 的 sink 链 |
 | 初始化执行（`airp-init` 命令 / brief 字段 / 空判定 / W2 兜底） | `docs/init/00`（冻结契约）+ `01…04`；`extensions/toolkit/init-command.ts`、`packages/shared/src/{render/brief,rules/emptiness,rules/init-fallback,rules/characters}.ts`；跑 `pnpm probe:init`（真 spawn 端到端）|
+| 音频（`ambient`/`bgm` frontmatter、`/api/audio`、stinger） | `docs/audio/00`（冻结契约）+ `01…06`；`apps/server/src/routes/world.ts` 的 `/audio` 分支与 `readLayerAudio`、`apps/web/src/lib/audio.ts`；**素材入库口径见 §7.8**——增删 `assets/audio/**` MUST 同步 `assets/audio/PLAN.md` 与 `CREDITS.md` |
+| 小天地（`GET /api/nook`、nookId、`layer` 列、footprint 门禁） | `docs/nook/00`（冻结契约）+ `01…05`；`apps/server/src/routes/world.ts` 的 nook 分支、`components/nook/NookView.tsx`、`packages/shared/src/rules/characters.ts` 的 `nookCardPaths` |
+| 卡片占位尺寸（`cards` 行 / footprint 回写 / reseat 漂移） | `docs/footprint/00`（冻结契约）+ `01…05`；`packages/shared/src/store/local-store.ts` 的建行路径、`lib/{measure,footprint}.ts`（与 §7.5 三条契约配套）|
 
 文档里已被推翻的说法**直接改掉**，不要另起一段解释——`docs/archive/` 才是存废案的地方。
 
 ### 6.4 收工自检
 
 ```bash
-pnpm build && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:bodies && pnpm check:docs && pnpm probe:prompt && pnpm check:skills && pnpm check:voices && pnpm probe:init
+pnpm build && pnpm test && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:bodies && pnpm check:docs && pnpm probe:prompt && pnpm check:skills && pnpm check:voices && pnpm probe:init
 ```
+
+`pnpm test` 覆盖 `packages/shared/test/`、`apps/server/test/`、`apps/web/test/`、`tools/*.test.mjs` 四处（纯函数与非空性断言落在这里）。
 
 `pnpm check:ws` 是**跨端 WS 契约门禁**：服务端广播面、前端消费面、`docs/tools/12 §6.2` 契约三集合求 diff。**改了任何 WS 帧（增删帧名 / 改载荷 / 前端 case）必须让它变绿**——它会把"两端各自绿、合起来死"的漂移抓出来（2026-09-12 实际抓到 14 条）。
 
@@ -418,3 +440,18 @@ pnpm pi commit "fix(...): …" [--no-build]   # build 红线 → 子模块 commi
 2. 若确实需要 emit（例如给某个不退让的工具链），**产物必须落在 `extensions/` 之外**（如 `dist/`），绝不留同名 `.js` 在扩展目录里。
 3. 怀疑踩到：`node tools/check-*.mjs` 之外，直接 `find extensions -name '*.js'` —— 有输出就是 bug。
 4. `.d.ts` 不受影响（`extensionArgs` 与 jiti 都跳过），但同样不该手写。
+
+
+### 7.8 素材车间 `assets/` 的入库口径（2026-09-13 核实）
+
+`assets/` 是 **worldlines-assets 素材车间**（`assets/README.md`），**整树被 `.gitignore` 排除**，只白名单两项：
+
+| 子目录 | 入库 | 说明 |
+|---|---|---|
+| `assets/audio/**` | ✅ | 我们自己产出的音乐（Pixabay 免版税 BGM / 环境声 / 拟音）。**平台级音频池的真相源**就是这里——`routes/world.ts` 的 `AUDIO_ROOT` 指 `assets/audio`，`/api/audio?path=…` 从这里伺服。需求清单/缺口登记在 `assets/audio/PLAN.md`，授权信息在 `CREDITS.md` |
+| `assets/skills/**` | ✅ | 素材生产手艺包（纯文本，无大二进制），如 `motion-portrait` |
+| `assets/worlds/**`、`assets/_inbox/**` | ❌ | AI 生图原始产出与筛选（**合计约 587MB**），只作生产参考。**发布位不是这里**——定稿后经平台上传端点落入 IP 包，runtime 读 IP 包 |
+
+**坑（2026-09-13 实际踩到）**：`assets/README.md` 写的是"本目录不进 git"，**这句已过期**——`audio/` 与 `skills/` 现在是入库的。找音频资产时**不要只查 `apps/web/public/` 或 `templates/**/`**，平台池在仓库根 `assets/audio/`；世界级样本则走 `templates/<world>/assets/`（`/api/asset` 伺服）。判据：平台池 = `/api/audio?path=…`，世界级 = `/api/asset?…`。
+
+**改素材时**：音频走 `docs/audio/`（`00` 冻结契约）；`assets/audio/**` 增删 MUST 同步 `assets/audio/PLAN.md` 的状态列与 `CREDITS.md`（授权合规）。
