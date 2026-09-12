@@ -263,6 +263,14 @@ export function App() {
         return;
       }
       enterLayer(target);
+      // `first` is true ⟺ the layer had no README ⟺ it is a stub (same predicate
+      // as `isLayerEmpty`, docs/doc-11 §3.1). Walking into a stub asks the engine
+      // to initialize it: the server hands `/airp-init` to the writer and the
+      // outcome arrives later as a `layer_initialized` world event (docs/init/03).
+      // Fire-and-forget — initialization runs 45–60s, far past any HTTP/WS reply.
+      if (data.first === true) {
+        sendMessage({ type: 'airp_init', kind: 'scene', target, by: 'player' });
+      }
     } catch (err) {
       showToast(err instanceof Error ? err.message : String(err));
     }
