@@ -202,16 +202,29 @@ function save(url, out, kind, prompt) {
 }
 
 /**
- * The proxy stores the *upstream key it actually used* in `model` (e.g.
- * `abra_t2v_4s_360p`), which is how a silent downgrade becomes visible: ask for
- * 6s/720p and veo rejects it upstream, so the proxy falls back to 4s/360p
- * WITHOUT failing. Callers must be told, or they ship a 640x360 clip believing
- * it is 720p.
- * Returns null for unknown shapes (never invent a verdict from a missing key).
+ * The proxy reports the *upstream key it actually submitted* in `model`
+ * (`abra_t2v_4s_360p`, `veo_3_1_t2v_lite`, ...). Comparing it against the
+ * request is how a silent downgrade becomes visible.
+ *
+ * Two key dialects exist upstream and they do NOT share a shape:
+ *   abra: abra_{t2v|i2v}_{N}s_{360|720|1080}p   <- spec encoded in the name
+ *   veo : veo_3_1_t2v_{variant}[_{N}s]          <- spec in the name, NO resolution
+ * So the resolution check only applies to abra; for veo the variant name already
+ * fixes the output (base = 720p). Asking veo for a resolution is meaningless —
+ * the proxy now refuses to silently swap families, so a bad veo key surfaces as
+ * an error instead of a mysterious 360p clip.
  */
 function parseUpstreamKey(key) {
-  const m = String(key || '').match(/^(.+?)_(t2v|i2v|fl|r2v)_(\d+)s_(\d{3,4})p$/);
-  return m ? { family: m[1], kind: m[2], seconds: Number(m[3]), res: Number(m[4]) } : null;
+  const s = String(key || '');
+  const abra = s.match(/^abra_(t2v|i2v|fl|r2v)_(\d+)s_(\d{3,4})p$/);
+  if (abra) return { family: 'abra', kind: abra[1], seconds: Number(abra[2]), res: Number(abra[3]) };
+  // veo_3_1_t2v_lite / veo_3_1_t2v_fast_8s / veo_3_1_i2v_s_fast_fl
+  const veo = s.match(/^veo_3_1_(t2v|i2v)_(.+)$/);
+  if (veo) {
+    const t = veo[2].match(/_(\d+)s$/);
+    return { family: 'veo', kind: veo[1], seconds: t ? Number(t[1]) : null, res: null };
+  }
+  return null;
 }
 
 /** Warn when the finished clip does not match what was requested. */
@@ -219,15 +232,18 @@ function reportDowngrade(task, want) {
   const got = parseUpstreamKey(task.model);
   if (!got) return;
   const diffs = [];
-  if (want.seconds && got.seconds !== Number(want.seconds)) diffs.push(`时长 ${want.seconds}s → ${got.seconds}s`);
-  if (want.res && got.res !== Number(String(want.res).replace(/p$/i, ''))) {
+  if (want.seconds && got.seconds && got.seconds !== Number(want.seconds)) {
+    diffs.push(`时长 ${want.seconds}s → ${got.seconds}s`);
+  }
+  // Resolution is only meaningful for abra; veo encodes it in the variant name.
+  if (want.res && got.res && got.res !== Number(String(want.res).replace(/p$/i, ''))) {
     diffs.push(`分辨率 ${want.res}p → ${got.res}p`);
   }
   if (diffs.length) {
     console.log(
       `  ⚠ 上游拒绝了请求的参数，已静默降级（${diffs.join('，')}）。\n` +
         `    实际使用 key：${task.model}\n` +
-        `    该组合在上游不存在；可用组合以实际成功的为准，或改用 --model 指定其他模型族。`
+        `    按上游实际支持的组合重来，或接受降级；别把它当成成功。`
     );
   }
 }
@@ -292,7 +308,7 @@ async function cmdVideo(opts) {
   const prompt = opts.prompt || opts._[1];
   if (!prompt) die('缺少 --prompt');
 
-  const body = { model: opts.model || 'veo-3.1-fast', prompt };
+  const body = { model: opts.model || 'veo-3.1-lite', prompt };
   if (opts.seconds) body.seconds = Number(opts.seconds);
   if (opts.resolution) body.resolution = String(opts.resolution).replace(/p$/i, '');
   if (opts.aspect) body.aspect_ratio = opts.aspect;
@@ -413,9 +429,9 @@ image 选项:
       --aspect <比例>  landscape | portrait | square | four-three | three-four
 
 video 选项:
-      --model <名>     默认 veo-3.1-fast
+      --model <名>     默认 veo-3.1-lite（720p）
       --seconds <4|6|8>      时长（默认 4）
-      --resolution <360|720|1080>  分辨率（默认 360）
+      --resolution <360|720>  仅 omni-1.1-flash(abra) 生效，默认 720；veo 分辨率由模型决定，1080p 需后处理
       --aspect <比例>  landscape | portrait
       --image <路径|URL>     首帧图片（本地路径会内联为 data URL），走图生视频
 

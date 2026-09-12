@@ -1,6 +1,6 @@
 ---
 name: flow-media
-description: Use when generating images or videos for an asset — cover art, character base portraits, scene stills, backdrop plates, or short motion clips — through the local Flow proxy. Covers starting the proxy, the agent-cookie auth chain, the async video poll/download dance, and the silent-downgrade trap that ships a 360p clip when you asked for 720p.
+description: Use when generating images or videos for an asset — cover art, character base portraits, scene stills, backdrop plates, or short motion clips — through the local Flow proxy. Covers starting the proxy, the agent-cookie auth chain, the async video poll/download dance, and the two upstream key naming systems (abra vs veo) whose mix-up silently downgrades every veo request to a 360p omni clip.
 ---
 
 # Flow 生图 / 生视频
@@ -102,45 +102,87 @@ pnpm gen image --prompt "描述" [--model M] [--aspect R] [-o 路径]
 
 ---
 
-## 三、生视频（异步，坑都在这）
+## 三、生视频（异步）
 
 ```bash
-pnpm gen video --prompt "描述" [--model M] [--seconds 4|6|8] [--resolution 360] [--image 首帧] [-o 路径]
+pnpm gen video --prompt "描述" [--model M] [--seconds 4|6|8] [--image 首帧] [-o 路径]
 ```
 
-工具封装了三步：**提交 → 轮询 → 下载**。耗时实测 **~25–35s**。
+工具封装了三步：**提交 → 轮询 → 下载**。耗时实测 **~25–40s**（lite 8s 档约 40s）。
 
-### 3.1 关键坑：参数会被静默降级（最重要）
+### 3.1 模型与分辨率
 
-**你请求 720p，上游可能给你 360p，而且不报错。**
-`veo_3_1_*` 系列在上游已 404，代理会自动回退到 `abra` 家族并**成功返回**，于是：
+| 预设名 | 上游 key | 原生分辨率 | 实测 |
+|---|---|---|---|
+| `veo-3.1-lite` | `veo_3_1_t2v_lite` | 720p | ✅ 40s / 1.0MB |
+| `veo-3.1-fast` | `veo_3_1_t2v_fast` | 720p | ✅ |
+| `veo-3.1-quality` | `veo_3_1_t2v_fast_ultra` | 720p | ✅ |
+| `omni-1.1-flash` | `abra_t2v_8s` | **360p / 720p 可选** | ✅ 720p 实测 1280×720 |
 
-```bash
-pnpm gen video --prompt "..." --seconds 6 --resolution 720p
-#  ⚠ 上游拒绝了请求的参数，已静默降级（时长 6s → 4s，分辨率 720p → 360p）。
-#    实际使用 key：abra_t2v_4s_360p
-```
+`--seconds 4|6|8` 对所有预设有效。`omni-1.1-flash` 是唯一能用 `--resolution` 调分辨率的
+（**默认已改 720p**，要小文件才传 `--resolution 360`）。
 
-工具会打这条告警，`--json` 里也有 `upstream_key` 字段可断言。**看到告警就别当成功**——
-按上游实际支持的组合重来，或者接受它。
+> **默认用 `veo-3.1-lite`**（工具默认值）。不要用 `--resolution` 对着 veo 系调——
+> veo 的分辨率由 key 变体决定，传了也不生效。
 
-2026-09 实测的上游实际能力：
+### 3.2 上游 key 的两套命名（改代理时必读）
 
-| 参数 | 实测结果 |
+**两族格式不同，且分辨率都不写进 key**：
+
+| 家族 | 格式 | 例 |
+|---|---|---|
+| abra | `abra_{t2v\|i2v\|r2v}_{秒}s` | `abra_t2v_8s` |
+| veo | `veo_3_1_{t2v\|i2v}_{变体}[_{秒}s]` | `veo_3_1_t2v_lite`、`veo_3_1_t2v_fast_8s` |
+
+**实测佐证（免费探针：无效 key 返回 404，有效 key 返回 403 reCAPTCHA，都不扣额度）**：
+
+| key | 结果 |
 |---|---|
-| 时长 | **4s / 6s / 8s 都可用** |
-| 分辨率 | **只有 360p 可用**；`720p` / `1080p` 一律回落到 360p |
-| 输出 | 640×360 h264+aac，可正常播放 |
+| `abra_t2v_8s` | ✅ 有效 |
+| `abra_t2v_8s_720p` | ❌ **404**（带分辨率后缀的 key 不存在） |
+| `abra_t2v_4s_360p` | ✅ 存在，但纯属巧合；换个分辨率就 404 |
+| `veo_3_1_t2v_lite` | ✅ 有效 |
+| `veo_3_1_lite_t2v_4s_360p` | ❌ 404（词序错） |
 
-所以当前现实是：**要时长加 `--seconds`，分辨率暂时没得选。**
-别在 `--resolution 720p` 上反复试——上游没有这个组合。
+三条推论：
 
-### 3.2 签名地址会过期
+1. **abra 的分辨率走请求体 `outputSpec`**，与 key 无关。
+2. **veo 不能带 `outputSpec`** —— 规格由变体名决定，多传直接 `400 INVALID_ARGUMENT`。
+3. **veo 的 key 无效时应当报 404，不要静默回落**。此前代理拿 abra 模板拼 veo key，
+   结果 404 后回落到 omni，**你拿到 360p 片却以为在用 veo**。该 bug 已修（实测 veo-3.1-lite 现在真出 1280×720）。
+   工具会打降级告警，别忽略。
+
+### 3.3 1080p 是后处理，不是生成档位
+
+网页端"导出 1080p"**不是生成参数**，而是对**已生成的视频**再做一次放大。上游是独立工序：
+
+```
+POST /v1/video:batchAsyncGenerateVideoUpsampleVideo
+  videoInput.mediaId : <已生成视频的 mediaId>      ← 输入是成片，不是 prompt
+  videoModelKey      : veo_3_1_upsampler_1080p     ← 独立放大模型
+  resolution         : VIDEO_RESOLUTION_1080P
+```
+
+**所以生成时的分辨率上限就是 720p**，`--resolution 1080` 会被上游拒为 `400 INVALID_ARGUMENT`。
+本代理尚未实现 upsample 这道工序；需要 1080p 得另行处理成片。
+
+### 3.4 降级告警
+
+工具比对 `upstream_key` 与请求参数，不一致就告警（如 abra 的时长档位回退）：
+
+```bash
+#  ⚠ 上游拒绝了请求的参数，已静默降级（时长 8s → 4s）。
+#    实际使用 key：abra_t2v_4s
+```
+
+`--json` 里有 `upstream_key` 字段可断言。**看到告警就当失败处理**——要么换参数，要么接受降级。
+
+### 3.5 签名地址会过期
 
 `/v1/videos/<id>/content` **每次调用都重新签名**，所以工具不缓存地址，下载时现取。
 **不要**把 `remote_url` 存下来下次接着用，会 403。
 
-### 3.3 任务超时不用重跑
+### 3.6 任务超时不用重跑
 
 客户端等超时（默认 15min）**不等于任务丢了**，代理服务端仍在轮询。用 id 回捞：
 
@@ -149,7 +191,7 @@ pnpm gen fetch --id fp_xxxxxxxxxxxx -o out.mp4
 FLOW_VIDEO_TIMEOUT_MS=1800000 pnpm gen video ...   # 或拉长上限
 ```
 
-### 3.4 图生视频
+### 3.7 图生视频
 
 ```bash
 pnpm gen video --prompt "让灯塔的光缓缓扫过" --image assets/_inbox/cover.png -o i2v.mp4
@@ -169,7 +211,7 @@ pnpm gen video --prompt "让灯塔的光缓缓扫过" --image assets/_inbox/cove
 
 需要**透明立绘或循环背景视频**时，接着走 `assets/skills/motion-portrait/SKILL.md`
 的 `pnpm motion`（绿幕抠像 / 循环封口）——那是另一道工序，别混在本工具里做。
-注意 video 目前只有 360p，当全屏背景偏糊，优先用于小尺寸或配合运动模糊。
+veo 系输出 720p，做全屏背景可用；`omni-1.1-flash` 只有 360p，别用它做背景。
 
 ---
 
