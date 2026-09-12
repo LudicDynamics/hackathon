@@ -1,6 +1,6 @@
 # Audio Credits
 
-All tracks in this directory are royalty-free, sourced via the `search_audio`
+The original tracks in this directory were sourced via the `search_audio`
 tool (Freesound previews). They were re-encoded to **128 kbps MP3** and
 trimmed/faded for game use. Provenance recorded for reproducibility.
 
@@ -9,6 +9,27 @@ trimmed/faded for game use. Provenance recorded for reproducibility.
 the demo may be shown commercially.
 
 ---
+
+## Worldlines Canvas full-length themes
+
+Music: MaouDamashii (Koichi Morita) — https://maou.audio/
+Used under the creator's usage terms, with attribution retained from
+`worldlines-canvas/app/media/CREDITS.md`. These are not CC0 tracks.
+Copied byte-for-byte from `worldlines-canvas/app/media/`; no trimming,
+re-encoding, or generation. World mapping follows `app/src/app.js` BGM_TRACKS.
+The original Freesound theme pool below is retained, not overwritten.
+
+| Imported file | Original file | Track | World |
+|---|---|---|---|
+| `themes/canvas-mistport.mp3` | `maou_bgm_piano36.mp3` | Piano 36 | mistport (world migration pending) |
+| `themes/canvas-wuwu.mp3` | `maou_bgm_fantasy13.mp3` | Fantasy 13 | wuwu |
+| `themes/canvas-whitechapel.mp3` | `maou_bgm_orchestra26.mp3` | Orchestra 26 | whitechapel |
+| `themes/canvas-divergence.mp3` | `maou_bgm_healing17.mp3` | Healing 17 | divergence |
+| `themes/canvas-firstsnow.mp3` | `maou_bgm_acoustic54.mp3` | Acoustic 54 | firstsnow |
+
+The four migrated Canvas worlds select these full tracks through
+`world.json` `audio.theme: canvas-<world>`. Playback follows the existing
+theme/layer-BGM precedence and requires the first browser interaction.
 
 ## 1. BGM — `bgm/` (3 moods, selected by the layer README `bgm` field; crossfaded 1.5s)
 

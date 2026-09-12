@@ -1,5 +1,6 @@
 {
   "id": "divergence",
+  "audio": { "theme": "canvas-divergence" },
   "name": "Divergence Point",
   "version": "1.0.0",
   "schema": 1,
