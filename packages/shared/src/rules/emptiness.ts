@@ -11,8 +11,12 @@
  * means: the part of the path after `dir + '/'` contains no `/`.
  */
 
-/** Paths in `files` that are direct children of `dir`. */
-function directChildren(files: readonly string[], dir: string): string[] {
+/**
+ * Names of `files` that are direct children of `dir` (no `/` in the remainder).
+ * Exported because `nookCardPaths` (rules/characters.ts) needs the same notion —
+ * one implementation, not three (docs/init/00 §3.4 discipline).
+ */
+export function directChildrenOf(files: readonly string[], dir: string): string[] {
   const prefix = dir === '' ? '' : `${dir}/`;
   const out: string[] = [];
   for (const f of files) {
@@ -31,7 +35,7 @@ function directChildren(files: readonly string[], dir: string): string[] {
  * `dir` is world-root relative (e.g. `world/baker-street/crime-scene`).
  */
 export function isLayerEmpty(files: readonly string[], dir: string): boolean {
-  return !directChildren(files, dir).includes('README.md');
+  return !directChildrenOf(files, dir).includes('README.md');
 }
 
 /**
@@ -42,7 +46,7 @@ export function isLayerEmpty(files: readonly string[], dir: string): boolean {
  * the nook, matching the produce-spec where all nook files sit in the root.
  */
 export function isNookEmpty(files: readonly string[], dir: string): boolean {
-  return directChildren(files, dir).every((name) => name.endsWith('.json'));
+  return directChildrenOf(files, dir).every((name) => name.endsWith('.json'));
 }
 
 /**
@@ -61,7 +65,7 @@ export function hasInitProduct(
   dir: string,
   kind: 'scene' | 'nook'
 ): boolean {
-  const children = directChildren(files, dir);
+  const children = directChildrenOf(files, dir);
   return kind === 'scene'
     ? children.includes('README.md')
     : children.some((name) => !name.endsWith('.json'));

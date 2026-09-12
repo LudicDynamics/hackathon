@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   characterIdOfPath,
+  directChildrenOf,
   dirOf,
   hasInitProduct,
   isLayerEmpty,
   isNookEmpty,
   isValidCharacterId,
+  nookCardPaths,
   nookIdOf,
   w2SceneTemplate,
 } from '../dist/index.js';
@@ -98,4 +100,28 @@ test('w2SceneTemplate writes a stub README and an empty opening', () => {
   assert.match(files['README.md'], /^---\ntype: readme\nname: crime-scene\nmaterial: stub\n---/);
   assert.match(files['README.md'], /crime-scene/);
   assert.match(files['opening.md'], /^---\ntype: chalk\n---/);
+});
+
+
+// ----------------------------------------------------- nook page membership
+
+test('directChildrenOf keeps only direct children (docs/init/00 §3.4)', () => {
+  const files = ['a/x.md', 'a/y.json', 'a/sub/z.md', 'b/w.md', 'a'];
+  assert.deepEqual(directChildrenOf(files, 'a'), ['x.md', 'y.json']);
+  assert.deepEqual(directChildrenOf(files, 'a/sub'), ['z.md']);
+  assert.deepEqual(directChildrenOf(files, 'b'), ['w.md']);
+  assert.deepEqual(directChildrenOf(files, 'nope'), []);
+});
+
+test('nookCardPaths: direct-child .md minus README (docs/nook/01 §2.4)', () => {
+  const dir = 'characters/ryo';
+  const files = [
+    `${dir}/README.md`,
+    `${dir}/preset.json`,
+    `${dir}/diary.md`,
+    `${dir}/letter.md`,
+    `${dir}/letters/unsent.md`,
+    `${dir}/art.png`,
+  ];
+  assert.deepEqual(nookCardPaths(files, dir), [`${dir}/diary.md`, `${dir}/letter.md`]);
 });
