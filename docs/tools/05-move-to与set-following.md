@@ -5,7 +5,7 @@
 > 本文服从 `01-动作内核与事件落账.md` 冻结的 `ActionContext` / `ActionResult` / `ActionError` / 方法名（`moveCharacter` / `setFollowing`）；`MoveCharacterInput` / `SetFollowingInput` 的字段名与必选性**照 `01 §5` 表第 7/8 行逐字填形状，不增不改**。
 >
 > 关联：`doc-20 §4`（`move_to` 五种情形）、`§9`（`set_following`）、`§12`（UI 与 Agent 共用动作）、`doc-21 §4.2`（`character_moved` / `following_changed` `detail`）；`doc-05 §4.1.1`（角色 tab 三能力）、`§8.4`（`characters[].home`）；`doc-06 §2.5`（空位排座纪律）、`§5.4`（跟随的语义，逐条）；`doc-22 §3.1/§3.2`（`cast` / `standing` 节读 presence）、`§6`（presence 进 canvas.db）；`doc-19`（追光、在场感强度）；`00-文档骨架.md:67`（变更记录 #10）。
-> 源码基线：`packages/shared/src/db/schema.ts:28-37`（`presence` 表）、`store/local-store.ts:14-46/291-415/478-491`（排座与碰撞）、`store/layers.ts:32-135`（`layerOfDir` / `layerOfPath`）、`store/world-store.ts:6-44`、`apps/server/src/routes/world.ts:128-235`（`/api/layer` 吐 presence）、`apps/web/src/state/useWorld.ts:25-30/37/91`、`apps/web/src/components/sidebar/RightSidebar.tsx:105-171`、`apps/web/src/App.tsx:30/112-120/371-377`、`packages/shared/src/schemas/forms.ts:33`、`templates/holmes-world/**`。
+> 源码基线：`packages/shared/src/db/schema.ts:28-37`（`presence` 表）、`store/local-store.ts:14-46/291-415/478-491`（排座与碰撞）、`store/layers.ts:32-135`（`layerOfDir` / `layerOfPath`）、`store/world-store.ts:6-44`、`apps/server/src/routes/world.ts:128-235`（`/api/layer` 吐 presence）、`apps/web/src/state/useWorld.ts`（`LayerLink` / `PresenceEntry` / `LayerState.presence`）、`apps/web/src/components/sidebar/RightSidebar.tsx:105-171`、`apps/web/src/App.tsx:30/112-120/371-377`、`packages/shared/src/schemas/forms.ts:33`、`templates/holmes-world/**`。
 
 ---
 
@@ -628,7 +628,7 @@ async seatPresence(
 
 **三个刻意的决定**：
 
-1. **`x` / `y` 存中心点**，不是左上角。`/api/layer` 的 `presence` 直接吐 `x`/`y` 给前端画 104px 圆头像（`useWorld.ts:25-30` 的 `PresenceEntry{x,y}` 就是中心），卡片才用左上角 + `w/h`。**两种语义混用会让头像偏移半个身位**——这是最容易踩的一脚。`seatPresence` 返回的既然是中心，`upsertPresence` 原样写。
+1. **`x` / `y` 存中心点**，不是左上角。`/api/layer` 的 `presence` 直接吐 `x`/`y` 给前端画 104px 圆头像（`useWorld.ts` 的 `PresenceEntry{x,y}` 就是中心），卡片才用左上角 + `w/h`。**两种语义混用会让头像偏移半个身位**——这是最容易踩的一脚。`seatPresence` 返回的既然是中心，`upsertPresence` 原样写。
 2. **第 0 格（锚点本身）永远跳过**。对 `near`，锚点格就是锚卡片自己的位置（必然碰撞，跳过只是省一次判定，也让落点在锚的"旁边"而不是锚"身上"）；对全局锚点 `SEAT_ANCHOR`，第 0 格正是**第一张卡片会被排到的位置**（`seatUnplaced` 从第 0 格开始试，`local-store.ts:326-337`）——若 presence 先占了它，那张卡片的行虽然已经落库（`ON CONFLICT(id) DO NOTHING`，`local-store.ts:346-352`）不会被搬，但 `reseatLayer`（`local-store.ts:396-404`）之后的每次重排都会从第 0 格开始试，撞上一个没人期待的角色。**跳过第 0 格让 presence 永不与卡片抢首席。**
 3. **兜底落最后一格而非锚点**——与 `seatUnplaced` / `reseatLayer` 逐字一致（两处的注释都解释了理由：螺旋是一次行走，最后一格至少是"走过的最远处"；落回锚点会与锚重叠，`local-store.ts:330-343`、`:400-403`）。`exhausted: true` 进 `details.seat`，让探针能断言。
 
@@ -708,12 +708,12 @@ world/baker-street/raindrops.md   center (1125.5,  819.4)  200×168
 `presence` 住在 `canvas.db`，**而 `fs.watch` 看不见 SQLite 内部的变化**（文件本身会变——WAL 会追加 `-wal` 文件——所以 `event-bridge.ts:138` 那条「`filename.includes('.airpworld')` 就 return」**恰好把 `canvas.db-wal` 过滤掉了**）。这条链有三处衔接，缺一不可：
 
 1. **事件是可靠通道**：`move_to` / `set_following` / `carryFollowers` 都落 `history.db` 的 `events`（§5），server 尾部读表（`00 §5.3`）→ `world_event` 帧；
-2. **前端收到 `world_event` 后整层重取**：`useWorld` 现有的 `file_changed` 分支就 `fetchLayer(layerRef.current)`（`useWorld.ts:175-177`），把 `character_moved` / `following_changed` 加进同一分支即可（§6.2）；
+2. **前端收到 `world_event` 后整层重取**：`useWorld` 现有的 `file_changed` 分支就 `fetchLayer(layerRef.current)`（`useWorld.ts` 的 `file_changed` 分支），把 `character_moved` / `following_changed` 加进同一分支即可（§6.2）；
 3. **`/api/layer?layer=` 每次现读 `presence`**（`world.ts:221`），所以重取一定拿到新坐标。
 
 **这就是为什么本文不依赖"`fs.watch` 会看到 canvas.db 变了"。** `12` 的尾部读表（`00 §5.3` 的 `.airpworld` 过滤收紧，`event-bridge.ts:138` 改成只滤 `assets/` 与 `sessions/`）落地后，还有 ~1s 兜底定时器兜着；两条路任一条通，前端就会重取。
 
-> **一个必须登记的隐患**：即使 `12` 收紧了过滤，`canvas.db-wal` 的写入仍然会触发 `file_changed` 帧（`.airpworld/canvas.db-wal` 不再被滤掉），而 `file_changed` 在前端是"整层重取"（`useWorld.ts:175-177`）。**每一次 `move_to` 会因此多触发一次无意义的整层重取**（除了那条 `world_event` 之外）。这不是正确性问题（重取是幂等的），是带宽问题。修法（登记给 `12`）：`file_changed` 的过滤名单加 `.airpworld/canvas.db` 前缀——`canvas.db` 的状态变化自有事件与 `card_position`/`canvas_patched` 帧覆盖。见 §11 冲突 4。
+> **一个必须登记的隐患**：即使 `12` 收紧了过滤，`canvas.db-wal` 的写入仍然会触发 `file_changed` 帧（`.airpworld/canvas.db-wal` 不再被滤掉），而 `file_changed` 在前端是"整层重取"（`useWorld.ts` 的 `file_changed` 分支）。**每一次 `move_to` 会因此多触发一次无意义的整层重取**（除了那条 `world_event` 之外）。这不是正确性问题（重取是幂等的），是带宽问题。修法（登记给 `12`）：`file_changed` 的过滤名单加 `.airpworld/canvas.db` 前缀——`canvas.db` 的状态变化自有事件与 `card_position`/`canvas_patched` 帧覆盖。见 §11 冲突 4。
 
 ### 4.3 写盘原子性：SQLite 事务，不是 `writeFileAtomic`
 
@@ -799,7 +799,7 @@ world/baker-street/raindrops.md   center (1125.5,  819.4)  200×168
 | 字段 | 谁用 |
 |---|---|
 | `event` | `01 §11.2` 的兜底：前端立刻拿到这条事件（**不替代** `world_event` 帧，按 `event.id` 去重，`12 §6.4`） |
-| `character` / `name` / `layer` / `from?` / `x` / `y` / `near?` / `moved` | 探针断言；前端**可选**用于乐观动画（不发 `fetchLayer` 就先把头像挪过去，与 `moveCard` 的乐观合并同例，`useWorld.ts:121-145`） |
+| `character` / `name` / `layer` / `from?` / `x` / `y` / `near?` / `moved` | 探针断言；前端**可选**用于乐观动画（不发 `fetchLayer` 就先把头像挪过去，与 `moveCard` 的乐观合并同例，`useWorld.ts` 的 `moveCard`） |
 | `seat` | **只给探针/诊断**，不进事件、前端不用（`01 §6.3` 第 5 条：明细留返回值） |
 | `following` / `changed` / `created` / `landedFromHome` | 探针断言；`landedFromHome: false` 让前端能提示"这个角色还没有自己的场景，先放在大地图" |
 
@@ -813,7 +813,7 @@ world/baker-street/raindrops.md   center (1125.5,  819.4)  200×168
 
 **世界事件**：`character_moved` / `following_changed` 走 **`world_event`**（`00 §5.3` 的唯一通道），形状见 `12 §6.3`。
 
-**前端必须改的一行**（`useWorld.ts:173-181`）：把新事件 type 加进"整层重取"分支，理由见 §4.2：
+**前端必须改的一行**（`useWorld.ts` 的 WS `onmessage` switch）：把新事件 type 加进"整层重取"分支，理由见 §4.2：
 
 ```ts
 switch (msg.type) {
@@ -842,7 +842,7 @@ const presence = (store.queryCanvas(
 }));
 ```
 
-与前端 `PresenceEntry{characterId, x, y, following}`（`useWorld.ts:25-30`）**逐字对齐**，本文**不改它的形状**（加字段会破坏 `12 §6.3` 的"前端契约"冻结；`name` 前端自己从 `/api/characters` 拿）。**只补一样**：`ORDER BY character_id`，让同一份世界在两次请求间返回**稳定顺序**（渲染层按数组序叠加 halo 时，顺序抖动会造成 z 序闪烁；前端没有 z 字段可用）。
+与前端 `PresenceEntry{characterId, x, y, following}`（`useWorld.ts` 的 `PresenceEntry`）**逐字对齐**，本文**不改它的形状**（加字段会破坏 `12 §6.3` 的"前端契约"冻结；`name` 前端自己从 `/api/characters` 拿）。**只补一样**：`ORDER BY character_id`，让同一份世界在两次请求间返回**稳定顺序**（渲染层按数组序叠加 halo 时，顺序抖动会造成 z 序闪烁；前端没有 z 字段可用）。
 
 ### 6.4 角色 tab 的「跟随」按钮 → 同一个动作函数（任务点名：`doc-20 §12` UI 与 Agent 共用）
 
@@ -1007,7 +1007,7 @@ router.post('/following', async (req, res) => {
 |---|---|---|---|
 | `db/schema.ts:28-37` | `presence` 无 UNIQUE、无索引；`id` PK 无写入点 | §3.4 的新 DDL（`character_id UNIQUE` + 索引） | 无（表空。`grep -rn "INTO presence"` 零命中） |
 | （全仓库） | **`presence` 只有 1 个读点、0 个写点**：`world.ts:221` 的 `SELECT` | 新增 1 个写路径（`upsertPresence`）+ 3 个读点 | `world.ts:221` 保留（只加 `ORDER BY`） |
-| `apps/web/src/state/useWorld.ts:25-30` | `PresenceEntry` 类型已定义；`:37/:91` 已接入 `LayerState.presence` | **不改**（形状已对齐 §6.3） | — |
+| `apps/web/src/state/useWorld.ts` 的 `PresenceEntry` / `LayerState` | `PresenceEntry` 类型已定义；`LayerState.presence` 已接入（`useWorld.ts` 的 `LayerState` 接口） | **不改**（形状已对齐 §6.3） | — |
 | `apps/web/src/App.tsx:30/371-377` + `RightSidebar.tsx:112` | `followingCharacters` 是**浏览器内存里的假状态**，刷新即失、作家看不见、切层不跟 | 改走 `POST /api/following` + 从 presence 派生（§6.4） | 删 `App.tsx:30` 的 state；`RightSidebar` 的 props 改造 |
 | `apps/server/src/routes/world.ts` | **无 `/following` 路由**；`12 §2.4` 定"B1 先不建" | 建（§6.4）。理由：前端那一行接上后它就不再是死路由 | 无 |
 | `packages/shared/src/store/world-store.ts:22-44` | 无 presence 方法 | 加 4 个（§8.2） | 无 |

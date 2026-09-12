@@ -18,6 +18,7 @@
     "typecheck:extensions": "tsc -p extensions/tsconfig.json",
     "check:docs": "node tools/check-hooks-docs.mjs",
     "check:ws": "node tools/check-ws-contract.mjs",
+    "check:bodies": "node tools/check-request-bodies.mjs",
     "pi": "node tools/pi-rp.mjs"
   },
   "devDependencies": {

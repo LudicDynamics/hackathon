@@ -273,10 +273,12 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 ### 6.4 收工自检
 
 ```bash
-pnpm build && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:docs && pnpm probe:prompt && pnpm check:skills
+pnpm build && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:bodies && pnpm check:docs && pnpm probe:prompt && pnpm check:skills
 ```
 
 `pnpm check:ws` 是**跨端 WS 契约门禁**：服务端广播面、前端消费面、`docs/tools/12 §6.2` 契约三集合求 diff。**改了任何 WS 帧（增删帧名 / 改载荷 / 前端 case）必须让它变绿**——它会把"两端各自绿、合起来死"的漂移抓出来（2026-09-12 实际抓到 14 条）。
+
+`pnpm check:bodies` 是**HTTP 请求体门禁**（`tools/check-request-bodies.mjs`）：比对前端 `fetch('<route>', … JSON.stringify({...}))` 的键集合与 `docs/wiring/00 §6` 冻结的请求体。WS 门禁管帧名，这条管 body——`/api/dice` 曾因前端发 `{filePath,rollType,expect}` 而服务端只读 `body.path` 静默 400（2026-09-12 修复）。
 
 改动涉及引擎或 preset 时，额外确认探针里**没有 `not found` / `unknown slot` 警告**。
 

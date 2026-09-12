@@ -317,7 +317,7 @@ details: {
                   → server 尾部读表（00 §5.3）→ WS { type: 'world_event', event }
 ```
 
-**`use_item_on` 不新造帧名。** 现状 `routes/world.ts:411` 广播 `{ type: 'use_item_on', event }`，与 `01 §13` 冲突 6 / `00 §5.3` 的纪律（帧名与事件 type 不共用一个命名空间）冲突。**定案：删掉这个裸帧，全部走 `world_event`。** 理由：它是"世界变化"的一个 copy，不是演出；演出的部分（音效 + 抖动）由前端在 `world_event` 上驱动，前端已经有 `event.detail.handled` 与 `targetKind` 足以选演出（`useWorld.ts:209` 现在把这帧 `ignored`）。
+**`use_item_on` 不新造帧名。** 现状 `routes/world.ts:411` 广播 `{ type: 'use_item_on', event }`，与 `01 §13` 冲突 6 / `00 §5.3` 的纪律（帧名与事件 type 不共用一个命名空间）冲突。**定案：删掉这个裸帧，全部走 `world_event`。** 理由：它是"世界变化"的一个 copy，不是演出；演出的部分（音效 + 抖动）由前端在 `world_event` 上驱动，前端已经有 `event.detail.handled` 与 `targetKind` 足以选演出（`useWorld.ts` 的 WS `onmessage` switch `default` 分支现在把这帧 `ignored`）。
 
 > 这一条要 `12` 落：`routes/world.ts:411` 的 `eventBridge.broadcast({ type: 'use_item_on', event })` 删除；`event-bridge.ts` 不需要 `use_item_on` 特判（`world_event` 尾部读表会自动带出）。前端 `useWorld.ts` 的 switch 加一支 `world_event` → 按 `event.type === 'use_item_on'` 触发 `airp:item-applied` 自定义事件。
 
@@ -515,7 +515,7 @@ router.post('/use-item', async (req, res) => {
 | `apps/web/src/components/canvas/CardRenderer.tsx:97-118` | 微光改用 `useItemTargetOf`（§6.3-1）；`playFoley('unlock')` 移出 drop（§6.3-2） |
 | `apps/web/src/components/canvas/CanvasObject.tsx:95-117` | 同上（sprite 分支：微光 + `handleSpriteDrop` 的无条件抖动） |
 | `apps/web/src/App.tsx:156-178` | body 字段名改 `item`/`target`；失败也显示文本（§6.3-3）；按 `details.presentation` 播 |
-| `apps/web/src/state/useWorld.ts:167-209` | switch 加 `world_event` → `use_item_on` 分支（§6.2） |
+| `apps/web/src/state/useWorld.ts` 的 WS `onmessage` switch | 加 `world_event` → `use_item_on` 分支（§6.2） |
 
 ---
 ## 9. 与现存实现的差异
@@ -531,7 +531,7 @@ router.post('/use-item', async (req, res) => {
 | `packages/shared/src/schemas/events.ts:5` | `WorldEventType` 含 `use_item_on`（9 个旧类型之一） | 整体重写为 15 个（`01 §2.5`）；`use_item_on` 保留（`00 §5.2`） |
 | `apps/web/src/App.tsx:161-169` | 发 `{ itemPath, targetPath, targetType: 'card' }` | 发 `{ item, target }`（§8.5） |
 | `apps/web/src/components/canvas/CardRenderer.tsx:97-118` | 拖起时**所有**卡都加 `puzzle-target-ready`；drop 即播开锁音 | 只给合法目标高亮；音效/抖动由响应驱动（§6.3） |
-| `apps/web/src/state/useWorld.ts:209` | `use_item_on` 帧被 `ignored`（`break` 注释明写） | 消费 `world_event`（§6.2） |
+| `apps/web/src/state/useWorld.ts` 的 WS `onmessage` switch `default` 分支 | `use_item_on` 帧被 `ignored`（`break` 注释明写） | 消费 `world_event`（§6.2） |
 | `docs/doc-06-演出与交互设计.md:265` | 派发名写作 `player_used_item_on_target` | 统一为事件 type `use_item_on`（`doc-21 §4.6` 已退役这类身份×动作名） |
 | `docs/doc-19:165-169` | 派发名写作 `{ type: "player_action", action: "use_item_on" }` | 同上；前端 → 路由 → 动作函数 → 事件表，只有最后一个名字进世界 |
 
@@ -719,7 +719,7 @@ router.post('/use-item', async (req, res) => {
    - **门卡内容当场变化**：`locked:false` 让卡片立即可见地换态（`status.data` 是实体的一部分，读它就是读文件，`doc-20 §2.3`）——**"锁开了"这件事不需要作家的一个字就已经成立**；
    - 内容物幻影落地（`前端改造计划.md:261` 的"内容物幻影落地"）：handler 可以在 `status.data` 里挂一句"里面有什么"，前端演一次落物动画。
    - **判据**：这段演出结束时，评委会认为"我开了一把锁"。**这是 doc-19 §3.1 真正的验收点。**
-2. **校准"下一次输入"是什么 —— 这里有一处诚实的限制。** 当前代码里 `enterLayer`（`useWorld.ts:107-119`）**只重新取层，不发 writer prompt**；能真正起一轮的只有 `WriterBar` 的输入（`App.tsx:354-356`）与 `choose` 的选项点击（`App.tsx:149-154` 发 `writer_prompt`）。所以**不能声称"进门这个动作本身就是下一轮输入"**——按 `doc-21 §5.5`，进门（`layer_entered`）与拖拽一样"永远不触发一轮"。
+2. **校准"下一次输入"是什么 —— 这里有一处诚实的限制。** 当前代码里 `enterLayer`（`useWorld.ts` 的 `enterLayer`）**只重新取层，不发 writer prompt**；能真正起一轮的只有 `WriterBar` 的输入（`App.tsx:354-356`）与 `choose` 的选项点击（`App.tsx:149-154` 发 `writer_prompt`）。所以**不能声称"进门这个动作本身就是下一轮输入"**——按 `doc-21 §5.5`，进门（`layer_entered`）与拖拽一样"永远不触发一轮"。
    - **因此这条补偿的正确形式是：** 在演示动线上，紧接开锁的下一步是**玩家的一次发言或一次选择**（"我推门进去" / 点门卡上的选项）——那是**玩家本来就会做的动作**，也是 C 方案里注入段真正会到达作家的时刻。
    - **代价必须明说：** 若玩家开锁后**什么输入也不做**，作家不会主动开口（这正是 `doc-21 §5.5` 要的）。**这不是 bug，是"不打断"的另一面。**
    - **可选的进一步加强（不改架构）**：`layer_entered` 的 C 入口（`enterLayer`）在**首次**进入某层时可以顺带发一条 `writer_prompt`——但那是**玩家显式动作触发的注入**，属于 B2 的注入时机问题（`doc-21:250`），**不在本文范围**，也不该由 `use_item_on` 提议。

@@ -73,6 +73,27 @@ export interface UseWorldApi {
 
 const INITIAL_LAYER = 'map';
 
+/** 去重窗口（docs/tools/12 §6.4）：上限 200、FIFO 淘汰。 */
+const SEEN_EVENT_LIMIT = 200;
+
+/** world_event 帧载荷（docs/tools/12 §6.3 / packages/shared/src/schemas/events.ts 逐字）。 */
+interface WorldEventFrame {
+  type: 'world_event';
+  event: {
+    seq: number;
+    id: string;
+    projectId: string;
+    type: string;
+    actor: { type: string; id?: string };
+    layer: string | null;
+    subject: string | null;
+    turn: string | null;
+    detail: unknown;
+    createdAt: string;
+  };
+  timestamp: string;
+}
+
 export function useWorld(): UseWorldApi {
   const [state, setState] = useState<LayerState | null>(null);
   const [layer, setLayer] = useState<string>(INITIAL_LAYER);
@@ -82,6 +103,9 @@ export function useWorld(): UseWorldApi {
   const stateRef = useRef<LayerState | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reqSeqRef = useRef(0);
+  // world_event 去重（docs/tools/12 §6.4）：集合与 FIFO 队列同进同出。
+  const seenEventIdsRef = useRef<Set<string>>(new Set());
+  const seenEventOrderRef = useRef<string[]>([]);
 
   // Footprint channel (docs/footprint/03). The busy count is fed by the WS
   // `tool_start`/`tool_end` pair for the writer; the scheduler reads it live.
@@ -182,6 +206,32 @@ export function useWorld(): UseWorldApi {
     fpRef.current?.flushNow();
   }, []);
 
+  /** world_event 去重：首次见到返回 true 并登记，重复返回 false。
+   *  纪律「谁消费、谁登记」——本批只有 world_event 一处调用者（02 §3.3.1-(b)）。 */
+  const noteWorldEvent = useCallback((id: string): boolean => {
+    const seen = seenEventIdsRef.current;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    const order = seenEventOrderRef.current;
+    order.push(id);
+    if (order.length > SEEN_EVENT_LIMIT) {
+      const oldest = order.shift();
+      if (oldest !== undefined) seen.delete(oldest);
+    }
+    return true;
+  }, []);
+
+  /** 命中转发集合才派发 airp:world-event（00 §5 / docs/tools/12 §6.6）。 */
+  const forwardWorldEvent = useCallback((msg: WorldEventFrame): void => {
+    if (
+      ['entity_created', 'entity_edited', 'entity_deleted', 'entity_moved'].includes(
+        msg.event?.type
+      )
+    ) {
+      window.dispatchEvent(new CustomEvent('airp:world-event', { detail: msg }));
+    }
+  }, []);
+
   // The reporter is created ONCE and lives off refs: it needs the live layer and
   // the live items, not the ones captured at mount (03 §8.2).
   useEffect(() => {
@@ -265,19 +315,23 @@ export function useWorld(): UseWorldApi {
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        if (
-          msg.type === 'file_changed' ||
-          msg.type === 'item_moved' ||
-          msg.type === 'god_action'
-        ) {
+        if (msg.type === 'file_changed' || msg.type === 'card_position') {
           // App listens for this to keep its backpack/character views in sync.
           window.dispatchEvent(new CustomEvent('airp:world-event', { detail: msg }));
         }
         switch (msg.type) {
           case 'file_changed':
-          case 'item_moved':
-          case 'god_action':
             void fetchLayer(layerRef.current);
+            break;
+          case 'world_event':
+            // 世界事件（docs/tools/12 §6.3）：先判重，再转发，最后整层重取。
+            {
+              const ev = msg.event;
+              if (!ev || typeof ev.id !== 'string') break; // 畸形帧不污染去重集合
+              if (!noteWorldEvent(ev.id)) break; // 同一行的重复副本到此为止
+              forwardWorldEvent(msg);
+              void fetchLayer(layerRef.current);
+            }
             break;
           case 'world_frozen':
             setState((s) => (s ? { ...s, worldFrozen: true } : s));
@@ -313,8 +367,22 @@ export function useWorld(): UseWorldApi {
               fpRef.current?.notify();
             }
             break;
+          case 'character_delta':
+          case 'character_message':
+          case 'character_idle':
+            // 演出帧（docs/tools/12 §6.2）：无条件转给遮罩，不进 world_event 的
+            // 去重/重取路径；归属过滤在 App。
+            window.dispatchEvent(new CustomEvent('airp:character-frame', { detail: msg }));
+            break;
+          case 'error':
+            // 只接角色车道的报错：writer 错误无 characterId，绝不灌进角色遮罩。
+            if (msg.source === 'character' && typeof msg.characterId === 'string') {
+              window.dispatchEvent(new CustomEvent('airp:character-frame', { detail: msg }));
+            }
+            break;
           default:
-            break; // agent_event / roll_resolved / use_item_on ignored here
+            // agent_event / roll_resolved 等仍在此忽略（docs/tools/12 §6.2）。
+            break;
         }
       } catch (err) {
         console.error('WS parse error:', err);
@@ -322,7 +390,7 @@ export function useWorld(): UseWorldApi {
     };
 
     return () => ws.close();
-  }, [fetchLayer]);
+  }, [fetchLayer, noteWorldEvent, forwardWorldEvent]);
 
   // Initial load of the default layer.
   useEffect(() => {

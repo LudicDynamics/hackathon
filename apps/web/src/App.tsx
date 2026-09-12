@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Compass, Clock, Layers, ArrowLeft } from 'lucide-react';
 import { Canvas } from './components/canvas/Canvas.js';
 import { RightSidebar } from './components/sidebar/RightSidebar.js';
-import { CharacterModal } from './components/overlay/CharacterModal.js';
+import { CharacterModal, type CharacterFrame } from './components/overlay/CharacterModal.js';
 import { GodModeToolbar } from './components/god/GodModeToolbar.js';
 import { MuteButton } from './components/chrome/MuteButton.js';
 import { Minimap } from './components/chrome/Minimap.js';
@@ -45,6 +45,9 @@ export function App() {
 
   // Active Character Modal (Galgame Overlay)
   const [activeModalCharId, setActiveModalCharId] = useState<string | null>(null);
+
+  // 角色演出帧（A3）：useWorld 转发的原始帧；按 activeModalCharId 路由后再下推给遮罩。
+  const [activeModalFrame, setActiveModalFrame] = useState<CharacterFrame | null>(null);
 
   // World Studio Creator Radial Menu
   const [radialState, setRadialState] = useState<{
@@ -119,6 +122,7 @@ export function App() {
   //     passing a guess off as measured (M-8).
   const openCharacterModal = (charId: string) => {
     camera.save('modal');
+    setActiveModalFrame(null); // 清掉上一轮的残留，避免新遮罩先演旧台词
     sendMessage({ type: 'character_start', characterId: charId });
     setActiveModalCharId(charId);
   };
@@ -150,6 +154,28 @@ export function App() {
     window.addEventListener('airp:world-event', onWorldEvent);
     return () => window.removeEventListener('airp:world-event', onWorldEvent);
   }, []);
+
+  // Character performance frames (A3): route by the open modal's character id.
+  // Frames without `characterId` (pre-A1 senders) fall back to the open modal;
+  // with no modal open there is nothing to attribute them to, so they are dropped.
+  useEffect(() => {
+    const onCharacterFrame = (e: Event) => {
+      const msg = (e as CustomEvent).detail as CharacterFrame | undefined;
+      if (!msg || typeof msg.type !== 'string') return;
+      if (msg.characterId !== undefined) {
+        if (msg.characterId !== activeModalCharId) return;
+      } else if (activeModalCharId === null) {
+        return;
+      }
+      // Fresh object identity per frame so the modal's [incoming] effect always fires.
+      setActiveModalFrame({
+        ...msg,
+        characterId: msg.characterId ?? activeModalCharId ?? undefined,
+      });
+    };
+    window.addEventListener('airp:character-frame', onCharacterFrame);
+    return () => window.removeEventListener('airp:character-frame', onCharacterFrame);
+  }, [activeModalCharId]);
 
   const fetchManifest = async () => {
     try {
@@ -573,6 +599,7 @@ export function App() {
           characterId={activeChar.id}
           avatar={activeChar.avatar}
           bio={activeChar.bio}
+          incoming={activeModalFrame}
           locale={locale}
           onClose={closeCharacterModal}
           onSendMessage={(msg) => {

@@ -11,8 +11,8 @@ import { test } from 'node:test';
 import { mapEngineEvent, messageText } from '../dist/engine/event-bridge.js';
 
 /** Strip the broadcast timestamp so a frame compares structurally. */
-function frames(source, event, args = new Map()) {
-  return mapEngineEvent(source, event, args).map(({ timestamp: _t, ...rest }) => rest);
+function frames(source, event, args = new Map(), characterId = undefined) {
+  return mapEngineEvent(source, event, args, characterId).map(({ timestamp: _t, ...rest }) => rest);
 }
 
 test('chalk_landed reads details.path (the frozen shape) and result.path (legacy)', () => {
@@ -197,4 +197,32 @@ test('message_update / message_end keep their existing mapping', () => {
   }, new Map());
   assert.deepEqual(end, [{ type: 'writer_message', source: 'writer', text: 'done' }]);
   assert.equal(messageText({ content: [{ type: 'thinking', text: 'x' }, { type: 'text', text: 'y' }] }), 'y');
+});
+
+test('A1: character frames carry characterId; writer frames do not', () => {
+  const delta = {
+    type: 'message_update',
+    usage: { input: 0, output: 0 },
+    assistantMessageEvent: { type: 'text_delta', delta: 'hi' },
+  };
+  const idle = { type: 'agent_settled' };
+
+  // Character source + id: every produced frame is stamped.
+  assert.deepEqual(frames('character', delta, new Map(), 'nanami'), [
+    { type: 'character_delta', source: 'character', delta: 'hi', characterId: 'nanami' },
+  ]);
+  assert.deepEqual(frames('character', idle, new Map(), 'nanami'), [
+    { type: 'character_idle', source: 'character', characterId: 'nanami' },
+  ]);
+
+  // Writer source: no id is threaded, so no field is added.
+  assert.deepEqual(frames('writer', { ...delta }, new Map()), [
+    { type: 'writer_delta', source: 'writer', delta: 'hi' },
+  ]);
+
+  // Character source WITHOUT an id (legacy / empty clientKey): field omitted,
+  // not present as '' or null — the frontend's `??` fallback depends on it.
+  assert.deepEqual(frames('character', { ...delta }, new Map()), [
+    { type: 'character_delta', source: 'character', delta: 'hi' },
+  ]);
 });

@@ -16,7 +16,7 @@
 > - `docs/tools/01-动作内核与事件落账.md` §2.2 `types.ts`、§2.4 `errors.ts`、§3.1 五步骨架、§4.1「不属于 A/B/C 名单的动作」、§5 方法清单（第 12/13 行）、§3.9 `resolveLayer`。
 > - `docs/后端实现计划.md` §4 工具表（`plan:270` `link` / `plan:271` `arrange`）与 T0.2 事件桥（`plan:213`：`canvas_patched`，**只刷线/位，不整层重取**）。
 > - `AGENTS.md` §7.5（画布卡片的尺寸与旋转契约）。
-> - 源码：`packages/shared/src/db/schema.ts:8-26`、`store/local-store.ts:276-470`、`store/layers.ts:126-135`、`routes/world.ts:184-217/311-341`、`apps/web/src/components/canvas/LinkLayer.tsx`、`apps/web/src/state/useWorld.ts:34-36/190-207`、`apps/server/src/engine/event-bridge.ts:87-89`。
+> - 源码：`packages/shared/src/db/schema.ts:8-26`、`store/local-store.ts:276-470`、`store/layers.ts:126-135`、`routes/world.ts:184-217/311-341`、`apps/web/src/components/canvas/LinkLayer.tsx`、`apps/web/src/state/useWorld.ts`（`LayerLink` / `case 'card_position'`）、`apps/server/src/engine/event-bridge.ts:87-89`。
 
 ---
 
@@ -494,23 +494,23 @@ if (event.toolName === 'link' || event.toolName === 'arrange') {
 
 ### 6.3 前端拿到 `canvas_patched` 后演什么（T0.2：只刷线/位，不整层重取）
 
-现状：`useWorld.ts:178-183` 的 `switch` **没有** `canvas_patched` 分支，落到 `default`（`useWorld.ts:208`）被忽略；`LinkLayer` 的 `links` prop 只在 `fetchLayer` 时变（`Canvas.tsx:121-125` 的注释逐字说"`links` array reference only changes on fetchLayer-driven refreshes"）。**本层的帧因此是新接线**：
+现状：`useWorld.ts` 的 WS `switch` **没有** `canvas_patched` 分支，落到 `default` 被忽略；`LinkLayer` 的 `links` prop 只在 `fetchLayer` 时变（`Canvas.tsx:121-125` 的注释逐字说"`links` array reference only changes on fetchLayer-driven refreshes"）。**本层的帧因此是新接线**：
 
 | 帧 | 前端动作 | 不做什么 |
 |---|---|---|
 | `canvas_patched`（`kind: 'links'`） | 按 `layer` 比对：是本层 → 用 `frame.links` **增量合并**进 `worldState.links`（按 `id` upsert / 用 `action: 'deleted'` 删），触发 `LinkLayer` 重算（`useEffect [links]`） | **不** `fetchLayer`——那会重取整页（正文 + 排座 + presence），正是 T0.2 要省的 |
-| `canvas_patched`（`kind: 'cards'`） | 按 `path` 合并 `cards` 进 `worldState.items` 的 `x`/`y`/`z`（与 `card_position` 的合流逻辑同一份，`useWorld.ts:196-205`） | 同上；且**不**重新排座（坐标是权威，不是提案） |
+| `canvas_patched`（`kind: 'cards'`） | 按 `path` 合并 `cards` 进 `worldState.items` 的 `x`/`y`/`z`（与 `case 'card_position'` 的合流逻辑同一份，`useWorld.ts` 的 `card_position` 分支） | 同上；且**不**重新排座（坐标是权威，不是提案） |
 | `canvas_patched` 且 `layer !== 当前层` | 忽略（帧带层就是为了这个：作家在别的层摆位不该让当前页抖一下） | — |
 
 **`card_position` 与 `canvas_patched` 的分工**（两者都会在玩家拖卡时到达）：
 
-- 玩家拖卡 → `POST /api/card/position`（`routes/world.ts:311`）→ 路由照旧 `broadcast({type:'card_position', path, x, y})`（`routes/world.ts:328`）。**这条保留**：它是逐卡的、轻量的、前端已有乐观合并（`useWorld.ts:121-145`）。
+- 玩家拖卡 → `POST /api/card/position`（`routes/world.ts:311`）→ 路由照旧 `broadcast({type:'card_position', path, x, y})`（`routes/world.ts:328`）。**这条保留**：它是逐卡的、轻量的、前端已有乐观合并（`useWorld.ts` 的 `moveCard`）。
 - agent 调 `arrange` → 只有 `canvas_patched`（没有 `card_position`，因为没经过拖拽路由）。
 - **前端按 `(path, x, y)` 幂等合并**：两条帧到同一张卡时结果相同，不需要去重（值相等，setState 出的引用变化用浅比较兜住即可）。若实现时发现重复渲染，用 `x`/`y` 相等的早退守卫，而不是给帧加 id。
 
 ### 6.4 别忘了 `airp:world-event` 的自定义事件
 
-`useWorld.ts:170-177` 会把 `file_changed` / `item_moved` / `god_action` 转发成 `window` 上的 `airp:world-event`（背包/角色视图监听它）。**`canvas_patched` 不转发**：画布状态变化不影响背包清单（背包是 `player/` 目录扫描，与 canvas.db 无关），多转发一次只会让背包视图白刷。
+`useWorld.ts` 的 WS `onmessage` 会把 `file_changed` / `card_position` 转发成 `window` 上的 `airp:world-event`（背包/角色视图监听它）。**`canvas_patched` 不转发**：画布状态变化不影响背包清单（背包是 `player/` 目录扫描，与 canvas.db 无关），多转发一次只会让背包视图白刷。
 
 ---
 
@@ -576,8 +576,8 @@ if (event.toolName === 'link' || event.toolName === 'arrange') {
 | `apps/server/src/routes/world.ts:184-217` | `GET /api/layer` | 线的查询改 `SELECT id, from_id, to_id, style, color, directed, z_index, label FROM links WHERE layer = ? ORDER BY z_index, id`；返回体加 `color` / `directed` / `z`（前端要画） |
 | `apps/server/src/routes/world.ts:311-341` | `POST /api/card/position` | 改调 `createActionService(...).arrangeCards({ place: { path, x, y } })` + `ActionError.toHttp()`（归 12，见与 `b1-design-12` 的约定）；广播 `card_position` 保留 |
 | `apps/server/src/engine/event-bridge.ts:87-89` | `mapEngineEvent` 的 `tool_execution_end` 分支 | 把 `event.result.details` 的 `kind`/`action`/`layer`/`links`/`cards` 塞进 `canvas_patched` 帧（归 12，§6.2） |
-| `apps/web/src/state/useWorld.ts:178-210` | WS `switch` | 加 `case 'canvas_patched'`：按 §6.3 增量合并 `links` / `items` |
-| `apps/web/src/state/useWorld.ts:17-23` | `LayerLink` | 加 `color: string \| null` / `directed: boolean` / `z: number` |
+| `apps/web/src/state/useWorld.ts` 的 WS `onmessage` switch | 加 `case 'canvas_patched'`：按 §6.3 增量合并 `links` / `items` |
+| `apps/web/src/state/useWorld.ts` 的 `LayerLink` | 加 `color: string \| null` / `directed: boolean` / `z: number` |
 | `apps/web/src/components/canvas/LinkLayer.tsx:37-41` | `LINK_STROKES` | 从"样式 → CSS 变量"的 3 项表扩成 6 个基元 + `color` 覆盖；`stroke-width` 按 `style`（`bold`/`road` = 3.2）；`directed` 加 `marker-end`。**`hash(link.id)` 的种子逻辑不动**（§3.1 第 3 步的 id 设计就是为它） |
 | `apps/web/src/components/canvas/LinkLayer.tsx:197` | `buildPaths` | `if (link.style === 'dashed')` 保留；`hand`/`thread`/`road` 的路径生成分支加在 `roadPath` 旁（`thread` 走"图钉 + 重力下垂"，doc-04 §4） |
 
@@ -606,10 +606,10 @@ agent 进程：  pi tool `link`      ┐
 |---|---|---|---|
 | `db/schema.ts:19-26` | `links` 六列（`id/layer/from_id/to_id/style/label`） | 十列（加 `color/directed/z_index/created_at`；`style` 收窄为 6 个基元） | 无真实数据（模板 `templates/holmes-world/.airpworld/canvas.db` 的 `links` 实测 0 行），`DROP` 重建 |
 | `store/world-store.ts` | 无任何 link 方法；`placeCard` 冻结签名带 `w?`/`h?` | 加 §4.2 的六个方法；`placeCard` 的 box 收窄为 `x/y/z` | 无调用点（方法不存在） |
-| `routes/world.ts:210-217` | 线的查询只读 `id/from_id/to_id/style/label`，无 `ORDER BY` | 加 `color/directed/z_index` + `ORDER BY z_index, id` | 前端 `LayerLink`（`useWorld.ts:17`）与 `LinkLayer.LINK_STROKES`（`LinkLayer.tsx:37`）跟着扩 |
-| `routes/world.ts:328` | `card_position` 帧（逐卡） | **保留**；`arrange` 另走 `canvas_patched` | 前端已有 `case 'card_position'`（`useWorld.ts:190`）不动 |
+| `routes/world.ts:210-217` | 线的查询只读 `id/from_id/to_id/style/label`，无 `ORDER BY` | 加 `color/directed/z_index` + `ORDER BY z_index, id` | 前端 `LayerLink`（`useWorld.ts` 的 `LayerLink`）与 `LinkLayer.LINK_STROKES`（`LinkLayer.tsx:37`）跟着扩 |
+| `routes/world.ts:328` | `card_position` 帧（逐卡） | **保留**；`arrange` 另走 `canvas_patched` | 前端已有 `case 'card_position'` 分支（`useWorld.ts`）不动 |
 | `event-bridge.ts:87-89` | `link`/`arrange` → `canvas_patched`（**只带 `source`，工具还不存在**） | 帧加 `layer/kind/links/cards`（§6.2） | 无（工具此前不存在，帧没人消费） |
-| `useWorld.ts:178-210` | 无 `canvas_patched` 分支，落到 `default` 忽略 | 加增量合并分支（§6.3） | — |
+| `useWorld.ts` 的 WS `switch` | 无 `canvas_patched` 分支，落到 `default` 忽略 | 加增量合并分支（§6.3） | — |
 | `local-store.ts:417-430` | `saveCardPosition` 自己写 SQL + 用 `deriveLayer`（把 `player/**` 静默派 `'map'`） | 内部改调 `placeCard`（保持对外行为） | 拖拽路由 `routes/world.ts:326` |
 | `local-store.ts:432-441` | `renameCardPosition` 迁移端点，**不迁 `links.layer`**；失败只 `console.warn` | 迁 `links.layer`，同一事务；失败抛错 | `routes/world.ts:298`（04 的 `moveEntity` 第 5 步） |
 | `Canvas.tsx:121-125` | 注释明写 "`links` reference only changes on fetchLayer-driven refreshes" | 该注释在 §6.3 落地后**过时**，要改（帧可直接改 `links`） | — |
@@ -648,7 +648,7 @@ agent 进程：  pi tool `link`      ┐
 
 1. **线真的画出来了**：`templates/holmes-world` 起 server + agent；作家调 `link({op:'create', from:'world/crime-scene/README.md', to:'world/baker-street/README.md', style:'road', label:'步行 10 分钟'})` → **不刷新整页**下 map 层出现一条粗线带标签（验 T0.2 的"只刷线/位"）。
 2. **线不在别的层出现**：切到 `world/baker-street` → 那条线消失（`WHERE layer = ?` 生效）。
-3. **玩家的手 vs 作家的手**：玩家拖一张卡 → 仍是 `card_position` 逐卡帧（乐观合并先动，`useWorld.ts:121`）；作家 `arrange` 同层另一张卡 → 该卡**独自**跳位，其余不动（验 `canvas_patched` 只合涉及的卡）。
+3. **玩家的手 vs 作家的手**：玩家拖一张卡 → 仍是 `card_position` 逐卡帧（乐观合并先动，`useWorld.ts` 的 `moveCard`）；作家 `arrange` 同层另一张卡 → 该卡**独自**跳位，其余不动（验 `canvas_patched` 只合涉及的卡）。
 4. **`w/h` 的拒绝可见**：`arrange({path, x, y, w: 500})` → 工具返回 `isError` + `unsupported` 文案，**且 `cards.w` 未变**（对比 §10.2 那条行级断言）。这是 §11 冲突 1 的现场证据。
 5. **幂等**：同一 `link` 调两次 → `links` 表 1 行；前端线**不闪**（`LinkLayer` 的 seed 相同）。
 6. **悬空线不炸**：把线的 `to` 端点文件 `move` 进玩家背包（跨出画布层）→ 前端线消失、无报错、`links` 行还在；搬回来 → 线自动复现。

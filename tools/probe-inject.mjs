@@ -81,6 +81,16 @@ function makeTmpWorld() {
 async function seedWorld(tmp, { viewpoint }) {
   const store = new LocalWorldStore(tmp);
   try {
+    // Seat this layer's own cards, exactly as the browser's first `/api/layer`
+    // read does (`seatUnplaced`). Without this the viewpoint section has no
+    // anchor to measure against and degrades to `in view`, so A6's direction
+    // assertion would depend on the machine-local `cards` rows of the template
+    // — i.e. the probe would pass on a used checkout and fail on a fresh one.
+    // Seating here keeps the gate self-contained.
+    const layerFiles = (await store.listFiles())
+      .filter((p) => p.startsWith(`${LAYER}/`) && p.endsWith('.md'))
+      .map((p) => ({ path: p }));
+    await store.seatUnplaced(LAYER, layerFiles);
     if (viewpoint) {
       // The probe plays the browser here: `focus` is the ENCODED geometry (05
       // §2.5) — a real filename is NOT in this row, it comes from the store.

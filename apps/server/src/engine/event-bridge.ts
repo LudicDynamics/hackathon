@@ -46,10 +46,19 @@ export function messageText(message: unknown): string {
 export function mapEngineEvent(
   source: EventSource,
   event: JsonAgentSessionEvent,
-  toolArgs: Map<string, unknown>
+  toolArgs: Map<string, unknown>,
+  characterId?: string
 ): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
-  const push = (msg: Record<string, unknown>) => out.push({ ...msg, timestamp: new Date().toISOString() });
+  // A1: stamp every frame this call produces in ONE place. `characterId` is
+  // omitted (not null/empty) for writer frames so the frontend's nullish
+  // fallback (`detail.characterId ?? openOverlay`) keeps working.
+  const push = (msg: Record<string, unknown>) =>
+    out.push({
+      ...msg,
+      ...(characterId === undefined ? {} : { characterId }),
+      timestamp: new Date().toISOString(),
+    });
 
   switch (event.type) {
     case 'message_update': {
@@ -242,8 +251,8 @@ export class EventBridge {
   }
 
   /** Fan an engine event out to every WS client as the mapped AIRP frames. */
-  emitEngine(source: EventSource, event: JsonAgentSessionEvent): void {
-    for (const message of mapEngineEvent(source, event, this.toolArgsByCallId)) {
+  emitEngine(source: EventSource, event: JsonAgentSessionEvent, characterId?: string): void {
+    for (const message of mapEngineEvent(source, event, this.toolArgsByCallId, characterId)) {
       this.broadcast(message);
     }
   }

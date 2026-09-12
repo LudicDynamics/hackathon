@@ -556,9 +556,9 @@ async seatNear(layerId: string, file: SeatFile, anchorPath: string): Promise<Car
 
 ### 6.2 `item_moved` 演出帧：现状与去处
 
-现状 `routes/world.ts:303` 广播 `{ type: 'item_moved', result }`——**帧名与事件 type 撞了同一个命名空间**（与 `00 §5.3` 冻结的 `roll_resolved` → `dice_result` 是同一类问题，`01 §13` 冲突 6 已登记）。`event-bridge.ts` 里**没有** `item_moved` 的映射（前端只靠 `file_changed` 整层重取，`useWorld.ts:170-183`）。
+现状 `routes/world.ts:303` 广播 `{ type: 'item_moved', result }`——**帧名与事件 type 撞了同一个命名空间**（与 `00 §5.3` 冻结的 `roll_resolved` → `dice_result` 是同一类问题，`01 §13` 冲突 6 已登记）。`event-bridge.ts` 里**没有** `item_moved` 的映射（前端只靠 `file_changed` 整层重取，见 `useWorld.ts` 的 WS `onmessage` switch）。
 
-**冻结处理（与 `01 §11.3` 一致）**：演出帧与事件 type 不共用一个命名空间。`item_moved` 帧**删除**——`entity_moved` 事件统一走 `{ type: 'world_event', event }`，前端靠 `event.type` 分派演出（`01 §11.4`）。前端已有的 `item_moved` 监听（`useWorld.ts:172/180`）改成监听 `world_event` 且 `event.type === 'entity_moved'`。**`delete` 无演出帧**：删除是"东西不见了"，符合 `doc-21 §4.1` 的人话，靠 `world_event` + 该层重取即可；不给它造帧。（归 12 执行。）
+**冻结处理（与 `01 §11.3` 一致）**：演出帧与事件 type 不共用一个命名空间。`item_moved` 帧**删除**——`entity_moved` 事件统一走 `{ type: 'world_event', event }`，前端靠 `event.type` 分派演出（`01 §11.4`）。前端已有的 `item_moved` 监听（`useWorld.ts` 的 WS `onmessage` switch）改成监听 `world_event` 且 `event.type === 'entity_moved'`。**`delete` 无演出帧**：删除是"东西不见了"，符合 `doc-21 §4.1` 的人话，靠 `world_event` + 该层重取即可；不给它造帧。（归 12 执行。）
 
 ### 6.3 前端演什么
 
@@ -667,7 +667,7 @@ async seatNear(layerId: string, file: SeatFile, anchorPath: string): Promise<Car
 | `local-store.ts:432-441` `renameCardPosition` | `deriveLayer(to)` 对非层路径返回 `'map'`；`links.layer` 不跟改；catch 吞错 | §3.8.2 | `routes/world.ts:299` |
 | `local-store.ts:147-148` | `oldName = basename(from)` / `newName = basename(to)` 只用于事件 | 删掉（`detail` 用 `name`，不用改名前后 basename） | — |
 | `schemas/events.ts:25-32` `MoveResult` | `ok: boolean`；`dangling: {file,target}[]` | `ok: true`；`dangling: DanglingRef[]`；加 `name` | `world.ts:296-304`（12） |
-| `routes/world.ts:303` | `broadcast({ type: 'item_moved', result })` | 事件走 `{ type: 'world_event', event }`；帧名 `item_moved` 删除（§6.2） | `useWorld.ts:172/180` 前端监听改 `world_event`（12） |
+| `routes/world.ts:303` | `broadcast({ type: 'item_moved', result })` | 事件走 `{ type: 'world_event', event }`；帧名 `item_moved` 删除（§6.2） | `useWorld.ts` 的 WS `onmessage` switch 前端监听改 `world_event`（12） |
 | `routes/world.ts:438-440` | `/god-action` 的 `delete` 直接 `store.deleteFile` | 走 `svc.removeEntity`（引用扫描 + 卡片级联 + 落账） | 前端 `god-action` 调用不变（12） |
 | `routes/world.ts:297-302` | `/move` 手调 `renameCardPosition` 并 warn 吞错 | 由 `moveEntity` 内部编排并抛错（§3.4） | 12 删掉这段 |
 | `apps/web/src/App.tsx:181-196` | `handleDropItemToScene` 只发 `{from,to}`，不传 `near` | 若落点在某个卡片旁，前端应传 `near`（`doc-06 §5.1` 的"落点碰撞"语义） | 归前端计划 |
