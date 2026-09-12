@@ -1,0 +1,9 @@
+six-world-content:
+  name: playable-world-contracts
+  apply: "tools/experiences/*.mjs"
+  level: error
+  desc:
+    - "六个包都有零级导入、主视图、下一步行动，且不是预先写好的生成结果"
+    - "日语普通路径和提示词使用日语，英语包使用英语；保留协议标识符"
+    - "骰子必须先披露条件、概率、分级结果和拒绝选项，不自动投掷"
+    - "生成先完成 README、两个物件、Chalk 和回程，再补图；回访只修补缺件"
