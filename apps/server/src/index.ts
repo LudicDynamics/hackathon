@@ -95,6 +95,10 @@ wss.on('connection', (ws: WebSocket) => {
   ws.on('message', async (raw: string) => {
     try {
       const data = JSON.parse(raw.toString());
+      if (lifecycle.isModelSwitching() && ['writer_prompt', 'character_start', 'character_prompt'].includes(data.type)) {
+        ws.send(JSON.stringify({ type: 'error', source: data.type.startsWith('character') ? 'character' : 'writer', characterId: data.characterId, message: 'Models are switching. Please try again shortly.' }));
+        return;
+      }
 
       if (data.type === 'writer_prompt') {
         const writer = lifecycle.getWriter();

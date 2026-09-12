@@ -14,6 +14,12 @@ test('reader supports keyboard and ignores drag; save picker closes before loadi
   const object = await fs.readFile('apps/web/src/components/canvas/CanvasObject.tsx', 'utf8');
   assert.match(object, /event\.key === 'Enter'/);
   assert.match(object, /Math\.hypot/);
+  assert.match(object, /BagItemDialog inline/);
+  assert.doesNotMatch(object, /createPortal/);
+  const reader = await fs.readFile('apps/web/src/components/BagItemDialog.tsx', 'utf8');
+  assert.doesNotMatch(reader, /aria-modal="true"|cabin-reading/);
+  const shelf = await fs.readFile('apps/web/src/components/WorldShelf.tsx', 'utf8');
+  assert.doesNotMatch(shelf, /prototype-dialog-backdrop|aria-modal="true"/);
   const app = await fs.readFile('apps/web/src/App.tsx', 'utf8');
   const load = app.slice(app.indexOf('const loadWorld ='), app.indexOf('const submitWriter ='));
   assert.ok(load.indexOf('setWorldPickerOpen(false)') < load.indexOf('await airpGateway.loadWorld'));

@@ -1,5 +1,4 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
 import { BagItemDialog } from '../BagItemDialog.js';
 import { CardRenderer } from './CardRenderer.js';
 import { highlightLinks } from './LinkLayer.js';
@@ -140,20 +139,20 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
         if (Math.hypot(event.clientX - pointerStart.current.x, event.clientY - pointerStart.current.y) > 6) return;
         setReading(value => !value);
       }}
-      onKeyDown={event => { if (readable && event.target === event.currentTarget && event.key === 'Enter') { event.preventDefault(); setReading(value => !value); } }}
+      onKeyDown={event => { if (readable && event.target === event.currentTarget && event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); setReading(value => !value); } }}
       onPointerEnter={event => { setHovered(true); highlight(event.currentTarget, true); }}
       onPointerLeave={event => { setHovered(false); highlight(event.currentTarget, false); }}
       onFocus={event => { setFocused(true); highlight(event.currentTarget, true); }}
       onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) { setFocused(false); highlight(event.currentTarget, false); } }}
-      className="object ink-form"
+      className={`object ink-form${reading ? ' object--reading' : ''}`}
       style={
         {
           left: item.x,
           top: item.y,
-          width: item.w,
+          width: reading ? Math.max(item.w, 500) : item.w,
           // No height: the shell hugs its card, so the painted box IS the real
           // box (chalk runs far past form.h and used to overflow the shell).
-          zIndex: liftFor(item.path, item.z),
+          zIndex: reading ? 100 : liftFor(item.path, item.z),
           // Rotation belongs to the shell alone. Narration (chalk) and the
           // presence figure stay level; every paper form keeps its hand tilt.
           ['--target-rot' as any]:
@@ -161,7 +160,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
         } as React.CSSProperties
       }
     >
-        {kind === 'sprite' ? (
+        {reading ? <BagItemDialog inline item={item} onClose={() => setReading(false)} /> : kind === 'sprite' ? (
           <div
             onClick={() => {
               const charId = item.frontmatter?.characterId || item.frontmatter?.id || item.filename.replace('.md', '');
@@ -192,8 +191,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             onTakeItem={onTakeItem}
           />
         )}
-        <EntityInteractions item={item} active={hovered || focused} onChoice={onEntityAction} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate} onOpenCharacter={onOpenCharacterModal} />
-        {reading && createPortal(<BagItemDialog item={item} onClose={() => setReading(false)} />, document.body)}
+        {!reading && <EntityInteractions item={item} active={hovered || focused} onChoice={onEntityAction} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate} onOpenCharacter={onOpenCharacterModal} />}
     </div>
   );
 };

@@ -222,6 +222,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     const el = camera.viewportRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      if ((e.target as HTMLElement).closest('[data-reading]')) return;
       e.preventDefault();
       const rect = el.getBoundingClientRect();
       const sx = e.clientX - rect.left;

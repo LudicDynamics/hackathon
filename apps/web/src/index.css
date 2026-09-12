@@ -370,10 +370,10 @@ body:before {
   transition: filter 0.35s ease, transform 0.35s ease;
 }
 
-.portrait-emo img {
+.portrait-emo img, .portrait-emo video {
   width: 100%;
   height: 100%;
-  object-fit: cover; /* portraits are vertical PNGs — crop to the slot */
+  object-fit: contain; /* Preserve the full portrait and alpha silhouette. */
   object-position: center top;
 }
 

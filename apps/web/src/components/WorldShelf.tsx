@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { airpGateway, type WorldShelf as Shelf } from '../lib/airp-gateway.js';
 import { useLocale } from '../lib/i18n.js';
 
@@ -11,6 +11,14 @@ export function WorldShelf({ shelf, loading, onLoad, onClose, onRefresh }: {
   const [confirm, setConfirm] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const outside = (e: PointerEvent) => { if (!busy && !panel.current?.contains(e.target as Node)) onClose(); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); if (!busy) onClose(); } };
+    window.addEventListener('pointerdown', outside, true);
+    window.addEventListener('keydown', key, true);
+    return () => { window.removeEventListener('pointerdown', outside, true); window.removeEventListener('keydown', key, true); };
+  }, [busy, onClose]);
   const group = shelf.groups?.find(g => g.id === selected);
   const remove = async (savePath: string) => {
     setBusy(true); setMessage('');
@@ -22,12 +30,11 @@ export function WorldShelf({ shelf, loading, onLoad, onClose, onRefresh }: {
     } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
     finally { setBusy(false); }
   };
-  return <div className="prototype-dialog-backdrop" role="presentation" onClick={() => { if (!busy) onClose(); }}>
-    <section className="prototype-world-picker" role="dialog" aria-modal="true" aria-label={t(group ? 'Saved games' : 'Choose a world')} onClick={e => e.stopPropagation()}>
-      <span className="prototype-eyebrow">{t('WORLD SHELF')}</span>
+  return <section ref={panel} className="prototype-world-picker world-directory" role="dialog" aria-modal="false" aria-label={t(group ? 'Saved games' : 'Choose a world')}>
+      <header className="world-directory__header"><span>{t('WORLD SHELF')}</span><button autoFocus disabled={busy} onClick={onClose} aria-label={t('Close')}>×</button></header>
       <h2>{group?.name || t('Choose a world')}</h2>
-      {!group ? (shelf.groups || []).map(entry => <button key={entry.id} onClick={() => { setSelected(entry.id); setMessage(''); }}>
-        <b>{entry.name}</b><span>{t('{count} saves', { count: entry.saves.length })} →</span>
+      {!group ? (shelf.groups || []).map((entry, index) => <button className="world-directory__entry" key={entry.id} onClick={() => { setSelected(entry.id); setMessage(''); }}>
+        <small aria-hidden="true">{String(index + 1).padStart(2, '0')}</small><div><b>{entry.name}</b><span>{t('{count} saves', { count: entry.saves.length })}</span></div><span aria-hidden="true">↗</span>
       </button>) : <>
         <button disabled={busy || loading !== null} onClick={() => { setSelected(null); setConfirm(null); setMessage(''); }}>{t('← All worlds')}</button>
         {group.templatePath && <button disabled={busy || loading !== null} onClick={() => onLoad(group.templatePath!)}>{t('＋ Start a new game')}</button>}
@@ -48,6 +55,5 @@ export function WorldShelf({ shelf, loading, onLoad, onClose, onRefresh }: {
       </>}
       {message && <p role="status">{message}</p>}
       <button className="prototype-close" disabled={busy} onClick={onClose}>{t('Continue this story')}</button>
-    </section>
-  </div>;
+    </section>;
 }

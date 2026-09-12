@@ -115,8 +115,21 @@
 .airp-prototype .chalk button { font: 13px/1.5 'Manrope',sans-serif; letter-spacing: 0; border-radius: 6px; padding: 9px 12px; }
 .airp-prototype.is-dusk .chalk button { background: #2c243bd9; color: #eee1f3; border: 1px solid #b19cc355; text-shadow: none; }
 .airp-prototype.is-dusk .chalk button:hover { background: #e8ddc9; color: #382b42; }
-.prototype-world-picker { background: #e8ddc9; }
-.prototype-world-picker > button { background: #f1e8d888; }
+.prototype-world-picker.world-directory{position:fixed;z-index:90;left:24px;top:76px;width:min(360px,calc(100vw - 48px));max-height:calc(100dvh - 150px);padding:24px 26px;background:#e4dfd3 url('/materials/ivory-paper-v1.webp') repeat;background-size:384px;color:#464138;border:1px solid #b8ac97;border-radius:2px;box-shadow:2px 8px 24px #0004;overscroll-behavior:contain;scrollbar-width:thin}
+.world-directory__header{display:flex;align-items:center;justify-content:space-between;gap:16px;font:10px system-ui;letter-spacing:.2em;color:#786d5d}
+.world-directory__header button{font:24px/1 system-ui;cursor:pointer;color:inherit;padding:4px}
+.world-directory h2{font-family:'Iowan Old Style','Hiragino Mincho ProN','Yu Mincho','Songti SC',serif;font-size:24px;margin:10px 0 20px}
+.world-directory h3{font:12px system-ui;color:#786d5d;margin-top:24px}
+.prototype-world-picker.world-directory>button{border:0;border-bottom:1px solid #75664e26;border-radius:0;background:transparent;padding:12px 0;margin:0;color:inherit;transform:none}
+.prototype-world-picker.world-directory>button:hover{background:#78654f0c;transform:none}
+.prototype-world-picker.world-directory>.world-directory__entry{display:flex;align-items:center;gap:16px;text-align:left}
+.world-directory__entry>small{font:10px monospace;color:#918471}
+.world-directory__entry>div{flex:1}.world-directory__entry b{font-family:'Iowan Old Style','Hiragino Mincho ProN','Yu Mincho','Songti SC',serif!important;font-weight:500!important}
+.world-directory .world-save-row{border:0;border-bottom:1px solid #75664e26;border-radius:0;padding:12px 0;margin:0}
+.world-directory .world-save-row>button:last-of-type{font:11px system-ui;color:#89715f;background:transparent;padding-left:8px}
+.world-directory .world-save-open b{font:15px 'Iowan Old Style',Georgia,serif}.world-directory .world-save-open span{font-size:11px}
+.world-directory .world-save-confirm{border-color:#75664e26;font-size:13px}.world-directory .world-save-confirm button{background:#78654f14;margin-right:8px}
+@media(max-width:600px){.prototype-world-picker.world-directory{left:16px;top:64px;width:min(330px,calc(100vw - 32px));max-height:calc(100dvh - 154px);padding:20px}}
 @media(max-width:700px) {
   .is-reading .prototype-edge-controls { left: 22px; }
   .prototype-world-meta,.is-reading .prototype-world-meta { top: 76px; left: 20px; right: 88px; max-width: none; text-align: left; }
@@ -142,3 +155,7 @@
 .prototype-language select { max-width: 112px; padding: 6px 8px; border: 1px solid #ac947960; border-radius: 18px; color: #594d64; background: #e8ddc9; font: inherit; font-size: 12px; }
 .prototype-language select:focus-visible { outline: 2px solid #9974c5; outline-offset: 2px; }
 .prototype-world-loading{position:fixed;inset:0;z-index:1100;display:grid;place-items:center;background:#191522d9;color:#eee5d4;font:20px Georgia,serif;cursor:progress}
+.agent-settings{position:relative}
+.agent-settings>button{font-size:13px;color:#59466e}
+.agent-settings-panel{position:absolute;right:0;top:calc(100% + 16px);width:min(350px,85vw);max-height:70vh;overflow:auto;padding:20px;border:1px solid #cdbda44d;border-radius:16px;background:#292332f5;color:#eadfcf;box-shadow:0 16px 48px #0006;font:14px/1.5 Georgia,serif;z-index:1200;text-align:left}
+.agent-settings-panel>div{display:flex;justify-content:space-between}.agent-settings-panel label{display:block;margin:12px 0}.agent-settings-panel select{display:block;width:100%;margin-top:4px;padding:8px;background:#393142;color:#f0e5d4;border:1px solid #cdbda455;border-radius:8px}.agent-settings-panel p{font:12px/1.5 system-ui;opacity:.85;margin:10px 0}.agent-settings-panel button{padding:6px 10px;border:1px solid #cdbda455;border-radius:8px}.agent-settings-panel button:disabled{opacity:.45;cursor:not-allowed}

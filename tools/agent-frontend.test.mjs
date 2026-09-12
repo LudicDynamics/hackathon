@@ -21,3 +21,7 @@ test('character overlay consumes real frames and has no fabricated reply bank', 
   assert.match(source, /frame.characterId !== characterId/);
   for (const type of ['character_delta', 'character_message', 'character_idle', 'turn_aborted']) assert.ok(source.includes(type));
 });
+test('interactive writer defaults to low thinking with an explicit override', async () => {
+  const launch = await fs.readFile('apps/server/src/engine/launch.ts', 'utf8');
+  assert.match(launch, /'--thinking', process\.env\.AIRP_WRITER_THINKING \|\| 'low'/);
+});

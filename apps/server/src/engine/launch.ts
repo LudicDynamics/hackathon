@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { modelPreferenceArgs } from './model-preferences.js';
 import path from 'node:path';
 import { airpEnv, extensionArgs, installPreset, skillArgs } from './presets.js';
 import { CHARACTER_ROLE_PREFIX } from '@airp/shared';
@@ -115,9 +116,11 @@ export function writerLaunch(repoRoot: string, worldRoot: string, vendorCliPath:
     ...ISOLATION_ARGS,
     ...extensionArgs(repoRoot, worldRoot),
     ...skillArgs(repoRoot, worldRoot),
+    '--thinking', process.env.AIRP_WRITER_THINKING || 'low',
     ...(process.env.AIRP_WRITER_MODEL ? ['--model', process.env.AIRP_WRITER_MODEL] : []),
   ];
   if (hasExistingSession(worldRoot)) args.push('--continue');
+  args.push(...modelPreferenceArgs(worldRoot, 'writer'));
 
   return {
     cliPath: vendorCliPath,
@@ -164,6 +167,7 @@ export function characterLaunch(
       ...((process.env.AIRP_CHARACTER_MODEL || process.env.AIRP_WRITER_MODEL) ? ['--model', (process.env.AIRP_CHARACTER_MODEL || process.env.AIRP_WRITER_MODEL)!] : []),
       ...ISOLATION_ARGS,
       ...extensionArgs(repoRoot, worldRoot),
+      ...modelPreferenceArgs(worldRoot, 'character'),
     ],
     env: toEnv(airpEnv({ role: `${CHARACTER_ROLE_PREFIX}${characterId}` }), agentDirEnv(repoRoot), {
       PI_CODING_AGENT_SESSION_DIR: sessionsDir,

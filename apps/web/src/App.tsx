@@ -1,4 +1,5 @@
 import { useLocale } from './lib/i18n.js';
+import { AgentSettings } from './components/AgentSettings.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from './components/canvas/Canvas.js';
 import { CharacterModal } from './components/overlay/CharacterModal.js';
@@ -38,6 +39,7 @@ interface BackpackItem {
 }
 
 interface CharacterView {
+  avatarVideo?: string;
   id: string;
   name?: string;
   home?: string;
@@ -100,10 +102,24 @@ export function App() {
   const [loadingWorld, setLoadingWorld] = useState<string | null>(null);
   const [backdropReady, setBackdropReady] = useState(false);
   const [writerWorking, setWriterWorking] = useState(false);
+  const [writerStage, setWriterStage] = useState('The writer is working…');
+  const [writerStarted, setWriterStarted] = useState(0);
+  const [writerElapsed, setWriterElapsed] = useState(0);
+  useEffect(() => {
+    if (!writerWorking || !writerStarted) return;
+    const timer = window.setInterval(() => setWriterElapsed(Math.floor((Date.now() - writerStarted) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [writerWorking, writerStarted]);
   useEffect(() => {
     const receive = (event: Event) => {
       const frame = (event as CustomEvent).detail;
       if (frame.source !== 'writer') return;
+      if (frame.type === 'agent_progress') {
+        setWriterStage(frame.stage);
+        setWriterStarted(frame.startedAt);
+        setWriterElapsed(Math.floor((Date.now() - frame.startedAt) / 1000));
+        setWriterWorking(frame.busy);
+      }
       if (['writer_delta', 'tool_start', 'chalk_writing'].includes(frame.type)) setWriterWorking(true);
       if (['writer_idle', 'error', 'turn_aborted'].includes(frame.type)) setWriterWorking(false);
     };
@@ -390,8 +406,9 @@ export function App() {
             onMoveCard={moveCard}
             onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }}
             onEntityAction={(choice) => {
-              sendToWriter(`The player chose: "${choice}"`);
-              notify(`Choice sent: ${choice}`);
+              setWriterWorking(true);
+              sendToWriter(choice);
+              notify('The writer is listening…');
             }}
             onDiceRolled={(result, passed) => notify(`Roll ${result} · ${passed ? 'passed' : 'failed'}`)}
             onEnterGate={enterLayer}
@@ -418,6 +435,7 @@ export function App() {
             <span className="prototype-status">{t('{items} ITEMS · {people} PEOPLE', { items: handItems.length, people: characters.length })}</span>
             <button className="prototype-pill" onClick={() => setWorldPickerOpen(true)}>{t("Worlds")}</button>
             <label className="prototype-language"><span className="sr-only">{t('Language')}</span><select aria-label={t('Language')} value={locale} onChange={event => setLocale(event.target.value as 'en' | 'zh-CN' | 'ja')}><option value="en">English</option><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
+            <AgentSettings />
             <MuteButton />
             <button className="prototype-effects-toggle" role="switch" aria-label={t("Visual effects")} aria-checked={effectsEnabled} onClick={() => setEffectsEnabled(value => !value)} title={t("Particles, parallax and animated backgrounds")}><span aria-hidden="true" />{t(effectsEnabled ? 'Effects on' : 'Effects off')}</button>
             <button className="prototype-quiet" onClick={() => toggleShell('header')} aria-label={t("Close header")}><ChevronUp size={16} /></button>
@@ -503,7 +521,7 @@ export function App() {
             </button>
           ))}
           </div>
-          <button className="prototype-action-toggle prototype-chrome" onClick={() => { setAttention(current => current === 'authoring' ? 'ambient' : 'authoring'); window.setTimeout(() => writerRef.current?.focus(), 0); }} aria-label={t("Write an action")}><Sparkles size={17} /><span>{t("What do you do?")}</span></button>
+          <button className="prototype-action-toggle prototype-chrome" onClick={() => { setAttention(current => current === 'authoring' ? 'ambient' : 'authoring'); window.setTimeout(() => writerRef.current?.focus(), 0); }} aria-label={t("Write an action")}><Sparkles size={17} /><span aria-live="polite">{writerWorking ? `${t(writerStage)} · ${writerElapsed}s` : t('What do you do?')}</span></button>
 
           <form className="prototype-dock prototype-chrome" onSubmit={submitWriter}>
             <div className="prototype-docktop">
@@ -513,7 +531,7 @@ export function App() {
               <span>↵</span>
             </div>
             <div className="prototype-dockrow">
-              {writerWorking && <span role="status">{t('The writer is working…')} <button type="button" onClick={() => { sendMessage({ type: 'writer_abort' }); setWriterWorking(false); }}>{t('Stop writing')}</button></span>}
+              {writerWorking && <span role="status">{t(writerStage)} · {writerElapsed}s <button type="button" onClick={() => { sendMessage({ type: 'writer_abort' }); }}>{t('Stop writing')}</button></span>}
               <input ref={writerRef} aria-label={t("Action")} placeholder={t("What do you do? You can also address someone by name…")} autoComplete="off" />
               <button className="prototype-primary" aria-label={t("Send action")}>↑</button>
             </div>
@@ -543,6 +561,8 @@ export function App() {
           characterId={activeCharacter.id}
           displayName={activeCharacter.name}
           avatar={assetUrl(activeCharacter.avatar)}
+          avatarVideo={assetUrl(activeCharacter.avatarVideo)}
+          effectsEnabled={effectsEnabled}
           bio={activeCharacter.bio || activeCharacter.description}
           onClose={closeCharacter}
           onSendMessage={(message) => sendMessage({ type: 'character_prompt', characterId: activeCharacter.id, message })}

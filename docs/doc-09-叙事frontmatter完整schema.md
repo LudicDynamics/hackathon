@@ -1,6 +1,8 @@
 # doc-09 通用互动 frontmatter 完整 schema（待完善）
 
-场景媒体补充：README 可声明 `bgVideo: assets/scenes/intro.webm`（mp4/webm 世界相对路径），`bg` 继续指静态兜底图。`GET /api/layer` 返回 `bg.video?`；特效关闭时使用静态图。不是互动字段，不参与 choice/status 归一化。详《动态素材接线》。
+模型设置与执行状态是独立运行协议，不属于实体互动字段。shared 的 `AgentModelSelectionSchema` 校验 `/api/agent-settings` 写入，WebSocket `agent_progress` 传递公开阶段与时间戳；完整字段见《Agent模型选择与进度》。
+
+场景媒体补充：README 可声明 `bgVideo: assets/scenes/intro.webm`（mp4/webm 世界相对路径），`bg` 继续指静态兜底图。`GET /api/layer` 返回 `bg.video?`；角色 Markdown 和 world.json 的 characters 配置可声明 `avatarVideo`，原 `avatar` 为静态兜底，`GET /api/characters` 返回二者。特效关闭时使用静态图。不是互动字段，不参与 choice/status 归一化。详《动态素材接线》。
 
 > 状态：**归属与工具协议已定案，字段细节待设计**。doc-20 §2 是互动字段的上位协议。
 > 关联：doc-05 §3.1（frontmatter + 骰子协议）、doc-06 §2.6（渲染原则）、doc-10（组件 schema）、doc-20（Agent 工具与 `look_at`）。

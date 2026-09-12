@@ -10,6 +10,9 @@ dist/
 .env.*.local
 .artifacts/
 worlds/
+# Reproducible six-world playtest packages, compiled from tools/experiences.
+templates/*-playtest/
+templates/*-playtest-*/
 
 # --- assets/ : worldlines-assets 素材车间 ---
 # AI 生图候选（PNG/JPG）合计约 587MB，作为生产参考太占库，整树不追踪。
@@ -21,6 +24,8 @@ assets/**
 !assets/skills/
 !assets/skills/**
 **/.airpworld/prompt-presets/
+**/.airpworld/model-preferences.json
+**/.airpworld/model-preferences.json.tmp
 # pi-rp session memory is runtime state, never template content truth
 **/.pi/*.db*
 

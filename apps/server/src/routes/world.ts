@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import {
   ActionError,
+  AgentModelSelectionSchema,
   LocalWorldStore,
   SEAT_ANCHOR,
   boxSizeOf,
@@ -297,6 +298,24 @@ export function createWorldRouter(
   setActiveStore: (store: LocalWorldStore | null) => void
 ): Router {
   const router = Router();
+  router.get('/agent-settings', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) { res.status(409).json({ error: 'Load a world first.' }); return; }
+    try { res.json(await lifecycle.modelStatus(store.worldRoot, req.query.brief !== 'true')); }
+    catch (error) { res.status(503).json({ error: error instanceof Error ? error.message : 'Agent unavailable.' }); }
+  });
+  router.post('/agent-settings', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) { res.status(409).json({ error: 'Load a world first.' }); return; }
+    const parsed = AgentModelSelectionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid model settings.' }); return;
+    }
+    const { role, provider, model, thinking, world } = parsed.data;
+    if (world !== store.worldRoot) { res.status(409).json({ error: 'The active world changed. Reopen model settings.' }); return; }
+    try { res.json(await lifecycle.changeModel(store.worldRoot, role, { provider, model, thinking })); }
+    catch (error) { res.status(409).json({ error: error instanceof Error ? error.message : 'Could not change models.' }); }
+  });
   const dispatch = (store: LocalWorldStore, prompt: string) => {
     void lifecycle.submitWriter(store.worldRoot, prompt).catch(error => {
       eventBridge.broadcast({ type: 'error', source: 'writer', message: error instanceof Error ? error.message : String(error) });
@@ -306,6 +325,12 @@ export function createWorldRouter(
   // Platform audio root: <REPO_ROOT>/assets/audio. `repoRoot` (index.ts:15) is the
   // repo root in both dev and prod, so this always points at the 31 produced clips.
   const AUDIO_ROOT = path.resolve(repoRoot, 'assets/audio');
+  const clientManifest = async (store: LocalWorldStore) => {
+    const manifest = await store.getManifest();
+    const key = manifest.audio?.theme;
+    const theme = typeof key === 'string' && key.trim() ? resolveAudioRef(key, 'bgm', store, AUDIO_ROOT) : null;
+    return { ...manifest, audio: { theme } };
+  };
 
   let shelfBusy = false;
   // List available templates and worlds
@@ -319,6 +344,7 @@ export function createWorldRouter(
 
   // Load a world
   router.post('/worlds/load', async (req, res) => {
+    if (lifecycle.isModelSwitching()) return res.status(409).json({ error: 'Wait for model settings to finish applying.' });
     if (shelfBusy) return res.status(409).json({ error: 'A world operation is in progress.' });
     shelfBusy = true;
     try {
@@ -340,7 +366,7 @@ export function createWorldRouter(
       const store = new LocalWorldStore(resolvedPath);
       setActiveStore(store);
 
-      const manifest = await store.getManifest();
+      const manifest = await clientManifest(store);
       // Re-align lastSeq against the NEW history.db before watching: the old
       // cursor belongs to another sequence and could permanently skip events
       // (docs/tools/12 §8.6 / §8 "index.ts 的接线").
@@ -375,16 +401,7 @@ export function createWorldRouter(
     const store = getActiveStore();
     if (!store) return res.status(400).json({ error: 'No active world' });
     try {
-      const manifest = await store.getManifest();
-      // Resolve the world theme key to a URL here — the frontend never resolves
-      // README/manifest audio values (docs/audio/00 §4.1/§9.2). `themes` lives in
-      // the `bgm` pool table (00 §2.3).
-      const themeKey = manifest.audio?.theme;
-      const theme =
-        typeof themeKey === 'string' && themeKey.trim() !== ''
-          ? resolveAudioRef(themeKey, 'bgm', store, AUDIO_ROOT)
-          : null;
-      res.json({ ...manifest, audio: { theme } });
+      res.json(await clientManifest(store));
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -568,16 +585,19 @@ export function createWorldRouter(
       const chars = await Promise.all(
         (manifest.characters || []).map(async (c) => {
           let avatar = c.avatar;
+          let avatarVideo = c.avatarVideo;
           let bio = c.description;
           try {
             const raw = await store.readFile(`characters/${c.id}/README.md`);
             const { frontmatter, body } = parseFrontmatter(raw);
             if (frontmatter?.avatar) avatar = frontmatter.avatar;
+            if (typeof frontmatter?.avatarVideo === 'string') avatarVideo = frontmatter.avatarVideo;
             if (!bio) bio = body.slice(0, 100);
           } catch {}
           return {
             ...c,
             avatar: avatar || '/assets/characters/portraits/fella_1.png',
+            avatarVideo,
             bio,
           };
         })

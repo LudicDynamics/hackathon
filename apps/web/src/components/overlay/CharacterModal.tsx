@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { playStinger, type Emotion } from '../../lib/audio.js';
 import { useLocale } from '../../lib/i18n.js';
+import { MotionPortrait } from './MotionPortrait.js';
 
 /**
  * CharacterModal — galgame dialogue overlay (wave 2, Task D, T3.3).
@@ -20,6 +21,8 @@ interface CharacterModalProps {
   characterId: string;
   displayName?: string;
   avatar?: string;
+  avatarVideo?: string;
+  effectsEnabled?: boolean;
   bio?: string;
   onClose: () => void;
   /** character_prompt protocol — the app wraps this in the message type; unchanged. */
@@ -48,6 +51,8 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   characterId,
   displayName = characterId,
   avatar,
+  avatarVideo,
+  effectsEnabled = false,
   bio,
   onClose,
   onSendMessage,
@@ -151,7 +156,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
           <div className="portrait-breathe">
             <div className={`portrait-emo emo-${emo}${emo === 'shock' ? ' emo-shock-shake' : ''}`}>
               {showAvatar ? (
-                <img src={avatar} alt={displayName} onError={() => setAvatarError(true)} />
+                <MotionPortrait video={avatarVideo} poster={avatar} enabled={effectsEnabled} name={displayName} onPosterError={() => setAvatarError(true)} />
               ) : (
                 <div className="portrait-fallback" role="img" aria-label={displayName}>
                   {monogram}
