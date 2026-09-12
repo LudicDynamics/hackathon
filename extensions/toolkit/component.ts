@@ -21,11 +21,24 @@ export const getComponentTool = defineTool({
     'Omitting component lists every registered kind in one line each. Read-only; it writes nothing.',
   parameters: Type.Object(
     {
+      // Array branch MUST come first — Vertex/Gemini function-declaration validation
+      // rejects `anyOf: [string, array]` with "For schema with items, schema type
+      // should be ARRAY". See pi-rp `core/tools/read.ts:22-25` and look-at.ts.
       component: Type.Optional(
-        Type.Union([Type.String(), Type.Array(Type.String())], {
-          description:
-            'Component kind id(s), e.g. "lock" or ["letter","board"]. Omit to list the whole registry as a one-line-per-kind index.',
-        })
+        Type.Union(
+          [
+            Type.Array(Type.String(), {
+              description: 'Component kind ids, e.g. ["letter","board"].',
+            }),
+            Type.String({
+              description: 'Component kind id, e.g. "lock".',
+            }),
+          ],
+          {
+            description:
+              'One component kind id, or an array of ids. Omit to list the whole registry as a one-line-per-kind index.',
+          }
+        )
       ),
     },
     { additionalProperties: false }
