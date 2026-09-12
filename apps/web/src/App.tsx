@@ -1,3 +1,4 @@
+import { useLocale } from './lib/i18n.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from './components/canvas/Canvas.js';
 import { CharacterModal } from './components/overlay/CharacterModal.js';
@@ -64,6 +65,7 @@ function sceneName(manifest: WorldManifest | null, layer: string): string {
 }
 
 export function App() {
+  const { locale, setLocale, t } = useLocale();
   const [manifest, setManifest] = useState<WorldManifest | null>(null);
   const [backpack, setBackpack] = useState<BackpackItem[]>([]);
   const [characters, setCharacters] = useState<CharacterView[]>([]);
@@ -315,31 +317,31 @@ export function App() {
   return (
     <div className={`airp-prototype${isDusk ? ' is-dusk' : ''}${shell.immersive ? ' is-immersive' : ''}${shell.journal ? ' is-reading' : ''}${shell.header ? ' has-header' : ''}${attention === 'authoring' ? ' is-authoring' : ''}`}>
       <main className="prototype-workspace">
-        <aside className={`prototype-narrative${shell.journal ? ' is-open' : ''}`} aria-label="Story journal" aria-hidden={!shell.journal} inert={!shell.journal}>
+        <aside className={`prototype-narrative${shell.journal ? ' is-open' : ''}`} aria-label={t("Story journal")} aria-hidden={!shell.journal} inert={!shell.journal}>
           <div className="prototype-narrhead">
-            <span className="prototype-eyebrow">THE STORY SO FAR</span>
-            <button className="prototype-quiet" onClick={() => toggleShell('journal')} aria-label="Close story page">‹</button>
+            <span className="prototype-eyebrow">{t("THE STORY SO FAR")}</span>
+            <button className="prototype-quiet" onClick={() => toggleShell('journal')} aria-label={t("Close story page")}>‹</button>
           </div>
           <div className="prototype-journal">
-            <div className="prototype-small">OPENING / {manifest?.genre || 'A LIVING WORLD'}</div>
-            <h2 className="prototype-chapter">{manifest?.name || 'A world is waiting.'}</h2>
-            <div className="prototype-time-label">{layer === 'map' ? 'THE FIRST MOMENT' : 'THE STORY CONTINUES'}</div>
-            <p className="prototype-narrline">{manifest?.description || 'Choose a world to begin.'}</p>
+            <div className="prototype-small">{t('OPENING')} / {manifest?.genre || t('A LIVING WORLD')}</div>
+            <h2 className="prototype-chapter">{manifest?.name || t('A world is waiting.')}</h2>
+            <div className="prototype-time-label">{layer === 'map' ? t('THE FIRST MOMENT') : t('THE STORY CONTINUES')}</div>
+            <p className="prototype-narrline">{manifest?.description || t('Choose a world to begin.')}</p>
             {readme?.body && <div className="prototype-narrline"><MarkdownText text={readme.body} /></div>}
             {chalks.slice(-4).map((chalk) => (
               <blockquote key={chalk.path} className="prototype-quote">{chalk.body}</blockquote>
             ))}
             {chalks.length === 0 && (
-              <p className="prototype-small">The writer has not left a mark in this scene yet.</p>
+              <p className="prototype-small">{t("The writer has not left a mark in this scene yet.")}</p>
             )}
           </div>
           <div className="prototype-narrfoot">
-            You are the player inside {manifest?.name || 'this world'}
-            <span>Current place: {currentName}</span>
+            {t('You are the player inside {world}', { world: manifest?.name || t('this world') })}
+            <span>{t('Current place: {place}', { place: currentName })}</span>
           </div>
         </aside>
 
-        <section className="prototype-world" aria-label="Spatial story canvas">
+        <section className="prototype-world" aria-label={t("Spatial story canvas")}>
           <Canvas
             key={manifest?.id || 'opening'}
             openingComposition={['wuwu', 'whitechapel', 'divergence', 'firstsnow'].includes(manifest?.id || '')}
@@ -366,51 +368,52 @@ export function App() {
 
           <div className="prototype-vignette" aria-hidden="true" />
 
-          <header className="prototype-worldtop prototype-chrome" aria-label="World header" inert={!shell.header || shell.immersive}>
+          <header className="prototype-worldtop prototype-chrome" aria-label={t("World header")} inert={!shell.header || shell.immersive}>
             <span className="prototype-brand">World<span>lines</span></span>
-            <nav className="prototype-crumbs" aria-label="Scene path">
+            <nav className="prototype-crumbs" aria-label={t("Scene path")}>
               {breadcrumbs.map((part) => {
-                return <button key={part} onClick={() => enterLayer(part)}>{part === 'map' ? 'Map' : sceneName(manifest, part)}</button>;
+                return <button key={part} onClick={() => enterLayer(part)}>{part === 'map' ? t('Map') : sceneName(manifest, part)}</button>;
               })}
             </nav>
             <div className="prototype-spacer" />
-            <span className="prototype-freeze">{state?.worldFrozen ? 'WORLD PAUSED' : 'WORLD AWAKE'}</span>
-            <span className="prototype-status">{handItems.length} ITEMS · {characters.length} PEOPLE</span>
-            <button className="prototype-pill" onClick={() => setWorldPickerOpen(true)}>Worlds</button>
+            <span className="prototype-freeze">{state?.worldFrozen ? t('WORLD PAUSED') : t('WORLD AWAKE')}</span>
+            <span className="prototype-status">{t('{items} ITEMS · {people} PEOPLE', { items: handItems.length, people: characters.length })}</span>
+            <button className="prototype-pill" onClick={() => setWorldPickerOpen(true)}>{t("Worlds")}</button>
+            <label className="prototype-language"><span className="sr-only">{t('Language')}</span><select aria-label={t('Language')} value={locale} onChange={event => setLocale(event.target.value as 'en' | 'zh-CN' | 'ja')}><option value="en">English</option><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
             <MuteButton />
-            <button className="prototype-effects-toggle" role="switch" aria-label="Visual effects" aria-checked={effectsEnabled} onClick={() => setEffectsEnabled(value => !value)} title="Particles, parallax and animated backgrounds"><span aria-hidden="true" />Effects {effectsEnabled ? 'on' : 'off'}</button>
-            <button className="prototype-quiet" onClick={() => toggleShell('header')} aria-label="Close header"><ChevronUp size={16} /></button>
+            <button className="prototype-effects-toggle" role="switch" aria-label={t("Visual effects")} aria-checked={effectsEnabled} onClick={() => setEffectsEnabled(value => !value)} title={t("Particles, parallax and animated backgrounds")}><span aria-hidden="true" />{t(effectsEnabled ? 'Effects on' : 'Effects off')}</button>
+            <button className="prototype-quiet" onClick={() => toggleShell('header')} aria-label={t("Close header")}><ChevronUp size={16} /></button>
           </header>
 
           <div className="prototype-edge-controls prototype-chrome">
-            <button onClick={() => toggleShell('journal')} aria-label="Toggle story journal" aria-expanded={shell.journal}><BookOpen size={17} /></button>
-            <button onClick={() => toggleShell('header')} aria-label="Toggle header" aria-expanded={shell.header}><ChevronDown size={17} /></button>
+            <button onClick={() => toggleShell('journal')} aria-label={t("Toggle story journal")} aria-expanded={shell.journal}><BookOpen size={17} /></button>
+            <button onClick={() => toggleShell('header')} aria-label={t("Toggle header")} aria-expanded={shell.header}><ChevronDown size={17} /></button>
           </div>
 
-          <button className="prototype-immersion-toggle" onClick={() => toggleShell('immersion')} aria-label={shell.immersive ? 'Show interface' : 'Hide interface'} title="Toggle immersion · Tab">{shell.immersive ? <Minimize size={17} /> : <Maximize size={17} />}</button>
+          <button className="prototype-immersion-toggle" onClick={() => toggleShell('immersion')} aria-label={shell.immersive ? t('Show interface') : t('Hide interface')} title={t("Toggle immersion · Tab")}>{shell.immersive ? <Minimize size={17} /> : <Maximize size={17} />}</button>
 
           <div className="prototype-world-meta prototype-chrome">
             <div className="prototype-eyebrow">{manifest?.name}</div>
             <h1>{currentName}</h1>
-            <p>{layer === 'map' ? 'The first moment' : 'The story continues'} · {state?.worldFrozen ? 'Time stands still' : 'Time flows'}</p>
+            <p>{layer === 'map' ? t('The first moment') : t('The story continues')} · {state?.worldFrozen ? t('Time stands still') : t('Time flows')}</p>
             {sceneStatus.map(([key, value]) => <span className="prototype-stat" key={key}>{labelOf(key)} · {String(value)}</span>)}
           </div>
 
-          <div className="prototype-tools prototype-chrome" aria-label="Canvas tools">
-            <button className="active" title="Explore">↖</button>
-            <button onClick={() => setAttention('authoring')} title="God Hand">◯</button>
-            <button onClick={() => camera.restore(layer)} title="Return to scene">⌖</button>
+          <div className="prototype-tools prototype-chrome" aria-label={t("Canvas tools")}>
+            <button className="active" title={t("Explore")}>↖</button>
+            <button onClick={() => setAttention('authoring')} title={t("God Hand")}>◯</button>
+            <button onClick={() => camera.restore(layer)} title={t("Return to scene")}>⌖</button>
           </div>
 
-          <div className="prototype-hand-tray prototype-chrome" aria-label="Encountered characters">
-            <span className="prototype-tray-label">PEOPLE YOU KNOW</span>
-            {encountered.length === 0 && <span className="prototype-tray-empty">Every stranger has a story.</span>}
+          <div className="prototype-hand-tray prototype-chrome" aria-label={t("Encountered characters")}>
+            <span className="prototype-tray-label">{t("PEOPLE YOU KNOW")}</span>
+            {encountered.length === 0 && <span className="prototype-tray-empty">{t("Every stranger has a story.")}</span>}
             {encountered.map((character) => (
               <button
                 key={character.id}
                 className="prototype-hand-orb"
                 onClick={() => openCharacter(character)}
-                title={`Talk to ${character.id}`}
+                title={t('Talk to {name}', { name: character.id })}
                 style={assetUrl(character.avatar) ? { backgroundImage: `url("${assetUrl(character.avatar)}")` } : undefined}
               >
                 {!assetUrl(character.avatar) && <span>{character.id.charAt(0).toUpperCase()}</span>}
@@ -418,9 +421,9 @@ export function App() {
               </button>
             ))}
           </div>
-          <div className="prototype-belongings prototype-chrome" aria-label="Belongings">
-            <button className="prototype-bag-toggle" onClick={() => setBagOpen(open => !open)} aria-label="Open belongings" aria-expanded={bagOpen}><Backpack size={19} /><span>{handItems.length}</span></button>
-            {bagOpen && <div className="prototype-bag-content"><span className="prototype-eyebrow">BELONGINGS</span>{handItems.length === 0 && <p>Nothing carried yet.</p>}{handItems.map((item) => {
+          <div className="prototype-belongings prototype-chrome" aria-label={t("Belongings")}>
+            <button className="prototype-bag-toggle" onClick={() => setBagOpen(open => !open)} aria-label={t("Open belongings")} aria-expanded={bagOpen}><Backpack size={19} /><span>{handItems.length}</span></button>
+            {bagOpen && <div className="prototype-bag-content"><span className="prototype-eyebrow">{t("BELONGINGS")}</span>{handItems.length === 0 && <p>{t("Nothing carried yet.")}</p>}{handItems.map((item) => {
               const image = assetUrl(item.frontmatter?.image || item.frontmatter?.cover);
               return (
                 <button
@@ -438,48 +441,48 @@ export function App() {
             })}</div>}
           </div>
 
-          <button className="prototype-player-orb prototype-chrome" style={playerAvatar ? { backgroundImage: `url("${playerAvatar}")`, backgroundSize: 'cover', backgroundPosition: 'center 25%' } : undefined} onClick={() => setProfileOpen((open) => !open)} aria-label="Open player profile" aria-expanded={profileOpen}>{!playerAvatar && <UserRound size={25} />}<span className="prototype-player-label"><small>YOU</small>{playerRole}</span></button>
+          <button className="prototype-player-orb prototype-chrome" style={playerAvatar ? { backgroundImage: `url("${playerAvatar}")`, backgroundSize: 'cover', backgroundPosition: 'center 25%' } : undefined} onClick={() => setProfileOpen((open) => !open)} aria-label={t("Open player profile")} aria-expanded={profileOpen}>{!playerAvatar && <UserRound size={25} />}<span className="prototype-player-label"><small>{t("YOU")}</small>{playerRole}</span></button>
           {profileOpen && chromeVisible && (
             <div className="prototype-profile">
               <b>{playerRole}</b>
-              <div className="prototype-small">PLAYER CHARACTER</div>
+              <div className="prototype-small">{t("PLAYER CHARACTER")}</div>
               <p>{manifest?.id === 'wuwu' ? 'Newly posted to Fogwharf. Three commissions, one unfinished case. Your story begins here.' : `Your story unfolds in ${manifest?.name || 'this world'}.`}</p>
-              <div>{currentName} · {handItems.length} carried items</div>
+              <div>{currentName} · {t('{count} carried items', { count: handItems.length })}</div>
             </div>
           )}
 
-          <div className="prototype-residents prototype-chrome" aria-label="Resident companions">
+          <div className="prototype-residents prototype-chrome" aria-label={t("Resident companions")}>
           {resident.map(companion => (
             <button
               key={companion.id}
               className="prototype-companion-orb"
               onClick={() => openCharacter(companion)}
-              aria-label={`Talk to ${companion.id}`}
+              aria-label={t('Talk to {name}', { name: companion.id })}
               style={assetUrl(companion.avatar) ? { backgroundImage: `url("${assetUrl(companion.avatar)}")` } : undefined}
             >
               {!assetUrl(companion.avatar) && companion.id.charAt(0).toUpperCase()}<i /><small>{labelOf(companion.id)}</small>
             </button>
           ))}
           </div>
-          <button className="prototype-action-toggle prototype-chrome" onClick={() => { setAttention(current => current === 'authoring' ? 'ambient' : 'authoring'); window.setTimeout(() => writerRef.current?.focus(), 0); }} aria-label="Write an action"><Sparkles size={17} /><span>What do you do?</span></button>
+          <button className="prototype-action-toggle prototype-chrome" onClick={() => { setAttention(current => current === 'authoring' ? 'ambient' : 'authoring'); window.setTimeout(() => writerRef.current?.focus(), 0); }} aria-label={t("Write an action")}><Sparkles size={17} /><span>{t("What do you do?")}</span></button>
 
           <form className="prototype-dock prototype-chrome" onSubmit={submitWriter}>
             <div className="prototype-docktop">
-              <b>✧ SPEAK TO THE WRITER</b>
-              <span>{state?.worldFrozen ? 'The world is paused' : 'Your action moves the world forward'}</span>
+              <b>{t("✧ SPEAK TO THE WRITER")}</b>
+              <span>{state?.worldFrozen ? t('The world is paused') : t('Your action moves the world forward')}</span>
               <div className="prototype-spacer" />
               <span>↵</span>
             </div>
             <div className="prototype-dockrow">
-              <input ref={writerRef} aria-label="Action" placeholder="What do you do? You can also address someone by name…" autoComplete="off" />
-              <button className="prototype-primary" aria-label="Send action">↑</button>
+              <input ref={writerRef} aria-label={t("Action")} placeholder={t("What do you do? You can also address someone by name…")} autoComplete="off" />
+              <button className="prototype-primary" aria-label={t("Send action")}>↑</button>
             </div>
           </form>
 
           {attention === 'authoring' && (
             <div className="prototype-authoring">
               <GodModeToolbar frozen={state?.worldFrozen === true} onToggleFreeze={handleToggleFreeze} />
-              <button className="prototype-quiet" onClick={() => setAttention('ambient')}>Close</button>
+              <button className="prototype-quiet" onClick={() => setAttention('ambient')}>{t("Close")}</button>
             </div>
           )}
 
@@ -488,16 +491,16 @@ export function App() {
 
       {worldPickerOpen && (
         <div className="prototype-dialog-backdrop" role="presentation" onClick={() => setWorldPickerOpen(false)}>
-          <section className="prototype-world-picker" role="dialog" aria-modal="true" aria-label="Choose a world" onClick={(event) => event.stopPropagation()}>
-            <span className="prototype-eyebrow">WORLD SHELF</span>
-            <h2>Choose a world</h2>
+          <section className="prototype-world-picker" role="dialog" aria-modal="true" aria-label={t("Choose a world")} onClick={(event) => event.stopPropagation()}>
+            <span className="prototype-eyebrow">{t("WORLD SHELF")}</span>
+            <h2>{t("Choose a world")}</h2>
             {[...shelf.templates.map((id) => ({ id, path: `templates/${id}`, kind: 'Template' })), ...shelf.worlds.map((id) => ({ id, path: `worlds/${id}`, kind: 'Your world' }))].map((entry) => (
               <button key={entry.path} onClick={() => void loadWorld(entry.path)} disabled={loadingWorld !== null}>
                 <b>{labelOf(entry.id)}</b>
-                <span>{entry.kind}{loadingWorld === entry.path ? ' · opening…' : ''}</span>
+                <span>{t(entry.kind)}{loadingWorld === entry.path ? t(' · opening…') : ''}</span>
               </button>
             ))}
-            <button className="prototype-close" onClick={() => setWorldPickerOpen(false)}>Continue this story</button>
+            <button className="prototype-close" onClick={() => setWorldPickerOpen(false)}>{t("Continue this story")}</button>
           </section>
         </div>
       )}

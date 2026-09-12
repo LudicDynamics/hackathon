@@ -1,3 +1,4 @@
+import { useLocale } from '../../lib/i18n.js';
 import React from 'react';
 import { renderFrontmatterWidgets } from '../../lib/fm.js';
 import { airpGateway } from '../../lib/airp-gateway.js';
@@ -13,6 +14,7 @@ interface Props {
 
 /** Shared by every Markdown form; visual form never decides interaction support. */
 export function EntityInteractions({ item, active = false, onChoice, onDiceRolled, onEnterGate, onOpenCharacter }: Props) {
+  const { t } = useLocale();
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
   const [feedback, setFeedback] = React.useState('');
@@ -70,19 +72,19 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
   const isGate = fm?.type === 'gate' || item.path.endsWith('/README.md');
   const isPerson = fm?.type === 'character' || fm?.type === 'sprite';
   const collectable = !isGate && !isPerson && fm?.type !== 'chalk' && item.path.startsWith('world/') && fm?.portable !== false;
-  const choose = (choice: string) => { void run(async () => { await airpGateway.choose(item.path, choice); setFeedback('Choice recorded. The world can respond on the next turn.'); }); };
+  const choose = (choice: string) => { void run(async () => { await airpGateway.choose(item.path, choice); setFeedback(t('Choice recorded. The world can respond on the next turn.')); }); };
   return <div ref={ref} className={`entity-interactions entity-interactions--${side}`} data-no-drag onClick={event => event.stopPropagation()}>
     <fieldset disabled={busy}>
     {renderFrontmatterWidgets(item.frontmatter, { filePath: item.path, reveal: active, onChoice: choose, onDiceRolled })}
-    <div className="entity-action-arrows" aria-label="Entity actions">
+    <div className="entity-action-arrows" aria-label={t("Entity actions")}>
       {actions.map((action: string, index: number) => <button type="button" key={`${index}-${action}`} disabled={!onChoice} onClick={() => send(action)}><span aria-hidden="true">→ </span>{action}</button>)}
-      {collectable && <button type="button" onClick={() => void run(async () => { await airpGateway.move(item.path, `player/${item.path.split('/').pop()}`); setFeedback('Added to belongings.'); })}>→ Take along</button>}
-      {isGate && onEnterGate && <button type="button" onClick={() => onEnterGate(typeof fm?.target === 'string' ? fm.target : item.path.replace(/\/README\.md$/, ''))}>→ Enter scene</button>}
-      {isPerson && onOpenCharacter && <button type="button" onClick={() => onOpenCharacter(fm?.characterId || fm?.id || item.path.split('/').pop()!.replace(/\.md$/, ''))}>→ Talk</button>}
-      {onChoice && <button type="button" onClick={() => send('Look closely at this entity and respond in the current role-playing scene. Do not move or collect it unless asked.')}>→ Look closer</button>}
+      {collectable && <button type="button" onClick={() => void run(async () => { await airpGateway.move(item.path, `player/${item.path.split('/').pop()}`); setFeedback(t('Added to belongings.')); })}>{t("→ Take along")}</button>}
+      {isGate && onEnterGate && <button type="button" onClick={() => onEnterGate(typeof fm?.target === 'string' ? fm.target : item.path.replace(/\/README\.md$/, ''))}>{t("→ Enter scene")}</button>}
+      {isPerson && onOpenCharacter && <button type="button" onClick={() => onOpenCharacter(fm?.characterId || fm?.id || item.path.split('/').pop()!.replace(/\.md$/, ''))}>{t("→ Talk")}</button>}
+      {onChoice && <button type="button" onClick={() => send('Look closely at this entity and respond in the current role-playing scene. Do not move or collect it unless asked.')}>{t("→ Look closer")}</button>}
     </div>
     </fieldset>
-    {busy && <small role="status">Working…</small>}
+    {busy && <small role="status">{t("Working…")}</small>}
     {feedback && <small role="status">{feedback}</small>}
     {error && <small className="entity-action-error" role="alert">{error}</small>}
   </div>;

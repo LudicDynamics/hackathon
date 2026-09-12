@@ -114,7 +114,9 @@
   .prototype-world-meta,.is-reading .prototype-world-meta { top: 76px; left: 20px; right: 88px; max-width: none; text-align: left; }
   .has-header .prototype-world-meta { top: 126px; }
   .prototype-worldtop { padding: 10px 60px 10px 14px; gap: 5px; }
-  .prototype-brand { font-size: 19px; margin-right: 0; }
+  .prototype-brand { display: none; }
+  .prototype-worldtop { overflow-x: auto; }
+  .prototype-worldtop > button, .prototype-language { flex-shrink: 0; white-space: nowrap; }
   .prototype-crumbs { display: none; }
   .prototype-narrative { top: 122px; bottom: 100px; width: min(300px,calc(100% - 28px)); }
   .prototype-residents { top: 164px; right: 18px; }
@@ -129,3 +131,5 @@
   .prototype-bag-toggle { width: 44px; height: 44px; }
   .prototype-dock { bottom: 163px; }
 }
+.prototype-language select { max-width: 112px; padding: 6px 8px; border: 1px solid #ac947960; border-radius: 18px; color: #594d64; background: #e8ddc9; font: inherit; font-size: 12px; }
+.prototype-language select:focus-visible { outline: 2px solid #9974c5; outline-offset: 2px; }

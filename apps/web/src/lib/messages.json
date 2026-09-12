@@ -1,0 +1,346 @@
+{
+  "Worlds": {
+    "zh-CN": "世界",
+    "ja": "ワールド"
+  },
+  "Map": {
+    "zh-CN": "地图",
+    "ja": "マップ"
+  },
+  "Mute sound": {
+    "zh-CN": "关闭声音",
+    "ja": "ミュート"
+  },
+  "Unmute sound": {
+    "zh-CN": "开启声音",
+    "ja": "ミュート解除"
+  },
+  "Visual effects": {
+    "zh-CN": "视觉特效",
+    "ja": "視覚効果"
+  },
+  "Effects on": {
+    "zh-CN": "特效开",
+    "ja": "効果オン"
+  },
+  "Effects off": {
+    "zh-CN": "特效关",
+    "ja": "効果オフ"
+  },
+  "Particles, parallax and animated backgrounds": {
+    "zh-CN": "粒子、视差与动态背景",
+    "ja": "パーティクル・視差・動画背景"
+  },
+  "Close header": {
+    "zh-CN": "收起顶部栏",
+    "ja": "ヘッダーを閉じる"
+  },
+  "Toggle header": {
+    "zh-CN": "展开／收起顶部栏",
+    "ja": "ヘッダーの切り替え"
+  },
+  "Toggle story journal": {
+    "zh-CN": "展开／收起故事手记",
+    "ja": "物語ノートの切り替え"
+  },
+  "Story journal": {
+    "zh-CN": "故事手记",
+    "ja": "物語ノート"
+  },
+  "Close story page": {
+    "zh-CN": "关闭故事页",
+    "ja": "物語ページを閉じる"
+  },
+  "THE STORY SO FAR": {
+    "zh-CN": "故事至今",
+    "ja": "これまでの物語"
+  },
+  "OPENING": {
+    "zh-CN": "序章",
+    "ja": "プロローグ"
+  },
+  "A LIVING WORLD": {
+    "zh-CN": "鲜活的世界",
+    "ja": "生きた世界"
+  },
+  "A world is waiting.": {
+    "zh-CN": "一个世界正在等你。",
+    "ja": "あなたを待つ世界。"
+  },
+  "THE FIRST MOMENT": {
+    "zh-CN": "最初的时刻",
+    "ja": "はじまりの瞬間"
+  },
+  "THE STORY CONTINUES": {
+    "zh-CN": "故事继续",
+    "ja": "物語は続く"
+  },
+  "Choose a world to begin.": {
+    "zh-CN": "选择一个世界开始。",
+    "ja": "ワールドを選んで始めましょう。"
+  },
+  "The writer has not left a mark in this scene yet.": {
+    "zh-CN": "作家还没有在这里留下笔迹。",
+    "ja": "作家はまだこの場面に言葉を残していません。"
+  },
+  "Spatial story canvas": {
+    "zh-CN": "空间叙事画布",
+    "ja": "物語の空間キャンバス"
+  },
+  "World header": {
+    "zh-CN": "世界顶部栏",
+    "ja": "ワールドヘッダー"
+  },
+  "Scene path": {
+    "zh-CN": "场景路径",
+    "ja": "場面の経路"
+  },
+  "WORLD PAUSED": {
+    "zh-CN": "世界已暂停",
+    "ja": "世界は停止中"
+  },
+  "WORLD AWAKE": {
+    "zh-CN": "世界正在流动",
+    "ja": "世界は進行中"
+  },
+  "Show interface": {
+    "zh-CN": "显示界面",
+    "ja": "UIを表示"
+  },
+  "Hide interface": {
+    "zh-CN": "隐藏界面",
+    "ja": "UIを隠す"
+  },
+  "Toggle immersion · Tab": {
+    "zh-CN": "切换沉浸模式 · Tab",
+    "ja": "没入モード切り替え · Tab"
+  },
+  "The first moment": {
+    "zh-CN": "最初的时刻",
+    "ja": "はじまりの瞬間"
+  },
+  "The story continues": {
+    "zh-CN": "故事继续",
+    "ja": "物語は続く"
+  },
+  "Time stands still": {
+    "zh-CN": "时间静止",
+    "ja": "時は止まっている"
+  },
+  "Time flows": {
+    "zh-CN": "时间流动",
+    "ja": "時は流れている"
+  },
+  "Canvas tools": {
+    "zh-CN": "画布工具",
+    "ja": "キャンバスツール"
+  },
+  "Explore": {
+    "zh-CN": "探索",
+    "ja": "探索"
+  },
+  "God Hand": {
+    "zh-CN": "上帝之手",
+    "ja": "神の手"
+  },
+  "Return to scene": {
+    "zh-CN": "回到场景",
+    "ja": "場面に戻る"
+  },
+  "Encountered characters": {
+    "zh-CN": "相识的人",
+    "ja": "出会った人物"
+  },
+  "PEOPLE YOU KNOW": {
+    "zh-CN": "你认识的人",
+    "ja": "知り合った人々"
+  },
+  "Every stranger has a story.": {
+    "zh-CN": "每个陌生人都有故事。",
+    "ja": "誰もが物語を持っている。"
+  },
+  "Belongings": {
+    "zh-CN": "随身物品",
+    "ja": "持ち物"
+  },
+  "BELONGINGS": {
+    "zh-CN": "随身物品",
+    "ja": "持ち物"
+  },
+  "Open belongings": {
+    "zh-CN": "打开随身物品",
+    "ja": "持ち物を開く"
+  },
+  "Nothing carried yet.": {
+    "zh-CN": "还没有携带物品。",
+    "ja": "持ち物はまだありません。"
+  },
+  "Open player profile": {
+    "zh-CN": "打开玩家档案",
+    "ja": "プレイヤー情報を開く"
+  },
+  "YOU": {
+    "zh-CN": "你",
+    "ja": "あなた"
+  },
+  "PLAYER CHARACTER": {
+    "zh-CN": "玩家角色",
+    "ja": "プレイヤーキャラクター"
+  },
+  "Resident companions": {
+    "zh-CN": "常驻同伴",
+    "ja": "同行する仲間"
+  },
+  "Write an action": {
+    "zh-CN": "书写行动",
+    "ja": "行動を書く"
+  },
+  "What do you do?": {
+    "zh-CN": "你想做什么？",
+    "ja": "どうしますか？"
+  },
+  "✧ SPEAK TO THE WRITER": {
+    "zh-CN": "✧ 对作家说",
+    "ja": "✧ 作家に語りかける"
+  },
+  "The world is paused": {
+    "zh-CN": "世界已暂停",
+    "ja": "世界は停止中"
+  },
+  "Your action moves the world forward": {
+    "zh-CN": "你的行动，让世界向前",
+    "ja": "あなたの行動が世界を動かす"
+  },
+  "Action": {
+    "zh-CN": "行动",
+    "ja": "行動"
+  },
+  "What do you do? You can also address someone by name…": {
+    "zh-CN": "你想做什么？也可以直接叫出某人的名字……",
+    "ja": "どうしますか？相手の名前で呼びかけることもできます…"
+  },
+  "Send action": {
+    "zh-CN": "发送行动",
+    "ja": "行動を送信"
+  },
+  "Close": {
+    "zh-CN": "关闭",
+    "ja": "閉じる"
+  },
+  "Choose a world": {
+    "zh-CN": "选择世界",
+    "ja": "ワールドを選ぶ"
+  },
+  "WORLD SHELF": {
+    "zh-CN": "世界书架",
+    "ja": "ワールド一覧"
+  },
+  "Template": {
+    "zh-CN": "模板",
+    "ja": "テンプレート"
+  },
+  "Your world": {
+    "zh-CN": "你的世界",
+    "ja": "あなたのワールド"
+  },
+  "Continue this story": {
+    "zh-CN": "继续这个故事",
+    "ja": "この物語を続ける"
+  },
+  "Language": {
+    "zh-CN": "语言",
+    "ja": "言語"
+  },
+  "→ Take along": {
+    "zh-CN": "→ 收入随身",
+    "ja": "→ 持っていく"
+  },
+  "→ Enter scene": {
+    "zh-CN": "→ 进入场景",
+    "ja": "→ 場面に入る"
+  },
+  "→ Talk": {
+    "zh-CN": "→ 交谈",
+    "ja": "→ 話す"
+  },
+  "→ Look closer": {
+    "zh-CN": "→ 仔细观察",
+    "ja": "→ よく調べる"
+  },
+  "Entity actions": {
+    "zh-CN": "实体行动",
+    "ja": "対象への行動"
+  },
+  "Working…": {
+    "zh-CN": "处理中……",
+    "ja": "処理中…"
+  },
+  "Added to belongings.": {
+    "zh-CN": "已收入随身物品。",
+    "ja": "持ち物に追加しました。"
+  },
+  "Choice recorded. The world can respond on the next turn.": {
+    "zh-CN": "已记录选择，世界将在下一轮回应。",
+    "ja": "選択を記録しました。世界は次のターンで応答できます。"
+  },
+  "▾ Pinned": {
+    "zh-CN": "▾ 已固定",
+    "ja": "▾ 固定中"
+  },
+  "▸ Interact": {
+    "zh-CN": "▸ 互动",
+    "ja": "▸ アクション"
+  },
+  "Status": {
+    "zh-CN": "状态",
+    "ja": "状態"
+  },
+  "Advance the Story": {
+    "zh-CN": "推进故事",
+    "ja": "物語を進める"
+  },
+  "Close dialog": {
+    "zh-CN": "关闭对话",
+    "ja": "会話を閉じる"
+  },
+  "{count} choices": {
+    "zh-CN": "{count} 个选项",
+    "ja": "選択肢 {count} 個"
+  },
+  "Dice": {
+    "zh-CN": "骰子",
+    "ja": "ダイス"
+  },
+  "· pinned": {
+    "zh-CN": "· 已固定",
+    "ja": "· 固定中"
+  },
+  "Talk to {name}": {
+    "zh-CN": "与 {name} 交谈",
+    "ja": "{name} と話す"
+  },
+  "{items} ITEMS · {people} PEOPLE": {
+    "zh-CN": "{items} 件物品 · {people} 位人物",
+    "ja": "持ち物 {items} · 人物 {people}"
+  },
+  "Current place: {place}": {
+    "zh-CN": "当前地点：{place}",
+    "ja": "現在地：{place}"
+  },
+  "You are the player inside {world}": {
+    "zh-CN": "你是 {world} 中的玩家",
+    "ja": "あなたは {world} のプレイヤー"
+  },
+  "this world": {
+    "zh-CN": "这个世界",
+    "ja": "この世界"
+  },
+  "{count} carried items": {
+    "zh-CN": "携带 {count} 件物品",
+    "ja": "持ち物 {count} 個"
+  },
+  " · opening…": {
+    "zh-CN": " · 正在打开……",
+    "ja": " · 読み込み中…"
+  }
+}

@@ -1,3 +1,4 @@
+import { useLocale } from './i18n.js';
 import React, { useState } from 'react';
 import { Activity, ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react';
 import { DiceRoller } from '../components/narrative/DiceRoller.js';
@@ -76,6 +77,7 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
   onChoice,
   onDiceRolled,
 }) => {
+  const { t } = useLocale();
   // Status fold: hover peeks open, click pins, leaving collapses unless pinned.
   const [statusPinned, setStatusPinned] = useState(false);
   const [statusHover, setStatusHover] = useState(false);
@@ -91,7 +93,7 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
   return (
     <div className="fm-block" onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)} onFocus={() => setFocused(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setFocused(false); }}>
       <button type="button" className="fm-head" aria-expanded={open} aria-pressed={pinned} onClick={() => setPinned(value => !value)}>
-        {pinned ? '▾ Pinned' : '▸ Interact'}{choices.length > 0 ? ` · ${choices.length} choices` : ''}{dice ? ' · Dice' : ''}{statusKeys ? ' · Status' : ''}
+        {t(pinned ? '▾ Pinned' : '▸ Interact')}{choices.length > 0 ? ` · ${t('{count} choices', { count: choices.length })}` : ''}{dice ? ` · ${t('Dice')}` : ''}{statusKeys ? ` · ${t('Status')}` : ''}
       </button>
       <div className="fm-body" hidden={!open}>
       {statusKeys > 0 && (
@@ -106,8 +108,8 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
           >
             {statusOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             <Activity className="w-3.5 h-3.5" />
-            <span>{statusLabel ?? 'Status'} ({statusKeys})</span>
-            {statusOpen && statusPinned && <span className="text-ink/40">· pinned</span>}
+            <span>{statusLabel ?? t('Status')} ({statusKeys})</span>
+            {statusOpen && statusPinned && <span className="text-ink/40">{t("· pinned")}</span>}
           </button>
 
           {statusOpen && (
@@ -138,7 +140,7 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
       {choices.length > 0 && (
         <div className="mt-4 space-y-2">
           <div className="text-xs font-mono text-ink/40 uppercase tracking-wider mb-1">
-            Advance the Story
+            {t('Advance the Story')}
           </div>
           {choices.map((choice, idx) => {
             const hovered = hoverChoice === idx;
