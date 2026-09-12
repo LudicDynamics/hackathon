@@ -17,7 +17,9 @@ worlds/
 assets/**
 !assets/audio/
 !assets/audio/**
-# Runtime copies installed from presets/ by installPreset; not the source of truth
+# 素材生产的手艺包（文本，无大二进制）——工具见 tools/motion-clip.mjs
+!assets/skills/
+!assets/skills/**
 **/.airpworld/prompt-presets/
 # pi-rp session memory is runtime state, never template content truth
 **/.pi/*.db*

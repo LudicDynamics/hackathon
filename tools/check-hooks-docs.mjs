@@ -73,6 +73,15 @@ for (const d of docs) {
     }
   });
 }
+
+// A doc with an odd number of ``` fences has a broken code block — it swallows
+// the rest of the doc into a fence (found live while fixing 02/06).
+for (const d of docs) {
+  const n = d.lines.filter((l) => l.trim().startsWith('```')).length;
+  if (n % 2 !== 0) {
+    report('fence-balance', d.name, null, `${n} \`\`\` fences — odd count means an unclosed code block`, 'close the dangling fence');
+  }
+}
 for (const [sym, byFile] of ownerOf) {
   if (byFile.size <= 1) continue;
   const [first] = [...byFile.values()].flat();
@@ -149,7 +158,7 @@ if (sentinels.length > 2) {
 
 // ---------------------------------------------------------------- 4. citations
 const CITE = /((?:packages|apps|extensions|tools|vendor)\/[\w/\-.]*?[\w/-])\.(tsx|mts|cts|json|mjs|cjs|ts|js)(?::(\d+)(?:-(\d+))?)?/g;
-const NEWISH = /\bNEW\b|新建|新增|待建|尚未存在/;
+const NEWISH = /\bNEW\b|新建|新增|新文件|待建|尚未存在|（新）|\(新\)/;
 const cited = new Map();
 for (const d of docs) {
   d.lines.forEach((raw, i) => {

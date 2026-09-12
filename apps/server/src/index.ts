@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import { existsSync } from 'node:fs';
 import { WebSocketServer, WebSocket } from 'ws';
-import { LocalWorldStore, createActionService } from '@airp/shared';
+import { LocalWorldStore, createActionService, settleTurnCursor } from '@airp/shared';
 import { AgentLifecycleManager } from './engine/lifecycle.js';
 import { EventBridge } from './engine/event-bridge.js';
 import { createWorldRouter } from './routes/world.js';
@@ -29,6 +29,14 @@ app.use(express.json());
 let activeStore: LocalWorldStore | null = null;
 const eventBridge = new EventBridge();
 eventBridge.setWss(wss);
+
+// Character overlay open-time high-water marks (03 §4.3). Module-level and
+// in-process (server + lifecycle share this process); NOT persisted — an open
+// overlay is transient, so a restart legitimately forgets it. `character_stop`
+// pins the cursor to the value recorded at `character_start`, so events that
+// happened to OTHER readers while the overlay was open are not swallowed.
+const characterOpenHighWater = new Map<string, number>();
+let warnedMissingHighWater = false;
 
 const lifecycle = new AgentLifecycleManager({
   repoRoot: REPO_ROOT,
@@ -116,8 +124,20 @@ wss.on('connection', (ws: WebSocket) => {
         }
       } else if (data.type === 'character_start') {
         try {
-          if (!activeStore) throw new Error('No active world');
-          await lifecycle.startCharacter(data.characterId, activeStore.worldRoot);
+          const worldPath = activeStore?.worldRoot;
+          if (!worldPath) throw new Error('No active world for the character agent');
+          // Pin the open-time high-water BEFORE spawning (03 §4.3): the close
+          // path settles the cursor to this seq, so "world changed while the
+          // overlay was open" is reported on the NEXT open instead of being
+          // swallowed. A failed read must not block opening (doc 00 §11).
+          if (activeStore) {
+            try {
+              characterOpenHighWater.set(String(data.characterId), await activeStore.getMaxSeq());
+            } catch (err) {
+              console.warn('[AIRP WS] character open high-water read failed:', err);
+            }
+          }
+          await lifecycle.startCharacter(data.characterId, worldPath);
         } catch (err: unknown) {
           console.error('[AIRP WS] Character start failed:', err);
           ws.send(JSON.stringify({ type: 'error', source: 'character', characterId: data.characterId, message: err instanceof Error ? err.message : String(err) }));
@@ -165,6 +185,24 @@ wss.on('connection', (ws: WebSocket) => {
             // A missing event is far less bad than a leaked agent process.
             console.warn('[AIRP WS] character_talked event skipped:', err);
           }
+        }
+        // Settle the character's read cursor on CLOSE (03 §4.3 call point 3) —
+        // never on open (a crash / misclick would swallow the span forever).
+        // The pinned seq is the open-time high-water; a missing key (e.g. the
+        // server restarted mid-overlay) degrades to `getMaxSeq()` + one warn.
+        if (activeStore) {
+          const key = String(data.characterId);
+          const pinned = characterOpenHighWater.get(key);
+          if (pinned === undefined && !warnedMissingHighWater) {
+            warnedMissingHighWater = true;
+            console.warn(
+              `[AIRP WS] character_stop for "${key}" has no open high-water; falling back to the max seq`
+            );
+          }
+          const opts = pinned === undefined ? {} : { seq: pinned };
+          await settleTurnCursor(activeStore, `character:${key}`, opts);
+          // Close consumes the overlay: forget the pinned high-water.
+          characterOpenHighWater.delete(key);
         }
         await lifecycle.stopCharacter(data.characterId);
       }

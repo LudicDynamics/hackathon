@@ -5,6 +5,9 @@
 >
 > 本轮最重要的产出不是这份报告，而是 **`tools/check-hooks-docs.mjs`**——它把"冻结契约"变成可机械核验的东西（B1 复盘第一教训）。本报告里 4 类 blocker 中 3 类该脚本**已经能自动抓到**。
 
+> **状态：已闭合（2026-09-12）。** 六篇 fixer 逐篇回写 + 主控亲改契约 + 手接卡死的 Fix02；`pnpm check:docs` 全绿。§5 三张清单是当时的任务派发单，**全部已执行**；§2/§3 的缺陷编号可直接对照 `git log` 查闭合提交。
+>
+> **本批最贵的一课**：判决 `incorrect` 不是因为机制选错（机制是对的），而是因为**并行写文档必然产生契约漂移**。所以真正的修复不是"下次注意"，而是**让漂移能被机器抓到**——`tools/check-hooks-docs.mjs` 现在进了 `pnpm check:docs`，是本批留下的最重要的东西。
 ---
 
 ## 0. 一句话结论
@@ -51,7 +54,7 @@
 ### B-6 注入面安全：sanitize 是"内容的"而非"长度的"（RevRisk，无人重复）
 - **INJ-01**：`layer` 只查"是否 `map` 或 `world/` 开头 + 段非空 + ≤300 字"——**不拒换行、引号、反引号、注入散文**。经 `readLayerName` 回落（`presence.ts:112-121`）把**末段原样**印进 `the player is in "<layer name>"`。全仓 grep `转义|escape|换行|控制字符` 零命中。
 - **INJ-02**：`selected[]` 同样只做类型+限长，`02` 用引号原样回显。
-- **INJ-03**：**"`POST /api/viewpoint` 是唯一外部输入"这个断言是假的**——`layer_files`/`cast` 印 `entityName()`（`rules/interactive.ts:383-387`，`title.trim()` **不限长**），而 `POST /api/god-action`（`routes/world.ts:605-656`）**无鉴权**接受任意 `frontmatter`/`body`，`index.ts:23` 挂了 `cors()`、`:175` 绑 `0.0.0.0`。**这是第二条注入通道，威胁模型漏了它。**
+- **INJ-03**：**"`POST /api/viewpoint` 是唯一外部输入"这个断言是假的**——`layer_files`/`cast` 印 `entityName()`（`rules/interactive.ts:383-387`，`title.trim()` **不限长**），而 `POST /api/god-action`（`routes/world.ts:669-720`）**无鉴权**接受任意 `frontmatter`/`body`，`index.ts:23` 挂了 `cors()`、`:175` 绑 `0.0.0.0`。**这是第二条注入通道，威胁模型漏了它。**
 - **修法：契约新增「注入面消毒」一节**：所有进入注入块的动态文本走**同一个 `sanitiseForBlock()`**（剥换行/控制字符、收敛引号、限长），并更正"唯一外部输入"的措辞为"唯一**新增**的浏览器直连输入；世界文件与 god-action 是既有通道，对其统一消毒"。
 
 ---
@@ -71,7 +74,7 @@
 | **A-9** | **热路径 `getEventsSince` 无 LIMIT**：`local-store.ts:408-429` 是 `SELECT * WHERE seq > ? ORDER BY seq ASC` **无 LIMIT**，截断发生在 `renderEventWindow` 之后 → `00 §4.2`"上限是有界性唯一保证"对**读取**不成立。游标在 steer/followUp 轮不推进，长会话每轮重读不断增长的范围 | RevRisk |
 | **A-10** | **每建一个 `LocalWorldStore` 就跑带 `DROP TABLE` 的探测式 DDL**（`local-store.ts:63-73`），而 `06 §5.4` 允许扩展**再开第二个连接** → 形状探测一旦漂移，扩展会 DROP 服务端正在服务的 `presence`/`links` 表。WAL + `busy_timeout` **不挡 DDL**。契约须写明"扩展侧 store 不得触发 DDL 重建" | RevRisk |
 | **A-11** | **`EventWindowLine` 的 `count` 缺 `character_moved`**：`MERGE_EXEMPT` 未含它，落到通用 `The engine did this N times.`；而 `carryFollowers`（`presence.ts:225-268`）对**每个跟随者**追加一条同 turn 同 actor 的 `character_moved` → **日常流程可复现**（跟随者跨层） | RevSemantics |
-| **A-12** | **交互三模板硬编码 "The player"**：`choice_selected`/`roll_resolved`/`use_item_on` 都可被 writer/god actor 触发（`roll-dice.ts:18` 在作家工具面；`/api/dice` 强制时 actor=`god`）→ 作家把自己刚做的选择读成"玩家做的"，且 `04` 的队尾判定不带 actor 检查，进一步指示它去回应自己 | RevSemantics |
+| **A-12** | **交互三模板硬编码 "The player"**：`choice_selected`/`roll_resolved`/`use_item_on` 都可被 writer/god actor 触发（`extensions/tools.ts:55` 的 `roll_dice` 在作家工具面；`/api/dice` 强制时 actor=`god`）→ 作家把自己刚做的选择读成"玩家做的"，且 `04` 的队尾判定不带 actor 检查，进一步指示它去回应自己 | RevSemantics |
 | **A-13** | **`"…and N more; the rest are on record"` 承诺一个作家打不开的记录**：游标已推到 `getMaxSeq()`，被折叠的事件永不重现，且**没有历史面工具**（`tools.ts` 无） | RevSemantics |
 | **A-14** | **C2「你关着时这里变了」永不触发**：`unseenCreation` 只看 `layer_initialized`/`layer_init_failed`（scene-init 子代理产出），而"作家关着时写的内容"只产生 `entity_created`/`entity_edited` → C2 沉默，角色收到 C3"无事欠答"，随后可自相矛盾 | RevSemantics |
 | **A-15** | **`00 §3.1` 的 `Section.key` 注释把 `next_step` 列为 key**，与 §8/01/02 的 `SectionKey` 联合类型直接矛盾 | RevHonesty |

@@ -29,6 +29,7 @@ export interface MinimapProps {
   items: LayerItem[];
   /** Camera driver; the minimap subscribes to it and calls flyTo on click. */
   camera: CameraApi;
+  label?: string;
 }
 
 /** Geometry produced by one draw pass and reused by the click handler. */
@@ -47,7 +48,7 @@ function token(name: string, fallback: string): string {
   return v || fallback;
 }
 
-export const Minimap: React.FC<MinimapProps> = ({ items, camera }) => {
+export const Minimap: React.FC<MinimapProps> = ({ items, camera, label = 'MINIMAP' }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const geoRef = useRef<MapGeometry | null>(null);
   /** Latest items, read by the draw pass without re-subscribing on every fetch. */
@@ -168,7 +169,7 @@ export const Minimap: React.FC<MinimapProps> = ({ items, camera }) => {
 
   return (
     <div className="minimap-wrap" onClick={handleClick}>
-      <div className="minimap__title">MINIMAP</div>
+      <div className="minimap__title">{label}</div>
       <canvas
         ref={canvasRef}
         className="minimap__canvas"

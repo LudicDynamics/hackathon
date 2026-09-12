@@ -128,6 +128,29 @@ export function cardFormOf(
 }
 
 /**
+ * NEW. Short, deterministic hash of a DECLARED footprint. Changes IFF the
+ * declared (kind, w, h) triple changes, so it is the ONLY thing `reseatLayer`
+ * compares to decide "the kind was resized in code" (contract §5.1 第 4 条 /
+ * §9 第 8 条). Pure FNV-1a on `${kind}:${w}x${h}` — dependency-free on purpose:
+ * forms.ts is imported by the web bundle (cardFormOf), and node:crypto there
+ * would break it.
+ *
+ * `kind` is part of the hash input (MINOR-10): `map` (300x200, chrome scroll)
+ * and `thread` (300x200, chrome paper) share a box but paint at different
+ * heights, so hashing `(w,h)` alone would miss a resize. Consequence accepted
+ * by the contract: renaming a kind re-seats its cards once (the alternative —
+ * silent non-reseat — is worse).
+ */
+export function cardFormVersionOf(kind: string, w: number, h: number): string {
+  let hash = 0x811c9dc5;
+  for (const ch of `${kind}:${w}x${h}`) {
+    hash ^= ch.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+/**
  * Chalk style variants — narration is the one kind with "many styles". Every
  * field is optional; the default is bare serif ink (transparent background, no
  * card surface). Special styles are opt-in via frontmatter:

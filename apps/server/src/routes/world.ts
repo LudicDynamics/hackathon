@@ -9,11 +9,17 @@ import {
   ActionError,
   LocalWorldStore,
   SEAT_ANCHOR,
+  boxSizeOf,
+  dirOfLayer,
   createActionService,
+  listBackpack,
   parseFrontmatter,
   cardFormOf,
   cardKindOf,
+  sanitiseForBlock,
   type Actor,
+  type CardRecord,
+  type ViewRect,
 } from '@airp/shared';
 import type { AgentLifecycleManager } from '../engine/lifecycle.js';
 import type { EventBridge } from '../engine/event-bridge.js';
@@ -23,6 +29,10 @@ interface LayerItem {
   filename: string;
   frontmatter: Record<string, unknown> | null;
   body: string;
+}
+
+interface SceneReadme extends LayerItem {
+  kind: 'scene';
 }
 
 /**
@@ -76,12 +86,100 @@ function rotOf(cardPath: string): number {
   return (hashInt(cardPath) % 7) - 3;
 }
 
-/** Card footprint — the shared CARD_FORMS table is the single source
- *  (packages/shared/src/schemas/forms.ts), so the seated box and the painted
- *  box can never drift. */
-function cardSize(item: LayerItem): { w: number; h: number } {
-  const { w, h } = cardFormOf(item.frontmatter, item.filename);
-  return { w, h };
+/** SHAPE gate only (00 §14.1 rule 4): the value must LOOK like a layer id.
+ *  NOT dot-relative like `assertWorldPath` (presence.ts:29) — relative paths are
+ *  meaningless outside the action layer. This is NECESSARY, NOT SUFFICIENT: it
+ *  does not reject newlines / quotes / backticks / injected prose, and the value
+ *  is echoed verbatim into the state block, so every accepted value MUST then
+ *  pass `sanitiseForBlock` (00 §14). */
+function isPlausibleLayer(layer: string): boolean {
+  if (layer === 'map') return true; // MAP_LAYER, store/layers.ts
+  if (!layer.startsWith('world/')) return false;
+  const segs = layer.split('/');
+  return segs.every((s) => s !== '' && s !== '.' && s !== '..');
+}
+
+/** Clamp a numeric field, or null when it is not a real finite number.
+ *  NOT Nodesign's `Number(v)`: `Number(null)`/`Number('')` are 0 and would let a
+ *  null camera component through — 00 §11 requires the whole report be refused. */
+function num(v: unknown, min: number, max: number): number | null {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+  return Math.min(max, Math.max(min, v));
+}
+
+/** The one NEW browser-direct input on the injection path (00 §5.2). Rejects
+ *  the WHOLE report on a malformed camera — a half-believed rect is worse than
+ *  none. Every accepted STRING is then folded through `sanitiseForBlock`
+ *  (00 §14). `at` is NOT produced here: it is the server clock's stamp (05 §4.1
+ *  table's last row), applied by `writeViewpoint`. */
+function sanitizeViewpoint(raw: unknown): {
+  layer: string;
+  focus: ViewRect | null;
+  selected: string[];
+  bagCount: number;
+} | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const body = raw as Record<string, unknown>;
+
+  const rawLayer = typeof body.layer === 'string' && body.layer.length <= 300 ? body.layer : '';
+  if (rawLayer !== '' && !isPlausibleLayer(rawLayer)) return null;
+  // Content-level pass (00 §14.1 rules 1-3): fold newlines / control chars /
+  // quotes and cap length. The shape gate above is NOT enough (INJ-01).
+  const layer = sanitiseForBlock(rawLayer, { maxLength: 300 });
+
+  let focus: ViewRect | null = null;
+  if (body.camera !== undefined && body.camera !== null) {
+    if (typeof body.camera !== 'object') return null;
+    const c = body.camera as Record<string, unknown>;
+    const x = num(c.x, -1e6, 1e6);
+    const y = num(c.y, -1e6, 1e6);
+    const w = num(c.w, 1, 1e5);
+    const h = num(c.h, 1, 1e5);
+    if (x === null || y === null || w === null || h === null) return null;
+    // The wire sends the world-space visible rect's TOP-LEFT. `focus` is the
+    // CENTRE in WORLD coords (ViewpointRecord's contract): `camera.x` already
+    // equals `cam.x - vw / (2 * z)`, so the centre is x + w / 2.
+    focus = { x: x + w / 2, y: y + h / 2, w, h };
+  }
+
+  const rawBag = num(body.bagCount, 0, 999);
+  const bagCount = rawBag === null ? 0 : Math.trunc(rawBag);
+
+  const selected = (Array.isArray(body.selected) ? body.selected : [])
+    .filter((s): s is string => typeof s === 'string' && s.length <= 300)
+    .slice(0, 24)
+    .map((s) => sanitiseForBlock(s, { maxLength: 300 }));
+
+  return { layer, focus, selected, bagCount };
+}
+
+/**
+ * DECLARED footprint of a kind — `reseatLayer` judges "was this kind resized in
+ * code?" by hashing `kind + w + h`, so `kind` is part of the payload (00 §5.1
+ * 第 4 条 / §9 第 8 条). MUST NOT be used for a collision test: since F1 the
+ * stored row is the card's real footprint (00 §3.1).
+ */
+function declaredSizeOf(item: LayerItem): { kind: string; w: number; h: number } {
+  const form = cardFormOf(item.frontmatter, item.filename);
+  return { kind: cardKindOf(item.frontmatter, item.filename), w: form.w, h: form.h };
+}
+
+/**
+ * STORED footprint — the row is the truth; declared is only the first-paint
+ * default for a card that has no row yet (00 §3.4). This is what `seatUnplaced`
+ * seats a brand-new card with, so a long chalk gets a seat that fits it.
+ */
+function storedSizeOf(
+  item: LayerItem,
+  row: CardRecord | undefined
+): { kind: string; w: number; h: number } {
+  const declared = declaredSizeOf(item);
+  if (row && (row.w <= 0 || row.h <= 0)) {
+    // Degenerate row is corruption, not a normal state: never silent (00 §7).
+    console.warn(`/api/layer: card "${item.path}" has a degenerate row (w=${row.w}, h=${row.h}); using the declared form.`);
+  }
+  const { w, h } = boxSizeOf(row, declared);
+  return { kind: declared.kind, w, h };
 }
 
 /**
@@ -332,39 +430,47 @@ export function createWorldRouter(
       // Seat and persist any card that has no row yet (placed cards never re-seat).
       const unseated = items
         .filter((it) => !rowByPath.has(it.path))
-        .map((it) => ({ path: it.path, ...cardSize(it) }));
+        .map((it) => ({ path: it.path, ...storedSizeOf(it, rowByPath.get(it.path)) }));
       if (unseated.length > 0) {
         for (const row of await store.seatUnplaced(layer, unseated)) {
           rowByPath.set(row.id, row);
         }
       }
 
-      // Re-flow any card whose stored box drifted from the current form table
-      // (a kind was resized in code). Without this the old seats overlap.
+      // Re-flow any card whose stored footprint drifted: a kind was resized in
+      // code (declared hash mismatch) or the front end measured a new size.
+      // Both live in `reseatLayer` (00 §5.1); without this the old seats overlap.
       for (const row of await store.reseatLayer(
         layer,
-        items.map((it) => ({ path: it.path, ...cardSize(it) }))
+        items.map((it) => ({ path: it.path, ...declaredSizeOf(it) }))
       )) {
         rowByPath.set(row.id, row);
       }
 
       const enriched = items.map((it) => {
         const row = rowByPath.get(it.path);
-        const form = cardFormOf(it.frontmatter, it.filename);
+        const { kind, w, h } = storedSizeOf(it, row);
         return {
           ...it,
-          kind: cardKindOf(it.frontmatter, it.filename),
+          kind,
           x: row ? row.x : SEAT_ANCHOR.x,
           y: row ? row.y : SEAT_ANCHOR.y,
-          // w/h are a pure function of kind, so they always come from the form
-          // table — never from the stored row. Resizing a kind re-flows every
-          // card of that kind on the next paint (rows only persist x/y).
-          w: form.w,
-          h: form.h,
+          // w/h come from the stored row: since F1 those columns are the card's
+          // REAL footprint, written by POST /api/card/footprint once the front
+          // end measures it (00 §3.1). The form table is only the first-paint
+          // default for a row that is missing or degenerate.
+          w,
+          h,
           z: row ? row.z : 1,
           rot: rotOf(it.path), // derived, never persisted
         };
       });
+
+      // The layer's own README is its entry Chalk as well as its scene config.
+      // It is returned separately from `items`: the same README is a gate on
+      // the parent page, so seating it again here would create one path with two
+      // incompatible positions.
+      let scene: SceneReadme | null = null;
 
       // bg + audio from the layer README frontmatter (doc-10 E0; docs/audio/00 §3).
       let bg: { src: string | null; tone: string; grain: string } = { src: null, tone: 'warm', grain: 'parchment' };
@@ -372,8 +478,16 @@ export function createWorldRouter(
       try {
         const readmePath = layer === 'map' ? 'world/README.md' : `${layer}/README.md`;
         const raw = await store.readFile(readmePath);
+        const parsedReadme = parseFrontmatter(raw);
+        scene = {
+          path: readmePath,
+          filename: 'README.md',
+          frontmatter: parsedReadme.frontmatter,
+          body: parsedReadme.body,
+          kind: 'scene',
+        };
         bg = readLayerBg(raw);
-        const ownFm = parseFrontmatter(raw).frontmatter;
+        const ownFm = parsedReadme.frontmatter;
         const own = readLayerAudio(ownFm, store, AUDIO_ROOT);
         audio = own;
         // Inheritance is keyed on DECLARATION, not on resolution: `??` cannot tell
@@ -419,31 +533,21 @@ export function createWorldRouter(
         following: Number(row.following) === 1,
       }));
 
-      res.json({ layer, bg, audio, items: enriched, links, presence, worldFrozen });
+      res.json({ layer, scene, bg, audio, items: enriched, links, presence, worldFrozen });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
-  // Get backpack items (player/ directory)
+  // Get backpack items (player/ directory). The scan lives in shared so the
+  // injection-side `bag` section and this route name one fact once
+  // (docs/hooks/02 §3.1/§4.2); `BagItem`'s field names are the contract the
+  // sidebar reads (`RightSidebar.tsx`), so they are not this route's to change.
   router.get('/backpack', async (_req, res) => {
     const store = getActiveStore();
     if (!store) return res.status(400).json({ error: 'No active world' });
     try {
-      const allFiles = await store.listFiles('player');
-      const items = await Promise.all(
-        allFiles.map(async (file) => {
-          const raw = await store.readFile(file);
-          const { frontmatter, body } = parseFrontmatter(raw);
-          return {
-            path: file,
-            filename: path.basename(file),
-            frontmatter,
-            body,
-          };
-        })
-      );
-      res.json({ items });
+      res.json({ items: await listBackpack(store) });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -536,6 +640,61 @@ export function createWorldRouter(
     }
   });
 
+  /**
+   * Persist measured card footprints (docs/footprint/03 §3.1, contract §3.3).
+   *
+   * The second "card state HTTP write", deliberately asymmetric with
+   * `/card/position`: a player may never resize a card through `arrange`, but
+   * the renderer's measured fact may overwrite the stored box (contract §5.3).
+   *
+   * Writes ONLY `cards.width/height` (+ `metadata.measuredAt`) via the store,
+   * keyed by `id = path` alone. It MUST NOT write an event (contract §3.6 — a
+   * derived render fact, not world content) and MUST NOT broadcast a frame:
+   * the caller IS the measurer, so a frame would only echo stale data back.
+   *
+   * 200 → { ok: true, updated, unchanged }   (unknown path/row → skipped, counted in `unchanged`)
+   * 404 → { ok: false, code: 'not_found' }   (layer name does not exist)
+   * 400 → { ok: false, code: 'invalid_argument' } (malformed layer/boxes)
+   */
+  router.post('/card/footprint', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const { layer, boxes } = req.body as { layer?: unknown; boxes?: unknown };
+    if (typeof layer !== 'string' || layer === '') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'layer must be a non-empty layer id' });
+    }
+    // L3: the store matches rows by `id = path` ONLY, so this layer check is the
+    // single gate that keeps a mistyped layer name from silently writing rows
+    // that live in another layer. 404 (not 400): an unknown layer is "not found".
+    if ((await store.resolveLayer(dirOfLayer(layer))) !== layer) {
+      return res.status(404).json({ ok: false, code: 'not_found', error: 'layer must be an existing layer id' });
+    }
+    if (!Array.isArray(boxes)) {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'boxes must be an array' });
+    }
+    if (boxes.length === 0) return res.json({ ok: true, updated: 0, unchanged: 0 });
+    for (let i = 0; i < boxes.length; i++) {
+      const b = boxes[i] as { path?: unknown; w?: unknown; h?: unknown } | null;
+      // Whole-request 400, never "skip the bad ones": the only caller is our own
+      // frontend, so a bad box is a bug and partial writes would hide it (03 L6).
+      if (b === null || typeof b !== 'object') {
+        return res.status(400).json({ ok: false, code: 'invalid_argument', error: `boxes[${i}] must be an object` });
+      }
+      if (typeof b.path !== 'string' || b.path === '') {
+        return res.status(400).json({ ok: false, code: 'invalid_argument', error: `boxes[${i}].path must be a non-empty string` });
+      }
+      if (typeof b.w !== 'number' || !Number.isFinite(b.w) || b.w <= 0 || b.w > 1e6) {
+        return res.status(400).json({ ok: false, code: 'invalid_argument', error: `boxes[${i}].w must be a finite positive number` });
+      }
+      if (typeof b.h !== 'number' || !Number.isFinite(b.h) || b.h <= 0 || b.h > 1e6) {
+        return res.status(400).json({ ok: false, code: 'invalid_argument', error: `boxes[${i}].h must be a finite positive number` });
+      }
+    }
+    await reply(res, async () => ({
+      details: await store.writeFootprints(layer, boxes as Array<{ path: string; w: number; h: number }>),
+    }));
+  });
+
   // Resolve roll_dice — `rollDice` is the ONE adjudicator (doc-20 §2.2). The old
   // body rolled, parsed `expect` and wrote the file back here, a second rule set.
   // The HTTP path sends NO presentation frame (§3.3 step 5): the frontend drives
@@ -601,6 +760,52 @@ export function createWorldRouter(
     if (typeof layer !== 'string' || layer === '') {
       return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'layer must be a non-empty layer id' });
     }
+    // P0 gate contract: a target README may require exact backpack paths.
+    // Later requirement axes (facts / companions / adjudicated RP) will extend
+    // this block without changing the README-as-gate source of truth.
+    const readmePath = layer === 'map' ? 'world/README.md' : `${layer}/README.md`;
+    if ((await store.statKind(readmePath)) === 'file') {
+      const parsed = parseFrontmatter(await store.readFile(readmePath));
+      if (parsed.errors.length > 0) {
+        return res.status(409).json({
+          ok: false,
+          code: 'invalid_gate',
+          error: `This scene cannot be entered because its README is invalid: ${parsed.errors[0]}`,
+        });
+      }
+      const rawItems = parsed.frontmatter?.requires?.items;
+      const requiredItems = Array.isArray(rawItems)
+        ? rawItems.filter((item): item is string => typeof item === 'string' && item !== '')
+        : [];
+      const invalidItem = requiredItems.find(
+        (item) => !item.startsWith('player/') || !item.endsWith('.md') || item.split('/').includes('..')
+      );
+      if (invalidItem) {
+        return res.status(409).json({
+          ok: false,
+          code: 'invalid_gate',
+          error: `Gate requirements must name player/*.md backpack paths, got: ${invalidItem}`,
+        });
+      }
+      const missing: string[] = [];
+      for (const item of requiredItems) {
+        if ((await store.statKind(item)) !== 'file') missing.push(item);
+      }
+      if (missing.length > 0) {
+        const blocked = parsed.frontmatter?.blocked;
+        return res.status(409).json({
+          ok: false,
+          code: 'requirements_not_met',
+          error:
+            typeof blocked === 'string' && blocked.trim() !== ''
+              ? blocked
+              : `This scene is still locked. Missing: ${missing.join(', ')}`,
+          missing,
+        });
+      }
+    }
+    // A stub has no README yet; entering it is what asks the world to
+    // materialise one, so absence must not become an artificial lock.
     await reply(res, async () => {
       const layers = (await store.getManifest()).layers;
       if (!layers[layer]) throw new ActionError({ code: 'not_found', message: 'Scene does not exist.' });
@@ -612,11 +817,20 @@ export function createWorldRouter(
     });
   });
 
-  /**
-   * `/api/viewpoint` belongs to B2 / doc-22 §9 (a `viewpoint` row in canvas.db).
-   * B1 deliberately ships no route and no table: a placeholder table now would
-   * create a second source of truth (docs/tools/12 §2.4).
-   */
+  // The player's viewpoint (00 §5). No event, no WS frame: this is a
+  // current-value report, not a world change (there is no `state_changed`; the
+  // row is not the world). Synchronous: `writeViewpoint` uses `execCanvas`, and
+  // this is not an action, so it does not go through `reply()`.
+  router.post('/viewpoint', (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const v = sanitizeViewpoint(req.body);
+    if (!v) {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'viewpoint report rejected' });
+    }
+    const at = store.writeViewpoint(v); // the ONE writer; returns the server-stamped `at`
+    res.json({ ok: true, at });
+  });
 
   // God mode toggle freeze — a presentation toggle, not an action: it writes no
   // event and broadcasts a演出 frame directly (docs/tools/12 §2.4).

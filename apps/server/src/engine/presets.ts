@@ -134,15 +134,18 @@ export function extensionArgs(repoRoot: string, worldRoot?: string): string[] {
   for (const dir of searchDirs) {
     if (fs.existsSync(dir)) {
       try {
+        // A `.js` sitting next to a `.ts` of the same basename is a stale
+        // transpile artifact (jiti runs the `.ts`). Loading BOTH registers
+        // every slot / tool twice — `registerSlot` is a bare `Map.set`
+        // (slot-renderers.ts:26), so the winner is decided by readdir order.
+        // Prefer the `.ts` and skip its `.js` twin.
         for (const file of fs.readdirSync(dir)) {
-          if (
-            (file.endsWith('.ts') || file.endsWith('.js')) &&
-            !file.endsWith('.d.ts') &&
-            !file.endsWith('.test.ts') &&
-            !file.endsWith('.spec.ts')
-          ) {
-            args.push('--extension', path.join(dir, file));
-          }
+          const isTs = file.endsWith('.ts') && !file.endsWith('.d.ts');
+          const isJs = file.endsWith('.js') && !file.endsWith('.d.ts');
+          if (!isTs && !isJs) continue;
+          if (file.endsWith('.test.ts') || file.endsWith('.spec.ts')) continue;
+          if (isJs && fs.existsSync(path.join(dir, `${file.slice(0, -3)}.ts`))) continue;
+          args.push('--extension', path.join(dir, file));
         }
       } catch {
         // Skip unreadable directory

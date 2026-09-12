@@ -48,7 +48,7 @@ apps/
     routes/world.ts     # 玩家 UI 路由 → 动作服务（/move, /dice, /use-item, /choice, /enter-layer, /god-action, …）
     world-shelf.ts      # 世界/存档书架投影与可恢复删除；见 docs/世界与存档.md
     engine/
-      launch.ts         # spawn 参数单一来源（preset / --session-dir / --continue / env / AIRP_AGENT_ROLE），服务端与探针共用
+      launch.ts         # spawn 参数单一来源（preset / --session-dir / --continue / env / AIRP_AGENT_ROLE / --no-* 资源隔离），服务端与探针共用
       lifecycle.ts      # Agent 生命周期编排（单例复用 / spawn / warmup / 崩溃退避重启 / stopAll）
       event-bridge.ts   # 引擎事件 → WS 帧；尾部读 events 表 → world_event 广播（见 §3.2）
       brief-builder.ts  # buildSceneInitBrief / buildNookInitBrief（动态 brief）
@@ -67,16 +67,17 @@ apps/
 packages/shared/src/    # schema + store + sqlite + 动作层
   schemas/              # world / frontmatter（互动字段通用化）/ components / events / forms / canvas
   store/                # local-store（fs + canvas.db + history.db）/ layers（层树派生）/ world-store（接口）
-  db/schema.ts          # 两库建表：cards / links / presence / entries / events(seq) / read_cursors
+  inject/               # 每轮注入：turn-cache（轮边界单槽缓存）/ collect（分节采集 + 备忘录 + 三步 fail-soft）
+  db/schema.ts          # 两库建表：cards / links / presence / viewpoint / entries / events(seq) / read_cursors
   rules/                # 零依赖纯规则：dice（expect 解析）/ interactive（choice 归一化）
-  render/               # 文本视图：spatial（人话方位）/ layer-page（目录展开）——look_at 与状态块共用
+  render/               # 文本视图：spatial（人话方位）/ layer-page（目录展开）/ state（注入块装配）/ sections（分节表）/ events（事件人话）/ next-step（"下一步"）/ viewpoint（视点量化）/ sanitise（注入面消毒）——look_at、状态块与前端共用
   components/           # 官方组件注册表（kind / schema / CARD_FORMS 联动 / use_item handler）
   actions/              # 动作层：createActionService(store, actor) —— server 路由与扩展工具的唯一共同入口
 presets/                # 提示词预设：writer, character, scene-init, nook-init
 extensions/
   instructions.ts       # 平台提示词正文（slot writer-char / system-char / scene-init-instruction / nook-init-instruction）
   tools.ts              # 唯一 registerTool 入口：注册 AIRP 动作工具（extensions/toolkit/ 是 jiti 直跑的薄壳）
-  world-context.ts      # 每轮世界/事件提示；原生 write/edit 落账，排除 AIRP 工具
+  world-context.ts      # 仅原生 write/edit 落账，排除 AIRP 工具；每轮注入统一复用 context.ts
   toolkit/              # 工具壳 + 共享 helper（deps/actor/turn/result）——子目录，不会被当扩展加载
 skills/                 # 项目级 skills：跨世界通用手艺（生图 / 组件叙事 / 节奏 / 玩法咬合）
 templates/              # 开箱世界模板；含 wuwu / whitechapel / divergence / firstsnow 四个素材版世界
@@ -86,10 +87,17 @@ worlds/                 # 脚手架产出的玩家世界（.gitignore）
 tools/scaffold.mjs      # 模板 → 新世界
 tools/sync-template-assets.mjs # 正式素材 → 模板图片、场景/角色引用与校验清单（不重建剧情）
 tools/migrate-canvas-worlds.mjs # worldlines-canvas 四世界 → AIRP 文件系统模板 + WebP 素材
+  context.ts            # 每轮注入（状态块 + 事件段 + "下一步"），挂 `context` 钩子（临时不落盘）；按 AIRP_AGENT_ROLE 分节（writer 6 节 / character 4 节）
+tools/motion-clip.mjs   # 微动立绘 / 背景视频生产（pnpm motion）：绿幕→透明 webm，成片→循环 webm
+                        #   手艺包见 assets/skills/motion-portrait/SKILL.md（alpha 解码陷阱在彼）
 tools/probe-writer.mjs  # 全链路探针（pnpm probe）
 tools/probe-tools.mjs   # 工具面探针：jiti 载入 extensions/tools.ts，断言注册表 + 真执行（pnpm probe:tools）
 tools/probe-tools-engine.mjs # 工具面探针（强形式）：真 spawn 引擎，断言 AIRP 工具被引擎执行（pnpm probe:tools 的第二段）
 tools/pi-rp.mjs         # pi-rp 子模块工作流（pnpm pi status|build|update|commit，见 §7.2）
+tools/probe-inject.mjs  # 注入探针：真 spawn 作家引擎，断言每请求恰好一份注入块、且不落盘（pnpm probe:inject）
+tools/inject-probe-provider.ts # 注入探针的确定性 provider（把每个请求的 wire messages 落文件）
+tools/check-ws-contract.mjs # 跨端 WS 契约门禁（pnpm check:ws）：服务端发射面 ↔ 前端消费面 ↔ 契约表求 diff
+docs/前端接线体检.md   # 2026-09-12 跨端 WS 契约静默漂移的核实报告（含缺陷分级与文档漂移清单）
 docs/                   # 设计文档（真相源）；docs/tools/ 是 B1 工具面设计 + 评审报告
 vendor/pi-rp/           # 叙事引擎 submodule
 ```
@@ -106,12 +114,11 @@ graph LR
   S --> L["engine/lifecycle<br/>进程编排"]
   L -->|"JSONL commands / stdio（pi-rp RpcClient）"| P["vendor/pi-rp<br/>pi 引擎（作家 / 角色 agent）"]
   P -->|"extensions/tools.ts 注册 AIRP 工具"| A
+  P -->|"extensions/context.ts 挂 `context` 钩子"| SB["每轮注入状态块<br/>状态块 + 事件段 + 下一步<br/>临时不落盘"]
   A -->|"落盘 + 落账"| FS["世界目录<br/>*.md + world.json"]
   A --> DB[".airpworld/<br/>canvas.db + history.db"]
   P -.->|"读取"| PR["presets/*.json<br/>→ .airpworld/prompt-presets/"]
 ```
-
-**动作层是 UI 与 Agent 的唯一共同入口**（`docs/doc-20` §12）：server 路由与扩展工具**各自 new 一个 `WorldStore`**，但都调同一个 `createActionService(store, actor)` 的动作函数——所以玩家点击与作家/角色的工具调用不可能跑出两套骰子 / 移动 / choice 语义。动作函数是 transport-free 的（不碰 HTTP、不碰 WS），**工具自己落账**；扩展进程不假设连着 WS。
 
 ### 3.1 单轮管线（作家）
 
@@ -119,6 +126,8 @@ graph LR
 
 Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → write/edit 演化场景物件 → 轻量收敛。
 **chat history 不进画布，只有 chalk 落板。**
+
+**注入挂 `context` 钩子（不是 `before_agent_start` 的 `message`——那个会被持久化并逐轮累积），只在本次 LLM 请求里存在、不落会话条目。** 每轮注入 = **一个自足的状态块**（当前值，全量）+ **一个事件段**（变化，游标增量）+ **一句"下一步"**（祈使，由事实推出）；三者拼成一条自定义消息追加到消息尾部。重活（扫目录 / 读库 / 渲染）只在**轮边界**（`agent_start`）算一次并缓存，`context` handler 只做字符串拼接与缓存读取。作家 6 节 / 角色 4 节，按 `AIRP_AGENT_ROLE` 选表。协议见 `docs/hooks/00…06`。
 
 ### 3.2 文件即真相
 
@@ -133,6 +142,8 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 
 **事件是唯一变更来源，`fs.watch` 不落账**：一切写世界的动作先落 `history.db` 的 `events` 表（`seq` 自增主键是唯一游标；五种 `actor`：player/god/writer/character/engine；十五个封闭 `type`，见 `docs/doc-21`）。经过动作函数的工具**自己落账**，扩展的 `tool_result` hook 只兜原生 `write`/`edit`（两份名单 MUST 互斥，否则 chalk 落两次）。`fs.watch` 只做前端重取的触发器。**扩展在 agent 进程、WS 在 server 进程，两者不通**——server 侧**尾部读 `events` 表**（`getEventsSince(lastSeq)`）再把新事件合成 `world_event` 帧广播给前端。
 
+**作家注入的轮边界在 `agent_start`，游标在注入成功后推进**：读取与渲染是轮边界的一次结算；作家游标在**注入成功后**推到 `getMaxSeq()`，角色游标在**关遮罩时**推进（**须 `actor.type === 'writer'` 守卫**，否则角色进程每轮也推作家语义）。详见 `docs/hooks/00` §1 §6。
+
 **state 绝对不做（架构不相容，非排期）**：不引入 `get_state` / `set_state` / `state_update` / `watch_state`，不引入状态文件、状态命名空间、状态栏。理由：那会产生第二个真相源——agent 绕过 `edit` 改状态时 `fs.watch` 与事件表都看不见，同时打穿"文件即真相"与"事件是唯一变更来源"两条地基。详见 `docs/doc-20` §2.3。
 
 ### 3.3 preset 即 Agent 人格
@@ -140,6 +151,8 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 初始化只有一个可委托 profile（`scene-init`），作家委托（R1）与引擎直唤（R2）共用它，靠**动态 brief** 区分任务。详见 `docs/doc-11`。
 
 **层由目录树扫描得出**，不在 `world.json` 里声明：`world/**/` 的每个目录是一个层，目录里的 `README.md` 是它的场景配置。父层页面只显示自己目录的 md + **每个直接子层的门牌**（子层 README，或无 README 的 stub 门），绝不伸进子层内部——这是「子场景的卡全糊在基层上」那个 bug 的根因。派生逻辑在 `packages/shared/src/store/layers.ts`（纯函数，前后端共用）。
+
+`world.json.entry` 指定打开世界后的 0 级导入层（缺省 `map`）。当前层自己的 `README.md` 由 `/api/layer` 单独作为 `scene` 返回并显示为入场 Chalk；它在父层仍是 Gate，不进入普通卡片排座。P0 Gate 可用 README 的 `requires.items` 要求玩家背包中的精确文件路径，详见 `docs/doc-15` 与 `docs/doc-20`。
 
 ---
 
@@ -160,6 +173,9 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 | `docs/前端改造计划.md` | `apps/web/` 的施工单 |
 | `docs/后端实现计划.md` | `apps/server/` + `extensions/` 的施工单（引擎接通 / 工具面 / Hook 注入 / 角色上下文） |
 | `docs/tools/` | **B1 工具面设计与实现真相源**：`00-共同上下文.md` 是冻结契约（路径/事件/身份/存储/注册/反模式），`01`–`12` 逐个工具的设计，`REVIEW-评审报告.md` 是评审裁决。**动动作层 / 注册工具 / 改路由前必读** |
+| `docs/hooks/` | **B2/B3 每轮注入协议真相源**：`00-共同上下文.md` 是冻结契约（注入接缝/分节/游标/身份/消毒/barrel 反模式），`01`–`06` 逐篇设计，`AUDIT-doc-22体检.md` 记录 doc-22 哪些断言为假。**改 `extensions/context.ts`、注入块、视点链路前必读** |
+| `docs/前端接线体检.md` | 动 WS 帧 / 前端消费面 / `useWorld.ts` 前必读——冻结契约的机械核验（`pnpm check:ws`）与已知漂移清单 |
+| `docs/wiring/` | **前端接线 A 档（止血 + 文档回写）真相源**：`00-共同上下文.md` 是冻结契约（角色身份/去重/转发集合/请求体），`01`–`04` 逐模块设计，`05-文档回写.md` 是回写清单。**动 `useWorld.ts` WS switch / `CharacterModal` / `DiceRoller` / 角色帧载荷前必读** |
 | `docs/doc-08~18` | 各专题（多为待完善），实现对应模块前再读 |
 
 **参考实现（都在本项目的兄弟目录，不进本仓库）**：
@@ -182,9 +198,11 @@ pnpm probe                                      # 全链路探针，PASSED 才�
 pnpm dev                                        # 全栈开发（web 5173 / server 3001）
 pnpm probe:tools                                # 工具面探针（注册表断言 + 真引擎执行 AIRP 工具），PASSED 才算工具面没坏
 pnpm typecheck:extensions                       # extensions/ 类型体检（jiti 直跑的 TS 不在 workspace 里）
-node --test packages/shared/test/ apps/server/test/   # 单元/集成测试（.mjs，跑的是已构建的 dist）
+pnpm probe:inject                               # 注入探针（真 spawn 作家引擎，断言每请求恰好一份注入块且不落盘）
+pnpm check:ws                                   # 跨端 WS 契约门禁（服务端广播面 ↔ 前端消费面 ↔ docs/tools/12 §6.2）
+pnpm check:docs                                 # hooks 文档门禁（symbol ownership / barrel union / file:line 引用）
 pnpm pi status                                  # pi-rp 子模块 + dist 新鲜度体检（见 §7.2）
-
+pnpm motion <绿幕.mp4> -o out.webm --scale 360   # 微动立绘 / 背景视频（见 assets/skills/motion-portrait）
 node tools/scaffold.mjs --template holmes-world --out worlds/my-holmes
 pnpm --filter @airp/server dev                  # 只起后端
 ```
@@ -199,6 +217,21 @@ pnpm --filter @airp/server dev                  # 只起后端
 - `.pi/agent/models.json` = provider 与 API key；**不入库**（本仓是公开的黑客松产物，钥匙不能进 git）。从队友的 checkout 拷一份，或指向 wl 的 `~/.projects/worldlines-rivet/.pi/agent/`。
 - 缺这个文件不报错：pi-rp `ModelConfig.load` 对 `ENOENT` 静默回落内建 provider（只是没有自定义模型可选）。`pnpm probe` 走离线确定性 provider，**不需要**它。
 - 探针的真模型分支（`AIRP_PROBE_REAL=1`）与手工全链路演示才需要真 provider。
+
+**资源发现必须隔离**（`launch.ts::ISOLATION_ARGS`）：两条 launch spec 都带
+`--no-extensions --no-skills --no-context-files --no-prompt-templates --no-themes`。
+不加这几个开关，pi-rp 会顺着发现路径把**我们没交给 agent 的东西**灌进去，实测三处：
+
+- **`<home>/.agents/skills/`（本机 37 个）** —— 作家进程命令表里冒出 `skill:tdd` /
+  `skill:character-sim` / `skill:llm-writing` …全部进 system prompt；
+- `<cwd>/.airpworld/extensions/*.ts` —— 世界包能植入任意扩展并在 agent 进程里执行；
+- 从世界根**逐级上溯**读到的仓库根 `AGENTS.md` —— 18KB 中文开发手册直接进 system prompt。
+
+注意 `<home>/.pi/agent/**` **不在**这张清单里：`PI_CODING_AGENT_DIR` 已 pin 到仓库内
+`.pi/agent/`（见上一条），pi-rp 的 user scope 整个指向那里，开发者自己的 agent dir 碰不到。
+显式 `--extension` / `--skill` 在 `--no-*` 下**照常加载**（被砍的是"发现"而非"显式路径"），
+pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受影响——隔离的是
+**发现**，不是能力。`tools/probe-writer.mjs` 有静态 + 动态两条断言守着（§5 命令表）。
 
 ---
 
@@ -237,14 +270,20 @@ pnpm --filter @airp/server dev                  # 只起后端
 | 协议（frontmatter / WS 消息 / API 路由） | `packages/shared` schema + `docs/doc-09` 或 `doc-05` |
 | 提示词 / preset / 初始化流程 | `presets/*.json` + `docs/doc-11`（**骨架与文件必须逐字一致**） |
 | 交互 / 演出 / 视觉 | `docs/doc-06` / `doc-04`（视觉以 §10 为准） |
+| 注入协议 / 钩子接线 / 分节表 | `docs/hooks/00…06`（冻结契约 `00` 唯一真相源） |
+| 角色 preset 的 compaction | `presets/character.json` 是**唯一真源模板**（新角色从它复制）；改 `hiddenOverrides.compaction` 必须**同 commit** 铺到 **全部**模板/world 角色 preset，并跑 `apps/server/test/character-preset-parity.test.mjs`（逐字一致，缺一份即静默失效） |
+| 跨端 WS 帧契约（增删帧 / 改载荷 / 前端消费面） | `docs/tools/12` §6.2（唯一帧清单）+ `docs/前端接线体检.md`；跑 `pnpm check:ws`（门禁会因两端不一致而红） |
+| 角色来源的 WS 帧载荷（`characterId`） | `docs/wiring/00` §3（唯一形状源）+ `apps/server/src/engine/{lifecycle,event-bridge}.ts` 的 sink 链 |
 
 文档里已被推翻的说法**直接改掉**，不要另起一段解释——`docs/archive/` 才是存废案的地方。
 
 ### 6.4 收工自检
 
 ```bash
-pnpm build && pnpm probe
+pnpm build && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:docs
 ```
+
+`pnpm check:ws` 是**跨端 WS 契约门禁**：服务端广播面、前端消费面、`docs/tools/12 §6.2` 契约三集合求 diff。**改了任何 WS 帧（增删帧名 / 改载荷 / 前端 case）必须让它变绿**——它会把"两端各自绿、合起来死"的漂移抓出来（2026-09-12 实际抓到 14 条）。
 
 改动涉及引擎或 preset 时，额外确认探针里**没有 `not found` / `unknown slot` 警告**。
 
@@ -338,13 +377,13 @@ pnpm pi commit "fix(...): …" [--no-build]   # build 红线 → 子模块 commi
 规则（改卡片渲染前先读）：
 
 1. **宽度只有一个真相源**：`packages/shared/src/schemas/forms.ts` 的 `CARD_FORMS`。`.object` 外壳吃 `item.w`，内层形态一律 `width: 100%`——**内层禁止写死宽度**。
-2. **外壳不写死高度**：`CanvasObject` 只给 `width`，高度由内容撑开，外壳（和拖拽碰撞读到的 `offsetHeight`）自然贴合。form 表的 `h` 只服务座位排布，不是渲染高度。
+2. **外壳不写死高度**：`CanvasObject` 只给 `width`，高度由内容撑开，外壳（和拖拽碰撞读到的 `offsetHeight`）自然贴合。**排座用的高度从 `cards.height` 列读**（初值来自 form 表，之后由前端实测回写，见第 7 条）——`form.h` 只是初值，不是排座的最终输入。
 3. **旋转只归外壳**：`--target-rot`（`rotOf` 派生）只写在外壳上。内层形态**禁止自带 `rotate`**（`.note` 曾自带 `-1.2deg`，与外壳叠加成 -4.2°）。**`chalk` 与 `sprite` 恒为 `0deg`**——叙事板正是"板正的板书"，不倾斜。
 4. **文字不溢出**：卡面摘要走 `plainExcerpt`（剥掉 `#`/`<b>`/换行等 markdown 原文），多行用 `-webkit-line-clamp` 截断；正文绝不会以裸 markdown 源码出现在卡面。
 5. **第二层阅读的标准形态 = 模态框**（`letter` 的 `letterFocus`、v3 `DetailPanel`：类型章 + 全文 + 回跳 + 续写；见 doc-10 E2/E9 与 §E11 对照表）。**点击展开是默认**，hover 只是它的替代——当卡片的**单击语义已被占用**（`gate` 单击 = 进门，不能再抢去开阅读），或形态上不适合弹模态框的组件，才改走 hover 浮层。`gate` 的 README 全文即此例：`.gate__detail` 绝对定位浮在卡片上沿、`z-index` 盖过邻卡、`pointer-events` 默认 none。**无论走哪种，"全文绝不塞进卡片撑破布局"这条不变。**
 6. **z 序**：`.object` 的 `z-index` 是内联写的（服务端行序），所以交互态抬升必须 `!important`——hover `.object{z-index:30}`、拖拽 `.object.dragging-item{z-index:40}`（拖拽值必须更高，否则被邻卡 hover 盖住）。
 
-**已知缺口**：座位排布仍按 form 表的 `h` 算碰撞，与实际渲染高度（chalk 可远超 190）不一致，多张长 chalk 可能轻微重叠。这是排列算法的独立问题，改动会触及 `local-store` 螺旋排布与已持久化座位，尚未处理。
+7. **碰撞尺寸只有一个真相源**：服务端读 `cards.width/height`（列），前端拖拽读本地实测（`lib/measure.ts` 的 `offsetHeight`）。**MUST NOT 出现第三处现算 `cardFormOf` 的碰撞点。** `cards` 行的建行路径（`seatUnplaced`/`seatNear`/`arrange` 前的 seat）必须写入该 kind 的真实占位——**绝不落下 schema DEFAULT `280/180`**。前端实测经 `POST /api/card/footprint` 回写 `width/height` + `metadata.measuredAt`；`metadata` 另有 `formVersion`（kind 定义 hash）与 `seatW/seatH`（上次排座所用尺寸）。`reseatLayer` 据此判漂移：kind 改尺寸 → 用 declared 重排并清 `measuredAt`（**先于**实测判定）；实测占位变化 → 用行值重排。细则见 `docs/footprint/00-共同上下文.md`。
 
 ### 7.6 前端性能红线（实测，2026-09-12 诊断）
 
@@ -354,3 +393,17 @@ pnpm pi commit "fix(...): …" [--no-build]   # build 红线 → 子模块 commi
 2. **pointermove 不进 React**。旧 `Canvas` 的视差用 `setParallax` state，每次鼠标移动都重渲染整棵画布子树（代价随卡片数涨）。现在视差走模块态 `lib/parallax.ts`：`Canvas` 只写值，`SceneBackdrop` 自己写 transform、`ParticleLayer` 每帧采样——零 React 工作。任何"跟随指针"的效果都照此办理。
 3. **拖拽循环内禁止强制同步布局**。卡片外壳无内联高度（见 §7.5），所以 `offsetHeight`/`getBoundingClientRect` 这类读会触发 reflow；旧拖拽每 move 读 ~6 次 `offsetHeight`（profile 里第一大头，300 move ≈ 256ms）。现在尺寸走 `lib/measure.ts` 的按代缓存（`invalidateMeasures()` 在层数据/窗口尺寸变化时失效），视口 rect 缓存在 `viewportRectRef`。**拖拽路径里一旦出现 `el.offsetXxx` / `getBoundingClientRect` 就是 bug。**
 4. **世界网格 `CanvasGrid` 不再是一张 6000×6000 的巨型贴图**（合成器曾为它保留 5707×5700 图层）——它是"视口 + 一格余量"的 sheet，随相机重写 left/top/width/height 且图案原点吸附世界网格。改它时别把尺寸写回固定值。
+
+### 7.7 `extensions/` 绝不手搓 `.js`（实测，2026-09-12 踩过坑）
+
+**pi 运行时用 jiti 直接执行 `extensions/*.ts`，不需要任何编译；手搓一份同名的 `.js` 会与 `.ts` 双双被加载，冲突报错。**
+
+- **引擎侧**：`launch.ts::extensionArgs`（`apps/server/src/engine/presets.ts`）扫 `extensions/` 时**同时收 `.ts` 与 `.js`**，两个都进 `--extension`。`extensions/instructions.js` 曾因手工 transpile 留在盘上，于是同一批 slot **被注册两次**——`registerSlot`/`registerTool` 是裸 `Map.set`，谁赢由 readdir 顺序决定，**静默错、不报错**。（2026-09-12 已让 `extensionArgs` 优先 `.ts`、同基名跳过 `.js` 孪生，并删除该文件；但**这是兜底，不是许可**。）
+- **jiti 侧**：`extensions/` 是 jiti 直跑的 TS，**不在 pnpm workspace 里**——`pnpm build` 的 tsc 根本不碰它。`extensions/tsconfig.json` 是 `noEmit: true`（只做 `pnpm typecheck:extensions` 类型体检），**所以 `.js` 产物永远不会由正常流程生成**，只会由手工 `tsc`/`transpileModule`/旧脚本产生。
+
+**纪律**：
+
+1. **不要手动编译 `extensions/*.ts`**，也不要提交任何 `extensions/*.js`（`extensions/toolkit/**` 同理）。改完 `.ts` 直接跑，无需构建。
+2. 若确实需要 emit（例如给某个不退让的工具链），**产物必须落在 `extensions/` 之外**（如 `dist/`），绝不留同名 `.js` 在扩展目录里。
+3. 怀疑踩到：`node tools/check-*.mjs` 之外，直接 `find extensions -name '*.js'` —— 有输出就是 bug。
+4. `.d.ts` 不受影响（`extensionArgs` 与 jiti 都跳过），但同样不该手写。

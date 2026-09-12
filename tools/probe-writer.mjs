@@ -25,6 +25,60 @@ function presetWarnings(client) {
 }
 
 /**
+ * The `--no-*` discovery kill-switches MUST be on every spawn (launch.ts::ISOLATION_ARGS).
+ * Without them pi-rp walks the developer machine's globals: 37 skills from `~/.agents/skills/`
+ * + `~/.pi/agent/skills/`, every `~/.pi/agent/extensions/*.ts`, and — the worst one — the
+ * repo-root `AGENTS.md` found by walking ancestors up from the world root, which lands in the
+ * agent's system prompt. Asserted here so a future "cleanup" of the arg list fails the gate.
+ */
+const REQUIRED_ISOLATION = [
+  '--no-extensions',
+  '--no-skills',
+  '--no-context-files',
+  '--no-prompt-templates',
+  '--no-themes',
+];
+
+function assertIsolationArgs(label, spec) {
+  const missing = REQUIRED_ISOLATION.filter((flag) => !spec.args.includes(flag));
+  if (missing.length > 0) {
+    throw new Error(`${label}: spawn is missing resource-isolation flags: ${missing.join(' ')}`);
+  }
+}
+
+/**
+ * Live leak check: no resource may come from the developer machine's global discovery
+ * roots. AIRP passes skills explicitly (`<repo>/skills`, `<world>/skills`), so those are
+ * legitimate — what must never appear is anything under `~/.agents/` or `~/.pi/`.
+ * Extensions are limited to pi-rp's own hidden inline builtins (llama/memories/opening).
+ */
+const BUILTIN_INLINE = ['llama', 'memories', 'opening'];
+const GLOBAL_ROOTS = [path.join(os.homedir(), '.agents'), path.join(os.homedir(), '.pi')];
+
+const isGlobalPath = (p) => typeof p === 'string' && GLOBAL_ROOTS.some((root) => p.startsWith(root));
+
+async function assertNoGlobalLeak(label, client) {
+  // `getCommands()` resolves the bare array; the engine may still be wiring its
+  // command table right after spawn, so poll until it is populated (bounded).
+  let commands = [];
+  for (let i = 0; i < 20 && commands.length === 0; i++) {
+    commands = await client.getCommands().catch(() => []);
+    if (commands.length === 0) await new Promise((r) => setTimeout(r, 300));
+  }
+  const leakedSkills = commands.filter((c) => c.source === 'skill' && isGlobalPath(c.sourceInfo?.path));
+  const leakedExtensions = commands.filter(
+    (c) => c.source === 'extension' && !BUILTIN_INLINE.includes(c.name) && isGlobalPath(c.sourceInfo?.path)
+  );
+  if (leakedSkills.length > 0 || leakedExtensions.length > 0) {
+    const fmt = (list) => list.map((c) => `${c.name} (${c.sourceInfo?.path ?? '?'})`).join(', ');
+    throw new Error(
+      `${label}: global resources leaked into the agent — ` +
+        `skills=[${fmt(leakedSkills)}] extensions=[${fmt(leakedExtensions)}]`
+    );
+  }
+}
+
+/**
  * Spawns a spec from `engine/launch.js`, waits for it to settle, and asserts the
  * preset actually loaded. Passing the spec the server itself uses is the point —
  * a broken path or a renamed slot fails here rather than silently at runtime.
@@ -33,6 +87,8 @@ async function checkSpawn(label, spec) {
   console.log(`\n[${label}] Spawning from shared launch spec...`);
   console.log(`  args: ${spec.args.join(' ')}`);
   console.log(`  session dir: ${spec.env.PI_CODING_AGENT_SESSION_DIR ?? '(none)'}`);
+
+  assertIsolationArgs(label, spec);
 
   const client = new RpcClient({
     cliPath: spec.cliPath,
@@ -47,7 +103,9 @@ async function checkSpawn(label, spec) {
   if (warnings.length > 0) {
     throw new Error(`${label}: preset was not loaded:\n${warnings.join('\n')}`);
   }
+  await assertNoGlobalLeak(label, client);
   console.log(`✓ ${label} spawned; preset resolved (no "not found" / "unknown slot").`);
+  console.log(`✓ ${label} no global skills/extensions leaked (discovery isolated).`);
   await client.stop();
   console.log(`✓ ${label} stopped.`);
 }

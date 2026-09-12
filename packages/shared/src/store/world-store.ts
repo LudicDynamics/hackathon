@@ -18,6 +18,29 @@ export interface CardRecord {
   w: number;
   h: number;
   z: number;
+  /**
+   * NEW. Parsed from `cards.metadata.formVersion`; null/absent = no marker.
+   * Compared against `cardFormVersionOf(kind, declared w, h)` to detect that a
+   * KIND was resized in code (contract §5.1 第 4 条).
+   */
+  formVersion?: string | null;
+  /**
+   * NEW. Parsed from `cards.metadata.measuredAt`; non-null = this row's w/h is
+   * a MEASURED value written by `writeFootprints` (the race guard that keeps
+   * that method free of kind knowledge, contract §5.1 第 3 条).
+   */
+  measuredAt?: string | null;
+  /**
+   * NEW. Parsed from `cards.metadata.seatW`; the `w` actually used at this
+   * row's LAST seat (contract §5.2). Absent on rows written before this batch.
+   */
+  seatW?: number | null;
+  /**
+   * NEW. Parsed from `cards.metadata.seatH`; compared against `h` to detect
+   * that the MEASURED footprint moved since the last seat — the ONLY path that
+   * makes "card grew taller -> its seat moves aside" happen (contract §5.1 第 3 条).
+   */
+  seatH?: number | null;
 }
 
 /** A card file pending seating; w/h defaults applied at seat time when absent. */
@@ -25,6 +48,18 @@ export interface SeatFile {
   path: string;
   w?: number;
   h?: number;
+  /**
+   * NEW. Declared kind of `path` at seat time. Needed to compute the DECLARED
+   * version `cardFormVersionOf(kind, w, h)`; supplied by the caller
+   * (`declaredSizeOf`/`storedSizeOf`, 02). Absent on the legacy callers
+   * (`seatFileOf`) — `reseatLayer` then skips the path rather than guessing.
+   */
+  kind?: string;
+  /**
+   * NEW. Pre-computed declared version accelerator. When present it WINS over
+   * computing from (kind,w,h); when absent the version comes from `kind`.
+   */
+  formVersion?: string;
 }
 
 /**
@@ -38,6 +73,20 @@ export interface PresenceRecord {
   y: number;
   following: boolean;
   updatedAt: string;
+}
+
+/** The player's viewpoint row, decoded (00 §5.1 / 05 §2.3). `focus` is the view CENTRE. */
+export interface ViewpointRecord {
+  /** Layer id verbatim from the browser: 'map' or 'world/<dir>'. */
+  layer: string;
+  /** Viewport centre in world coords, or null when the browser reported no camera. */
+  focus: { x: number; y: number } | null;
+  /** Selected card paths (world-root relative). */
+  selected: string[];
+  /** Player's backpack size at report time; the LIST is section 02's `bag`. */
+  bagCount: number;
+  /** ISO report time, server clock. */
+  at: string;
 }
 
 /** Outcome of presence seating (05 §3.9.3); `exhausted` surfaces the fallback. */
@@ -63,12 +112,12 @@ export interface WorldStore {
 
   // === Event layer (replaces appendWorldEvent; getEvents is kept, seq-ordered) ===
   appendEvent(args: AppendEventArgs): Promise<WorldEvent>;
-  getEventsSince(seq: number, opts?: { layer?: string; excludeActor?: ActorValue }): Promise<WorldEvent[]>;
+  getEventsSince(seq: number, opts?: { layer?: string; excludeActor?: ActorValue; limit?: number }): Promise<WorldEvent[]>;
   getMaxSeq(): Promise<number>;
   readCursor(reader: string): Promise<number>;
   writeCursor(reader: string, seq: number): Promise<void>;
   /** Newest-first, history panel only (doc-21 §3.1: seq is the cursor, never created_at). */
-  getEvents(limit?: number): Promise<WorldEvent[]>;
+  getEvents(limit?: number, opts?: { layer?: string }): Promise<WorldEvent[]>;
 
   // === Path / file helpers (01 §2.7) ===
   /**
@@ -91,7 +140,22 @@ export interface WorldStore {
   getLayerCards(paths: string[]): CardRecord[];
   seatUnplaced(layerId: string, files: SeatFile[]): Promise<CardRecord[]>;
   reseatLayer(layerId: string, files: SeatFile[]): Promise<CardRecord[]>;
+  /**
+   * NEW. Persist measured footprints for one layer (03's only entry point).
+   * Only `width`/`height` and `metadata.measuredAt` are written;
+   * `metadata.formVersion` / `seatW` / `seatH` are PRESERVED untouched, and
+   * x/y/z are NEVER touched (contract §3.3 / §5.2 / §8 反模式 9). Idempotent:
+   * a box whose stored w/h already equals the input is `unchanged` and writes
+   * nothing. Matches rows by `id = path` ONLY — a nested-layer README row has a
+   * different `layer` than the page it is shown on (contract §3.3 BLOCKER-2).
+   * Unknown path / missing row -> skip + warn + `unchanged` (HTTP 200).
+   */
+  writeFootprints(
+    layerId: string,
+    boxes: Array<{ path: string; w: number; h: number }>
+  ): Promise<{ updated: number; unchanged: number }>;
   saveCardPosition(id: string, x: number, y: number): Promise<CardRecord>;
+
   renameCardPosition(from: string, to: string): Promise<void>;
   /** Seat one new card next to an anchor card; `exhausted` when no clean cell (04 §3.9.3). */
   seatNear(layerId: string, file: SeatFile, anchorPath: string): Promise<CardRecord & { exhausted: boolean }>;
@@ -126,6 +190,22 @@ export interface WorldStore {
   /** One character's row, or null when they have never been placed. */
   getPresenceOf(characterId: string): PresenceRecord | null;
   /**
+   * The singleton viewpoint row, or null when the table is absent / empty / stale
+   * (05 §2.3). SYNCHRONOUS: the only synchronous store read, matching
+   * `getPresence` (it goes through `queryCanvas`).
+   */
+  readViewpoint(now?: number): ViewpointRecord | null;
+  /**
+   * Overwrite the singleton viewpoint row (05 §2.5). The SERVER owns `at`.
+   * Returns the stamped ISO timestamp.
+   */
+  writeViewpoint(v: {
+    layer: string;
+    focus: { x: number; y: number; w: number; h: number } | null;
+    selected: string[];
+    bagCount: number;
+  }): string;
+  /**
    * Physical move the action layer orchestrates: reference rewrite, rename,
    * self-rebase of the moved file's own relative links (04 §3.1 steps 5–7).
    * Lands NO event — `moveEntity` does, with the real actor.
@@ -133,6 +213,11 @@ export interface WorldStore {
   moveFile(from: string, to: string): Promise<{ name: string; rewrote: string[]; dangling: DanglingRef[] }>;
   /** Markdown + child-door ids for a layer's page (see store/layers.ts). */
   pageOfLayer(layerId: string): Promise<{ cards: string[]; doorIds: string[] }>;
+  /**
+   * Newest-first files by mtime under `prefix` (world-relative), capped at `limit`.
+   * Powers `recent_chalk`'s cross-layer ordering (02 §3.1) — the only mtime read.
+   */
+  filesByMtime(prefix: string, limit: number): Promise<string[]>;
 
   // === Canvas state layer (doc-09 §4.2): `canvas.db` only, never an event ===
   /**

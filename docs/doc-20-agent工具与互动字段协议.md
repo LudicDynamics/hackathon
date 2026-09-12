@@ -116,6 +116,30 @@ roll_dice:
 
 **为什么是"绝对不做"而不是"现阶段不做"**：这套东西的存在前提是"状态与内容分离"——世界有一份可脱离文件的、被代码逻辑消费的状态，才需要专门的读写工具与同步机制。AIRP 的前提正相反：**文件即真相，状态只是文件的一个字段**。一旦引入状态工具，就出现了第二个真相源，agent 可以绕过 `edit` 改状态，`fs.watch` 与事件表都看不见——那会同时打穿"文件即真相"和"事件是唯一变更来源"两条地基。这不是排期问题，是架构不相容。
 
+### 2.4 README Gate 的进入条件
+
+Layer 的 README 既是父层的 Gate，也是进入后的场景 Chalk。P0 先实现一个可验证的确定性门槛：
+
+```yaml
+requires:
+  items:
+    - player/brass-cap.md
+blocked: Take the ultramarine brass cap. It is the first link in the case.
+```
+
+玩家点击 Gate 时，`POST /api/enter-layer` 重新读取目标 README，并确认 `requires.items` 中每个精确路径都存在；缺失则返回 `409 requirements_not_met` 与 README 自己的 `blocked` 人话，不追加 `layer_entered`。通过后才落场景进入事件并导航。
+
+后续条件仍沿同一入口扩展，但必须分别定义真相源，不能把自然语言假装成确定性状态：
+
+| 条件轴 | 预期真相源 | P0 状态 |
+|---|---|---|
+| 道具 / 钥匙 | `player/*.md` 的真实存在 | **已实现** |
+| 同行角色 | `canvas.db presence.following` | 待实现 |
+| 已确认事实 / 谜题 | 具体实体的 `status.data` 或已落账事件 | 待定案 |
+| RP 综合判断 | Writer 读取本局事件与场景文件后写入明确结果 | 待实现；不能由 HTTP 猜测 |
+
+因此“道具 + 人物 + 谜题齐全才开门”最终仍由 README 声明，但每一项必须能回指文件或事件；RP 只负责把模糊过程收成明确的世界事实。
+
 ## 3. `look_at`：读取玩家可见语义
 
 ```ts

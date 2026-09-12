@@ -39,6 +39,41 @@ export function sessionsDirOf(worldRoot: string): string {
 }
 
 /**
+ * Resource discovery kill-switches (pi-rp `--no-*` flags).
+ *
+ * A spawned agent MUST see exactly what AIRP hands it, and nothing the developer machine
+ * happens to have installed globally. Without these, pi-rp's discovery walks surfaces we do
+ * not control. Measured on this machine (`get_commands` from a real writer spawn):
+ *
+ *  - `--no-skills`: kills `<home>/.agents/skills/` — **37 skills** leaked into the command
+ *    table (`skill:tdd`, `skill:character-sim`, `skill:llm-writing`, …). Also covers
+ *    `<cwd>/.airpworld/skills/`, which a world package could otherwise plant. Note
+ *    `<home>/.pi/agent/skills/` does NOT leak: `PI_CODING_AGENT_DIR` is pinned to the repo's
+ *    `.pi/agent` (see `agentDirEnv`), so the user's own agent dir is never read.
+ *  - `--no-extensions`: `<cwd>/.airpworld/extensions/*.ts` — a world package's own extensions
+ *    would otherwise be discovered and executed (project trust is granted by `--approve`).
+ *  - `--no-context-files`: `<agentDir>/AGENTS.md` plus every `AGENTS.md`/`CLAUDE.md` up the
+ *    ancestor chain from the world root. A world living under `<repo>/templates/<x>/` or
+ *    `<repo>/worlds/<x>/` therefore picks up the repo's own `AGENTS.md` — 18KB of Chinese
+ *    developer handbook — straight into the agent's system prompt.
+ *  - `--no-prompt-templates` / `--no-themes`: same discovery shape, no AIRP use.
+ *
+ * Explicit `--extension` / `--skill` flags still load under `--no-*` (verified: `noSkills` +
+ * `additionalSkillPaths` keeps the explicit paths and drops the discovered set — see
+ * `resource-loader.ts`, `noExtensions ? cliEnabledExtensions : merge(cli, enabled)`), and
+ * pi-rp's own hidden inline extensions (llama.cpp / memories / opening, `builtInExtensions`)
+ * are unaffected — they are built-in factories, not discovery. So this isolates discovery
+ * without touching AIRP's own tool face or the active preset.
+ */
+const ISOLATION_ARGS = [
+  '--no-extensions',
+  '--no-skills',
+  '--no-context-files',
+  '--no-prompt-templates',
+  '--no-themes',
+] as const;
+
+/**
  * Pins pi-rp's agent config dir to the repo's `.pi/agent/`.
  *
  * Without it `getAgentDir()` falls back to `~/.pi/agent/`, where whoever runs this
@@ -77,6 +112,7 @@ export function writerLaunch(repoRoot: string, worldRoot: string, vendorCliPath:
     presetId,
     '--session-dir',
     sessionsDir,
+    ...ISOLATION_ARGS,
     ...extensionArgs(repoRoot, worldRoot),
     ...skillArgs(repoRoot, worldRoot),
     ...(process.env.AIRP_WRITER_MODEL ? ['--model', process.env.AIRP_WRITER_MODEL] : []),
@@ -125,6 +161,7 @@ export function characterLaunch(
       sessionsDir,
       '--session',
       path.join(sessionsDir, `char-${characterId}.jsonl`),
+      ...ISOLATION_ARGS,
       ...extensionArgs(repoRoot, worldRoot),
     ],
     env: toEnv(airpEnv({ role: `${CHARACTER_ROLE_PREFIX}${characterId}` }), agentDirEnv(repoRoot), {

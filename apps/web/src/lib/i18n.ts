@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import messages from './messages.json';
+export { UI_COPY, type UiCopy } from './legacy-ui-copy.js';
 
 export type Locale = 'en' | 'zh-CN' | 'ja';
 export const LOCALE_KEY = 'airp-ui-locale';

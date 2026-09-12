@@ -38,3 +38,19 @@ export * from './actions/chalk.js';
 export * from './actions/create.js';
 export * from './actions/layer.js';
 export * from './actions/talk.js';
+
+// B2/B3 injection surface. TS `export *` has no glob, so every new module MUST
+// be added here by hand — a missing line is a SILENT unreachable module
+// (docs/hooks/00 §15). This block is the single authoritative union.
+export * from './render/spatial.js';      // dirPhrase (02 presencePhrase dep; extension + web share it)
+export * from './render/layer-page.js';   // summaryOf / kindWordOf / renderLayerBlock
+export * from './render/state.js';        // Section / renderState / STATE_* (01)
+export * from './render/sections.js';     // WRITER_SECTIONS / CHARACTER_SECTIONS / sectionsFor / SECTION_CAPS (02)
+export * from './render/events.js';       // renderEventWindow / EventWindowLine (03)
+export * from './render/next-step.js';    // computeNextStep / NextStepFacts (04)
+export * from './render/viewpoint.js';    // ViewRect / quantiseViewRect / encodeViewRect / decodeViewRect / viewpointKey / VIEWPOINT_* (05)
+export * from './render/sanitise.js';     // sanitiseForBlock (00 §14)
+export * from './inject/turn-cache.js';   // readTurnBlock / writeTurnBlock (01)
+export * from './inject/collect.js';      // collectSections / makeSectionDeps / buildNextStepFacts (01)
+export * from './store/cursor.js';        // settleTurnCursor (03; shared by writer extension and character server side)
+export * from './actions/backpack.js';    // listBackpack (02; server route imports it by package name)

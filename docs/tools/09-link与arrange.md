@@ -174,7 +174,7 @@ CREATE INDEX IF NOT EXISTS idx_links_layer ON links(layer, z_index, id);
 
 落库的 `style` 因此是一个**更小的基元枚举**（`ink|dashed|bold|hand|thread|road`，6 个），渲染只认这 6 个。`arrow`/`red` 是**工具面的语法糖**，不进 DB——这样"DB 里存的是画法，工具面给人话"两层分开，将来加新简写不动表。
 
-**`cards` 表结构不动**：`width/height` 保留（它们只服务排座碰撞，`local-store.ts:346`/`407`），**`arrange` 不写它们**（§2.6 + §11 冲突 1）。`z_index` 保留（`seatUnplaced` 已按层维护 max+1，`local-store.ts:302-307`），`arrange` 可写。
+**`cards` 表结构不动**：`width/height` 保留，**`arrange` 不写它们**（§2.6 + §11 冲突 1）。**2026-09-12 起这两列是「该卡的真实占位尺寸」**（初值 `form.w/h`，之后由前端实测经 `POST /api/card/footprint` 回写；见 `docs/footprint/00-共同上下文.md`）——所以"`arrange` 不写它们"的理由从"写了会被下一帧撤销"变成"它们归实测通道所有，不是摆位参数"。`z_index` 保留（`seatUnplaced` 已按层维护 max+1，`local-store.ts:302-307`），`arrange` 可写。
 
 ### 2.5 `layer` 归属：写入时怎么推导
 
@@ -216,7 +216,7 @@ arrange({
 - **`place`（给 `path`）**：绝对坐标写入。至少给 `x` / `y` / `z` 之一；`x`/`y` 必须 `Number.isFinite`，clamp 到 `[-4000, 4000]`（**clamp 不抛错**：任何卡都落在一个真实坐标上，绝不让 `NaN` 进 `cards.x`——`NaN` 会被 SQLite 存成 NULL，卡片随后从画面上消失）。
 - **`layout`（给 `layout`）**：相对重排。`path` 必须缺席。`paths` 省略 = 该层**全部**卡片。重排是**从零赋坐标**（不读旧坐标），顺序 = `paths` 按字典序排（确定性）。三种形态：`grid`（√n 列的方阵）、`circle`（等角分布在以 `SEAT_ANCHOR` 为心的圆上）、`row`（单行）；步距沿用 `SEAT_STEP` 与 `spiralCells` 的参数（`local-store.ts` 现有常量），**不新造一套间距**。
 - **两形态都给 / 都不给** → `invalid_argument`。
-- **`w` / `h` 给了** → `unsupported`，文案说清"card size is derived from `CARD_FORMS`; use the component registry"。**不静默忽略**（00 §6.2：不许静默降级）。理由见 §11 冲突 1——不是"没做"，是**做了也会被下一帧撤销**：`/api/layer` 每次都会 `reseatLayer` 把 `w/h` 与 form 表不一致的卡重新排座并回写 `w/h`（`local-store.ts:367-415`），并且返回给前端的 `w/h` 从来不读行（`routes/world.ts:184-190` 注释逐字写明）。
+- **`w` / `h` 给了** → `unsupported`，文案说清"card size is derived from `CARD_FORMS`; use the component registry"。**不静默忽略**（00 §6.2：不许静默降级）。理由见 §11 冲突 1——不是"没做"，是**尺寸不归摆位管**：`cards.width/height` 是**实测通道**的领地（前端测量 → `POST /api/card/footprint` → 回写，`docs/footprint/00-共同上下文.md` §3.3）；`arrange` 若也写它，就出现了**第二个尺寸写入者**，与"碰撞尺寸只有一个真相源"（`AGENTS §7.5` 第 7 条）冲突。**注意 `arrangeCards` 的 layout/place 分支在写位置前会先 `seatUnplaced`**（给无行的卡落正确初值，`docs/footprint/00-共同上下文.md` §5.5）——那是**用规范写入者**初始化，不是 `arrange` 自己改尺寸。
 - **`z` 可写**：AGENTS §7.5 第 6 条说 `.object` 的 `z-index` 是内联写的（服务端行序），所以"提到最前"是有意义且会被渲染尊重的操作。
 - **`rot` 不在签名里**：旋转是 `rotOf(path)` 派生的 hash 值、**从不持久化**（`routes/world.ts:196` 注释、AGENTS §7.5 第 3 条）。给 `arrange` 一个 `rot` 参数只能造出一个被下一次渲染忽略的字段，所以**连参数都不加**（与 `w/h` 不同：`w/h` 是 plan 已冻结在签名里的，必须"接收并明确拒绝"而不是"假装没这个参数"）。
 - **`layout` 不检查与未参与重排的卡的重叠**（`paths` 是子集时可能与既有卡重叠）：全量重排是正规用法，子集重排的落点由调用者负责。登记为已知边界（§7），不做软碰撞（软碰撞是前端拖拽的手感，`lib/collide.ts`，不属于引擎）。

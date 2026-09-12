@@ -15,11 +15,12 @@ interface CardRendererProps {
   };
   /** Ordinal of this gate among the layer's gates (Main computes it). */
   index?: number;
-  onSelectChoice?: (choice: string) => void;
+  onSelectChoice?: (path: string, choice: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
   onEnterGate?: (targetLayer: string) => void;
   onOpenCharacterModal?: (charId: string) => void;
   onItemDropOnTarget?: (draggedItemPath: string, targetPath: string) => void;
+  onTakeItem?: (path: string) => void;
 }
 
 /** Hand-drawn ordinal seal (prototype `numCircle`, L692-695). */
@@ -66,6 +67,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
   onEnterGate,
   onOpenCharacterModal,
   onItemDropOnTarget,
+  onTakeItem,
 }) => {
   const { frontmatter, body, filename, path } = item;
   const { locale } = useLocale();
@@ -114,7 +116,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
     return (
       <ChalkCard
         item={item}
-        onSelectChoice={onSelectChoice}
+        onSelectChoice={(choice) => onSelectChoice?.(path, choice)}
         onDiceRolled={onDiceRolled}
       />
     );
@@ -265,6 +267,16 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
       <span className="note__clip" />
       <div className="note__title">{noteTitle}</div>
       <MarkdownText text={stripLeadingTitle(body)} className="note__body" />
+      {frontmatter?.portable === true && (
+        <button
+          type="button"
+          data-no-drag
+          className="note__take"
+          onClick={() => onTakeItem?.(path)}
+        >
+          {typeof frontmatter.take_label === 'string' ? frontmatter.take_label : 'Take'}
+        </button>
+      )}
     </div>
   );
 };

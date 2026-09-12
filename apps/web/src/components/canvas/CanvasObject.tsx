@@ -61,21 +61,25 @@ export interface CanvasObjectProps {
   item: LayerItem;
   /** Ordinal of this gate among the layer's gates (fallback for the seal). */
   index?: number;
-  onSelectChoice?: (choice: string) => void;
+  onSelectChoice?: (path: string, choice: string) => void;
+  onEntityAction?: (prompt: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
   onEnterGate?: (targetLayer: string) => void;
   onOpenCharacterModal?: (charId: string) => void;
   onItemDropOnTarget?: (itemPath: string, targetPath: string) => void;
+  onTakeItem?: (path: string) => void;
 }
 
 export const CanvasObject: React.FC<CanvasObjectProps> = ({
   item,
   index,
   onSelectChoice,
+  onEntityAction,
   onDiceRolled,
   onEnterGate,
   onOpenCharacterModal,
   onItemDropOnTarget,
+  onTakeItem,
 }) => {
   const kind = item.kind;
   const [isDragOver, setIsDragOver] = React.useState(false);
@@ -173,9 +177,10 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             onEnterGate={onEnterGate}
             onOpenCharacterModal={onOpenCharacterModal}
             onItemDropOnTarget={onItemDropOnTarget}
+            onTakeItem={onTakeItem}
           />
         )}
-        <EntityInteractions item={item} active={hovered || focused} onChoice={onSelectChoice} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate} onOpenCharacter={onOpenCharacterModal} />
+        <EntityInteractions item={item} active={hovered || focused} onChoice={onEntityAction} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate} onOpenCharacter={onOpenCharacterModal} />
     </div>
   );
 };

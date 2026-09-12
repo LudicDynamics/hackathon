@@ -213,7 +213,7 @@ CREATE TABLE read_cursors (
 
 ### 5.1 作家：游标增量
 
-`read_cursors['writer']` 之后的全部事件，**排除 `actor_type = writer` 的**（不必把自己刚写的东西再念给自己听）。注入发生在 `before_agent_start`（后端实现计划 §5 B2），注入成功后游标推到本次最大 `seq`。
+`read_cursors['writer']` 之后的全部事件，**排除 `actor_type = writer` 的**（不必把自己刚写的东西再念给自己听）。注入发生在 **`context` 钩子**（B2；`docs/hooks/00` §1——**不是 `before_agent_start`**，那个会累积），读取有界（`limit`），注入成功后**在轮边界**把游标推到本次最大 `seq`（`docs/hooks/00` §6.2）。
 
 ### 5.2 角色：层窗口 + 各自的游标
 
@@ -221,12 +221,12 @@ CREATE TABLE read_cursors (
 
 | 情形 | 取什么 |
 |---|---|
-| 该角色**首次**被点开（无游标） | 本层最近 **12 条**事件（`layer` 过滤），倒序取完再正序渲染 |
+| 该角色**首次**被点开（无游标） | 本层最近 **12 条**事件（**按层查**，走 `idx_events_layer`），倒序取完再正序渲染 |
 | 再次被点开（有游标） | 游标之后、本层的全部事件，上限 12 条 |
 
 同样排除 `actor_id = 自己`。**游标在关闭遮罩时推进，不是打开时**——打开时推进的话，一次崩溃或误点就把这段永久吞掉了。
 
-12 是可调的配置，不是常量。
+12 是可调的配置，不是常量（实现落点为 `SECTION_CAPS.dynamics`，`docs/hooks/02` §2.2）。
 
 > **事件天然就是指路牌。** 这就是 `detail` 必须带 `path` 而不只带句子的第二个理由：角色读到「《02-柜台》落成了 — `world/baker-street/02-counter.md`」，要细节自己 `look_at` 就是。B3 的"只给清单不灌全文"和本条是同一件事的两半。
 
@@ -239,9 +239,9 @@ CREATE TABLE read_cursors (
 渲染前依次执行，**顺序固定**：
 
 1. **同 `turn` + 同 `type` + 同 `actor`** → 合并计数：「玩家把 3 件东西收进了背包」；
-2. **同 `subject` 的连续 `entity_edited`** → 只留最后一条；
-3. **`entity_created` 后紧跟同 `subject` 的 `entity_moved`** → 只说最终落点；
-4. 合并后仍超过 **12 条** → 取最近 12 条，末尾补一句「……另外还有一些零碎变动」，**游标照推到最新**。
+2. **同实体的连续 `entity_edited`** → 只留最后一条。**判据是"同一实体"，不是字面的同 `subject`**（`docs/hooks/03` §3.5）：`entity_created.subject = path` 而 `entity_moved.subject = to`，同一实体的两处 subject 永不相等，照字面落地这条规则是死代码；
+3. **`entity_created` 后紧跟同实体的 `entity_moved`**（判据 `created.detail.path === moved.detail.from`）→ 只说最终落点；
+4. 合并后仍超过 **12 条** → 取最近 12 条，末尾补一句 `…and N more (older events omitted)`（**只说省略，不暗示可取**——游标已推到 `getMaxSeq()`，被折叠的事件永不重现且无历史面工具；`docs/hooks/00` §4.2）。**游标照推到最新**。
 
 第 4 条是对 doc-05 §5.1「N 轮未被提及自然过期丢弃」的收紧：**不做过期。** 过期意味着事件在表里躺着、状态是"还没被谁念过"，于是事件表多了一份隐式的消费状态；而游标已经是唯一的消费状态了。注入即消费，溢出折叠，不留尾巴。
 

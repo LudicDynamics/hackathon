@@ -360,11 +360,14 @@ export function App() {
             openingComposition={manifest?.locale === 'ja' || ['wuwu', 'whitechapel', 'divergence', 'firstsnow', 'unwritten-door'].some(id => manifest?.id === id || manifest?.id?.startsWith(`${id}-`))}
             effectsEnabled={effectsEnabled}
             currentLayer={layer}
+            scene={null}
+            sceneCopy={{ label: t('Scene Chalk'), collapse: t('Fold scene introduction'), expand: t('Read scene introduction') }}
             items={canvasItems}
             links={state?.links || []}
             bg={(!loadingWorld && state?.bg) || { src: null, tone: 'warm', grain: 'parchment' }}
             onMoveCard={moveCard}
-            onSelectChoice={(choice) => {
+            onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }}
+            onEntityAction={(choice) => {
               sendToWriter(`The player chose: "${choice}"`);
               notify(`Choice sent: ${choice}`);
             }}

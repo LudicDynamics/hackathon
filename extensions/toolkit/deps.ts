@@ -40,23 +40,33 @@ export function worldStore(ctx: ExtensionContext): LocalWorldStore {
 }
 
 /**
+ * Read-only peek at the cached store: the store B1 already opened for THIS
+ * module instance, or null. NEVER constructs one (06 §5.4).
+ *
+ * `extensions/context.ts` uses `peekWorldStore() ?? <its own store>` so that,
+ * when the loader's jiti cache does happen to be shared, the process keeps ONE
+ * SQLite connection. It is an optimisation, not a correctness dependency: a
+ * cold cache returns null and the caller opens its own (worst case two
+ * connections, harmless under WAL). The caller MUST check `worldRoot` before
+ * reusing the result — a long-lived process can switch worlds.
+ */
+export function peekWorldStore(): LocalWorldStore | null {
+  return store;
+}
+
+/**
  * The caller's current layer, or null when nothing reports it.
  *
- * Same source the action layer's `look_at` default chain reads (doc-tools/03
- * §2.1): a `viewpoint` row in `canvas.db`. That table belongs to B2/doc-22, so
- * the query simply finds nothing in every B1 world and returns null — the
- * `chalk` shell then requires an explicit `path` instead of inventing a layer
- * (doc-tools/02 §12 item 1: guessing would put the file in the wrong scene).
+ * Reads the `viewpoint` row through the store method (B2 / 05 §2.6) — the same
+ * source `look_at`'s default chain uses, and no longer a second copy of the
+ * `sqlite_master` probe. No row / empty / expired → null, so the `chalk` shell
+ * then requires an explicit `path` instead of inventing a layer (docs/tools/02
+ * §12 item 1: guessing would put the file in the wrong scene). Note the `??`
+ * nuance: an EMPTY layer string maps to null, not to a falsy passthrough.
  */
 export function currentLayer(ctx: ExtensionContext): string | null {
-  const store = worldStore(ctx);
-  const tables = store.queryCanvas(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'viewpoint'"
-  );
-  if (tables.length === 0) return null;
-  const rows = store.queryCanvas('SELECT layer FROM viewpoint LIMIT 1');
-  const layer = rows.length > 0 && rows[0] ? String(rows[0].layer ?? '') : '';
-  return layer === '' ? null : layer;
+  const layer = worldStore(ctx).readViewpoint()?.layer;
+  return layer === undefined || layer === '' ? null : layer;
 }
 
 // Agent identity lives in ./actor.ts (docs/tools/00 §6.1 lists the file): the

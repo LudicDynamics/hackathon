@@ -16,7 +16,7 @@
 
 当前走作家亲写 W1，**尚未接 scene-init 委托 R1/R2**。作家按世界 skill 读取两份 Context：无发现则自由补完现代场景，有信或通话则承接已揭示事实。目标 README 已存在时不重生成。初次只补 README、两个物件、短 chalk 与回程门。
 
-`world-context.ts` 每轮注入世界概况和最近事件，引导读取原文件与 skill。原生 write/edit 成功后补事件，AIRP 工具不重复落账。writer preset 禁用 bash，避免 shell 绕过文件工具 hook。
+`context.ts` 统一承担每轮状态与事件注入，复用 main 的临时上下文通道；`world-context.ts` 仅在原生 write/edit 成功后补事件，AIRP 工具不重复落账，不再额外持久注入同一批事件。writer preset 禁用 bash，避免 shell 绕过文件工具 hook。
 
 ## 图片与画面
 

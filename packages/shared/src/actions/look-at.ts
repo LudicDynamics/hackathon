@@ -165,19 +165,14 @@ async function itemOf(
 }
 
 /**
- * B1 default chain (doc-03 §2.1): the `viewpoint` table belongs to B2 (00 §4).
- * While it is absent — every B1 world — an omitted path means `map`.
+ * B1 default chain (doc-03 §2.1): an omitted path means the player's current
+ * layer. The viewpoint row now lives in `canvas.db` (B2 / 05 §2.6) — read it
+ * through the store method rather than probing `sqlite_master` here. No row,
+ * an empty row, or an expired one all degrade to `map`, which is what the old
+ * probe did when the table was absent.
  */
 async function resolveDefaultLayer(ctx: ActionContext): Promise<string> {
-  const tables = ctx.store.queryCanvas(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'viewpoint'"
-  );
-  if (Array.isArray(tables) && tables.length > 0) {
-    const rows = ctx.store.queryCanvas('SELECT layer FROM viewpoint LIMIT 1');
-    const layer = Array.isArray(rows) && rows[0] ? String((rows[0] as any).layer ?? '') : '';
-    if (layer !== '') return layer;
-  }
-  return MAP_LAYER;
+  return ctx.store.readViewpoint()?.layer || MAP_LAYER;
 }
 
 /** The entity block: path, title, body, then 06's interactive text (doc-03 §4.1). */

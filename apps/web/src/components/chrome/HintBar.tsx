@@ -11,12 +11,18 @@ import React, { useState } from 'react';
 export interface HintBarProps {
   /** Override the default hint line (e.g. a layer-specific variant). */
   text?: string;
+  showLabel?: string;
+  hideLabel?: string;
 }
 
 export const DEFAULT_HINT =
   'Drag to pan · Scroll to zoom · Click a door to enter · Alt+← / Esc to return · Type below to ask the writer';
 
-export const HintBar: React.FC<HintBarProps> = ({ text = DEFAULT_HINT }) => {
+export const HintBar: React.FC<HintBarProps> = ({
+  text = DEFAULT_HINT,
+  showLabel = 'Show controls help',
+  hideLabel = 'Hide controls help',
+}) => {
   const [open, setOpen] = useState(false);
 
   if (!open) {
@@ -25,7 +31,7 @@ export const HintBar: React.FC<HintBarProps> = ({ text = DEFAULT_HINT }) => {
         type="button"
         className="hint-bar hint-bar--chip"
         title={text}
-        aria-label="Show controls help"
+        aria-label={showLabel}
         onClick={() => setOpen(true)}
       >
         ?
@@ -37,7 +43,7 @@ export const HintBar: React.FC<HintBarProps> = ({ text = DEFAULT_HINT }) => {
     <button
       type="button"
       className="hint-bar"
-      title="Hide controls help"
+      title={hideLabel}
       onClick={() => setOpen(false)}
     >
       {text}

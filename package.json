@@ -9,10 +9,14 @@
     "dev:web": "pnpm --filter @airp/web dev",
     "build": "pnpm --filter @airp/shared build && pnpm --filter @airp/server build && pnpm --filter @airp/web build",
     "scaffold": "node tools/scaffold.mjs",
+    "motion": "node tools/motion-clip.mjs",
     "probe": "node tools/probe-writer.mjs",
     "probe:image": "node tools/probe-image.mjs",
     "probe:tools": "node tools/probe-tools.mjs && node tools/probe-tools-engine.mjs",
+    "probe:inject": "node tools/probe-inject.mjs",
     "typecheck:extensions": "tsc -p extensions/tsconfig.json",
+    "check:docs": "node tools/check-hooks-docs.mjs",
+    "check:ws": "node tools/check-ws-contract.mjs",
     "pi": "node tools/pi-rp.mjs"
   },
   "devDependencies": {
