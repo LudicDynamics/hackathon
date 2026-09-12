@@ -45,13 +45,13 @@
 apps/
   server/src/
     index.ts            # Express + WS 入口（/api、静态托管 apps/web/dist、端口 3001）
-    routes/world.ts     # /api/worlds/load, /move, /dice, /use-item, /freeze, /god-action
+    routes/world.ts     # 玩家 UI 路由 → 动作服务（/move, /dice, /use-item, /choice, /enter-layer, /god-action, …）
     engine/
-      launch.ts         # spawn 参数单一来源（preset / --session-dir / --continue / env），服务端与探针共用
+      launch.ts         # spawn 参数单一来源（preset / --session-dir / --continue / env / AIRP_AGENT_ROLE），服务端与探针共用
       lifecycle.ts      # Agent 生命周期编排（单例复用 / spawn / warmup / 崩溃退避重启 / stopAll）
-      event-bridge.ts   # 引擎事件 → WebSocket 广播（mapEngineEvent 纯映射 + file_changed 单 watcher）
+      event-bridge.ts   # 引擎事件 → WS 帧；尾部读 events 表 → world_event 广播（见 §3.2）
       brief-builder.ts  # buildSceneInitBrief / buildNookInitBrief（动态 brief）
-      presets.ts        # preset 安装到 <worldRoot>/.airpworld/prompt-presets/；skillArgs 拼 --skill
+      presets.ts        # preset 安装到 <worldRoot>/.airpworld/prompt-presets/；extensionArgs/skillArgs/airpEnv
   web/src/
     lib/                   # camera（插值相机）/ collide（软碰撞）/ seat（排座镜像）
     state/                 # useCamera（相机与层级记忆）/ useWorld（层数据 + WS + 落库）
@@ -60,17 +60,29 @@ apps/
     components/overlay/    # 角色特写遮罩
     components/sidebar/    # 右侧边栏（背包 + 角色）
     components/god/        # 上帝模式工具栏
-packages/shared/src/    # world / frontmatter / components / events schema + store + sqlite
+packages/shared/src/    # schema + store + sqlite + 动作层
+  schemas/              # world / frontmatter（互动字段通用化）/ components / events / forms / canvas
+  store/                # local-store（fs + canvas.db + history.db）/ layers（层树派生）/ world-store（接口）
+  db/schema.ts          # 两库建表：cards / links / presence / entries / events(seq) / read_cursors
+  rules/                # 零依赖纯规则：dice（expect 解析）/ interactive（choice 归一化）
+  render/               # 文本视图：spatial（人话方位）/ layer-page（目录展开）——look_at 与状态块共用
+  components/           # 官方组件注册表（kind / schema / CARD_FORMS 联动 / use_item handler）
+  actions/              # 动作层：createActionService(store, actor) —— server 路由与扩展工具的唯一共同入口
 presets/                # 提示词预设：writer, character, scene-init, nook-init
-extensions/             # 项目级 pi-rp 扩展：注册专用指令槽（writer-char, system-char, scene-init-instruction 等）
+extensions/
+  instructions.ts       # 平台提示词正文（slot writer-char / system-char / scene-init-instruction / nook-init-instruction）
+  tools.ts              # 唯一 registerTool 入口：注册 AIRP 动作工具（extensions/toolkit/ 是 jiti 直跑的薄壳）
+  toolkit/              # 工具壳 + 共享 helper（deps/actor/turn/result）——子目录，不会被当扩展加载
 skills/                 # 项目级 skills：跨世界通用手艺（生图 / 组件叙事 / 节奏 / 玩法咬合）
 templates/              # 开箱世界模板：holmes-world, school-romance, magic-academy, cthulhu
   <world>/skills/       # 世界级 skills：该世界自己的文风与剧情，与 world/ 同级、随包分发
 worlds/                 # 脚手架产出的玩家世界（.gitignore）
 tools/scaffold.mjs      # 模板 → 新世界
 tools/probe-writer.mjs  # 全链路探针（pnpm probe）
+tools/probe-tools.mjs   # 工具面探针：jiti 载入 extensions/tools.ts，断言注册表 + 真执行（pnpm probe:tools）
+tools/probe-tools-engine.mjs # 工具面探针（强形式）：真 spawn 引擎，断言 AIRP 工具被引擎执行（pnpm probe:tools 的第二段）
 tools/pi-rp.mjs         # pi-rp 子模块工作流（pnpm pi status|build|update|commit，见 §7.2）
-docs/                   # 设计文档（真相源）
+docs/                   # 设计文档（真相源）；docs/tools/ 是 B1 工具面设计 + 评审报告
 vendor/pi-rp/           # 叙事引擎 submodule
 ```
 
@@ -82,13 +94,16 @@ vendor/pi-rp/           # 叙事引擎 submodule
 graph LR
   W["apps/web<br/>React 无限画布"] -->|"HTTP /api/*"| S["apps/server<br/>Express + ws"]
   S -->|"WebSocket 事件流"| W
+  S -->|"调用动作服务"| A["packages/shared/actions<br/>createActionService(store, actor)"]
   S --> L["engine/lifecycle<br/>进程编排"]
   L -->|"JSONL commands / stdio（pi-rp RpcClient）"| P["vendor/pi-rp<br/>pi 引擎（作家 / 角色 agent）"]
-  P -->|"write / edit 工具写盘"| FS["世界目录<br/>*.md + world.json"]
-  S --> FS
-  S --> DB[".airpworld/<br/>canvas.db + history.db"]
+  P -->|"extensions/tools.ts 注册 AIRP 工具"| A
+  A -->|"落盘 + 落账"| FS["世界目录<br/>*.md + world.json"]
+  A --> DB[".airpworld/<br/>canvas.db + history.db"]
   P -.->|"读取"| PR["presets/*.json<br/>→ .airpworld/prompt-presets/"]
 ```
+
+**动作层是 UI 与 Agent 的唯一共同入口**（`docs/doc-20` §12）：server 路由与扩展工具**各自 new 一个 `WorldStore`**，但都调同一个 `createActionService(store, actor)` 的动作函数——所以玩家点击与作家/角色的工具调用不可能跑出两套骰子 / 移动 / choice 语义。动作函数是 transport-free 的（不碰 HTTP、不碰 WS），**工具自己落账**；扩展进程不假设连着 WS。
 
 ### 3.1 单轮管线（作家）
 
@@ -99,6 +114,8 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 
 世界目录本身就是真相源，**没有独立状态文件**。`status.data` / `choice` / `roll_dice` 是实体通用 frontmatter，不局限于 chalk；玩家 UI、作家与角色通过同一个引擎动作层触发互动。**`status` 不是状态系统，它只是某个实体（含 chalk）的一份快照**——读它 = 读那个文件。
 分层存储：**内容走文件系统，架构状态与历史走 SQLite**（`canvas.db` / `history.db`）。
+
+**事件是唯一变更来源，`fs.watch` 不落账**：一切写世界的动作先落 `history.db` 的 `events` 表（`seq` 自增主键是唯一游标；五种 `actor`：player/god/writer/character/engine；十五个封闭 `type`，见 `docs/doc-21`）。经过动作函数的工具**自己落账**，扩展的 `tool_result` hook 只兜原生 `write`/`edit`（两份名单 MUST 互斥，否则 chalk 落两次）。`fs.watch` 只做前端重取的触发器。**扩展在 agent 进程、WS 在 server 进程，两者不通**——server 侧**尾部读 `events` 表**（`getEventsSince(lastSeq)`）再把新事件合成 `world_event` 帧广播给前端。
 
 **state 绝对不做（架构不相容，非排期）**：不引入 `get_state` / `set_state` / `state_update` / `watch_state`，不引入状态文件、状态命名空间、状态栏。理由：那会产生第二个真相源——agent 绕过 `edit` 改状态时 `fs.watch` 与事件表都看不见，同时打穿"文件即真相"与"事件是唯一变更来源"两条地基。详见 `docs/doc-20` §2.3。
 
@@ -126,6 +143,7 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 | `docs/doc-20-四世界可玩剧本与生成式关卡设计.md` | **四世界内容设计入口**：导言 Chalk / 首个行动反馈、行动与情感双线、Chalk 生成式关卡闭环、四个世界的可玩剧本与上帝模式样板 |
 | `docs/前端改造计划.md` | `apps/web/` 的施工单 |
 | `docs/后端实现计划.md` | `apps/server/` + `extensions/` 的施工单（引擎接通 / 工具面 / Hook 注入 / 角色上下文） |
+| `docs/tools/` | **B1 工具面设计与实现真相源**：`00-共同上下文.md` 是冻结契约（路径/事件/身份/存储/注册/反模式），`01`–`12` 逐个工具的设计，`REVIEW-评审报告.md` 是评审裁决。**动动作层 / 注册工具 / 改路由前必读** |
 | `docs/doc-08~18` | 各专题（多为待完善），实现对应模块前再读 |
 
 **参考实现（都在本项目的兄弟目录，不进本仓库）**：
@@ -146,6 +164,9 @@ pnpm install                                    # 装依赖（含 submodule）
 pnpm build                                      # 编译全仓库
 pnpm probe                                      # 全链路探针，PASSED 才算地基没坏
 pnpm dev                                        # 全栈开发（web 5173 / server 3001）
+pnpm probe:tools                                # 工具面探针（注册表断言 + 真引擎执行 AIRP 工具），PASSED 才算工具面没坏
+pnpm typecheck:extensions                       # extensions/ 类型体检（jiti 直跑的 TS 不在 workspace 里）
+node --test packages/shared/test/ apps/server/test/   # 单元/集成测试（.mjs，跑的是已构建的 dist）
 pnpm pi status                                  # pi-rp 子模块 + dist 新鲜度体检（见 §7.2）
 
 node tools/scaffold.mjs --template holmes-world --out worlds/my-holmes

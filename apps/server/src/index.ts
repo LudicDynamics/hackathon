@@ -1,10 +1,11 @@
 import express from 'express';
 import http from 'node:http';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import { WebSocketServer, WebSocket } from 'ws';
-import { LocalWorldStore } from '@airp/shared';
+import { LocalWorldStore, createActionService } from '@airp/shared';
 import { AgentLifecycleManager } from './engine/lifecycle.js';
 import { EventBridge } from './engine/event-bridge.js';
 import { createWorldRouter } from './routes/world.js';
@@ -37,6 +38,9 @@ const lifecycle = new AgentLifecycleManager({
 const DEFAULT_WORLD = path.join(REPO_ROOT, 'templates/holmes-world');
 try {
   activeStore = new LocalWorldStore(DEFAULT_WORLD);
+  // Align the tail cursor BEFORE watching — the watcher kicks `drain()`, and
+  // aligning first keeps "align, then listen" unambiguous (docs/tools/12 §8.6).
+  eventBridge.startTailReader(activeStore);
   eventBridge.watchWorld(DEFAULT_WORLD);
   console.log(`[AIRP Server] Default world loaded: ${DEFAULT_WORLD}`);
   // The frontend never calls /api/worlds/load, so without this the writer process
@@ -95,9 +99,9 @@ wss.on('connection', (ws: WebSocket) => {
           } else {
             await writer.prompt(data.message);
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.error('[AIRP WS] Writer prompt failed:', err);
-          ws.send(JSON.stringify({ type: 'error', source: 'writer', message: err?.message || String(err) }));
+          ws.send(JSON.stringify({ type: 'error', source: 'writer', message: err instanceof Error ? err.message : String(err) }));
         }
       } else if (data.type === 'writer_abort' || data.type === 'abort') {
         const writer = lifecycle.getWriter();
@@ -107,9 +111,9 @@ wss.on('connection', (ws: WebSocket) => {
       } else if (data.type === 'character_start') {
         try {
           await lifecycle.startCharacter(data.characterId, data.worldPath);
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.error('[AIRP WS] Character start failed:', err);
-          ws.send(JSON.stringify({ type: 'error', source: 'character', characterId: data.characterId, message: err?.message || String(err) }));
+          ws.send(JSON.stringify({ type: 'error', source: 'character', characterId: data.characterId, message: err instanceof Error ? err.message : String(err) }));
         }
       } else if (data.type === 'character_prompt') {
         const character = lifecycle.getCharacter(data.characterId);
@@ -125,9 +129,9 @@ wss.on('connection', (ws: WebSocket) => {
           } else {
             await character.prompt(data.message);
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.error('[AIRP WS] Character prompt failed:', err);
-          ws.send(JSON.stringify({ type: 'error', source: 'character', characterId: data.characterId, message: err?.message || String(err) }));
+          ws.send(JSON.stringify({ type: 'error', source: 'character', characterId: data.characterId, message: err instanceof Error ? err.message : String(err) }));
         }
       } else if (data.type === 'character_abort') {
         const character = lifecycle.getCharacter(data.characterId);
@@ -135,9 +139,29 @@ wss.on('connection', (ws: WebSocket) => {
           await character.abort().catch((err) => console.warn('[AIRP WS] Character abort failed:', err));
         }
       } else if (data.type === 'character_stop') {
+        // Record the beat BEFORE retiring the process: the action layer reads
+        // characters/<id>/README.md for `detail.name` (doc-21 §3.3), and a
+        // stopped client can no longer be asked anything (docs/tools/12 §3.5).
+        if (activeStore) {
+          try {
+            const svc = createActionService(activeStore, { type: 'player' }, { turn: `req:${randomUUID()}` });
+            // M-8: no frontend counter exists today, so a missing/0 count is an
+            // ESTIMATE — say so via details.turnsEstimated instead of passing a
+            // guess off as measured.
+            const provided = Number(data.turns) > 0;
+            await svc.noteCharacterTalked({
+              character: String(data.characterId),
+              turns: provided ? Number(data.turns) : 1,
+              turnsEstimated: provided ? undefined : true,
+            });
+          } catch (err) {
+            // A missing event is far less bad than a leaked agent process.
+            console.warn('[AIRP WS] character_talked event skipped:', err);
+          }
+        }
         await lifecycle.stopCharacter(data.characterId);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[AIRP WS Error]', err);
     }
   });

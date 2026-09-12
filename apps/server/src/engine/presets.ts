@@ -39,6 +39,26 @@ export function installPreset(worldRoot: string, srcFile: string): string {
 }
 
 /**
+ * Env vars passed through from the server process into the agent process
+ * (doc-tools/11 §11 conflict 8). Whitelist, NOT `...process.env`: forwarding
+ * everything would drag the developer machine's PATH/HOME/proxy vars into the
+ * agent and make "what the agent can see" unauditable (doc-tools/12 §2.3).
+ */
+const AIRP_ENV_PASSTHROUGH = [
+  'OPENROUTER_API_KEY',
+  'AIRP_IMAGE_MODEL',
+  'AIRP_IMAGE_TIMEOUT_MS',
+  'AIRP_IMAGE_LIBRARY_DIR',
+] as const;
+
+export interface AirpEnvOptions {
+  /** doc-tools/00 §3: the agent's only identity difference. `writer` | `character:<id>`. Omitted = not injected. */
+  role?: string;
+  /** Per-spawn additions (e.g. the probe's PI_OFFLINE). `undefined` values are dropped by launch.ts's toEnv. */
+  extra?: Record<string, string | undefined>;
+}
+
+/**
  * Builds the environment variables needed to spawn the pi-rp process.
  *
  * `PI_PROJECT_CONFIG_DIR` is the master switch: it is what makes pi-rp discover the
@@ -50,9 +70,22 @@ export function installPreset(worldRoot: string, srcFile: string): string {
  * directory (doc-05 §7.4), and a character learns the scene by `look_at` / `read`
  * (the hook only lists which files exist; doc-07 §3.5, B3). Seeding chat would show
  * the player nothing and burn a turn.
+ *
+ * `role` is the ONE injection point for agent identity (doc-tools/00 §3).
  */
-export function airpEnv(): NodeJS.ProcessEnv {
-  return { PI_PROJECT_CONFIG_DIR: AIRP_CONFIG_DIR };
+export function airpEnv(opts: AirpEnvOptions = {}): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { PI_PROJECT_CONFIG_DIR: AIRP_CONFIG_DIR };
+  for (const key of AIRP_ENV_PASSTHROUGH) {
+    const value = process.env[key];
+    if (value !== undefined) env[key] = value;
+  }
+  // Only write AIRP_AGENT_ROLE when a role was actually given: '' and undefined are
+  // both "unset" in the degradation table (doc-tools/01 §2.3) but warn differently.
+  if (opts.role !== undefined) env.AIRP_AGENT_ROLE = opts.role;
+  for (const [key, value] of Object.entries(opts.extra ?? {})) {
+    env[key] = value;
+  }
+  return env;
 }
 
 /**
