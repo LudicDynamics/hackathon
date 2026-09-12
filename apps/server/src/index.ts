@@ -4,6 +4,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import cors from 'cors';
+import { existsSync } from 'node:fs';
 import { WebSocketServer, WebSocket } from 'ws';
 import { LocalWorldStore, createActionService } from '@airp/shared';
 import { AgentLifecycleManager } from './engine/lifecycle.js';
@@ -15,6 +16,8 @@ const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const VENDOR_CLI = path.join(REPO_ROOT, 'vendor/pi-rp/packages/coding-agent/dist/cli.js');
 const WEB_DIST = path.join(REPO_ROOT, 'apps/web/dist');
+const localEnv = path.join(REPO_ROOT, '.env.local');
+if (existsSync(localEnv)) process.loadEnvFile(localEnv);
 
 const app = express();
 const server = http.createServer(app);
@@ -35,7 +38,7 @@ const lifecycle = new AgentLifecycleManager({
 });
 
 // Open the first curated world and start its writer.
-const DEFAULT_WORLD = path.join(REPO_ROOT, 'templates/wuwu');
+const DEFAULT_WORLD = path.resolve(REPO_ROOT, process.env.AIRP_WORLD ?? 'templates/wuwu');
 try {
   activeStore = new LocalWorldStore(DEFAULT_WORLD);
   // Align the tail cursor BEFORE watching — the watcher kicks `drain()`, and
@@ -97,7 +100,10 @@ wss.on('connection', (ws: WebSocket) => {
           } else if (data.mode === 'followUp') {
             await writer.followUp(data.message);
           } else {
-            await writer.prompt(data.message);
+            if (!activeStore) throw new Error('No active world');
+            void lifecycle.submitWriter(activeStore.worldRoot,
+              `[Current Layer] ${typeof data.layer === 'string' ? data.layer : 'map'}\n[Player Request] ${data.message}`
+            ).catch(err => ws.send(JSON.stringify({ type: 'error', source: 'writer', message: err.message })));
           }
         } catch (err: unknown) {
           console.error('[AIRP WS] Writer prompt failed:', err);

@@ -79,6 +79,7 @@ export function writerLaunch(repoRoot: string, worldRoot: string, vendorCliPath:
     sessionsDir,
     ...extensionArgs(repoRoot, worldRoot),
     ...skillArgs(repoRoot, worldRoot),
+    ...(process.env.AIRP_WRITER_MODEL ? ['--model', process.env.AIRP_WRITER_MODEL] : []),
   ];
   if (hasExistingSession(worldRoot)) args.push('--continue');
 

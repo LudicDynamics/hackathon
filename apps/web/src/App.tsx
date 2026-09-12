@@ -9,6 +9,7 @@ import { useAudio } from './state/useAudio.js';
 import { useCamera } from './state/useCamera.js';
 import { useWorld } from './state/useWorld.js';
 import { airpGateway, type WorldShelf } from './lib/airp-gateway.js';
+import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
 import { initialShell, transitionShell, splitCharacters } from './lib/ui-shell.mjs';
 import { MarkdownText } from './lib/md.js';
 import { BookOpen, ChevronDown, ChevronUp, Maximize, Minimize, UserRound, Backpack, Sparkles } from 'lucide-react';
@@ -16,6 +17,7 @@ import { preloadAudio } from './lib/audio.js';
 
 interface WorldManifest {
   id: string;
+  locale?: 'en' | 'ja' | 'zh-CN';
   name: string;
   description: string;
   genre: string;
@@ -36,6 +38,7 @@ interface BackpackItem {
 
 interface CharacterView {
   id: string;
+  name?: string;
   home?: string;
   role?: string;
   avatar?: string;
@@ -46,6 +49,8 @@ interface CharacterView {
 type Attention = 'ambient' | 'authoring';
 
 function labelOf(value: string): string {
+  if (value === 'first-snow-jp') return '初雪ラジオ · 日本語';
+  if (value.startsWith('first-snow-jp-')) return `初雪ラジオ · ${value.slice('first-snow-jp-'.length)}`;
   const tail = value.split('/').filter(Boolean).at(-1) || value;
   return tail
     .split('-')
@@ -67,6 +72,9 @@ function sceneName(manifest: WorldManifest | null, layer: string): string {
 export function App() {
   const { locale, setLocale, t } = useLocale();
   const [manifest, setManifest] = useState<WorldManifest | null>(null);
+  useEffect(() => {
+    if (manifest?.locale === 'ja') setLocale('ja');
+  }, [manifest?.id, manifest?.locale, setLocale]);
   const [backpack, setBackpack] = useState<BackpackItem[]>([]);
   const [characters, setCharacters] = useState<CharacterView[]>([]);
   const [shelf, setShelf] = useState<WorldShelf>({ templates: [], worlds: [] });
@@ -124,6 +132,12 @@ export function App() {
   };
 
   useEffect(() => {
+    const onNotice = (event: Event) => notify(String((event as CustomEvent).detail));
+    window.addEventListener('airp:notice', onNotice);
+    return () => window.removeEventListener('airp:notice', onNotice);
+  }, []);
+
+  useEffect(() => {
     void loadChromeData();
     const onWorldEvent = () => void loadChromeData();
     window.addEventListener('airp:world-event', onWorldEvent);
@@ -148,7 +162,7 @@ export function App() {
   useEffect(() => {
     const src = state?.bg?.src;
     setBackdropReady(false);
-    if (!src) return;
+    if (!src || loadingWorld) return;
     const probe = new Image();
     probe.onload = () => setBackdropReady(true);
     probe.onerror = () => setBackdropReady(false);
@@ -157,7 +171,7 @@ export function App() {
       probe.onload = null;
       probe.onerror = null;
     };
-  }, [state?.bg?.src]);
+  }, [state?.bg?.src, manifest?.id, loadingWorld]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -226,8 +240,7 @@ export function App() {
     try {
       const result = await airpGateway.loadWorld<WorldManifest>(worldPath);
       setManifest(result.manifest);
-      enterLayer('map');
-      await refresh();
+      await enterLayer('map');
       await loadChromeData();
       setWorldPickerOpen(false);
       setAttention('ambient');
@@ -344,12 +357,12 @@ export function App() {
         <section className="prototype-world" aria-label={t("Spatial story canvas")}>
           <Canvas
             key={manifest?.id || 'opening'}
-            openingComposition={['wuwu', 'whitechapel', 'divergence', 'firstsnow'].includes(manifest?.id || '')}
+            openingComposition={manifest?.locale === 'ja' || ['wuwu', 'whitechapel', 'divergence', 'firstsnow', 'unwritten-door'].some(id => manifest?.id === id || manifest?.id?.startsWith(`${id}-`))}
             effectsEnabled={effectsEnabled}
             currentLayer={layer}
             items={canvasItems}
             links={state?.links || []}
-            bg={state?.bg || { src: null, tone: 'warm', grain: 'parchment' }}
+            bg={(!loadingWorld && state?.bg) || { src: null, tone: 'warm', grain: 'parchment' }}
             onMoveCard={moveCard}
             onSelectChoice={(choice) => {
               sendToWriter(`The player chose: "${choice}"`);
@@ -413,11 +426,11 @@ export function App() {
                 key={character.id}
                 className="prototype-hand-orb"
                 onClick={() => openCharacter(character)}
-                title={t('Talk to {name}', { name: character.id })}
+                title={t('Talk to {name}', { name: character.name || character.id })}
                 style={assetUrl(character.avatar) ? { backgroundImage: `url("${assetUrl(character.avatar)}")` } : undefined}
               >
                 {!assetUrl(character.avatar) && <span>{character.id.charAt(0).toUpperCase()}</span>}
-                <small>{labelOf(character.id)}</small>
+                <small>{character.name || labelOf(character.id)}</small>
               </button>
             ))}
           </div>
@@ -457,10 +470,10 @@ export function App() {
               key={companion.id}
               className="prototype-companion-orb"
               onClick={() => openCharacter(companion)}
-              aria-label={t('Talk to {name}', { name: companion.id })}
+              aria-label={t('Talk to {name}', { name: companion.name || companion.id })}
               style={assetUrl(companion.avatar) ? { backgroundImage: `url("${assetUrl(companion.avatar)}")` } : undefined}
             >
-              {!assetUrl(companion.avatar) && companion.id.charAt(0).toUpperCase()}<i /><small>{labelOf(companion.id)}</small>
+              {!assetUrl(companion.avatar) && companion.id.charAt(0).toUpperCase()}<i /><small>{companion.name || labelOf(companion.id)}</small>
             </button>
           ))}
           </div>
@@ -490,19 +503,7 @@ export function App() {
       </main>
 
       {worldPickerOpen && (
-        <div className="prototype-dialog-backdrop" role="presentation" onClick={() => setWorldPickerOpen(false)}>
-          <section className="prototype-world-picker" role="dialog" aria-modal="true" aria-label={t("Choose a world")} onClick={(event) => event.stopPropagation()}>
-            <span className="prototype-eyebrow">{t("WORLD SHELF")}</span>
-            <h2>{t("Choose a world")}</h2>
-            {[...shelf.templates.map((id) => ({ id, path: `templates/${id}`, kind: 'Template' })), ...shelf.worlds.map((id) => ({ id, path: `worlds/${id}`, kind: 'Your world' }))].map((entry) => (
-              <button key={entry.path} onClick={() => void loadWorld(entry.path)} disabled={loadingWorld !== null}>
-                <b>{labelOf(entry.id)}</b>
-                <span>{t(entry.kind)}{loadingWorld === entry.path ? t(' · opening…') : ''}</span>
-              </button>
-            ))}
-            <button className="prototype-close" onClick={() => setWorldPickerOpen(false)}>{t("Continue this story")}</button>
-          </section>
-        </div>
+        <WorldShelfDialog shelf={shelf} loading={loadingWorld} onLoad={path => void loadWorld(path)} onClose={() => setWorldPickerOpen(false)} onRefresh={async () => { setShelf(await airpGateway.worlds()); }} />
       )}
 
       {radialState && <RadialMenu {...radialState} onClose={() => setRadialState(null)} onCreate={createAt} />}
@@ -510,6 +511,7 @@ export function App() {
       {activeCharacter && (
         <CharacterModal
           characterId={activeCharacter.id}
+          displayName={activeCharacter.name}
           avatar={assetUrl(activeCharacter.avatar)}
           bio={activeCharacter.bio || activeCharacter.description}
           onClose={closeCharacter}

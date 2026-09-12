@@ -5,6 +5,8 @@
 
 ## 背景与现状（已定案，不重谈）
 
+日语世界迁移补充：manifest 的 `characters[].name?: string` 作为人物显示名，省略时 UI 回退到 `id`；`id` 仍是角色路由、preset 与文件目录的关联键，不拿翻译后的名字当路径。新增日语模板使用 `locale: "ja"` 指定载入时的 UI 默认语言；语言文档和具体样例见《世界日语化迁移》。
+
 - 三者（choice / status / roll_dice）是**所有落盘实体通用的互动字段**，不局限于 chalk；类 md 表格渲染、可折叠、随所属实体走；
 - **无独立状态文件、无状态栏、无 state 工具**（doc-00 变更记录 #4）：`status` 只是**该实体（含 chalk）的一份快照**，读它 = 读那个文件。`get_state / set_state / state_update / watch_state` **绝对不做**（doc-20 §2.3）；
 - roll_dice **骰子协议已定稿**（doc-05 §3.1）：作者写 `type`/`desc`/`expect`（不写 `result`）；玩家点击或 Agent 调用 `roll_dice` → 引擎真随机掷出并按 expect 判定 → 回写 result/passed → 落定显示 + `roll_resolved` 事件；

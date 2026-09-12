@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { playStinger, type Emotion } from '../../lib/audio.js';
+import { useLocale } from '../../lib/i18n.js';
 
 /**
  * CharacterModal — galgame dialogue overlay (wave 2, Task D, T3.3).
@@ -17,6 +18,7 @@ import { playStinger, type Emotion } from '../../lib/audio.js';
 
 interface CharacterModalProps {
   characterId: string;
+  displayName?: string;
   avatar?: string;
   bio?: string;
   onClose: () => void;
@@ -58,11 +60,14 @@ function parseEmoTag(raw: string): { text: string; emo: Emotion } {
 
 export const CharacterModal: React.FC<CharacterModalProps> = ({
   characterId,
+  displayName = characterId,
   avatar,
   bio,
   onClose,
   onSendMessage,
 }) => {
+  const { locale, t } = useLocale();
+  const ja = locale === 'ja';
   const [phase, setPhase] = useState<Phase>('idle');
   const [emo, setEmo] = useState<Emotion>('normal');
   const [line, setLine] = useState(''); // full current line (shown once streaming)
@@ -137,11 +142,11 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   // Opening line, streamed shortly after the overlay settles.
   useEffect(() => {
     const t = window.setTimeout(
-      () => streamLine('(Watching you) Is there something you would like to know?', 'normal'),
+      () => streamLine(ja ? '（あなたの方へ顔を向ける）' : '(Watching you) Is there something you would like to know?', 'normal'),
       420,
     );
     return () => window.clearTimeout(t);
-  }, [streamLine]);
+  }, [streamLine, ja]);
 
   // Unmount: cancel every pending timer.
   useEffect(() => clearTimers, [clearTimers]);
@@ -164,6 +169,15 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     setInputText('');
     setPlayerEcho(msg); // kept on the paper, not a history list
     onSendMessage?.(msg); // character_prompt protocol — App wires the message type
+    if (ja) {
+      // This legacy overlay does not consume agent frames yet. Never invent a reply.
+      const notice = '【表示状態】送信しました。役の返答を表示する接続は、まだ準備中です。';
+      setLine(notice);
+      setShown(notice);
+      setPhase('done');
+      setEmo('normal');
+      return;
+    }
     const pick = FALLBACK_REPLIES[Math.floor(Math.random() * FALLBACK_REPLIES.length)];
     const { text, emo: mood } = parseEmoTag(pick.text);
     streamLine(text, mood);
@@ -177,9 +191,9 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     <div
       className={`character-modal-layer${closing ? ' modal-closing' : ''}`}
       role="dialog"
-      aria-label={`Dialogue with ${characterId}`}
+      aria-label={ja ? `${displayName}との会話` : `Dialogue with ${displayName}`}
     >
-      <button type="button" className="modal-close" onClick={handleClose} aria-label="Close dialog">
+      <button type="button" className="modal-close" onClick={handleClose} aria-label={t('Close dialog')}>
         ×
       </button>
 
@@ -192,9 +206,9 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
           <div className="portrait-breathe">
             <div className={`portrait-emo emo-${emo}${emo === 'shock' ? ' emo-shock-shake' : ''}`}>
               {showAvatar ? (
-                <img src={avatar} alt={characterId} onError={() => setAvatarError(true)} />
+                <img src={avatar} alt={displayName} onError={() => setAvatarError(true)} />
               ) : (
-                <div className="portrait-fallback" role="img" aria-label={`${characterId} portrait`}>
+                <div className="portrait-fallback" role="img" aria-label={displayName}>
                   {monogram}
                 </div>
               )}
@@ -205,13 +219,13 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 
       {/* Bottom tilted paper dialog: name plate, narration, streaming line, input. */}
       <div className={`speech-paper${closing ? ' speech-paper-closing' : ''}`}>
-        <div className="name-plate">{characterId}</div>
-        <p className="narr-line">{bio ? bio : '(necessary description)'}</p>
+        <div className="name-plate">{displayName}</div>
+        <p className="narr-line">{bio || ''}</p>
 
         <div className="line-stage">
           {playerEcho && <span className="player-echo">“{playerEcho}”</span>}
           {phase === 'thinking' && (
-            <span className="thinking-hint">{characterId} is thinking…</span>
+            <span className="thinking-hint">{ja ? '応答を待っています…' : `${displayName} is thinking…`}</span>
           )}
           {(phase === 'streaming' || phase === 'done') && line !== '' && (
             <span className="speech-line">
@@ -227,10 +241,10 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') handleSend();
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleSend();
           }}
-          placeholder={`Say something to ${characterId}… (Enter to send)`}
-          aria-label={`Message to ${characterId}`}
+          placeholder={ja ? `${displayName}に話しかける…（Enterで送信）` : `Say something to ${displayName}… (Enter to send)`}
+          aria-label={ja ? `${displayName}へのメッセージ` : `Message to ${displayName}`}
           disabled={busy}
           className="speech-input"
         />

@@ -636,6 +636,14 @@
   font: 400 29px var(--serif);
 }
 
+.world-save-row { margin-top: 12px; padding: 12px; border: 1px solid #b8a8b8; border-radius: 10px; }
+.world-save-row button { padding: 8px; border-radius: 6px; }
+.world-save-open { display: block; width: 100%; text-align: left; }
+.world-save-open b, .world-save-open span { display: block; overflow-wrap: anywhere; }
+.world-save-open span { font-size: 12px; opacity: .7; margin-top: 6px; }
+.world-save-confirm { border-top: 1px solid #b8a8b8; margin-top: 8px; }
+.world-save-row button:disabled { opacity: .45; cursor: not-allowed; }
+
 .prototype-world-picker > button {
   display: block;
   width: 100%;

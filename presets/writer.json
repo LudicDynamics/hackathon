@@ -3,6 +3,7 @@
   "id": "writer",
   "name": "Writer",
   "description": "The lead narrator and director of the AIRP world",
+  "tools": { "deny": ["bash"] },
   "items": [
     {
       "kind": "slot",

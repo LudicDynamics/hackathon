@@ -22,18 +22,18 @@
 
 ### 1.1 语言规范（硬要求）
 
-**产品默认英文，沟通与文档一律中文。** 用户授权的界面多语言试验支持中文/日文切换；世界素材、提示词与协议命名仍遵循下表。范围见 `docs/界面多语言.md`。
+**五个样板世界迁为日语，沟通与内部设计文档一律中文。** 2026-09-12 用户确认：图形可以复用，世界语言文档重新编写；先迁 `first-snow-jp`。未迁世界暂留旧文件，不代表已完成。界面切换与迁移状态见 `docs/界面多语言.md`、`docs/世界日语化迁移.md`。
 
 | 范围 | 语言 | 理由 |
 |---|---|---|
-| 前端 UI 文案、演示内容、世界素材 | **英文** | 玩家与评委看到的一切 |
-| `presets/**` 提示词、`templates/**` 世界内容 | **英文** | 喂给 AI 的 prompt 与世界内容，**连目录名与文件名一起** |
-| 立绘 / 资源 / 图标等资产的文件名与说明 | **英文** | 资产清单 |
+| 样板世界 UI 默认语言、演示内容、世界文本 | **日语** | 日语版世界载入时切到日语；通用 UI 保留语言切换 |
+| 日语版 `templates/**` 的提示词、人物与世界内容 | **日语** | 人类可读文本重写；平台共享 preset 不因此复制五套 |
+| 立绘 / 资源 / 图标等资产 | **文件名 ASCII；世界内说明日语** | 图形可复用，说明随日语世界重写 |
 | 代码注释、报错文案、日志 | **英文** | 仓库是公开的黑客松产物，评审会直接读代码 |
 | commit message、与队友/用户沟通 | **中文** | 开发者都是中国人 |
 | `docs/**`、本文件、根 `README.md` | **中文** | 内部设计文档 |
 
-黑客松官方语言是 **英文 / 日语**。判断标准：**任何可能被评委或海外玩家看到的东西 → 英文**。日语只用于日式世界的专有名词，且用罗马字（`nanami`、`sakura-academy`）。
+黑客松官方语言是 **英文 / 日语**。当前五世界按用户决定以日语呈现；人名、场景名与正文使用正常日文。目录、文件名、工具名、协议键及枚举值仍用 ASCII 标识（`nanami`、`first-snow-jp`），不可翻译协议导致路由或解析失效。世界内资产说明也用日文，内部资产管理文档用中文。
 
 命名一律 ASCII 小写 kebab-case（`baker-street`、`arcane-library`）；专有名词用标准英文或罗马字（`watson`、`baker-street`）。改世界内容时**目录名即 id**——**层不是声明出来的，是扫描出来的**：`world/**/` 下每个目录就是一个层，目录里的 `README.md` 是它的场景配置（有 README = 已写层；没有 = stub 懒加载层，见 doc-11 §3）。改层就是改目录名，`world.json` 里**没有** `layers`。`characters[].home`、preset 的 `options.baseDir` 同样随目录名走。
 
@@ -46,6 +46,7 @@ apps/
   server/src/
     index.ts            # Express + WS 入口（/api、静态托管 apps/web/dist、端口 3001）
     routes/world.ts     # 玩家 UI 路由 → 动作服务（/move, /dice, /use-item, /choice, /enter-layer, /god-action, …）
+    world-shelf.ts      # 世界/存档书架投影与可恢复删除；见 docs/世界与存档.md
     engine/
       launch.ts         # spawn 参数单一来源（preset / --session-dir / --continue / env / AIRP_AGENT_ROLE），服务端与探针共用
       lifecycle.ts      # Agent 生命周期编排（单例复用 / spawn / warmup / 崩溃退避重启 / stopAll）
@@ -75,9 +76,11 @@ presets/                # 提示词预设：writer, character, scene-init, nook-
 extensions/
   instructions.ts       # 平台提示词正文（slot writer-char / system-char / scene-init-instruction / nook-init-instruction）
   tools.ts              # 唯一 registerTool 入口：注册 AIRP 动作工具（extensions/toolkit/ 是 jiti 直跑的薄壳）
+  world-context.ts      # 每轮世界/事件提示；原生 write/edit 落账，排除 AIRP 工具
   toolkit/              # 工具壳 + 共享 helper（deps/actor/turn/result）——子目录，不会被当扩展加载
 skills/                 # 项目级 skills：跨世界通用手艺（生图 / 组件叙事 / 节奏 / 玩法咬合）
 templates/              # 开箱世界模板；含 wuwu / whitechapel / divergence / firstsnow 四个素材版世界
+  unwritten-door/       # 第六个体验 Demo：信封、手机与空白门外，见 doc-25
   <world>/skills/       # 世界级 skills：该世界自己的文风与剧情，与 world/ 同级、随包分发
 worlds/                 # 脚手架产出的玩家世界（.gitignore）
 tools/scaffold.mjs      # 模板 → 新世界
@@ -111,6 +114,8 @@ graph LR
 **动作层是 UI 与 Agent 的唯一共同入口**（`docs/doc-20` §12）：server 路由与扩展工具**各自 new 一个 `WorldStore`**，但都调同一个 `createActionService(store, actor)` 的动作函数——所以玩家点击与作家/角色的工具调用不可能跑出两套骰子 / 移动 / choice 语义。动作函数是 transport-free 的（不碰 HTTP、不碰 WS），**工具自己落账**；扩展进程不假设连着 WS。
 
 ### 3.1 单轮管线（作家）
+
+未写之门 Demo 的 choice、自由输入与 stub 首次进入，经 `lifecycle.submitWriter` 串行派发作家；新场景当前走亲写 W1，未启用 scene-init 委托。根 `.env.local` 指定模型/图像网关/超时；图像经 pi-ai 调用。从模板加载先复制到 worlds 再游玩。范围见 `docs/doc-25-未写之门Demo.md`。
 
 Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → write/edit 演化场景物件 → 轻量收敛。
 **chat history 不进画布，只有 chalk 落板。**

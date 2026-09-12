@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { readWorldShelf, trashWorldSave, ShelfError } from '../world-shelf.js';
 import type { Response } from 'express';
 import fs from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
@@ -196,24 +197,21 @@ export function createWorldRouter(
   setActiveStore: (store: LocalWorldStore | null) => void
 ): Router {
   const router = Router();
+  const dispatch = (store: LocalWorldStore, prompt: string) => {
+    void lifecycle.submitWriter(store.worldRoot, prompt).catch(error => {
+      eventBridge.broadcast({ type: 'error', source: 'writer', message: error instanceof Error ? error.message : String(error) });
+    });
+  };
   let worldFrozen = false;
   // Platform audio root: <REPO_ROOT>/assets/audio. `repoRoot` (index.ts:15) is the
   // repo root in both dev and prod, so this always points at the 31 produced clips.
   const AUDIO_ROOT = path.resolve(repoRoot, 'assets/audio');
 
+  let shelfBusy = false;
   // List available templates and worlds
   router.get('/worlds', async (_req, res) => {
     try {
-      const templatesDir = path.join(repoRoot, 'templates');
-      const templates = await fs.readdir(templatesDir);
-
-      const worldsDir = path.join(repoRoot, 'worlds');
-      let worlds: string[] = [];
-      try {
-        worlds = await fs.readdir(worldsDir);
-      } catch {}
-
-      res.json({ templates, worlds });
+      res.json(await readWorldShelf(repoRoot, getActiveStore()?.worldRoot));
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -221,9 +219,17 @@ export function createWorldRouter(
 
   // Load a world
   router.post('/worlds/load', async (req, res) => {
+    if (shelfBusy) return res.status(409).json({ error: 'A world operation is in progress.' });
+    shelfBusy = true;
     try {
       const { worldPath } = req.body;
-      const resolvedPath = path.isAbsolute(worldPath) ? worldPath : path.join(repoRoot, worldPath);
+      let resolvedPath = path.isAbsolute(worldPath) ? worldPath : path.join(repoRoot, worldPath);
+      const templatesRoot = path.join(repoRoot, 'templates') + path.sep;
+      if (resolvedPath.startsWith(templatesRoot)) {
+        const playPath = path.join(repoRoot, 'worlds', `${path.basename(resolvedPath)}-${randomUUID().slice(0, 8)}`);
+        await fs.cp(resolvedPath, playPath, { recursive: true });
+        resolvedPath = playPath;
+      }
 
       worldFrozen = false;
       await lifecycle.stopCharacters();
@@ -249,7 +255,19 @@ export function createWorldRouter(
       res.json({ ok: true, manifest, path: resolvedPath });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      shelfBusy = false;
     }
+  });
+
+  router.delete('/worlds/save', async (req, res) => {
+    if (shelfBusy) return res.status(409).json({ error: 'A world operation is in progress.' });
+    shelfBusy = true;
+    try {
+      res.json(await trashWorldSave(repoRoot, req.body?.worldPath, getActiveStore()?.worldRoot));
+    } catch (err) {
+      res.status(err instanceof ShelfError ? err.status : 500).json({ error: err instanceof Error ? err.message : String(err) });
+    } finally { shelfBusy = false; }
   });
 
   // Get active world manifest
@@ -281,7 +299,7 @@ export function createWorldRouter(
       const { cards: cardFiles, doorIds } = await store.pageOfLayer(layer);
       // Each door = the child layer's README if it exists (a written scene), or
       // a synthesised stub door when the child has no README yet (doc-11 §3).
-      const items: LayerItem[] = await Promise.all([
+      const allItems: LayerItem[] = await Promise.all([
         ...cardFiles.map(async (file): Promise<LayerItem> => {
           const raw = await store.readFile(file);
           const { frontmatter, body } = parseFrontmatter(raw);
@@ -302,6 +320,9 @@ export function createWorldRouter(
           }
         }),
       ]);
+      // An authored gate replaces the automatic child directory sign.
+      const targets = new Set(allItems.filter(it => it.frontmatter?.type === 'gate').map(it => it.frontmatter?.target));
+      const items = allItems.filter(it => it.filename !== 'README.md' || !targets.has(it.path.replace(/\/README\.md$/, '')));
       const mdFiles = items.map((it) => it.path);
 
       // Card rows keyed by path (never by layer column - a nested layer README
@@ -565,7 +586,11 @@ export function createWorldRouter(
     if (!((typeof choice === 'string' && choice !== '') || (typeof choice === 'number' && Number.isFinite(choice)))) {
       return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'choice must be a string label or a 1-based number' });
     }
-    await reply(res, () => serviceFor(store, { type: 'player' }).chooseOption({ path: choicePath, choice }));
+    await reply(res, async () => {
+      const result = await serviceFor(store, { type: 'player' }).chooseOption({ path: choicePath, choice });
+      dispatch(store, `[Player Event] ${JSON.stringify(result.details.event)}\nRead ${JSON.stringify(choicePath)} and the world skill. Resolve this choice, update the source file, and write a chalk response. Do not record the choice a second time.`);
+      return result;
+    });
   });
 
   // Player walks through a door into another layer (05 §3.6.2 / 12 §2.4).
@@ -576,7 +601,15 @@ export function createWorldRouter(
     if (typeof layer !== 'string' || layer === '') {
       return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'layer must be a non-empty layer id' });
     }
-    await reply(res, () => serviceFor(store, { type: 'player' }).enterLayer({ layer }));
+    await reply(res, async () => {
+      const layers = (await store.getManifest()).layers;
+      if (!layers[layer]) throw new ActionError({ code: 'not_found', message: 'Scene does not exist.' });
+      const result = await serviceFor(store, { type: 'player' }).enterLayer({ layer });
+      if (result.details.first) {
+        dispatch(store, `[Player Event] ${JSON.stringify(result.details.event)}\n[Target Path] ${layer === 'map' ? 'world' : layer}\nThe player opens a door into an unwritten scene. Read world.json, the world skill, the parent README and its props before writing. Preserve all revealed context. If the target README now exists, continue it without regenerating. Otherwise write its README, two objects, and opening chalk. Then generate and attach one background image if available. Use the world skill's door procedure when present.`);
+      }
+      return result;
+    });
   });
 
   /**

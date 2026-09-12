@@ -47,6 +47,29 @@ export class AgentLifecycleManager {
   private writerRestarts = 0;
   private characterClients = new Map<string, RpcClient>();
   private turnTimeouts = new Map<string, NodeJS.Timeout>();
+  private writerQueue: Promise<void> = Promise.resolve();
+  private writerStarting: { world: string; promise: Promise<RpcClient> } | null = null;
+
+  /** Resolve player beats in order, including their file updates. */
+  submitWriter(worldRoot: string, message: string): Promise<void> {
+    const queuedWorld = this.writerStarting?.world ?? this.writerWorld;
+    const pending = this.writerQueue.catch(() => {}).then(async () => {
+      if (queuedWorld && (this.writerStarting?.world ?? this.writerWorld) !== queuedWorld) throw new Error('The active world changed.');
+      const client = await this.startWriter(worldRoot);
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => { off(); reject(new Error('Writer response timed out.')); }, 300000);
+        const off = client.onEvent(event => {
+          if (event.type !== 'agent_settled') return;
+          clearTimeout(timer);
+          off();
+          resolve();
+        });
+        client.prompt(message).catch(error => { clearTimeout(timer); off(); reject(error); });
+      });
+    });
+    this.writerQueue = pending;
+    return pending;
+  }
 
   constructor(options: AgentLifecycleManagerOptions) {
     this.repoRoot = options.repoRoot;
@@ -63,6 +86,17 @@ export class AgentLifecycleManager {
    * world retires the old process first.
    */
   async startWriter(worldRoot: string): Promise<RpcClient> {
+    if (this.writerStarting) {
+      if (this.writerStarting.world === worldRoot) return this.writerStarting.promise;
+      await this.writerStarting.promise.catch(() => {});
+    }
+    const promise = this.startWriterProcess(worldRoot);
+    this.writerStarting = { world: worldRoot, promise };
+    try { return await promise; }
+    finally { if (this.writerStarting?.promise === promise) this.writerStarting = null; }
+  }
+
+  private async startWriterProcess(worldRoot: string): Promise<RpcClient> {
     if (this.writer && this.writerWorld === worldRoot) return this.writer;
     if (this.writer) await this.stopWriter();
 
@@ -171,7 +205,7 @@ export class AgentLifecycleManager {
         reason: 'timeout',
         timestamp: new Date().toISOString(),
       });
-    }, DEFAULT_TURN_TIMEOUT_MS);
+    }, Number(process.env.AIRP_TURN_TIMEOUT_MS) > 0 ? Number(process.env.AIRP_TURN_TIMEOUT_MS) : DEFAULT_TURN_TIMEOUT_MS);
     timer.unref?.();
     this.turnTimeouts.set(clientKey, timer);
   }

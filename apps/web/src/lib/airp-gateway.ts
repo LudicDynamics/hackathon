@@ -1,6 +1,7 @@
 export interface WorldShelf {
   templates: string[];
   worlds: string[];
+  groups?: { id: string; name: string; templatePath: string | null; saves: { id: string; path: string; updatedAt: string; active: boolean }[] }[];
 }
 
 export interface WorldLoadResult<TManifest = Record<string, unknown>> {
@@ -26,10 +27,19 @@ function json(method: string, body?: unknown): RequestInit {
   };
 }
 
+// World-relative filenames are not globally unique. Rotate the asset namespace
+// after a successful world load, including re-opening the same world/template.
+let assetSession = `${Date.now()}-0`;
+let assetGeneration = 0;
+
 export const airpGateway = {
   worlds: () => request<WorldShelf>('/api/worlds'),
-  loadWorld: <TManifest = Record<string, unknown>>(worldPath: string) =>
-    request<WorldLoadResult<TManifest>>('/api/worlds/load', json('POST', { worldPath })),
+  deleteSave: (worldPath: string) => request<{ ok: boolean; recoveryPath: string }>('/api/worlds/save', json('DELETE', { worldPath })),
+  loadWorld: async <TManifest = Record<string, unknown>>(worldPath: string) => {
+    const result = await request<WorldLoadResult<TManifest>>('/api/worlds/load', json('POST', { worldPath }));
+    if (result.ok) assetSession = `${Date.now()}-${++assetGeneration}`;
+    return result;
+  },
   manifest: <TManifest = Record<string, unknown>>() => request<TManifest>('/api/manifest'),
   layer: <TLayer = Record<string, unknown>>(layer: string, signal?: AbortSignal) =>
     request<TLayer>(`/api/layer?layer=${encodeURIComponent(layer)}`, { signal }),
@@ -38,6 +48,7 @@ export const airpGateway = {
     request<{ characters: TCharacters }>('/api/characters'),
   move: (from: string, to: string) => request('/api/move', json('POST', { from, to })),
   choose: (path: string, choice: string) => request('/api/choice', json('POST', { path, choice })),
+  enterLayer: (layer: string) => request('/api/enter-layer', json('POST', { layer })),
   moveCard: (path: string, x: number, y: number) =>
     request('/api/card/position', json('POST', { path, x, y })),
   rollDice: (filePath: string, rollType: string, expect: string) =>
@@ -50,7 +61,7 @@ export const airpGateway = {
   toggleFreeze: () => request<{ worldFrozen: boolean }>('/api/freeze', json('POST')),
   godAction: (action: 'create' | 'update' | 'delete', filePath: string, content?: string) =>
     request('/api/god-action', json('POST', { action, filePath, content })),
-  assetUrl: (path: string) => `/api/asset?path=${encodeURIComponent(path)}`,
+  assetUrl: (path: string) => `/api/asset?path=${encodeURIComponent(path)}&session=${assetSession}`,
 };
 
 export function openAirpSocket(onMessage: (message: Record<string, unknown>) => void): WebSocket {

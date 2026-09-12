@@ -48,7 +48,7 @@ export interface UseWorldApi {
   /** The layer currently being shown (reactive; src of truth for layer). */
   layer: string;
   /** Switch layer + fetch it (WS subscriptions stay bound to the layer). */
-  enterLayer(next: string): void;
+  enterLayer(next: string): Promise<void>;
   /** Re-fetch the current layer. */
   refresh(): Promise<void>;
   /**
@@ -103,15 +103,17 @@ export function useWorld(): UseWorldApi {
   }, [fetchLayer]);
 
   const enterLayer = useCallback(
-    (next: string) => {
+    async (next: string) => {
       if (next === layerRef.current) {
         // Same layer: still re-sync (may be an explicit gate re-entry).
-        void fetchLayer(next);
+        await fetchLayer(next);
         return;
       }
-      layerRef.current = next;
-      setLayer(next);
-      void fetchLayer(next);
+      await airpGateway.enterLayer(next).then(async () => {
+        layerRef.current = next;
+        setLayer(next);
+        await fetchLayer(next);
+      }).catch(error => window.dispatchEvent(new CustomEvent('airp:notice', { detail: String(error) })));
     },
     [fetchLayer]
   );
@@ -136,7 +138,9 @@ export function useWorld(): UseWorldApi {
   }, []);
 
   const sendToWriter = useCallback((text: string) => {
-    sendSocket(wsRef.current, { type: 'writer_prompt', message: text });
+    if (!sendSocket(wsRef.current, { type: 'writer_prompt', message: text, layer: layerRef.current })) {
+      window.dispatchEvent(new CustomEvent('airp:notice', { detail: 'Connection lost. Please try again.' }));
+    }
   }, []);
 
   const sendMessage = useCallback((payload: Record<string, unknown>) => {
@@ -159,6 +163,13 @@ export function useWorld(): UseWorldApi {
         window.dispatchEvent(new CustomEvent('airp:world-event', { detail: msg }));
       }
       switch (msg.type) {
+        case 'error':
+        case 'turn_aborted':
+          window.dispatchEvent(new CustomEvent('airp:notice', { detail: msg.message ?? 'The writer could not finish this turn.' }));
+          break;
+        case 'image_generation_progress':
+          window.dispatchEvent(new CustomEvent('airp:notice', { detail: 'Painting the scene… You can keep exploring.' }));
+          break;
         case 'file_changed':
         case 'world_event':
         case 'item_moved':

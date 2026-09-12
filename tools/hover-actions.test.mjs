@@ -29,6 +29,9 @@ test('hover controls float outside the entity and use a transparent container', 
   assert.match(code, /airpGateway.move\(item.path/);
   assert.match(code, /setSide\(best.side\)/);
   assert.match(code, /side: 'below'/);
+  assert.match(code, /candidate.side === placement/);
+  assert.doesNotMatch(code, /observer.observe\(el\)/);
+  assert.doesNotMatch(code, /addEventListener\('pointermove'/);
 });
 
 test('canvas uses the merged action and event contracts', async () => {

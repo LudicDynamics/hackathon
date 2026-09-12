@@ -257,7 +257,7 @@ function failFromProvider(
     case 'no_credentials':
       fail(
         'unsupported',
-        `Image model '${provider?.model ?? 'the configured image model'}' is configured but has no API key. Set OPENROUTER_API_KEY and ` +
+        `Image model '${provider?.model ?? 'the configured image model'}' is configured but has no API key. Set ${provider?.id === 'openai' ? 'OPENAI_API_KEY' : 'OPENROUTER_API_KEY'} and ` +
           'restart, then try again. Do not retry in this turn.',
         details
       );

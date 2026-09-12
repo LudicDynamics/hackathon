@@ -3,6 +3,8 @@ import { ChalkCard } from '../narrative/ChalkCard.js';
 import { MarkdownText, plainExcerpt, stripLeadingTitle, leadingTitleOf } from '../../lib/md.js';
 import { playFoley } from '../../lib/audio.js';
 import { DoorOpen } from 'lucide-react';
+import { useLocale } from '../../lib/i18n.js';
+import { PropCard } from './PropCard.js';
 
 interface CardRendererProps {
   item: {
@@ -66,6 +68,8 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
   onItemDropOnTarget,
 }) => {
   const { frontmatter, body, filename, path } = item;
+  const { locale } = useLocale();
+  const ja = locale === 'ja';
   const [letterOpen, setLetterOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isItemDragging, setIsItemDragging] = useState(false);
@@ -100,6 +104,12 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
   const puzzleClasses = `${isItemDragging ? 'puzzle-target-ready' : ''} ${isDragOver ? 'puzzle-target-hover' : ''} ${isUnlockedEffect ? 'puzzle-unlock-burst' : ''}`.trim();
 
   // 1. Chalk Card — ink on the canvas (bare by default).
+  if (frontmatter?.visual === 'envelope' || frontmatter?.visual === 'phone' || frontmatter?.visual === 'door') {
+    return <PropCard visual={frontmatter.visual} title={frontmatter.title || filename} body={body}
+      image={typeof frontmatter.image === 'string' ? frontmatter.image : undefined}
+      onEnter={frontmatter.type === 'gate' ? () => onEnterGate?.(frontmatter.target) : undefined} />;
+  }
+
   if (frontmatter?.type === 'chalk') {
     return (
       <ChalkCard
@@ -131,7 +141,9 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
     const order = /^\d+$/.test(String(orderNum))
       ? String(orderNum).padStart(2, '0')
       : orderNum;
-    const meta = isStub ? 'UNWRITTEN · walk in, and it will be written →' : 'SCENE · ENTRANCE';
+    const meta = isStub
+      ? (ja ? 'まだ白紙 · 一歩先から物語が生まれる →' : 'UNWRITTEN · walk in, and it will be written →')
+      : (ja ? '場面 · 入口' : 'SCENE · ENTRANCE');
     // The card face shows a clean one-line excerpt; the raw README markdown
     // (# heading, line breaks) stays in the hover sheet. Never spill source.
     const excerpt = plainExcerpt(body);
@@ -186,7 +198,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
         >
           <div className="letter__head">
             <span className="letter__seal" />
-            {frontmatter.title || 'Letter'}
+            {frontmatter.title || (ja ? '手紙' : 'Letter')}
           </div>
           <div className="letter__preview">
             {/* frontmatter.preview is authored copy; the body fallback is raw
@@ -194,7 +206,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
             {frontmatter.preview || plainExcerpt(body)}
           </div>
           <div className="letter__meta">
-            <span>{frontmatter.sign || 'Click to open and read'}</span>
+            <span>{frontmatter.sign || (ja ? '開いて読む' : 'Click to open and read')}</span>
           </div>
         </div>
 
@@ -227,7 +239,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
                   onClick={() => setLetterOpen(false)}
                   className="px-6 py-2 text-xs font-mono transition-all border border-ink/20 hover:bg-ink hover:text-cream"
                 >
-                  Fold &amp; Put Away (Esc)
+                  {ja ? 'たたんでしまう' : 'Fold & Put Away'}
                 </button>
               </div>
             </div>

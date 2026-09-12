@@ -1,4 +1,17 @@
 {
+  "Saved games": { "zh-CN": "存档", "ja": "セーブデータ" },
+  "{count} saves": { "zh-CN": "{count} 个存档", "ja": "セーブ {count} 件" },
+  "← All worlds": { "zh-CN": "← 全部世界", "ja": "← ワールド一覧" },
+  "＋ Start a new game": { "zh-CN": "＋ 开始新游戏", "ja": "＋ 新しく始める" },
+  "No saves yet. Start a new game above.": { "zh-CN": "暂无存档，可以从上方开始新游戏。", "ja": "セーブはまだありません。上から新しく始められます。" },
+  "Save ID": { "zh-CN": "存档 ID", "ja": "セーブ ID" },
+  "Current game": { "zh-CN": "正在游玩", "ja": "プレイ中" },
+  "Delete save": { "zh-CN": "删除存档", "ja": "セーブを削除" },
+  "Open another save before deleting this one.": { "zh-CN": "请先切换到其他存档，再删除此存档。", "ja": "別のセーブを開いてから削除してください。" },
+  "Move this save to trash? Its files will be kept for recovery.": { "zh-CN": "将此存档移入回收目录？文件会保留，可手动恢复。", "ja": "このセーブをゴミ箱へ移動しますか？ファイルは復元用に保持されます。" },
+  "Move to trash": { "zh-CN": "移入回收目录", "ja": "ゴミ箱へ移動" },
+  "Save moved to trash.": { "zh-CN": "存档已移入回收目录。", "ja": "セーブをゴミ箱へ移動しました。" },
+  "Cancel": { "zh-CN": "取消", "ja": "キャンセル" },
   "Worlds": {
     "zh-CN": "世界",
     "ja": "ワールド"

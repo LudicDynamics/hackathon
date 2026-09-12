@@ -9,6 +9,10 @@
 
 ## 0. 一句话
 
+日语世界装配补充：`first-snow-jp` 的人物 preset 仍引用共享 `system-char`；新增 `world-language` 文件槽读取世界根 `language.md`，随后加载角色自身四份日语文档。精确 JSON、文件路径与 Writer skill 的日语规则见《世界日语化迁移》§4；不复制平台提示词正文、不启用新初始化路径。
+
+2026-09-12 未写之门实际接线：首次进入 stub 落事件后串行提交作家亲写（W1），R1/R2 尚未启用。writer preset 增加 `"tools": { "deny": ["bash"] }`，原生 write/edit 经 `world-context.ts` 落账。完整范围见 doc-25；下文 R1/R2 为目标协议，不表示该 Demo 已验证委托。
+
 **初始化 = 一次"外包"，不是一次"扮演"。** 世界只认两种初始化路径——**作家委托**（agent 判断该外包了）和**玩家/引擎直唤**（玩家自己动手要一片新地方）。两者共用**同一套 subagent preset**，差别只在"谁来填那份 brief"。
 
 ---

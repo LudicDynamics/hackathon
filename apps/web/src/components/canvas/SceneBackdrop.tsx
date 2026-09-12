@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { subscribeParallax } from '../../lib/parallax.js';
 import { materialSkinOf } from '@airp/shared/forms';
+import { airpGateway } from '../../lib/airp-gateway.js';
 
 /** The layer backdrop payload from `GET /api/layer` (see LayerState.bg). */
 export interface SceneBackdropBg {
@@ -30,9 +31,9 @@ export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg, effectsEnabled
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const src = bg.src;
+  const src = bg.src ? airpGateway.assetUrl(bg.src) : null;
   const isAvailable = !!src && failedSrc !== src;
-  const isVideo = !!src && /\.(mp4|webm)$/i.test(src);
+  const isVideo = !!bg.src && /\.(mp4|webm)$/i.test(bg.src);
 
   // Parallax drift is written straight to the DOM from the module store: a
   // pointermove used to arrive here as a React prop and re-render the whole
@@ -70,18 +71,20 @@ export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg, effectsEnabled
       {isAvailable && (
         isVideo ? (
           <video
+            key={src}
             ref={videoRef}
             className="scene-backdrop__img object-cover"
             loop
             muted
             playsInline
-            src={`/api/asset?path=${encodeURIComponent(src)}`}
+            src={src}
             onError={() => setFailedSrc(src)}
           />
         ) : (
           <img
+            key={src}
             className="scene-backdrop__img"
-            src={`/api/asset?path=${encodeURIComponent(src)}`}
+            src={src}
             alt=""
             onError={() => setFailedSrc(src)}
           />

@@ -27,6 +27,9 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
     const object = el.closest<HTMLElement>('.object');
     const viewport = object?.closest<HTMLElement>('[aria-label="Infinite canvas"]') || object?.parentElement?.parentElement;
     if (!object || !viewport) return;
+    // Placement is locked for this hover session. Changing side changes the
+    // panel's padding/height, so observing it and choosing again feeds back.
+    let placement: string | null = null;
     const measure = () => {
       const box = object.getBoundingClientRect();
       const bounds = viewport.getBoundingClientRect();
@@ -44,18 +47,22 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
         const outside = width * height - overlap(candidate.x, candidate.y, bounds);
         return outside * 10 + obstacles.reduce((sum, r) => sum + overlap(candidate.x, candidate.y, r), 0);
       };
-      const best = candidates.reduce((best, next) => score(next) < score(best) ? next : best);
+      const best = candidates.find(candidate => candidate.side === placement)
+        ?? candidates.reduce((best, next) => score(next) < score(best) ? next : best);
+      placement = best.side;
       setSide(best.side);
       // Keep the bottom player/hand/action chrome out of the reading area.
       el.style.maxHeight = `${Math.max(80, (bounds.bottom - Math.max(bounds.top, best.y) - 110) / scale)}px`;
     };
     measure();
-    const observer = new ResizeObserver(measure);
+    let frame = 0;
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(() => { frame = 0; measure(); });
+    };
+    const observer = new ResizeObserver(schedule);
     observer.observe(viewport);
-    observer.observe(el);
-    viewport.addEventListener('wheel', measure, { passive: true });
-    viewport.addEventListener('pointermove', measure, { passive: true });
-    return () => { observer.disconnect(); viewport.removeEventListener('wheel', measure); viewport.removeEventListener('pointermove', measure); };
+    viewport.addEventListener('wheel', schedule, { passive: true });
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); viewport.removeEventListener('wheel', schedule); };
   }, [active]);
   const run = async (work: () => void | Promise<unknown>) => {
     if (running.current) return;
@@ -72,7 +79,7 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
   const isGate = fm?.type === 'gate' || item.path.endsWith('/README.md');
   const isPerson = fm?.type === 'character' || fm?.type === 'sprite';
   const collectable = !isGate && !isPerson && fm?.type !== 'chalk' && item.path.startsWith('world/') && fm?.portable !== false;
-  const choose = (choice: string) => { void run(async () => { await airpGateway.choose(item.path, choice); setFeedback(t('Choice recorded. The world can respond on the next turn.')); }); };
+  const choose = (choice: string) => { void run(async () => { await airpGateway.choose(item.path, choice); setFeedback('The world is responding…'); }); };
   return <div ref={ref} className={`entity-interactions entity-interactions--${side}`} data-no-drag onClick={event => event.stopPropagation()}>
     <fieldset disabled={busy}>
     {renderFrontmatterWidgets(item.frontmatter, { filePath: item.path, reveal: active, onChoice: choose, onDiceRolled })}
