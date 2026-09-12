@@ -11,11 +11,14 @@ import {
   boxSizeOf,
   dirOfLayer,
   createActionService,
+  listBackpack,
   parseFrontmatter,
   cardFormOf,
   cardKindOf,
+  sanitiseForBlock,
   type Actor,
   type CardRecord,
+  type ViewRect,
 } from '@airp/shared';
 import type { AgentLifecycleManager } from '../engine/lifecycle.js';
 import type { EventBridge } from '../engine/event-bridge.js';
@@ -80,6 +83,73 @@ function hashInt(s: string): number {
 /** Integer degrees in [-3, 3], derived per card path, never persisted. */
 function rotOf(cardPath: string): number {
   return (hashInt(cardPath) % 7) - 3;
+}
+
+/** SHAPE gate only (00 §14.1 rule 4): the value must LOOK like a layer id.
+ *  NOT dot-relative like `assertWorldPath` (presence.ts:29) — relative paths are
+ *  meaningless outside the action layer. This is NECESSARY, NOT SUFFICIENT: it
+ *  does not reject newlines / quotes / backticks / injected prose, and the value
+ *  is echoed verbatim into the state block, so every accepted value MUST then
+ *  pass `sanitiseForBlock` (00 §14). */
+function isPlausibleLayer(layer: string): boolean {
+  if (layer === 'map') return true; // MAP_LAYER, store/layers.ts
+  if (!layer.startsWith('world/')) return false;
+  const segs = layer.split('/');
+  return segs.every((s) => s !== '' && s !== '.' && s !== '..');
+}
+
+/** Clamp a numeric field, or null when it is not a real finite number.
+ *  NOT Nodesign's `Number(v)`: `Number(null)`/`Number('')` are 0 and would let a
+ *  null camera component through — 00 §11 requires the whole report be refused. */
+function num(v: unknown, min: number, max: number): number | null {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+  return Math.min(max, Math.max(min, v));
+}
+
+/** The one NEW browser-direct input on the injection path (00 §5.2). Rejects
+ *  the WHOLE report on a malformed camera — a half-believed rect is worse than
+ *  none. Every accepted STRING is then folded through `sanitiseForBlock`
+ *  (00 §14). `at` is NOT produced here: it is the server clock's stamp (05 §4.1
+ *  table's last row), applied by `writeViewpoint`. */
+function sanitizeViewpoint(raw: unknown): {
+  layer: string;
+  focus: ViewRect | null;
+  selected: string[];
+  bagCount: number;
+} | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const body = raw as Record<string, unknown>;
+
+  const rawLayer = typeof body.layer === 'string' && body.layer.length <= 300 ? body.layer : '';
+  if (rawLayer !== '' && !isPlausibleLayer(rawLayer)) return null;
+  // Content-level pass (00 §14.1 rules 1-3): fold newlines / control chars /
+  // quotes and cap length. The shape gate above is NOT enough (INJ-01).
+  const layer = sanitiseForBlock(rawLayer, { maxLength: 300 });
+
+  let focus: ViewRect | null = null;
+  if (body.camera !== undefined && body.camera !== null) {
+    if (typeof body.camera !== 'object') return null;
+    const c = body.camera as Record<string, unknown>;
+    const x = num(c.x, -1e6, 1e6);
+    const y = num(c.y, -1e6, 1e6);
+    const w = num(c.w, 1, 1e5);
+    const h = num(c.h, 1, 1e5);
+    if (x === null || y === null || w === null || h === null) return null;
+    // The wire sends the world-space visible rect's TOP-LEFT. `focus` is the
+    // CENTRE in WORLD coords (ViewpointRecord's contract): `camera.x` already
+    // equals `cam.x - vw / (2 * z)`, so the centre is x + w / 2.
+    focus = { x: x + w / 2, y: y + h / 2, w, h };
+  }
+
+  const rawBag = num(body.bagCount, 0, 999);
+  const bagCount = rawBag === null ? 0 : Math.trunc(rawBag);
+
+  const selected = (Array.isArray(body.selected) ? body.selected : [])
+    .filter((s): s is string => typeof s === 'string' && s.length <= 300)
+    .slice(0, 24)
+    .map((s) => sanitiseForBlock(s, { maxLength: 300 }));
+
+  return { layer, focus, selected, bagCount };
 }
 
 /**
@@ -448,25 +518,15 @@ export function createWorldRouter(
     }
   });
 
-  // Get backpack items (player/ directory)
+  // Get backpack items (player/ directory). The scan lives in shared so the
+  // injection-side `bag` section and this route name one fact once
+  // (docs/hooks/02 §3.1/§4.2); `BagItem`'s field names are the contract the
+  // sidebar reads (`RightSidebar.tsx`), so they are not this route's to change.
   router.get('/backpack', async (_req, res) => {
     const store = getActiveStore();
     if (!store) return res.status(400).json({ error: 'No active world' });
     try {
-      const allFiles = (await store.listFiles('player')).filter((file) => file !== 'player/README.md');
-      const items = await Promise.all(
-        allFiles.map(async (file) => {
-          const raw = await store.readFile(file);
-          const { frontmatter, body } = parseFrontmatter(raw);
-          return {
-            path: file,
-            filename: path.basename(file),
-            frontmatter,
-            body,
-          };
-        })
-      );
-      res.json({ items });
+      res.json({ items: await listBackpack(store) });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -724,11 +784,20 @@ export function createWorldRouter(
     await reply(res, () => serviceFor(store, { type: 'player' }).enterLayer({ layer }));
   });
 
-  /**
-   * `/api/viewpoint` belongs to B2 / doc-22 §9 (a `viewpoint` row in canvas.db).
-   * B1 deliberately ships no route and no table: a placeholder table now would
-   * create a second source of truth (docs/tools/12 §2.4).
-   */
+  // The player's viewpoint (00 §5). No event, no WS frame: this is a
+  // current-value report, not a world change (there is no `state_changed`; the
+  // row is not the world). Synchronous: `writeViewpoint` uses `execCanvas`, and
+  // this is not an action, so it does not go through `reply()`.
+  router.post('/viewpoint', (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const v = sanitizeViewpoint(req.body);
+    if (!v) {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'viewpoint report rejected' });
+    }
+    const at = store.writeViewpoint(v); // the ONE writer; returns the server-stamped `at`
+    res.json({ ok: true, at });
+  });
 
   // God mode toggle freeze — a presentation toggle, not an action: it writes no
   // event and broadcasts a演出 frame directly (docs/tools/12 §2.4).

@@ -12,6 +12,10 @@
     "./forms": {
       "types": "./dist/schemas/forms.d.ts",
       "import": "./dist/schemas/forms.js"
+    },
+    "./viewpoint": {
+      "types": "./dist/render/viewpoint.d.ts",
+      "import": "./dist/render/viewpoint.js"
     }
   },
   "scripts": {

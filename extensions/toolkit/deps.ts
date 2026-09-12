@@ -40,6 +40,21 @@ export function worldStore(ctx: ExtensionContext): LocalWorldStore {
 }
 
 /**
+ * Read-only peek at the cached store: the store B1 already opened for THIS
+ * module instance, or null. NEVER constructs one (06 §5.4).
+ *
+ * `extensions/context.ts` uses `peekWorldStore() ?? <its own store>` so that,
+ * when the loader's jiti cache does happen to be shared, the process keeps ONE
+ * SQLite connection. It is an optimisation, not a correctness dependency: a
+ * cold cache returns null and the caller opens its own (worst case two
+ * connections, harmless under WAL). The caller MUST check `worldRoot` before
+ * reusing the result — a long-lived process can switch worlds.
+ */
+export function peekWorldStore(): LocalWorldStore | null {
+  return store;
+}
+
+/**
  * The caller's current layer, or null when nothing reports it.
  *
  * Reads the `viewpoint` row through the store method (B2 / 05 §2.6) — the same

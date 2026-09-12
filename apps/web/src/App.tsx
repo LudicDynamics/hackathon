@@ -15,6 +15,7 @@ import { useCamera } from './state/useCamera.js';
 import { useWorld } from './state/useWorld.js';
 import { preloadAudio } from './lib/audio.js';
 import { UI_COPY, type Locale } from './lib/i18n.js';
+import { useViewpointReport } from './hooks/useViewpointReport.js';
 
 interface WorldManifest {
   id: string;
@@ -60,6 +61,23 @@ export function App() {
   const { state: worldState, layer: currentLayer, enterLayer, refresh, moveCard, sendToWriter, sendMessage } = world;
   const worldFrozen = worldState?.worldFrozen === true;
 
+  // Player viewpoint report (05 §5). Mounted ONCE at the top: `useCamera()` is
+  // a module-level shared camera, while `layer` / `backpackItems` live here, so
+  // Canvas (which owns the viewport div) is the wrong place for this.
+  //
+  // `?eye=1` is the agent's own view page: reporting from it would overwrite the
+  // player's viewpoint with where the AGENT is looking — a symptom far from its
+  // cause, hence this comment (05 §5.4). There is no eye-mode consumer yet, so
+  // the flag is a frozen contract kept ready for the eye-mode batch.
+  // TODO(eye-mode): stamp `data-eye-ready` in this same spot when that batch lands.
+  const isEyeMode = new URLSearchParams(location.search).get('eye') === '1';
+  useViewpointReport({
+    camera,
+    layer: currentLayer,
+    bagCount: backpackItems.length,
+    enabled: !isEyeMode,
+  });
+
   // Audio beds follow server-resolved URLs from /api/layer (00 §4.2). `tone` is a
   // material CSS hook only — it is NOT an audio selector anymore.
   //
@@ -83,6 +101,22 @@ export function App() {
   }, [themeUrl]);
 
   // Camera memory around the modal mask (P0: save before opening, restore after).
+  //
+  // The two WS frames below are the B3 front-end senders (docs/hooks/06 §4.5,
+  // frame semantics frozen by docs/hooks/03 §4.3). Without them the character
+  // cursor never advances and neither the first-open injection nor the cold-start
+  // window can run. Server side (owned by the events lane):
+  //   - `character_start`: records the open-time high-water `getMaxSeq()` and
+  //     spawns the character process. It must NOT advance the cursor — advancing
+  //     on open would permanently swallow everything a crash or a misclick skips.
+  //     `worldPath` is omitted on purpose: the server falls back to the active
+  //     store's root (`apps/server/src/index.ts:121-125`), which is authoritative;
+  //     the client only knows the template name, so sending one would risk
+  //     pointing the agent at the wrong world.
+  //   - `character_stop`: settles the character cursor at the open-time
+  //     high-water, then stops the process. `turns` is omitted too — no front-end
+  //     counter exists, and the server marks the count as estimated rather than
+  //     passing a guess off as measured (M-8).
   const openCharacterModal = (charId: string) => {
     camera.save('modal');
     sendMessage({ type: 'character_start', characterId: charId });

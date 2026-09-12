@@ -11,6 +11,7 @@
     "scaffold": "node tools/scaffold.mjs",
     "probe": "node tools/probe-writer.mjs",
     "probe:tools": "node tools/probe-tools.mjs && node tools/probe-tools-engine.mjs",
+    "probe:inject": "node tools/probe-inject.mjs",
     "typecheck:extensions": "tsc -p extensions/tsconfig.json",
     "check:docs": "node tools/check-hooks-docs.mjs",
     "pi": "node tools/pi-rp.mjs"

@@ -1,3 +1,5 @@
+import { CARD_FORMS } from '../schemas/forms.js';
+
 /**
  * Spatial humanization (doc-03 §5.4). Pure, no I/O: turns box geometry into the
  * words a reader can act on. Coordinates never leave this module — the whole
@@ -17,7 +19,7 @@ export interface Box {
 }
 
 /** Normalized centre distance: 1.0 == the two boxes are one average box apart. */
-function normalDistance(a: Box, b: Box): number {
+export function normalDistance(a: Box, b: Box): number {
   const dx = a.x + a.w / 2 - (b.x + b.w / 2);
   const dy = a.y + a.h / 2 - (b.y + b.h / 2);
   return Math.hypot(dx / ((a.w + b.w) / 2), dy / ((a.h + b.h) / 2));
@@ -82,4 +84,68 @@ export function nearestNeighbours(
     if (best) out.push({ path: item.path, dir: dirPhrase(item.box, best.box), other: best.path });
   }
   return out;
+}
+
+/**
+ * A character's footprint box from a presence POINT (02 §3.3 ruling A).
+ *
+ * Presence `x`/`y` are the avatar CENTRE (`world-store.ts:31`), so they cannot
+ * feed a `Box`-shaped function directly: a zero-width box divides `dirPhrase`'s
+ * gaps by `(a.w + b.w) / 2` and turns every direction into `Infinity`/`NaN`.
+ * The size is NOT invented — `seatPresence` already models a presence with
+ * `CARD_FORMS.sprite` when it seats and collision-checks one (`local-store.ts:1005`).
+ * Using the engine's own occupancy model keeps the thresholds relative and
+ * avoids a second vocabulary of distances (02 §3.3).
+ */
+export function spriteBox(at: { x: number; y: number }): Box {
+  const { w, h } = CARD_FORMS.sprite;
+  return { x: at.x - w / 2, y: at.y - h / 2, w, h };
+}
+
+/** A placed card the presence phrase can point at (02 §3.3). */
+export interface Anchor {
+  path: string;
+  /** Top-left rectangle, straight from `cards` (`store.getLayerCards`). */
+  box: Box;
+  name: string;
+}
+
+/**
+ * Where a point stands relative to its NEAREST anchor, plus that anchor's
+ * display name. `null` when the layer has no placed card — the caller then says
+ * `somewhere in this layer` rather than pretending to know (02 §3.3).
+ */
+export function presencePhrase(
+  at: { x: number; y: number },
+  anchors: Anchor[]
+): { dir: string; anchorPath: string; anchorName: string } | null {
+  if (anchors.length === 0) return null;
+  const subject = spriteBox(at);
+  let best = anchors[0];
+  let bestD = normalDistance(subject, anchors[0].box);
+  for (const a of anchors.slice(1)) {
+    const d = normalDistance(subject, a.box);
+    if (d < bestD) {
+      bestD = d;
+      best = a;
+    }
+  }
+  return { dir: dirPhrase(subject, best.box), anchorPath: best.path, anchorName: best.name };
+}
+
+/**
+ * One `cast` / `Also here` row (02 §3.3): `  <id> — <dir> "<anchor name>"`.
+ * ` · following you` only exists in the writer's view AND only when true —
+ * a character has no reader value for "who follows the player" (02 §3.2).
+ */
+export function castLine(
+  id: string,
+  at: { x: number; y: number },
+  anchors: Anchor[],
+  opts: { following?: boolean; role: 'writer' | 'character' }
+): string {
+  const p = presencePhrase(at, anchors);
+  const where = p ? `${p.dir} "${p.anchorName}"` : 'somewhere in this layer';
+  const tail = opts.role === 'writer' && opts.following ? ' · following you' : '';
+  return `  ${id} — ${where}${tail}`;
 }
