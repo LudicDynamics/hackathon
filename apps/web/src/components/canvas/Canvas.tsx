@@ -4,6 +4,7 @@ import { LinkLayer, highlightLinks, updateAllLinks } from './LinkLayer.js';
 import { CanvasGrid } from './CanvasGrid.js';
 import { SceneBackdrop } from './SceneBackdrop.js';
 import { ParticleLayer } from './ParticleLayer.js';
+import { SceneChalk } from '../narrative/SceneChalk.js';
 import { useCamera } from '../../state/useCamera.js';
 import { clampZ, zoomAt, screenToWorld } from '../../lib/camera.js';
 import { makeBox, pushFrom, relaxAll } from '../../lib/collide.js';
@@ -17,13 +18,16 @@ interface CanvasProps {
   items: LayerItem[];
   links: LayerLink[];
   bg: { src: string | null; tone: string; grain: string };
+  scene: LayerItem | null;
+  sceneCopy: { label: string; collapse: string; expand: string };
   onMoveCard?: (path: string, x: number, y: number) => Promise<void> | void;
-  onSelectChoice?: (choice: string) => void;
+  onSelectChoice?: (path: string, choice: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
   onEnterGate?: (targetLayer: string) => void;
   onOpenCharacterModal?: (charId: string) => void;
   onItemDropOnTarget?: (itemPath: string, targetPath: string) => void;
   onDropItemToScene?: (itemPath: string) => void;
+  onTakeItem?: (path: string) => void;
   onOpenRadialMenu?: (x: number, y: number, worldX: number, worldY: number) => void;
 }
 
@@ -74,6 +78,8 @@ export const Canvas: React.FC<CanvasProps> = ({
   items,
   links,
   bg,
+  scene,
+  sceneCopy,
   onMoveCard,
   onSelectChoice,
   onDiceRolled,
@@ -81,6 +87,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   onOpenCharacterModal,
   onItemDropOnTarget,
   onDropItemToScene,
+  onTakeItem,
   onOpenRadialMenu,
 }) => {
   const camera = useCamera();
@@ -471,9 +478,19 @@ export const Canvas: React.FC<CanvasProps> = ({
             onEnterGate={onEnterGate}
             onOpenCharacterModal={onOpenCharacterModal}
             onItemDropOnTarget={onItemDropOnTarget}
+            onTakeItem={onTakeItem}
           />
         ))}
       </div>
+
+      <SceneChalk
+        scene={scene}
+        label={sceneCopy.label}
+        collapseLabel={sceneCopy.collapse}
+        expandLabel={sceneCopy.expand}
+        onSelectChoice={onSelectChoice}
+        onDiceRolled={onDiceRolled}
+      />
 
       {/* Atmospheric 1.35x foreground particle system: floating dust & rain overlay */}
       <ParticleLayer tone={bg.tone} />

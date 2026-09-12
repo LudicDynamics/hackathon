@@ -1,6 +1,7 @@
 import React from 'react';
 import { chalkStyleOf } from '@airp/shared/forms';
 import { renderFrontmatterWidgets } from '../../lib/fm.js';
+import { MarkdownText } from '../../lib/md.js';
 
 interface ChalkCardProps {
   item: {
@@ -52,7 +53,7 @@ export const ChalkCard: React.FC<ChalkCardProps> = ({
   return (
     <div className={classes.join(' ')} style={sizeStyle}>
       {/* Chalk narration body — transparent ink, pre-wrap preserved. */}
-      <div className="whitespace-pre-wrap">{body}</div>
+      <MarkdownText text={body} className="whitespace-pre-wrap" />
 
       {widgets}
     </div>

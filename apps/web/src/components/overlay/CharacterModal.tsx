@@ -22,6 +22,7 @@ interface CharacterModalProps {
   onClose: () => void;
   /** character_prompt protocol — the app wraps this in the message type; unchanged. */
   onSendMessage?: (msg: string) => void;
+  locale?: 'en' | 'ja';
 }
 
 /** T3.2 emotion-tag protocol. Moods are pure CSS diffs until sprite sheets land.
@@ -45,6 +46,13 @@ const FALLBACK_REPLIES: ReadonlyArray<{ text: string; emo: Emotion }> = [
   { text: 'The fire keeps its own time here. So do we.', emo: 'normal' },
 ];
 
+const FALLBACK_REPLIES_JA: ReadonlyArray<{ text: string; emo: Emotion }> = [
+  { text: '[emo: thinking] 少し考えさせて。今夜は、見た目よりずっと複雑だから。', emo: 'thinking' },
+  { text: '[emo: smile] そのことを話してくれて、うれしい。', emo: 'smile' },
+  { text: '[emo: sad] 選ばなかった約束も、消えるわけじゃないよ。', emo: 'sad' },
+  { text: '初雪が降るまでに、あなたの言葉で聞かせて。', emo: 'normal' },
+];
+
 /** Current on-stage performance: idle → thinking → streaming → done. */
 type Phase = 'idle' | 'thinking' | 'streaming' | 'done';
 
@@ -62,6 +70,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   bio,
   onClose,
   onSendMessage,
+  locale = 'en',
 }) => {
   const [phase, setPhase] = useState<Phase>('idle');
   const [emo, setEmo] = useState<Emotion>('normal');
@@ -137,7 +146,11 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   // Opening line, streamed shortly after the overlay settles.
   useEffect(() => {
     const t = window.setTimeout(
-      () => streamLine('(Watching you) Is there something you would like to know?', 'normal'),
+      () =>
+        streamLine(
+          locale === 'ja' ? '（あなたを見つめて）話したいこと、ある？' : '(Watching you) Is there something you would like to know?',
+          'normal'
+        ),
       420,
     );
     return () => window.clearTimeout(t);
@@ -164,7 +177,8 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     setInputText('');
     setPlayerEcho(msg); // kept on the paper, not a history list
     onSendMessage?.(msg); // character_prompt protocol — App wires the message type
-    const pick = FALLBACK_REPLIES[Math.floor(Math.random() * FALLBACK_REPLIES.length)];
+    const bank = locale === 'ja' ? FALLBACK_REPLIES_JA : FALLBACK_REPLIES;
+    const pick = bank[Math.floor(Math.random() * bank.length)];
     const { text, emo: mood } = parseEmoTag(pick.text);
     streamLine(text, mood);
   };
@@ -177,9 +191,9 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     <div
       className={`character-modal-layer${closing ? ' modal-closing' : ''}`}
       role="dialog"
-      aria-label={`Dialogue with ${characterId}`}
+      aria-label={locale === 'ja' ? `${characterId}との会話` : `Dialogue with ${characterId}`}
     >
-      <button type="button" className="modal-close" onClick={handleClose} aria-label="Close dialog">
+      <button type="button" className="modal-close" onClick={handleClose} aria-label={locale === 'ja' ? '会話を閉じる' : 'Close dialog'}>
         ×
       </button>
 
@@ -211,7 +225,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         <div className="line-stage">
           {playerEcho && <span className="player-echo">“{playerEcho}”</span>}
           {phase === 'thinking' && (
-            <span className="thinking-hint">{characterId} is thinking…</span>
+            <span className="thinking-hint">{locale === 'ja' ? `${characterId}は考えている…` : `${characterId} is thinking…`}</span>
           )}
           {(phase === 'streaming' || phase === 'done') && line !== '' && (
             <span className="speech-line">
@@ -229,7 +243,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
           onKeyDown={(e) => {
             if (e.key === 'Enter') handleSend();
           }}
-          placeholder={`Say something to ${characterId}… (Enter to send)`}
+          placeholder={locale === 'ja' ? `${characterId}に話す…（Enterで送信）` : `Say something to ${characterId}… (Enter to send)`}
           aria-label={`Message to ${characterId}`}
           disabled={busy}
           className="speech-input"

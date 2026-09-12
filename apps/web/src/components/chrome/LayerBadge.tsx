@@ -9,11 +9,12 @@ export interface LayerBadgeProps {
   name: string;
   /** Material the layer is bound to; rendered as `material: <value>`. */
   material: string;
+  materialLabel?: string;
 }
 
-export const LayerBadge: React.FC<LayerBadgeProps> = ({ name, material }) => (
+export const LayerBadge: React.FC<LayerBadgeProps> = ({ name, material, materialLabel = 'material' }) => (
   <div className="layer-badge">
     <div className="layer-badge__name">{name}</div>
-    <div className="layer-badge__mat">{`material: ${material}`}</div>
+    <div className="layer-badge__mat">{`${materialLabel}: ${material}`}</div>
   </div>
 );

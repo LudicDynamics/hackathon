@@ -14,12 +14,14 @@ export interface WriterBarProps {
   /** Locks the bar (no input, no submit) when true. */
   disabled?: boolean;
   placeholder?: string;
+  sendLabel?: string;
 }
 
 export const WriterBar: React.FC<WriterBarProps> = ({
   onSend,
   disabled = false,
   placeholder = 'Ask the writer…',
+  sendLabel = 'Send',
 }) => {
   const [text, setText] = useState('');
 
@@ -53,7 +55,7 @@ export const WriterBar: React.FC<WriterBarProps> = ({
         disabled={disabled}
         onClick={submit}
       >
-        Send
+        {sendLabel}
       </button>
     </div>
   );

@@ -34,8 +34,8 @@ const lifecycle = new AgentLifecycleManager({
   frameSink: (message) => eventBridge.broadcast(message),
 });
 
-// Auto-load default holmes-world if available
-const DEFAULT_WORLD = path.join(REPO_ROOT, 'templates/holmes-world');
+// Auto-load the English playable slice; the launcher can switch worlds later.
+const DEFAULT_WORLD = path.join(REPO_ROOT, 'templates/whitechapel');
 try {
   activeStore = new LocalWorldStore(DEFAULT_WORLD);
   // Align the tail cursor BEFORE watching — the watcher kicks `drain()`, and
@@ -110,7 +110,12 @@ wss.on('connection', (ws: WebSocket) => {
         }
       } else if (data.type === 'character_start') {
         try {
-          await lifecycle.startCharacter(data.characterId, data.worldPath);
+          const worldPath =
+            typeof data.worldPath === 'string' && data.worldPath !== ''
+              ? data.worldPath
+              : activeStore?.worldRoot;
+          if (!worldPath) throw new Error('No active world for the character agent');
+          await lifecycle.startCharacter(data.characterId, worldPath);
         } catch (err: unknown) {
           console.error('[AIRP WS] Character start failed:', err);
           ws.send(JSON.stringify({ type: 'error', source: 'character', characterId: data.characterId, message: err instanceof Error ? err.message : String(err) }));

@@ -1,0 +1,38 @@
+{
+  "id": "firstsnow-radio",
+  "name": "初雪ラジオ",
+  "version": "0.1.0",
+  "schema": 1,
+  "description": "大学最後の冬。初雪が降る前に、二つの約束へ答える。",
+  "author": "AIRP",
+  "genre": "school-romance",
+  "locale": "ja",
+  "entry": "world/intro",
+  "cover": "/api/asset?path=assets/backgrounds/intro.webp",
+  "material": "paper",
+  "audio": { "theme": "firstsnow" },
+  "tags": ["radio", "romance", "winter", "demo"],
+  "characters": [
+    {
+      "id": "nanami",
+      "home": "world/intro",
+      "role": "companion",
+      "avatar": "/api/asset?path=assets/characters/nanami.webp",
+      "description": "十年来、言えない気持ちを台本の余白に残してきた番組パーソナリティ。"
+    },
+    {
+      "id": "sumi",
+      "home": "world/intro/relationships/cafe",
+      "role": "npc",
+      "avatar": "/api/asset?path=assets/characters/sumi.webp",
+      "description": "デビューしたばかりの歌手。今夜だけは仕事ではない時間を求めている。"
+    }
+  ],
+  "player": {
+    "id": "radio-director",
+    "name": "導播",
+    "avatar": "/api/asset?path=assets/characters/director.webp"
+  },
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z"
+}

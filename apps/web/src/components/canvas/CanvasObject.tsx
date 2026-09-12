@@ -70,11 +70,12 @@ export interface CanvasObjectProps {
   item: LayerItem;
   /** Ordinal of this gate among the layer's gates (fallback for the seal). */
   index?: number;
-  onSelectChoice?: (choice: string) => void;
+  onSelectChoice?: (path: string, choice: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
   onEnterGate?: (targetLayer: string) => void;
   onOpenCharacterModal?: (charId: string) => void;
   onItemDropOnTarget?: (itemPath: string, targetPath: string) => void;
+  onTakeItem?: (path: string) => void;
 }
 
 export const CanvasObject: React.FC<CanvasObjectProps> = ({
@@ -85,6 +86,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   onEnterGate,
   onOpenCharacterModal,
   onItemDropOnTarget,
+  onTakeItem,
 }) => {
   const kind = item.kind;
   const [isDragOver, setIsDragOver] = React.useState(false);
@@ -167,6 +169,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             onEnterGate={onEnterGate}
             onOpenCharacterModal={onOpenCharacterModal}
             onItemDropOnTarget={onItemDropOnTarget}
+            onTakeItem={onTakeItem}
           />
         )}
     </div>
