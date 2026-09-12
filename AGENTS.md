@@ -365,3 +365,17 @@ pnpm pi commit "fix(...): …" [--no-build]   # build 红线 → 子模块 commi
 2. **pointermove 不进 React**。旧 `Canvas` 的视差用 `setParallax` state，每次鼠标移动都重渲染整棵画布子树（代价随卡片数涨）。现在视差走模块态 `lib/parallax.ts`：`Canvas` 只写值，`SceneBackdrop` 自己写 transform、`ParticleLayer` 每帧采样——零 React 工作。任何"跟随指针"的效果都照此办理。
 3. **拖拽循环内禁止强制同步布局**。卡片外壳无内联高度（见 §7.5），所以 `offsetHeight`/`getBoundingClientRect` 这类读会触发 reflow；旧拖拽每 move 读 ~6 次 `offsetHeight`（profile 里第一大头，300 move ≈ 256ms）。现在尺寸走 `lib/measure.ts` 的按代缓存（`invalidateMeasures()` 在层数据/窗口尺寸变化时失效），视口 rect 缓存在 `viewportRectRef`。**拖拽路径里一旦出现 `el.offsetXxx` / `getBoundingClientRect` 就是 bug。**
 4. **世界网格 `CanvasGrid` 不再是一张 6000×6000 的巨型贴图**（合成器曾为它保留 5707×5700 图层）——它是"视口 + 一格余量"的 sheet，随相机重写 left/top/width/height 且图案原点吸附世界网格。改它时别把尺寸写回固定值。
+
+### 7.7 `extensions/` 绝不手搓 `.js`（实测，2026-09-12 踩过坑）
+
+**pi 运行时用 jiti 直接执行 `extensions/*.ts`，不需要任何编译；手搓一份同名的 `.js` 会与 `.ts` 双双被加载，冲突报错。**
+
+- **引擎侧**：`launch.ts::extensionArgs`（`apps/server/src/engine/presets.ts`）扫 `extensions/` 时**同时收 `.ts` 与 `.js`**，两个都进 `--extension`。`extensions/instructions.js` 曾因手工 transpile 留在盘上，于是同一批 slot **被注册两次**——`registerSlot`/`registerTool` 是裸 `Map.set`，谁赢由 readdir 顺序决定，**静默错、不报错**。（2026-09-12 已让 `extensionArgs` 优先 `.ts`、同基名跳过 `.js` 孪生，并删除该文件；但**这是兜底，不是许可**。）
+- **jiti 侧**：`extensions/` 是 jiti 直跑的 TS，**不在 pnpm workspace 里**——`pnpm build` 的 tsc 根本不碰它。`extensions/tsconfig.json` 是 `noEmit: true`（只做 `pnpm typecheck:extensions` 类型体检），**所以 `.js` 产物永远不会由正常流程生成**，只会由手工 `tsc`/`transpileModule`/旧脚本产生。
+
+**纪律**：
+
+1. **不要手动编译 `extensions/*.ts`**，也不要提交任何 `extensions/*.js`（`extensions/toolkit/**` 同理）。改完 `.ts` 直接跑，无需构建。
+2. 若确实需要 emit（例如给某个不退让的工具链），**产物必须落在 `extensions/` 之外**（如 `dist/`），绝不留同名 `.js` 在扩展目录里。
+3. 怀疑踩到：`node tools/check-*.mjs` 之外，直接 `find extensions -name '*.js'` —— 有输出就是 bug。
+4. `.d.ts` 不受影响（`extensionArgs` 与 jiti 都跳过），但同样不该手写。
