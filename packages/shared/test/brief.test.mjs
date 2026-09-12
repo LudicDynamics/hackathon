@@ -87,6 +87,28 @@ test('nook brief: roleDesc appears in parentheses when present', () => {
   assert.match(b, /\[Character\] Dr\. Watson \(companion\)/);
 });
 
+test('nook brief: [Home] carries provenance, with role when present', () => {
+  const withRole = buildNookInitBrief({
+    characterId: 'watson',
+    displayName: 'Dr. Watson',
+    home: 'world/baker-street',
+    role: 'companion',
+    manifest,
+  });
+  assert.match(withRole, /^\[Home\] world\/baker-street \(role: companion\)$/m);
+
+  const noRole = buildNookInitBrief({
+    characterId: 'watson',
+    displayName: 'Dr. Watson',
+    home: 'world/baker-street',
+    manifest,
+  });
+  assert.match(noRole, /^\[Home\] world\/baker-street$/m);
+
+  const none = buildNookInitBrief({ characterId: 'w', displayName: 'W', manifest });
+  assert.doesNotMatch(none, /\[Home\]/, 'no [Home] line when home is absent');
+});
+
 test('nook brief: [Missing Files] lists bare filenames, comma-separated', () => {
   const b = buildNookInitBrief({
     characterId: 'watson',

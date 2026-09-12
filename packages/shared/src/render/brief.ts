@@ -72,6 +72,10 @@ export interface NookInitContext {
   displayName: string;
   /** One-line role description; omitted from the brief when absent. */
   roleDesc?: string;
+  /** Where this character lives (manifest `characters[].home`) — their "provenance". */
+  home?: string;
+  /** `companion` | `npc` (manifest `characters[].role`). */
+  role?: string;
   manifest: WorldManifest;
   /**
    * Files the character's `preset.json` references but that are not on disk yet
@@ -81,13 +85,18 @@ export interface NookInitContext {
 }
 
 export function buildNookInitBrief(ctx: NookInitContext): string {
-  const lines = [
+  const lines: (string | null)[] = [
     `[Task] Instantiate a character nook`,
     `[Target Path] characters/${ctx.characterId}`,
     ctx.roleDesc
       ? `[Character] ${ctx.displayName} (${ctx.roleDesc})`
       : `[Character] ${ctx.displayName}`,
     `[World] ${ctx.manifest.name} (genre: ${ctx.manifest.genre})`,
+    ctx.home
+      ? ctx.role
+        ? `[Home] ${ctx.home} (role: ${ctx.role})`
+        : `[Home] ${ctx.home}`
+      : null,
     `[Request] Generate the initial furnishings of this character's private domain, bearing traces of their life, unsent letters, or intimate keepsakes.`,
     `[Constraints] Authentic and believable, full of emotional weight; do not write in a "showroom" voice.`,
     `[Deliverables] 2–4 markdown files representing their past story (letters, diaries, signature props).`,
@@ -99,5 +108,5 @@ export function buildNookInitBrief(ctx: NookInitContext): string {
 
   lines.push(`[Report] Report in exactly the three lines the system prompt defines`);
 
-  return lines.join('\n');
+  return lines.filter((l): l is string => l !== null).join('\n');
 }
