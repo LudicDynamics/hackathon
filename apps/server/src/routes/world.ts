@@ -8,11 +8,14 @@ import {
   ActionError,
   LocalWorldStore,
   SEAT_ANCHOR,
+  boxSizeOf,
+  dirOfLayer,
   createActionService,
   parseFrontmatter,
   cardFormOf,
   cardKindOf,
   type Actor,
+  type CardRecord,
 } from '@airp/shared';
 import type { AgentLifecycleManager } from '../engine/lifecycle.js';
 import type { EventBridge } from '../engine/event-bridge.js';
@@ -79,12 +82,33 @@ function rotOf(cardPath: string): number {
   return (hashInt(cardPath) % 7) - 3;
 }
 
-/** Card footprint — the shared CARD_FORMS table is the single source
- *  (packages/shared/src/schemas/forms.ts), so the seated box and the painted
- *  box can never drift. */
-function cardSize(item: LayerItem): { w: number; h: number } {
-  const { w, h } = cardFormOf(item.frontmatter, item.filename);
-  return { w, h };
+/**
+ * DECLARED footprint of a kind — `reseatLayer` judges "was this kind resized in
+ * code?" by hashing `kind + w + h`, so `kind` is part of the payload (00 §5.1
+ * 第 4 条 / §9 第 8 条). MUST NOT be used for a collision test: since F1 the
+ * stored row is the card's real footprint (00 §3.1).
+ */
+function declaredSizeOf(item: LayerItem): { kind: string; w: number; h: number } {
+  const form = cardFormOf(item.frontmatter, item.filename);
+  return { kind: cardKindOf(item.frontmatter, item.filename), w: form.w, h: form.h };
+}
+
+/**
+ * STORED footprint — the row is the truth; declared is only the first-paint
+ * default for a card that has no row yet (00 §3.4). This is what `seatUnplaced`
+ * seats a brand-new card with, so a long chalk gets a seat that fits it.
+ */
+function storedSizeOf(
+  item: LayerItem,
+  row: CardRecord | undefined
+): { kind: string; w: number; h: number } {
+  const declared = declaredSizeOf(item);
+  if (row && (row.w <= 0 || row.h <= 0)) {
+    // Degenerate row is corruption, not a normal state: never silent (00 §7).
+    console.warn(`/api/layer: card "${item.path}" has a degenerate row (w=${row.w}, h=${row.h}); using the declared form.`);
+  }
+  const { w, h } = boxSizeOf(row, declared);
+  return { kind: declared.kind, w, h };
 }
 
 /**
@@ -315,35 +339,37 @@ export function createWorldRouter(
       // Seat and persist any card that has no row yet (placed cards never re-seat).
       const unseated = items
         .filter((it) => !rowByPath.has(it.path))
-        .map((it) => ({ path: it.path, ...cardSize(it) }));
+        .map((it) => ({ path: it.path, ...storedSizeOf(it, rowByPath.get(it.path)) }));
       if (unseated.length > 0) {
         for (const row of await store.seatUnplaced(layer, unseated)) {
           rowByPath.set(row.id, row);
         }
       }
 
-      // Re-flow any card whose stored box drifted from the current form table
-      // (a kind was resized in code). Without this the old seats overlap.
+      // Re-flow any card whose stored footprint drifted: a kind was resized in
+      // code (declared hash mismatch) or the front end measured a new size.
+      // Both live in `reseatLayer` (00 §5.1); without this the old seats overlap.
       for (const row of await store.reseatLayer(
         layer,
-        items.map((it) => ({ path: it.path, ...cardSize(it) }))
+        items.map((it) => ({ path: it.path, ...declaredSizeOf(it) }))
       )) {
         rowByPath.set(row.id, row);
       }
 
       const enriched = items.map((it) => {
         const row = rowByPath.get(it.path);
-        const form = cardFormOf(it.frontmatter, it.filename);
+        const { kind, w, h } = storedSizeOf(it, row);
         return {
           ...it,
-          kind: cardKindOf(it.frontmatter, it.filename),
+          kind,
           x: row ? row.x : SEAT_ANCHOR.x,
           y: row ? row.y : SEAT_ANCHOR.y,
-          // w/h are a pure function of kind, so they always come from the form
-          // table — never from the stored row. Resizing a kind re-flows every
-          // card of that kind on the next paint (rows only persist x/y).
-          w: form.w,
-          h: form.h,
+          // w/h come from the stored row: since F1 those columns are the card's
+          // REAL footprint, written by POST /api/card/footprint once the front
+          // end measures it (00 §3.1). The form table is only the first-paint
+          // default for a row that is missing or degenerate.
+          w,
+          h,
           z: row ? row.z : 1,
           rot: rotOf(it.path), // derived, never persisted
         };
@@ -531,6 +557,61 @@ export function createWorldRouter(
       }
       res.status(500).json({ ok: false, code: 'internal', error: err instanceof Error ? err.message : String(err) });
     }
+  });
+
+  /**
+   * Persist measured card footprints (docs/footprint/03 §3.1, contract §3.3).
+   *
+   * The second "card state HTTP write", deliberately asymmetric with
+   * `/card/position`: a player may never resize a card through `arrange`, but
+   * the renderer's measured fact may overwrite the stored box (contract §5.3).
+   *
+   * Writes ONLY `cards.width/height` (+ `metadata.measuredAt`) via the store,
+   * keyed by `id = path` alone. It MUST NOT write an event (contract §3.6 — a
+   * derived render fact, not world content) and MUST NOT broadcast a frame:
+   * the caller IS the measurer, so a frame would only echo stale data back.
+   *
+   * 200 → { ok: true, updated, unchanged }   (unknown path/row → skipped, counted in `unchanged`)
+   * 404 → { ok: false, code: 'not_found' }   (layer name does not exist)
+   * 400 → { ok: false, code: 'invalid_argument' } (malformed layer/boxes)
+   */
+  router.post('/card/footprint', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const { layer, boxes } = req.body as { layer?: unknown; boxes?: unknown };
+    if (typeof layer !== 'string' || layer === '') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'layer must be a non-empty layer id' });
+    }
+    // L3: the store matches rows by `id = path` ONLY, so this layer check is the
+    // single gate that keeps a mistyped layer name from silently writing rows
+    // that live in another layer. 404 (not 400): an unknown layer is "not found".
+    if ((await store.resolveLayer(dirOfLayer(layer))) !== layer) {
+      return res.status(404).json({ ok: false, code: 'not_found', error: 'layer must be an existing layer id' });
+    }
+    if (!Array.isArray(boxes)) {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'boxes must be an array' });
+    }
+    if (boxes.length === 0) return res.json({ ok: true, updated: 0, unchanged: 0 });
+    for (let i = 0; i < boxes.length; i++) {
+      const b = boxes[i] as { path?: unknown; w?: unknown; h?: unknown } | null;
+      // Whole-request 400, never "skip the bad ones": the only caller is our own
+      // frontend, so a bad box is a bug and partial writes would hide it (03 L6).
+      if (b === null || typeof b !== 'object') {
+        return res.status(400).json({ ok: false, code: 'invalid_argument', error: `boxes[${i}] must be an object` });
+      }
+      if (typeof b.path !== 'string' || b.path === '') {
+        return res.status(400).json({ ok: false, code: 'invalid_argument', error: `boxes[${i}].path must be a non-empty string` });
+      }
+      if (typeof b.w !== 'number' || !Number.isFinite(b.w) || b.w <= 0 || b.w > 1e6) {
+        return res.status(400).json({ ok: false, code: 'invalid_argument', error: `boxes[${i}].w must be a finite positive number` });
+      }
+      if (typeof b.h !== 'number' || !Number.isFinite(b.h) || b.h <= 0 || b.h > 1e6) {
+        return res.status(400).json({ ok: false, code: 'invalid_argument', error: `boxes[${i}].h must be a finite positive number` });
+      }
+    }
+    await reply(res, async () => ({
+      details: await store.writeFootprints(layer, boxes as Array<{ path: string; w: number; h: number }>),
+    }));
   });
 
   // Resolve roll_dice — `rollDice` is the ONE adjudicator (doc-20 §2.2). The old

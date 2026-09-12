@@ -16,11 +16,11 @@ import type {
   LinkStyle,
 } from '../schemas/canvas.js';
 import { LAYOUT_MODES, LINK_COLORS, LINK_STYLE_TOKENS } from '../schemas/canvas.js';
-import { cardFormOf } from '../schemas/forms.js';
+import { cardFormOf, type CardForm } from '../schemas/forms.js';
 import { parseFrontmatter } from '../schemas/frontmatter.js';
 import { ActionError, fail } from './errors.js';
 import { registerAction } from './service.js';
-import type { WorldStore } from '../store/world-store.js';
+import type { CardRecord, SeatFile, WorldStore } from '../store/world-store.js';
 import { SEAT_ANCHOR, SEAT_PAD, SEAT_STEP } from '../store/local-store.js';
 
 const MAX_COORD = 4000;
@@ -75,11 +75,25 @@ export function normalizeLinkStyle(
   };
 }
 
-/** One card's box for the layout calculators (w/h from the form table). */
+/** One card's box for the layout calculators (w/h from the stored row). */
 export interface LayoutBox {
   path: string;
   w: number;
   h: number;
+}
+
+/**
+ * The ONE row-vs-form precedence (00 §3.4). Since F1 the `cards` columns are
+ * the card's REAL footprint; the form table is only the first-paint default for
+ * a row that is missing or degenerate (`w/h <= 0`). Every server read path that
+ * needs a "will these two cards collide?" size MUST go through this function —
+ * never a second `cardFormOf` call (00 §3.2 I1).
+ */
+export function boxSizeOf(
+  row: Pick<CardRecord, 'w' | 'h'> | undefined,
+  form: Pick<CardForm, 'w' | 'h'>
+): { w: number; h: number } {
+  return row && row.w > 0 && row.h > 0 ? { w: row.w, h: row.h } : { w: form.w, h: form.h };
 }
 
 /** A chosen top-left position. */
@@ -363,15 +377,46 @@ const LAYOUT_COMPUTERS: Record<LayoutMode, (boxes: LayoutBox[]) => LayoutPos[]> 
   row: computeRow,
 };
 
-/** Card boxes with w/h from the form table (the one size source). */
+/** Card boxes for `arrange`: the stored row is the truth, the form table the
+ *  first-paint default (00 §3.1); a row with a real size short-circuits the
+ *  file read. Degenerate rows (`w/h <= 0`) fall back loudly. */
 async function boxesOf(store: WorldStore, paths: string[]): Promise<LayoutBox[]> {
+  const byId = new Map(store.getLayerCards(paths).map((r) => [r.id, r]));
   const boxes: LayoutBox[] = [];
   for (const path of paths) {
+    const row = byId.get(path);
+    if (row && row.w > 0 && row.h > 0) {
+      boxes.push({ path, w: row.w, h: row.h });
+      continue;
+    }
     const { frontmatter } = parseFrontmatter(await store.readFile(path));
     const form = cardFormOf(frontmatter, path.split('/').pop() ?? path);
-    boxes.push({ path, w: form.w, h: form.h });
+    if (row) {
+      console.warn(`arrange: card "${path}" has a degenerate row (w=${row.w}, h=${row.h}); using the declared form.`);
+    }
+    boxes.push({ path, ...boxSizeOf(row, form) });
   }
   return boxes;
+}
+
+/**
+ * Every row MUST carry a real kind footprint, never the schema DEFAULT
+ * (`applyPlaceCard` writes no w/h — contract §5.5 / 反模式 12). `arrange` is a
+ * row-creating path, so it seats any path that has no row yet at its DECLARED
+ * size through the canonical writer (`seatUnplaced`); paths that already have a
+ * row are a no-op, which keeps a second `arrange` deterministic. The seats
+ * themselves are discarded — `arrange` overwrites x/y moments later.
+ */
+async function seatDeclaredRows(store: WorldStore, layer: string, paths: string[]): Promise<void> {
+  const hasRow = new Set(store.getLayerCards(paths).map((r) => r.id));
+  const files: SeatFile[] = [];
+  for (const path of paths) {
+    if (hasRow.has(path)) continue;
+    const { frontmatter } = parseFrontmatter(await store.readFile(path));
+    const form = cardFormOf(frontmatter, path.split('/').pop() ?? path);
+    files.push({ path, w: form.w, h: form.h });
+  }
+  if (files.length > 0) await store.seatUnplaced(layer, files);
 }
 
 export async function arrangeCards(
@@ -418,6 +463,9 @@ export async function arrangeCards(
       );
     }
 
+    // Row-creating path: seat at DECLARED first so the row is never the schema
+    // DEFAULT (contract §5.5); `placeCard` below only moves it.
+    await seatDeclaredRows(store, layer, [place.path]);
     const card = await store.placeCard(layer, place.path, box);
     return {
       text: `Placed "${card.id}" at (${card.x}, ${card.y}, z ${card.z}) on layer "${layer}".`,
@@ -483,6 +531,11 @@ export async function arrangeCards(
       fail('not_found', `"${p}" is not on layer "${layer}".`);
     }
   }
+
+  // Row-creating path: every path must carry a real footprint before `boxesOf`
+  // reads it, or the first `arrange` writes the 280×180 DEFAULT and the second
+  // one lays out against that lie (contract §5.5 / 反模式 12).
+  await seatDeclaredRows(store, layer, paths);
 
   // Layout re-assigns x/y only — stacking order is not a layout concern, and
   // overwriting it would silently re-front cards on every re-flow (doc-09 §3.2).

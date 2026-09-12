@@ -18,6 +18,29 @@ export interface CardRecord {
   w: number;
   h: number;
   z: number;
+  /**
+   * NEW. Parsed from `cards.metadata.formVersion`; null/absent = no marker.
+   * Compared against `cardFormVersionOf(kind, declared w, h)` to detect that a
+   * KIND was resized in code (contract §5.1 第 4 条).
+   */
+  formVersion?: string | null;
+  /**
+   * NEW. Parsed from `cards.metadata.measuredAt`; non-null = this row's w/h is
+   * a MEASURED value written by `writeFootprints` (the race guard that keeps
+   * that method free of kind knowledge, contract §5.1 第 3 条).
+   */
+  measuredAt?: string | null;
+  /**
+   * NEW. Parsed from `cards.metadata.seatW`; the `w` actually used at this
+   * row's LAST seat (contract §5.2). Absent on rows written before this batch.
+   */
+  seatW?: number | null;
+  /**
+   * NEW. Parsed from `cards.metadata.seatH`; compared against `h` to detect
+   * that the MEASURED footprint moved since the last seat — the ONLY path that
+   * makes "card grew taller -> its seat moves aside" happen (contract §5.1 第 3 条).
+   */
+  seatH?: number | null;
 }
 
 /** A card file pending seating; w/h defaults applied at seat time when absent. */
@@ -25,6 +48,18 @@ export interface SeatFile {
   path: string;
   w?: number;
   h?: number;
+  /**
+   * NEW. Declared kind of `path` at seat time. Needed to compute the DECLARED
+   * version `cardFormVersionOf(kind, w, h)`; supplied by the caller
+   * (`declaredSizeOf`/`storedSizeOf`, 02). Absent on the legacy callers
+   * (`seatFileOf`) — `reseatLayer` then skips the path rather than guessing.
+   */
+  kind?: string;
+  /**
+   * NEW. Pre-computed declared version accelerator. When present it WINS over
+   * computing from (kind,w,h); when absent the version comes from `kind`.
+   */
+  formVersion?: string;
 }
 
 /**
@@ -91,7 +126,22 @@ export interface WorldStore {
   getLayerCards(paths: string[]): CardRecord[];
   seatUnplaced(layerId: string, files: SeatFile[]): Promise<CardRecord[]>;
   reseatLayer(layerId: string, files: SeatFile[]): Promise<CardRecord[]>;
+  /**
+   * NEW. Persist measured footprints for one layer (03's only entry point).
+   * Only `width`/`height` and `metadata.measuredAt` are written;
+   * `metadata.formVersion` / `seatW` / `seatH` are PRESERVED untouched, and
+   * x/y/z are NEVER touched (contract §3.3 / §5.2 / §8 反模式 9). Idempotent:
+   * a box whose stored w/h already equals the input is `unchanged` and writes
+   * nothing. Matches rows by `id = path` ONLY — a nested-layer README row has a
+   * different `layer` than the page it is shown on (contract §3.3 BLOCKER-2).
+   * Unknown path / missing row -> skip + warn + `unchanged` (HTTP 200).
+   */
+  writeFootprints(
+    layerId: string,
+    boxes: Array<{ path: string; w: number; h: number }>
+  ): Promise<{ updated: number; unchanged: number }>;
   saveCardPosition(id: string, x: number, y: number): Promise<CardRecord>;
+
   renameCardPosition(from: string, to: string): Promise<void>;
   /** Seat one new card next to an anchor card; `exhausted` when no clean cell (04 §3.9.3). */
   seatNear(layerId: string, file: SeatFile, anchorPath: string): Promise<CardRecord & { exhausted: boolean }>;

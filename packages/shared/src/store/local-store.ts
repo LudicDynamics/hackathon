@@ -14,7 +14,7 @@ import { EventDetailSchemas } from '../schemas/events.js';
 import { ActionError } from '../actions/errors.js';
 import { dirname as posixDirname, relFrom, rewriteOwnRefs, scanOwnRefs, scanRefs, rewriteRefs } from '../actions/refs.js';
 import { initCanvasDatabase, initHistoryDatabase } from '../db/schema.js';
-import { CARD_FORMS } from '../schemas/forms.js';
+import { CARD_FORMS, cardFormVersionOf } from '../schemas/forms.js';
 import type { PresenceRecord, SeatPresenceResult } from './world-store.js';
 
 /** Seating anchor (world coords, viewport agnostic). Cards spiral outward from here. */
@@ -505,7 +505,7 @@ export class LocalWorldStore implements WorldStore {
     if (paths.length === 0) return [];
     const placeholders = paths.map(() => '?').join(',');
     const rows = this.queryCanvas(
-      `SELECT id, layer, x, y, width, height, z_index FROM cards WHERE id IN (${placeholders})`,
+      `SELECT id, layer, x, y, width, height, z_index, metadata FROM cards WHERE id IN (${placeholders})`,
       paths
     );
     const byId = new Map<string, CardRecord>();
@@ -571,55 +571,159 @@ export class LocalWorldStore implements WorldStore {
         );
       }
 
+      // The row's seat baseline (`seatW`/`seatH`) is written WITH the box, so a
+      // later measured overwrite leaves a comparable `h !== seatH` signal
+      // (contract §5.2). `formVersion` is NOT written here: this method is not
+      // told the kind — the same pass's `reseatLayer` backfills it (row 8).
       this.execCanvas(
-        `INSERT INTO cards (id, layer, x, y, width, height, z_index)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO cards (id, layer, x, y, width, height, z_index, metadata)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO NOTHING`,
-        [file.path, layerId, placedX, placedY, w, h, nextZ]
+        [
+          file.path,
+          layerId,
+          placedX,
+          placedY,
+          w,
+          h,
+          nextZ,
+          serializeCardMetadata({ seatW: w, seatH: h }),
+        ]
       );
       seats.push({ id: file.path, layer: layerId, x: placedX, y: placedY, w, h, z: nextZ });
-      occupied.push({ cx: placedX + w / 2, cy: placedY + h / 2, w, h });
-      nextZ++;
     }
     return seats;
   }
 
   /**
-   * Re-flow the seated x/y of every card whose stored footprint no longer
-   * matches the current form table. `w/h` are a pure function of kind (see
-   * shared/schemas/forms.ts), so when a kind is resized in code the persisted
-   * rows still carry the old box — cards then overlap on the next paint. This
-   * re-seats ONLY drifted cards (keeping spiral order and every card whose size
-   * is unchanged, so a player's own drags survive), writing x/y/w/h back.
+   * Re-flow the seated x/y of every card that has legitimately drifted. Five
+   * drift sources, short-circuited in this order (contract §5.1; the numbered
+   * rows below are this table's, not the contract's):
+   *   2. no row            -> first seat, at DECLARED
+   *   3. w/h <= 0          -> dirty-row repair, at DECLARED
+   *   5. formVersion set AND !== declared -> the kind was resized in code, seat
+   *                        at DECLARED and CLEAR measuredAt. Judged BEFORE row 4
+   *                        (BLOCKER-C): a measured height was folded at the old
+   *                        width, so a resize invalidates it — matching row 4
+   *                        first would seat at a stale height and write
+   *                        `formVersion: dv`, permanently hiding the resize.
+   *   4. measuredAt set AND row.h !== seatH (or row.w !== seatW)
+   *                        -> the MEASURED footprint moved, seat at the ROW value
+   *   7/8. legacy (no formVersion, no measuredAt): row value === declared ->
+   *                        mark only (protects a player's own drags); else seat
+   *                        at DECLARED
+   *   6/9. steady state / measured-row-without-version -> no-op
+   *
+   * Source 4 is the ONLY path that makes "the card grew taller -> its seat
+   * moves aside" happen at all (`seatUnplaced` only seats rows that do not
+   * exist yet, and `writeFootprints` never touches x/y). Source 5 keeps the
+   * method's original purpose (a kind resized in code) alive even for measured
+   * rows — clearing `measuredAt` there is what stops the declared value source
+   * 5 writes from bouncing back through source 4 forever.
+   *
+   * `files[].w/h` MUST be the DECLARED size of the file's current kind, and
+   * `files[].kind` (or a pre-computed `formVersion`) MUST be present: the
+   * declared version is derived from them, so a file that carries neither is
+   * skipped rather than re-seated at a guessed size.
    */
   async reseatLayer(layerId: string, files: SeatFile[]): Promise<CardRecord[]> {
-    if (files.length === 0) return [];
+    if (files.length === 0) return []; // 1
     const rows = this.getLayerCards(files.map((f) => f.path));
     const byId = new Map(rows.map((r) => [r.id, r]));
-    const drifted = files
-      .filter((f) => {
-        const row = byId.get(f.path);
-        return row && f.w && f.h && (row.w !== f.w || row.h !== f.h);
-      })
-      .sort((a, b) => a.path.localeCompare(b.path));
-    if (drifted.length === 0) return [];
 
-    const driftedPaths = new Set(drifted.map((f) => f.path));
-    // Occupied = siblings at their CURRENT size, so drifters reflow around
-    // (never through) cards that did not move.
+    // SEAT has exactly two size sources — DECLARED (rows 2/3/5/7) and the ROW
+    // value (row 4) — and they are told apart by which w/h the item carries.
+    // A rowless card is INSERTed (there is nothing to UPDATE); everything else
+    // keeps its x/y identity and only its box + metadata move.
+    const seatAt = (path: string, d: { w: number; h: number }, dv: string, insert = false) => ({
+      path,
+      w: d.w,
+      h: d.h,
+      insert,
+      // A declared seat invalidates any previous measurement (row 5) and
+      // re-baselines the drift signal to the box we are about to place.
+      meta: serializeCardMetadata({ formVersion: dv, measuredAt: null, seatW: d.w, seatH: d.h }),
+    });
+    const seated: Array<{ path: string; w: number; h: number; insert: boolean; meta: string }> = [];
+    const backfill: Array<{ path: string; meta: string }> = [];
+
+    for (const f of files) {
+      const declared = declaredOf(f);
+      if (!declared) continue; // §7: no declared -> cannot compute a version, never guess
+      const dv = declaredVersionOf(f, declared);
+      if (!dv) continue;
+      const row = byId.get(f.path);
+      if (!row) { // 2
+        seated.push(seatAt(f.path, declared, dv, true));
+        continue;
+      }
+      if (!(row.w > 0) || !(row.h > 0)) { // 3
+        seated.push(seatAt(f.path, declared, dv));
+        continue;
+      }
+      // BLOCKER-C (contract §5.1): the KIND-resize source is judged BEFORE the
+      // measured-move source. A measured height was folded at the OLD width, so
+      // a kind resize invalidates it — if source 4 matched first it would seat
+      // at a known-stale height AND write `formVersion: dv`, permanently hiding
+      // the resize (the MAJOR-2 narrowing, caught by the acceptance suite).
+      if (row.formVersion != null && row.formVersion !== dv) { // 5 — kind resized in code
+        seated.push(seatAt(f.path, declared, dv));
+        continue;
+      }
+      const measuredMoved =
+        row.measuredAt != null && (row.h !== row.seatH || row.w !== row.seatW);
+      if (measuredMoved) { // 4 — the F1 core: re-seat at the MEASURED (row) size
+        seated.push({
+          path: f.path,
+          w: row.w,
+          h: row.h,
+          insert: false,
+          meta: serializeCardMetadata({
+            formVersion: dv,
+            measuredAt: row.measuredAt,
+            seatW: row.w,
+            seatH: row.h,
+          }),
+        });
+        continue;
+      }
+      if (row.formVersion === dv) continue; // 6 — steady state, no-op
+      if (row.measuredAt != null) continue; // 9 — measured row, no version yet: leave alone
+      if (row.w !== declared.w || row.h !== declared.h) { // 7 — legacy, size already changed
+        seated.push(seatAt(f.path, declared, dv));
+        continue;
+      }
+      backfill.push({ // 8 — legacy, size unchanged: mark only, x/y/w/h untouched
+        path: f.path,
+        meta: serializeCardMetadata({ formVersion: dv, seatW: row.w, seatH: row.h }),
+      });
+    }
+    if (seated.length === 0 && backfill.length === 0) return [];
+
+    // Only a SEATED card vacates its old spot; a backfilled row keeps its x/y,
+    // so it MUST stay an obstacle — otherwise a re-seated neighbour lands on it.
+    const moving = new Set(seated.map((s) => s.path));
+    // Occupied = every card NOT being re-seated, at its CURRENT (row) size, so a
+    // re-seated card flows around — never through — its stable siblings.
     const occupied = files
-      .filter((f) => !driftedPaths.has(f.path))
+      .filter((f) => !moving.has(f.path))
       .map((f) => {
         const row = byId.get(f.path);
         const w = row?.w ?? f.w ?? 280;
         const h = row?.h ?? f.h ?? 180;
         return { cx: (row?.x ?? 0) + w / 2, cy: (row?.y ?? 0) + h / 2, w, h };
       });
+    // Only an INSERT needs a z; take it from the layer's current maximum so a
+    // card seated here lands on top (same rule as `seatUnplaced`).
+    const maxZRows = this.queryCanvas(
+      'SELECT COALESCE(MAX(z_index), 0) AS maxZ FROM cards WHERE layer = ?',
+      [layerId]
+    );
+    let nextZ = Number((maxZRows[0] as Record<string, unknown> | undefined)?.maxZ ?? 0) + 1;
 
     const out: CardRecord[] = [];
-    for (const file of drifted) {
-      const w = file.w!;
-      const h = file.h!;
+    for (const item of seated) {
+      const { w, h } = item;
       let placedX = SEAT_ANCHOR.x - w / 2;
       let placedY = SEAT_ANCHOR.y - h / 2;
       let tries = 0;
@@ -632,14 +736,117 @@ export class LocalWorldStore implements WorldStore {
         placedY = cy - h / 2;
         if (!overlapsOccupied(occupied, cx, cy, w, h)) break;
       }
-      this.execCanvas('UPDATE cards SET x = ?, y = ?, width = ?, height = ? WHERE id = ?', [
-        placedX, placedY, w, h, file.path,
-      ]);
-      const prev = byId.get(file.path)!;
+      if (item.insert) {
+        this.execCanvas(
+          `INSERT INTO cards (id, layer, x, y, width, height, z_index, metadata)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO NOTHING`,
+          [item.path, layerId, placedX, placedY, w, h, nextZ, item.meta]
+        );
+        occupied.push({ cx: placedX + w / 2, cy: placedY + h / 2, w, h });
+        out.push({
+          id: item.path,
+          layer: layerId,
+          x: placedX,
+          y: placedY,
+          w,
+          h,
+          z: nextZ,
+          ...parseCardMetadata(item.meta),
+        });
+        nextZ++;
+        continue;
+      }
+      this.execCanvas(
+        'UPDATE cards SET x = ?, y = ?, width = ?, height = ?, metadata = ? WHERE id = ?',
+        [placedX, placedY, w, h, item.meta, item.path]
+      );
+      const prev = byId.get(item.path)!;
       occupied.push({ cx: placedX + w / 2, cy: placedY + h / 2, w, h });
-      out.push({ ...prev, x: placedX, y: placedY, w, h });
+      out.push({ ...prev, x: placedX, y: placedY, w, h, ...parseCardMetadata(item.meta) });
+    }
+    // Backfill rows come back too, so the caller's `rowByPath` holds the fresh
+    // metadata (they moved no pixels). No-op on the next pass (row 6).
+    for (const item of backfill) {
+      this.execCanvas('UPDATE cards SET metadata = ? WHERE id = ?', [item.meta, item.path]);
+      const prev = byId.get(item.path)!;
+      out.push({ ...prev, ...parseCardMetadata(item.meta) });
     }
     return out;
+  }
+
+  /**
+   * Persist measured footprints for one layer (contract §3.3; 03's only entry
+   * point). Writes ONLY `width`/`height` and `metadata.measuredAt`:
+   * `formVersion`/`seatW`/`seatH` are read-merge-written back untouched, and
+   * x/y/z are never mentioned. That immobility is the point — leaving `seatH`
+   * alone is what creates the `h !== seatH` signal `reseatLayer` re-seats on
+   * (contract §5.2 / §8 反模式 9); writing it here would silently kill F1.
+   *
+   * Rows are matched by `id = path` ALONE, never by `layer` (contract §3.3
+   * BLOCKER-2): a nested-layer README is shown on the `map` page while its row's
+   * `layer` is the nested one. `layerId` therefore only exists for the route's
+   * own `resolveLayer` check and for the warning text.
+   *
+   * Idempotent; unknown path / missing row / bad numbers are skipped with a
+   * warning and counted as `unchanged` — the caller returns HTTP 200.
+   */
+  async writeFootprints(
+    layerId: string,
+    boxes: Array<{ path: string; w: number; h: number }>
+  ): Promise<{ updated: number; unchanged: number }> {
+    if (boxes.length === 0) return { updated: 0, unchanged: 0 };
+    let updated = 0;
+    let unchanged = 0;
+    this.execCanvas('BEGIN IMMEDIATE');
+    try {
+      for (const box of boxes) {
+        if (!Number.isFinite(box.w) || !Number.isFinite(box.h) || box.w <= 0 || box.h <= 0) {
+          console.warn(
+            `[footprint] invalid box for "${box.path}" on layer "${layerId}" (w=${box.w}, h=${box.h}); skipped`
+          );
+          unchanged += 1;
+          continue;
+        }
+        const existing = this.queryCanvas('SELECT width, height, metadata FROM cards WHERE id = ?', [
+          box.path,
+        ])[0] as Record<string, unknown> | undefined;
+        if (!existing) {
+          console.warn(
+            `[footprint] no row for "${box.path}" on layer "${layerId}"; skipped`
+          );
+          unchanged += 1;
+          continue;
+        }
+        if (Number(existing.width) === box.w && Number(existing.height) === box.h) {
+          unchanged += 1;
+          continue;
+        }
+        const prior = parseCardMetadata(existing.metadata);
+        const meta = serializeCardMetadata({
+          formVersion: prior.formVersion,
+          measuredAt: new Date().toISOString(),
+          seatW: prior.seatW,
+          seatH: prior.seatH,
+        });
+        this.execCanvas('UPDATE cards SET width = ?, height = ?, metadata = ? WHERE id = ?', [
+          box.w,
+          box.h,
+          meta,
+          box.path,
+        ]);
+        updated += 1;
+      }
+      this.execCanvas('COMMIT');
+    } catch (err) {
+      try {
+        this.execCanvas('ROLLBACK');
+      } catch {
+        // SQLite already rolled back; the original error is the useful one.
+      }
+      throw err;
+    }
+    return { updated, unchanged };
   }
 
   // === Canvas state layer (doc-09 §4.2) =====================================
@@ -771,7 +978,7 @@ export class LocalWorldStore implements WorldStore {
 
   private cardById(path: string): CardRecord {
     const rows = this.queryCanvas(
-      'SELECT id, layer, x, y, width, height, z_index FROM cards WHERE id = ?',
+      'SELECT id, layer, x, y, width, height, z_index, metadata FROM cards WHERE id = ?',
       [path]
     );
     return this.toCardRecord(rows[0] as Record<string, unknown>);
@@ -935,12 +1142,29 @@ export class LocalWorldStore implements WorldStore {
       );
     }
 
+    // Seat baseline + version marker, merged over whatever the row already
+    // carried: `measuredAt` (a frontend measurement) survives, while the seat
+    // baseline moves to the box we are about to write (contract §3.3).
+    const priorMeta = parseCardMetadata(
+      (this.queryCanvas('SELECT metadata FROM cards WHERE id = ?', [file.path])[0] as
+        | Record<string, unknown>
+        | undefined)?.metadata
+    );
+    const declared = declaredOf(file);
+    const dv = declared ? declaredVersionOf(file, declared) : null;
+    const meta = serializeCardMetadata({
+      formVersion: dv ?? priorMeta.formVersion,
+      measuredAt: priorMeta.measuredAt,
+      seatW: w,
+      seatH: h,
+    });
     this.execCanvas(
-      `INSERT INTO cards (id, layer, x, y, width, height, z_index)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO cards (id, layer, x, y, width, height, z_index, metadata)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET layer = excluded.layer, x = excluded.x,
-         y = excluded.y, width = excluded.width, height = excluded.height`,
-      [file.path, layerId, placedX, placedY, w, h, nextZ]
+         y = excluded.y, width = excluded.width, height = excluded.height,
+         metadata = excluded.metadata`,
+      [file.path, layerId, placedX, placedY, w, h, nextZ, meta]
     );
     return {
       id: file.path,
@@ -1158,6 +1382,8 @@ export class LocalWorldStore implements WorldStore {
   }
 
   private toCardRecord(row: Record<string, unknown>): CardRecord {
+    // The four `metadata` keys travel with every row: `reseatLayer` needs them
+    // to tell "a measurement moved" from "a kind was resized in code".
     return {
       id: String(row.id),
       layer: String(row.layer),
@@ -1166,6 +1392,7 @@ export class LocalWorldStore implements WorldStore {
       w: Number(row.width),
       h: Number(row.height),
       z: Number(row.z_index),
+      ...parseCardMetadata(row.metadata),
     };
   }
 
@@ -1203,4 +1430,77 @@ function overlapsOccupied(
     if (ox > 0 && oy > 0) return true;
   }
   return false;
+}
+
+// === Card footprint metadata (contract §5.2) ==============================
+//
+// `cards.metadata` holds EXACTLY these four keys — it is not a free JSON bin:
+//   formVersion  declared-version marker (kind was resized in code?)
+//   measuredAt   non-null => this row's w/h came from a frontend measurement
+//   seatW/seatH  the w/h actually used at this row's LAST seat
+// The `seatH` comparison is what makes "card grew taller -> its seat moves
+// aside" possible at all (contract §5.1 第 3 条): `writeFootprints` only moves
+// width/height, so `h !== seatH` is the surviving drift signal.
+type CardMetadata = {
+  formVersion: string | null;
+  measuredAt: string | null;
+  seatW: number | null;
+  seatH: number | null;
+};
+
+/**
+ * Damaged/legacy JSON degrades to all-null (i.e. a legacy row, §3.1 表第 7/8
+ * 行) — one bad row MUST NOT blow up an entire `/api/layer`.
+ */
+function parseCardMetadata(raw: unknown): CardMetadata {
+  const empty: CardMetadata = { formVersion: null, measuredAt: null, seatW: null, seatH: null };
+  if (typeof raw !== 'string' || raw === '') return empty;
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return empty;
+  }
+  if (!parsed || typeof parsed !== 'object') return empty;
+  const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
+  // Only a finite number survives; `null`/`undefined`/`''`/garbage become null
+  // so "missing seatH" stays distinguishable from the number 0.
+  const num = (v: unknown): number | null => {
+    if (v === null || v === undefined || v === '' || typeof v === 'boolean') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  return {
+    formVersion: str(parsed.formVersion),
+    measuredAt: str(parsed.measuredAt),
+    seatW: num(parsed.seatW),
+    seatH: num(parsed.seatH),
+  };
+}
+
+/** Inverse of `parseCardMetadata`; the four keys are always written together. */
+function serializeCardMetadata(meta: Partial<CardMetadata>): string {
+  const out: Record<string, string | number> = {};
+  if (meta.formVersion != null) out.formVersion = meta.formVersion;
+  if (meta.measuredAt != null) out.measuredAt = meta.measuredAt;
+  if (meta.seatW != null) out.seatW = meta.seatW;
+  if (meta.seatH != null) out.seatH = meta.seatH;
+  return JSON.stringify(out);
+}
+/**
+ * DECLARED footprint carried by a SeatFile, or null when untrustworthy. Doubles
+ * as the narrowing guard for `SeatFile`'s optional w/h, so call sites get
+ * `{ w: number; h: number }` rather than two possibly-undefined numbers.
+ */
+function declaredOf(f: SeatFile): { w: number; h: number } | null {
+  return f.w && f.w > 0 && f.h && f.h > 0 ? { w: f.w, h: f.h } : null;
+}
+
+/**
+ * The DECLARED version for a SeatFile: the pre-computed `f.formVersion` wins,
+ * else it is derived from `f.kind`. null = unknown, and the caller SKIPS the
+ * path — guessing a version would re-seat with the wrong size (§7).
+ */
+function declaredVersionOf(f: SeatFile, d: { w: number; h: number }): string | null {
+  return f.formVersion ?? (f.kind ? cardFormVersionOf(f.kind, d.w, d.h) : null);
 }
