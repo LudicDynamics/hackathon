@@ -1,12 +1,15 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { CanvasObject, clearAllLifts, pruneLifts, raiseObject } from './CanvasObject.js';
 import { LinkLayer, highlightLinks, updateAllLinks } from './LinkLayer.js';
+import { CanvasGrid } from './CanvasGrid.js';
 import { SceneBackdrop } from './SceneBackdrop.js';
 import { ParticleLayer } from './ParticleLayer.js';
 import { useCamera } from '../../state/useCamera.js';
 import { clampZ, zoomAt, screenToWorld } from '../../lib/camera.js';
 import { makeBox, pushFrom, relaxAll } from '../../lib/collide.js';
 import { unlock, playFoley } from '../../lib/audio.js';
+import { elementBox, invalidateMeasures } from '../../lib/measure.js';
+import { setParallax } from '../../lib/parallax.js';
 import type { LayerItem, LayerLink } from '../../state/useWorld.js';
 
 interface CanvasProps {
@@ -64,12 +67,7 @@ function readTop(el: HTMLElement): number {
   return Number.isFinite(raw) ? raw : el.offsetTop || 0;
 }
 
-function elSize(el: HTMLElement): { w: number; h: number } {
-  return {
-    w: parseFloat(el.style.width) || el.offsetWidth || 280,
-    h: parseFloat(el.style.height) || el.offsetHeight || 180,
-  };
-}
+
 
 export const Canvas: React.FC<CanvasProps> = ({
   currentLayer,
@@ -87,13 +85,15 @@ export const Canvas: React.FC<CanvasProps> = ({
 }) => {
   const camera = useCamera();
 
-  const [parallax, setParallax] = useState({ x: 0, y: 0 });
 
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const pinchRef = useRef<{ d: number; z: number } | null>(null);
   const dragRef = useRef<PanDragState | null>(null);
   const cardDragRef = useRef<CardDragSession | null>(null);
   const paperSlideRef = useRef<{ t: number; x: number; y: number } | null>(null);
+  // Viewport client rect, cached across pointermoves (it only changes on
+  // resize). See handlePointerMove.
+  const viewportRectRef = useRef<{ vp: HTMLElement; r: DOMRect } | null>(null);
   const prevLayerRef = useRef<string | null>(null);
   const itemsByPath = useMemo(() => new Map(items.map((it) => [it.path, it])), [items]);
   // Ordinal seal number per gate (01, 02, …) — the scene's position among the
@@ -124,10 +124,26 @@ export const Canvas: React.FC<CanvasProps> = ({
     clearAllLifts();
   }, [links]);
 
+  // Card rendered sizes are cached during a drag; a layer refresh can change
+  // them, so drop the cache whenever the payload (or viewport) changes.
+  useEffect(() => {
+    invalidateMeasures();
+  }, [items, links]);
+
   // Cards that left the layer can no longer hold a lift.
   useEffect(() => {
     pruneLifts(new Set(items.map((it) => it.path)));
   }, [items]);
+
+  // Any viewport resize changes both card layout and the cached client rect.
+  useEffect(() => {
+    const onResize = () => {
+      invalidateMeasures();
+      viewportRectRef.current = null;
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // Wheel zoom anchored at the cursor.
   // NOTE: React's synthetic onWheel attaches passively at the root since React 17,
@@ -212,14 +228,24 @@ export const Canvas: React.FC<CanvasProps> = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    // 2.5D Parallax tracking: normalized coordinates [-1, 1] relative to viewport center
+    // 2.5D parallax tracking: publish normalized [-1,1] coordinates to the
+    // module store. Consumers (backdrop, particles) read it imperatively —
+    // this used to be setState, re-rendering the whole canvas subtree on every
+    // mouse move (cost grew with card count). The viewport rect is cached:
+    // it only changes on resize, and reading it here forced a layout on every
+    // move (profile: getBoundingClientRect 120× per 120 moves).
     const vp = camera.viewportRef.current;
     if (vp) {
-      const rect = vp.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        const nx = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
-        const ny = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
-        setParallax({ x: nx, y: ny });
+      let rect = viewportRectRef.current;
+      if (!rect || rect.vp !== vp) {
+        rect = { vp, r: vp.getBoundingClientRect() };
+        viewportRectRef.current = rect;
+      }
+      const { width, height, left, top } = rect.r;
+      if (width > 0 && height > 0) {
+        const nx = ((e.clientX - left) / width - 0.5) * 2;
+        const ny = ((e.clientY - top) / height - 0.5) * 2;
+        setParallax(nx, ny);
       }
     }
 
@@ -257,17 +283,21 @@ export const Canvas: React.FC<CanvasProps> = ({
         paperSlideRef.current = { t: now, x: e.clientX, y: e.clientY };
       }
 
-      // Soft push of neighbours (pure math, direct DOM writes).
+      // Soft push of neighbours (pure math, direct DOM writes). Boxes come
+      // from the measure cache — reading offsetHeight here forced a reflow of
+      // the doc on every move (profile: `get offsetHeight` ≈ 6×/move).
       const view = camera.viewportRef.current;
       if (view) {
-        const dragBox = makeBox(x, y, elSize(s.el).w, elSize(s.el).h);
+        const self = elementBox(s.el);
+        const dragBox = makeBox(x, y, self.w, self.h);
         const others: HTMLElement[] = [];
         view.querySelectorAll<HTMLElement>('.object').forEach((el) => {
           if (el !== s.el) others.push(el);
         });
-        const boxes = others.map((el) =>
-          makeBox(readLeft(el), readTop(el), elSize(el).w, elSize(el).h)
-        );
+        const boxes = others.map((el) => {
+          const b = elementBox(el);
+          return makeBox(b.l, b.t, b.w, b.h);
+        });
         for (const p of pushFrom(dragBox, boxes)) {
           const o = others[p.i];
           o.classList.add('pushed');
@@ -312,9 +342,10 @@ export const Canvas: React.FC<CanvasProps> = ({
       if (view) {
         const els: HTMLElement[] = [];
         view.querySelectorAll<HTMLElement>('.object').forEach((el) => els.push(el));
-        const boxes = els.map((el) =>
-          makeBox(readLeft(el), readTop(el), elSize(el).w, elSize(el).h)
-        );
+        const boxes = els.map((el) => {
+          const b = elementBox(el);
+          return makeBox(b.l, b.t, b.w, b.h);
+        });
         const relax = relaxAll(boxes);
         for (const r of relax) {
           const el = els[r.i];
@@ -418,15 +449,15 @@ export const Canvas: React.FC<CanvasProps> = ({
       style={{ perspective: '1200px' }}
     >
       {/* 2.5D Background sheet with 0.25x parallax drift & video support */}
-      <SceneBackdrop bg={bg} parallax={parallax} />
+      <SceneBackdrop bg={bg} />
 
       {/* World Transform Layer — single transform layer, rAF writes transform.
           Must pin transform-origin to top-left: default is center, which would
           offset every screen↔world mapping by half the content size. */}
       <div ref={camera.worldRef} className="absolute left-0 top-0 origin-top-left">
-        {/* 80px hairlines pan/zoom with the world (hearth .canvas). */}
-        <div className="canvas-grid" />
         <LinkLayer links={links} />
+        {/* World-locked 80px hairlines; sized to one viewport, not 6000px. */}
+        <CanvasGrid camera={camera} />
 
         {/* Cards — absolutely positioned at server-seated coords (no flex wrapper).
             `index` is the gate's ordinal among this layer's gates (01, 02, …). */}
@@ -445,7 +476,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       </div>
 
       {/* Atmospheric 1.35x foreground particle system: floating dust & rain overlay */}
-      <ParticleLayer tone={bg.tone} parallax={parallax} />
+      <ParticleLayer tone={bg.tone} />
     </div>
   );
 };

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { subscribeParallax } from '../../lib/parallax.js';
 import { materialSkinOf } from '@airp/shared/forms';
 
 /** The layer backdrop payload from `GET /api/layer` (see LayerState.bg). */
@@ -13,8 +14,6 @@ export interface SceneBackdropBg {
 
 export interface SceneBackdropProps {
   bg: SceneBackdropBg;
-  /** Normalized mouse parallax coordinates [-1, 1] */
-  parallax?: { x: number; y: number };
 }
 
 /**
@@ -26,25 +25,32 @@ export interface SceneBackdropProps {
  * Parallax depth: 0.25x slow drift with camera & pointer.
  * Video support: if src ends with .mp4 or .webm, renders an autoplaying loop video.
  */
-export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg, parallax = { x: 0, y: 0 } }) => {
+export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg }) => {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const src = bg.src;
   const isAvailable = !!src && failedSrc !== src;
   const isVideo = !!src && /\.(mp4|webm)$/i.test(src);
 
-  // Parallax transform: 0.25x background drift (scaled up slightly so edges never bleed)
-  const shiftX = parallax.x * 16;
-  const shiftY = parallax.y * 16;
-  const parallaxStyle: React.CSSProperties = {
-    transform: `translate3d(${shiftX}px, ${shiftY}px, 0) scale(1.06)`,
-    transition: 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
-  };
+  // Parallax drift is written straight to the DOM from the module store: a
+  // pointermove used to arrive here as a React prop and re-render the whole
+  // canvas subtree. 0.25x background shift, scaled up so <br>edges never bleed.
+  useEffect(
+    () =>
+      subscribeParallax((p) => {
+        const el = rootRef.current;
+        if (!el) return;
+        el.style.transform = `translate3d(${p.x * 16}px, ${p.y * 16}px, 0) scale(1.06)`;
+      }),
+    []
+  );
 
   return (
     <div
+      ref={rootRef}
       className={`scene-backdrop ${materialSkinOf(bg.grain)}`}
       data-tone={bg.tone}
-      style={parallaxStyle}
+      style={{ transform: 'translate3d(0, 0, 0) scale(1.06)', transition: 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)' }}
     >
       {isAvailable && (
         isVideo ? (
