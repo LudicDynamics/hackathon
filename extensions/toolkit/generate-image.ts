@@ -61,7 +61,8 @@ export const generateImageTool = defineTool({
     },
     { additionalProperties: false }
   ),
-  promptSnippet: 'Generate an image asset for the world from a text prompt',
+  promptSnippet:
+    'generate_image(prompt) — generate an image asset for the world; then point a layer README `bg:` at it',
   promptGuidelines: [
     'Use generate_image when a scene needs a picture that does not exist yet; then edit the layer README `bg:` field to point at the returned asset path.',
     'Do not repeat the same prompt, style and size — the second call reuses the first file and still costs a turn.',

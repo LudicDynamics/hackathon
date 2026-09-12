@@ -108,6 +108,37 @@ check(
   'no synonym tools (00 §8 anti-pattern)',
   ![...container.keys()].some((n) => /write_world_file|inspect|interact|speak_to|remember|leave_trace|.*_state/.test(n))
 );
+
+/* ── 1b. Prompt-slot face (docs/prompts/05 §9.1) ─────────────────────────── */
+// The `tools` slot renders one `- <name>: <snippet>` bullet per tool and DROPS a
+// tool whose promptSnippet is missing (`slot-renderers.js:90-93`, onlyWithSnippets
+// defaults true). A tool with a blank or multi-line snippet therefore silently
+// vanishes from — or breaks — the system prompt. 05 §3.1 pins it here.
+check(
+  'every promptSnippet is single-line (the slot renders one bullet per tool)',
+  [...container.values()].every((t) => !/[\r\n]/.test(t.promptSnippet ?? ''))
+);
+check(
+  'every promptSnippet starts with its own tool name (a bullet must identify itself)',
+  [...container.entries()].every(([name, t]) => (t.promptSnippet ?? '').trimStart().startsWith(name))
+);
+
+// 00 §9 anti-pattern: an AIRP tool may never shadow a pi-rp builtin or invent a
+// memory/state synonym. The existing regex (above) misses `state_update` — it has
+// no `_state` suffix — and never checks builtin names at all. Both holes closed here.
+const RESERVED_TOOL_NAMES = new Set([
+  // pi-rp builtins (core/tools/*.js). 00 §5: AIRP has NO get_state/set_state.
+  'read', 'bash', 'edit', 'write', 'grep', 'find', 'ls',
+  'state_update', 'get_state', 'subagent', 'subagent_profiles',
+  // pi-rp inline-extension tools AIRP deliberately denies (F6).
+  'recall', 'retrieve', 'memorize', 'revise', 'forget', 'relocate',
+  'associate', 'trigger', 'consolidate', 'retrace', 'set_time', 'awaken',
+]);
+check(
+  'no AIRP tool name collides with a reserved pi-rp tool name (00 §8)',
+  ![...container.keys()].some((n) => RESERVED_TOOL_NAMES.has(n)),
+  [...container.keys()].filter((n) => RESERVED_TOOL_NAMES.has(n)).join(',')
+);
 for (const [name, props] of Object.entries(EXPECTED_PARAMS)) {
   const actual = Object.keys(container.get(name).parameters.properties ?? {});
   check(`${name} parameter names`, JSON.stringify(actual) === JSON.stringify(props), actual.join(','));

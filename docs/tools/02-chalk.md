@@ -482,6 +482,8 @@ const resultPath = r?.path ?? r?.details?.path ?? undefined;
 
 **收起（`collapsed` / `aged`）不由工具管**：`doc-10 E2` 的「记忆风化」是前端按「年龄」渲染（`chalkStyleOf` 的 `collapsed` / `aged`，`forms.ts:95-100`）。工具在这一环只提供一个事实——**文件的 mtime**（它决定「年龄」），不写任何 `collapsed` / `aged` 键。`doc-08` 的 `fold_chalk` / `type: scenario` 是**赛后**的治理工具，B1 不做（`doc-08` 文末标记）。
 
+> **读侧 vs 写侧（2026-09-12 厘清）**：渲染器**确实会读** frontmatter 里的 `collapsed` / `aged`（`forms.ts:187-188`），所以作家手写了**不算错**——但设计意图是**年龄驱动**，这两个键不该由 agent 写（写了会出现"刚落的 chalk 就折叠"这种与 mtime 打架的画面）。**提示词不得教作家手写**（`docs/prompts/04-skill体系.md` §3.2 已按此措辞）。是否要在动作层对这两个键报错，见该文 §⑩-3（待拍板）。
+
 
 ---
 

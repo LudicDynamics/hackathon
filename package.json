@@ -13,6 +13,8 @@
     "probe": "node tools/probe-writer.mjs",
     "probe:tools": "node tools/probe-tools.mjs && node tools/probe-tools-engine.mjs",
     "probe:inject": "node tools/probe-inject.mjs",
+    "probe:prompt": "node tools/probe-prompt.mjs && node tools/probe-prompt-character.mjs",
+    "check:skills": "node tools/check-skills.mjs",
     "typecheck:extensions": "tsc -p extensions/tsconfig.json",
     "check:docs": "node tools/check-hooks-docs.mjs",
     "check:ws": "node tools/check-ws-contract.mjs",

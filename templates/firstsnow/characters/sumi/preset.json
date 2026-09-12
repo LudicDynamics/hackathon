@@ -12,6 +12,24 @@
       "branchSummaryPrompt": "<conversation>\n{conversation}\n</conversation>\n\nSummarize this abandoned exchange so this character can be reopened without losing it. Keep only:\n\n## Where we left off\n[The last thing said.]\n\n## What I promised or refused\n[Verbatim, or \"(none)\".]\n\nKeep it to a few lines. Preserve exact names."
     }
   },
+  "tools": {
+    "deny": [
+      "recall",
+      "retrieve",
+      "memorize",
+      "revise",
+      "forget",
+      "relocate",
+      "associate",
+      "trigger",
+      "consolidate",
+      "retrace",
+      "set_time",
+      "awaken",
+      "get_state",
+      "state_update"
+    ]
+  },
   "items": [
     {
       "kind": "slot",
@@ -24,6 +42,14 @@
       "role": "system",
       "content": "あなたは新人歌手の雪村澄。自然で短い日本語で話す。プレイヤーへの好意と、デビュー後の孤独から逃れたい気持ちを自分でも切り分けられない。プレイヤーの行動を具体的に覚え、決断を代行しない。"
     },
+    { "kind": "slot", "id": "tools", "slot": "tools", "options": { "onlyWithSnippets": true } },
+    {
+      "kind": "slot",
+      "id": "tool-guidelines",
+      "slot": "tool-guidelines",
+      "options": { "includePiDefaultGuidelines": false, "heading": "Guidelines:" }
+    },
+    { "kind": "slot", "id": "skills", "slot": "skills" },
     {
       "kind": "slot",
       "id": "profile",

@@ -17,21 +17,27 @@
 
 ```
 skills/
-  组件叙事/
+  component-narration/
     SKILL.md            # frontmatter 必须有 name 与 description
     references/         # 按需加载的详细文档
 ```
+
+> **目录名与 `name` 一律 ASCII 小写 kebab-case**（`AGENTS.md` §1.1）——**平台级与世界级都是英文**。
+> 世界语言只影响 `SKILL.md` 的**正文与 `description`**（世界内容），不影响目录名与 `name`（程序标识符）。
+> 世界级用世界目录名作前缀：`holmes-world-style`，不是 `holmes-beckstreet-style`。
 
 `SKILL.md` 的 frontmatter 只有两个必填字段：
 
 ```yaml
 ---
 name: component-narration        # 小写字母 / 数字 / 连字符，<=64 字符
-description: 什么时候落 note、什么时候落 letter、什么时候只写 chalk。在需要为叙事挑选承载组件时使用。
+description: Use when choosing what carries a piece of the scene — when plain chalk is enough, when the thing must be a note the player can pick up, and when it must be a sealed letter that opens into a second layer.
 ---
 ```
 
 **`description` 决定作家什么时候会去读它**，要写得具体——system prompt 里常驻的只有这一行，正文由作家按需 `read`（渐进披露）。完整规范见 `vendor/pi-rp/packages/coding-agent/docs/skills.md`。
+
+**正文只放判据，长表放 `references/`**（渐进披露）：`SKILL.md` 回答"怎么选"，`references/*.md` 回答"这个 kind 的字段叫什么"；正文引用时写相对路径（`read references/xxx.md`）。
 
 ## 为什么是 skill 而不是隐藏字段
 

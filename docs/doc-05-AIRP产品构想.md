@@ -270,6 +270,13 @@ player/
 
 ### 4.2 作家提示词骨架 v1
 
+> **已被取代（2026-09-12）**：作家提示词现由 `docs/prompts/01-作家提示词.md` 设计，正文落在
+> `extensions/instructions.ts` 的 `WRITER_INSTRUCTION`（slot `writer-char`）。下面这份 v1 骨架仅存沿革；
+> 工具面与单轮流程以 `docs/prompts/01` + `docs/doc-20` 为准。**逐条更正**：
+> - `chalk` **不写 frontmatter**——`status` / `choice` / `roll_dice` 等互动字段由单轮 Phase ② 的 `edit` 写回（`extensions/toolkit/chalk.ts:79`）；
+> - 单轮第 3 步"场景物件演化"除 `write` 外还有 `use_item_on` 后的 `edit` 演化（`docs/doc-20 §2.2`）；
+> - 阶段①"对话通道中响应 → 立即 chalk"易被读成**先在 chat 里说一句再落板**（即中间语言/元叙事），实际**中间语言绝不进画布**（本文件 `:343`）；可直接落板，无需寒暄。
+
 ```
 # 你是「<世界名>」的作家（Writer）
 
@@ -302,7 +309,7 @@ player/
 - 文件操作：read / bash / edit / write / delete
 - 委托：subagent / subagent_profiles
 - 画布感知：look_at（玩家可见正文 + 格式化互动字段）· view_canvas（看画布截图）
-- 板书：chalk（落盘叙事正文 + frontmatter 状态/选项/骰子）
+- 板书：chalk（**只落叙事正文**；互动字段 frontmatter 由 Phase ② 的 `edit` 写回，`docs/prompts/00 §5`）
 - 世界动作：move_to（移动角色）· move（移动物件）· choose · roll_dice · use_item_on · set_following
 - 画布状态：link（关系线）· arrange（布局）
 - 叙事辅助：generate_image（生图）

@@ -195,22 +195,24 @@ options.path   "/w/{{who}}.md"            → file not found "/w/{{who}}.md"  �
 
 ```
 world/baker-street/crime-scene/
-├── README.md          # type: readme，material: scene，含 name + bg/bgStyle
+├── README.md          # type: readme，material 取 brief 给的默认材质（见下方"material 更正"），含 name + bg/bgStyle
 ├── evening.md         # type: chalk —— 开场 chalk（≤200 字，可带 status / initial choice）
 └── rusted-key.md      # 物件（chalk / component，2~4 个）
 ```
 
 | 产出 | 要求 |
 |---|---|
-| **README.md** | `type: readme` + `material: scene` + `bg`（底图）+ 标题 + 一句话摘要。**覆盖掉 stub 占位**（原 stub README 里 `material: stub`） |
+| **README.md** | `type: readme` + **`material` 取 brief 注入的默认材质**（`brief-builder.ts:15` 的 `default material: <世界默认>`）+ `bg`（底图）+ 标题 + 一句话摘要。**覆盖掉 stub 占位**（原 stub README 里 `material: stub`） |
 | **开场 chalk（可选，强烈建议）** | 这一层"被玩家看见"的那一下，**缺了它入戏效果会差很多**（2026-09-11 明月修正：早先写成"绝对不写"是错的）。一段环境叙事，≤200 字（doc-07 纪律）；**可以带 `status` 快照，也可以给一组 `initial choice`** 作为玩家起步的抓手。**它就是开场白本体**——不是 agent 的 chat history 播种（那套已废弃，见 doc-05 §7.4） |
 | **物件 2~4 个** | 沉默细节优先（桌上的杯子、椅子的摆法、纸上的字），不是"线索大礼包"。可含 1 个可拿走的（给背包用） |
 
 > **"开场 chalk 可选"与"不预设剧情"不冲突**（两者是不同维度）：
 > - **允许**：写"你站在这里看到什么"、给起步选项、给状态快照——这些是**入口的手感**；
-> - **禁止**：下剧情结论、揭示真相、预定结局、替作家把这段戏写完——那些是**叙事主体（作家）的活**。
+> - **禁止**：下剧情结论、揭示真相、预定结局、替作家把这段戏写完——那些是**叙事主体（作家）的活**；
 >
 > 换句话说：初始化可以**开门**，不可以**演戏**。
+>
+> ⚠️ **material 取值更正（2026-09-12）**：本节旧稿写 `material: scene`，但材质注册表 `MATERIAL_SKINS`（`packages/shared/src/schemas/forms.ts:193-198`）**只有 `parchment / warm / stub / kraft`**，没有 `scene`——写 `scene` 会被 `materialSkinOf` 静默回落到 `mat-warm`（`forms.ts:200-202`），与"场景皮肤"语义不符。正确做法：**用 brief 给的默认材质**，不要写 `scene`。
 >
 > **术语边界（2026-09-12）**："开场 chalk" 是**世界里的文件**，玩家直接看到；pi-rp 的 "opening 播种器" 是往 **agent 会话**里灌 chat history——AIRP 不用后者。两者都译作"开场白"极易混淆，本文一律写"开场 chalk"。
 
@@ -271,10 +273,10 @@ characters/旅店老板/
 ├── appearance.md       # 若缺则补：外貌（遮罩立绘描述）
 ├── personality.md      # 若缺则补：性格
 ├── 作品.md              # 小天地内容：作品/便签/生活痕迹
-└── 一张旧照片.md        # 沉默细节（1~3 个）
+└── 一张旧照片.md        # 沉默细节（与内容文件合计 2~4 个）
 ```
 
-**"若缺则补"很关键**：holmes-world 的 `characters/watson/` 至今只有 `README.md` + `preset.json`，而 preset 引用了 `identity.md` / `personality.md`（**两个文件都不存在**）。按 C4，只要 slot 用默认的 `onMissing: skip`，这不会报错——但角色 spawn 时就少了履历。**初始化顺带补齐 preset 引用的缺失文件**，正好打通 doc-13 §5 与 doc-05 §4.1 的遗留问题。
+**"若缺则补"很关键，但当前 brief 不传这个信息（登记，2026-09-12）**：holmes-world 的 `characters/watson/` 至今只有 `README.md` + `preset.json`，而 preset 引用了 `identity.md` / `personality.md`（**两个文件都不存在**）。按 C4，只要 slot 用默认的 `onMissing: skip`，这不会报错——但角色 spawn 时就少了履历。**初始化顺带补齐 preset 引用的缺失文件**是本意，然而 `buildNookInitBrief`（`apps/server/src/engine/brief-builder.ts:46-57`）**没有"缺失文件"字段**（且该函数当前**无调用点**，`docs/后端实现计划.md:81`），所以这条纪律目前**永不触发**。修法二选一：给 brief 增一个 `[Missing Files]` 字段，或删掉这条纪律——勿让其悬空（详见 `docs/prompts/03-初始化器提示词.md` §⑨ 冲突 2）。
 
 **内容纪律**：写"痕迹"不写"设定"。
 
@@ -304,8 +306,8 @@ characters/旅店老板/
 模板内容（纯常量，纯函数可单测）：
 
 ```json
-{ "readme": "type: readme\nname: <目录名>\nmaterial: scene\n---\n\n# <目录名>\n\n（这里还没长出来。）",
-  "chalk":  "type: chalk\n---\n\n（你站在这里。还看不清什么。）" }
+{ "readme": "---\ntype: readme\nname: <目录名>\nmaterial: stub\n---\n\n# <目录名>\n\n（这里还没长出来。）",
+  "chalk":  "---\ntype: chalk\n---\n\n（你站在这里。还看不清什么。）" }
 ```
 
 ---

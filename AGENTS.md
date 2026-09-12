@@ -88,8 +88,13 @@ tools/probe-tools-engine.mjs # 工具面探针（强形式）：真 spawn 引擎
 tools/pi-rp.mjs         # pi-rp 子模块工作流（pnpm pi status|build|update|commit，见 §7.2）
 tools/probe-inject.mjs  # 注入探针：真 spawn 作家引擎，断言每请求恰好一份注入块、且不落盘（pnpm probe:inject）
 tools/inject-probe-provider.ts # 注入探针的确定性 provider（把每个请求的 wire messages 落文件）
+tools/probe-prompt.mjs  # 提示词 wire 探针：真 spawn 作家，断言 messages[0] 含正文/工具清单/skills、不含记忆工具与 Pi 默认 guideline（pnpm probe:prompt）
+tools/probe-prompt-character.mjs # 提示词 wire 探针（角色侧）：同款断言 + [emo: tag] 六标签都在（pnpm probe:prompt 的第二段）
+tools/prompt-dump-provider.ts # 提示词探针的确定性 provider（把每个请求的 wire payload 落文件）
+tools/check-skills.mjs  # skill 语料门禁（pnpm check:skills）：frontmatter 真解析 / 语言分层 / 命名 / 非法工具名
 tools/check-ws-contract.mjs # 跨端 WS 契约门禁（pnpm check:ws）：服务端发射面 ↔ 前端消费面 ↔ 契约表求 diff
 docs/前端接线体检.md   # 2026-09-12 跨端 WS 契约静默漂移的核实报告（含缺陷分级与文档漂移清单）
+docs/prompts/           # 提示词与 skill 体系设计（00 是冻结契约；01–05 分篇；REVIEW-* 评审报告）
 docs/                   # 设计文档（真相源）；docs/tools/ 是 B1 工具面设计 + 评审报告
 vendor/pi-rp/           # 叙事引擎 submodule
 ```
@@ -185,6 +190,8 @@ pnpm typecheck:extensions                       # extensions/ 类型体检（jit
 pnpm probe:inject                               # 注入探针（真 spawn 作家引擎，断言每请求恰好一份注入块且不落盘）
 pnpm check:ws                                   # 跨端 WS 契约门禁（服务端广播面 ↔ 前端消费面 ↔ docs/tools/12 §6.2）
 pnpm check:docs                                 # hooks 文档门禁（symbol ownership / barrel union / file:line 引用）
+pnpm probe:prompt                               # 提示词 wire 探针（作家 + 角色），断言补上的 slot 真的进了模型
+pnpm check:skills                               # skill 语料门禁（frontmatter / 语言分层 / 命名）
 pnpm pi status                                  # pi-rp 子模块 + dist 新鲜度体检（见 §7.2）
 pnpm motion <绿幕.mp4> -o out.webm --scale 360   # 微动立绘 / 背景视频（见 assets/skills/motion-portrait）
 node tools/scaffold.mjs --template holmes-world --out worlds/my-holmes
@@ -253,6 +260,8 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 | 目录 / 模块职责 / 数据流 | 本文（`AGENTS.md`）§2 §3 |
 | 协议（frontmatter / WS 消息 / API 路由） | `packages/shared` schema + `docs/doc-09` 或 `doc-05` |
 | 提示词 / preset / 初始化流程 | `presets/*.json` + `docs/doc-11`（**骨架与文件必须逐字一致**） |
+| 提示词正文 / slot 装配 | `docs/prompts/01…03`（正文逐字源）+ `presets/*.json` + **全部 9 份** `templates/*/characters/*/preset.json`；跑 `pnpm probe:prompt`（作家 + 角色 wire 断言）|
+| skill 体系（平台级 / 世界级） | `docs/prompts/04` + `skills/**` + `templates/*/skills/**`；跑 `pnpm check:skills`（frontmatter 真解析 / 语言分层 / 命名 / 非法工具名）|
 | 交互 / 演出 / 视觉 | `docs/doc-06` / `doc-04`（视觉以 §10 为准） |
 | 注入协议 / 钩子接线 / 分节表 | `docs/hooks/00…06`（冻结契约 `00` 唯一真相源） |
 | 角色 preset 的 compaction | `presets/character.json` 是**唯一真源模板**（新角色从它复制）；改 `hiddenOverrides.compaction` 必须**同 commit** 铺到 **全部**模板/world 角色 preset，并跑 `apps/server/test/character-preset-parity.test.mjs`（逐字一致，缺一份即静默失效） |
@@ -264,7 +273,7 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 ### 6.4 收工自检
 
 ```bash
-pnpm build && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:docs
+pnpm build && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:docs && pnpm probe:prompt && pnpm check:skills
 ```
 
 `pnpm check:ws` 是**跨端 WS 契约门禁**：服务端广播面、前端消费面、`docs/tools/12 §6.2` 契约三集合求 diff。**改了任何 WS 帧（增删帧名 / 改载荷 / 前端 case）必须让它变绿**——它会把"两端各自绿、合起来死"的漂移抓出来（2026-09-12 实际抓到 14 条）。

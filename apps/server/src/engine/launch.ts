@@ -133,8 +133,11 @@ export function writerLaunch(repoRoot: string, worldRoot: string, vendorCliPath:
  * character overlay's memory survives shutdown and rides along with the world.
  *
  * A character's own `characters/<id>/preset.json` wins over the repo's generic
- * character preset (same choice `lifecycle` made before). Characters get no
- * `--skill`: unlike the writer they carry no craft skills.
+ * character preset (same choice `lifecycle` made before). Characters get the
+ * same two skill tiers as the writer (`skillArgs`): the platform tier teaches
+ * how to act with the tools they have, the world tier teaches this world's voice.
+ * The `skills` slot in the preset is what puts those descriptions into the
+ * prompt — without it the `--skill` flags load nothing the model can see.
  */
 export function characterLaunch(
   repoRoot: string,
@@ -162,6 +165,7 @@ export function characterLaunch(
       path.join(sessionsDir, `char-${characterId}.jsonl`),
       ...ISOLATION_ARGS,
       ...extensionArgs(repoRoot, worldRoot),
+      ...skillArgs(repoRoot, worldRoot),
     ],
     env: toEnv(airpEnv({ role: `${CHARACTER_ROLE_PREFIX}${characterId}` }), agentDirEnv(repoRoot), {
       PI_CODING_AGENT_SESSION_DIR: sessionsDir,
