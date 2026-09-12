@@ -39,10 +39,12 @@
 
 **本批要落地的具体清单**（6 个 skill 目录 = 2 平台级 + 4 世界级；载体是 **6 个 `SKILL.md` 文件**）：
 
+> **2026-09-13 增补（`docs/tts/08`）**：平台级新增第三份 **`skills/voice-casting/`**（TTS 角色配音手艺，见 `docs/tts/08`）。下表仍记本批原始清单；平台级现为 **3 份**，`check:skills` 的 A0/A7 已改为**期望清单逐字比对 + 按 skill 分触发词表**。
+
 | tier | 目录 | `name` | 正文语言 | 世界 |
-|---|---|---|---|---|
 | 平台级 | `<repo>/skills/component-narration/` | `component-narration` | 英文 | 全部 |
 | 平台级 | `<repo>/skills/tool-craft/` | `tool-craft` | 英文 | 全部 |
+| 平台级 | `<repo>/skills/voice-casting/` | `voice-casting` | 英文 | 全部（2026-09-13 增补，`docs/tts/08`） |
 | 世界级 | `templates/holmes-world/skills/holmes-world-style/` | `holmes-world-style` | 英文 | holmes-world |
 | 世界级 | `templates/holmes-world/skills/holmes-world-plot/` | `holmes-world-plot` | 英文 | holmes-world |
 | 世界级 | `templates/firstsnow/skills/firstsnow-style/` | `firstsnow-style` | 日文 | firstsnow |
@@ -141,6 +143,7 @@ component-narration/
 - **引用方式是相对路径**：`read references/component-kinds.md` —— pi-rp 要求相对 skill 目录解析（`docs/skills.md:131-135`、`core/skills.ts:345`），写绝对路径在别的机器上会断。
 - **不要把 REFERENCES 写成第二份 SKILL.md**：`references/` 里的东西是"读到了才有用"的长表，不是每轮都该在的规则。判据同 doc-23 §2.8：常驻薄、细则胖。
 - **平台级的 `references/` 可以没有**（`tool-craft` 的 `chalk-styles.md` 是可选的，因为风格表本身只有 5 行，塞正文也小）；**世界级建议有**（世界文风常有 20+ 条正反例）。
+- **可以来自生成物**：`voice-casting` 的 `references/voice-palette.md`（2026-09-13 增补，`docs/tts/08 §4.1`）由 `tools/check-voices.mjs --write-ref` 从 `voices.ts` 渲染，门禁 V5 逐字节比对——**长表若已有单一真相源，就不该手写**。
 
 ## ③ 正文（§3.1/3.2/3.3 逐字可用；§3.4 是待产骨架，由世界作者补写）
 
@@ -649,7 +652,7 @@ description: "‹什么时候读——例如「决定这一场往哪去」，或
 | **A4** | **条件断言**：对每个存在 `skills/` 目录的世界，其 `SKILL.md` 正文语言与该世界 `world.json.locale` 一致——`locale: "ja"`（`firstsnow`）→ 正文含 CJK；`locale: "en"`/缺省（`holmes-world`，及将来补上的 `whitechapel`）→ 正文无 CJK | 条件式而非固定清单：本批只建 `holmes-world`/`firstsnow` 的目录（§2.1），断言不得假设 `whitechapel` 目录存在（评审 B2） |
 | **A5** | 每份 `SKILL.md` 正文 ≤ 120 行；长表只在 `references/*.md` | 渐进披露纪律（`00 §3.3`） |
 | **A6** | `description` **不含**泛化词：`/helps? with\|关于.*的帮助\|misc/i` | `docs/skills.md:162-174` 的 good/bad |
-| **A7** | 平台级两份 `description` **点名**至少两个具体触发物（`note` / `letter` / `chalk` / `move_to` / `show` / `choice` / `roll_dice` / `link` 至少命中 2） | 决定 agent 何时读；兑现 `01-作家提示词.md` §⑩-5 的跨篇假设 |
+| **A7** | 每个平台级 `SKILL.md` 的 `description` **点名**至少两个**该 skill 自己的**触发物。词表按 skill 分（`tools/check-skills.mjs` 的 `TRIGGERS_BY_SKILL`，`docs/tts/08 §4.3`）：`component-narration` = `note`/`letter`/`chalk`/`get_component`；`tool-craft` = `move_to`/`show`/`choice`/`roll_dice`/`link`/`chalk`；`voice-casting` = `voice`/`README`/`palette`/`character`。**A0 同步改为期望清单逐字比对**（新增平台 skill 忘了登记即红） | 决定 agent 何时读；兑现 `01-作家提示词.md` §⑩-5 的跨篇依赖。**共享词表会放行"音色 skill 提到 roll_dice"这类假通过**，故按 skill 分表 |
 | **A8** | 任何 `SKILL.md` 不含非法工具名：`!/get_state\|set_state\|state_update\|watch_state/` | `00 §5`、`00 §7.3` |
 | **A9** | 作家真 spawn 后 `messages[0]` 的 `<available_skills>` 同时含平台级与（若世界有）世界级 skill 的 `name` | 复用 `00 §8` 第 3 条要新建的 `tools/probe-prompt.mjs`（`00 §2` 的 dump provider 手法：真 spawn `vendor/pi-rp/.../dist/cli.js` + 落盘 wire payload）；世界的 skill 目录经 `--skill`（`presets.ts:112`） |
 | **A10** | 名字全局唯一（平台级 ∪ 世界级，跨全部 `templates/*`） | 排序后 `uniq -d` 为空 |

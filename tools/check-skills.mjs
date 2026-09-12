@@ -36,8 +36,19 @@ const CJK = /[\u4e00-\u9fff\u3040-\u30ff]/;
 const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const GENERIC_DESC_RE = /helps? with|关于.*的帮助|misc/i;
 const ILLEGAL_TOOL_RE = /get_state|set_state|state_update|watch_state/;
-/** A7: at least two concrete trigger nouns must appear in a platform description. */
-const TRIGGER_NOUNS = ['note', 'letter', 'chalk', 'move_to', 'show', 'choice', 'roll_dice', 'link'];
+/**
+ * A7: each platform skill's description must name at least two concrete
+ * triggers. The vocabulary is PER SKILL (docs/tts/08 §4.3) — a shared list would
+ * pass a voice skill that happens to mention `roll_dice`, which is not its
+ * trigger, while saying nothing about voices.
+ */
+const TRIGGERS_BY_SKILL = {
+  'component-narration': ['note', 'letter', 'chalk', 'get_component'],
+  'tool-craft': ['move_to', 'show', 'choice', 'roll_dice', 'link', 'chalk'],
+  'voice-casting': ['voice', 'README', 'palette', 'character'],
+};
+/** A0: the platform tier's exact membership. Adding a skill MUST update this. */
+const EXPECTED_PLATFORM = Object.keys(TRIGGERS_BY_SKILL);
 
 const PLATFORM_DIR = path.join(REPO, 'skills');
 const SKILL_BODY_MAX_LINES = 120;
@@ -90,7 +101,17 @@ const allFiles = [...platformFiles, ...worldFiles];
 
 // --------------------------------------------------------------------------- A0
 
-check('the corpus exists (2 platform skills)', platformFiles.length === 2, `${platformFiles.length} found`);
+check(
+  `the corpus matches the expected platform set (${EXPECTED_PLATFORM.length})`,
+  platformFiles.length === EXPECTED_PLATFORM.length,
+  `${platformFiles.length} found: ${platformFiles.map((f) => path.basename(path.dirname(f))).join(', ')}`
+);
+for (const name of EXPECTED_PLATFORM) {
+  check(
+    `platform skill "${name}" exists`,
+    fs.existsSync(path.join(PLATFORM_DIR, name, 'SKILL.md'))
+  );
+}
 assert.ok(
   allFiles.length > 0,
   'no SKILL.md found — the walk is wrong, not the corpus (a vacuous pass would hide everything below)',
@@ -130,8 +151,12 @@ for (const file of platformFiles) {
 // --------------------------------------------------------------------------- A7
 
 for (const file of platformFiles) {
+  const name = parsed.get(file).name;
   const description = parsed.get(file).description;
-  const hits = TRIGGER_NOUNS.filter((n) => new RegExp(`\\b${n}\\b`).test(description));
+  const triggers = TRIGGERS_BY_SKILL[name];
+  check(`${rel(file)}: has a trigger vocabulary (08 §4.3)`, Array.isArray(triggers), name);
+  if (!Array.isArray(triggers)) continue;
+  const hits = triggers.filter((n) => new RegExp(`\\b${n}\\b`).test(description));
   check(`${rel(file)}: platform description names >= 2 concrete triggers (04 A7)`, hits.length >= 2, hits.join(','));
 }
 

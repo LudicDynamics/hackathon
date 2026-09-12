@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Voice-corpus gate (`pnpm check:voices`) — docs/tts/07 §4.
+ * Voice-corpus gate (`pnpm check:voices`) — docs/tts/07 §4, docs/tts/08 §4.
  *
  * The bugs this exists to catch, all three of which shipped once (07 §0):
  *   1. `voice: Eldric` — a raw id that is NOT a DashScope voice (the real one
@@ -12,6 +12,11 @@
  * The palette (`resolveVoice`) is the single vocabulary; this walks every
  * character README in every template and asserts its declaration RESOLVES.
  * A file that declares nothing is fine — it means "use the server default".
+ *
+ * V5 keeps the `voice-casting` skill's palette reference in step with the
+ * palette. That file is a GENERATED artifact (08 §4.1): this script is its only
+ * renderer, so the reference cannot drift into recommending a voice that no
+ * longer exists. `--write-ref` regenerates it.
  *
  * This is a CONTENT gate, not a runtime one: it never touches the network.
  * Whether a palette id actually synthesises is established by 07 §5's recorded
@@ -38,6 +43,52 @@ const check = (label, ok, extra = '') => {
     failed++;
   }
 };
+const WRITE_REF = process.argv.includes('--write-ref');
+
+/**
+ * Render `references/voice-palette.md` for the `voice-casting` skill (08 §4.2):
+ * alias + tone ONLY — the engine's ids stay out of it, so nobody copies one.
+ * Grouped by gender because that is the axis a caster checks first.
+ */
+function renderPaletteRef() {
+  const byGender = (g) => VOICES.filter((v) => v.gender === g);
+  const rows = (g) =>
+    byGender(g)
+      .map((v) => `| \`${v.alias}\` | ${v.tone} |`)
+      .join('\n');
+  return `# The voice palette
+
+Every voice you may write in a character's \`voice:\` line. Pick by the sound, not by the name: the
+left column is what you type, the right column is what it sounds like.
+
+This file is GENERATED from \`packages/shared/src/rules/voices.ts\` — do not edit it by hand. To add
+a voice, follow \`docs/tts/07\` (it must be observed to synthesise) and run
+\`node tools/check-voices.mjs --write-ref\`.
+
+## Female
+
+| Alias | Sounds like |
+|---|---|
+${rows('female')}
+
+## Male
+
+| Alias | Sounds like |
+|---|---|
+${rows('male')}
+
+Rule: two characters in the SAME world must not share a voice. Cross-world reuse is fine.
+`;
+}
+
+const REF_PATH = path.join(REPO, 'skills', 'voice-casting', 'references', 'voice-palette.md');
+
+if (WRITE_REF) {
+  fs.mkdirSync(path.dirname(REF_PATH), { recursive: true });
+  fs.writeFileSync(REF_PATH, renderPaletteRef());
+  console.log(`wrote ${rel(REF_PATH)}`);
+  process.exit(0);
+}
 
 // --------------------------------------------------------------------- V0
 
@@ -106,8 +157,14 @@ function characterReadmes() {
 const readmes = characterReadmes();
 check('character README walk finds the corpus', readmes.length > 0, `${readmes.length} found`);
 
-/** world → { id, voice|null } — used by V5's "no duplicate voice" check. */
+/**
+ * world → [{ id, voice }] where `voice` is the RESOLVED wire id. An undeclared
+ * character carries the server default rather than `null`: see V4.
+ */
 const byWorld = new Map();
+/** The voice an undeclared character actually speaks in (tts.ts:41, :64). */
+const DEFAULT_VOICE_RAW = process.env.AIRP_TTS_DEFAULT_VOICE ?? 'Cherry';
+const DEFAULT_VOICE = resolveVoice(DEFAULT_VOICE_RAW) ?? DEFAULT_VOICE_RAW;
 
 for (const { world, id, file } of readmes) {
   const { frontmatter } = parseFrontmatter(fs.readFileSync(file, 'utf-8'));
@@ -117,9 +174,12 @@ for (const { world, id, file } of readmes) {
   if (raw === undefined || raw === null) {
     // No declaration = the server default. Legal, and worth SEEING: a world
     // whose characters are all voiceless is a content decision, not a bug.
-    console.log(`  --  ${where}: no voice declared (server default)`);
+    // It is NOT a free pass (V4): the default is a real voice, so an undeclared
+    // character shares it with every other undeclared one and with anyone who
+    // declares it explicitly.
+    console.log(`  --  ${where}: no voice declared (server default = ${DEFAULT_VOICE})`);
     if (!byWorld.has(world)) byWorld.set(world, []);
-    byWorld.get(world).push({ id, voice: null });
+    byWorld.get(world).push({ id, voice: DEFAULT_VOICE });
     continue;
   }
 
@@ -145,6 +205,9 @@ for (const { world, id, file } of readmes) {
   }
 
   if (!byWorld.has(world)) byWorld.set(world, []);
+  // An unresolved declaration already failed V3; do not also count it as a
+  // voice here (two typos in one world would then read as a collision).
+  if (resolved === null) continue;
   byWorld.get(world).push({ id, voice: resolved });
 }
 
@@ -153,13 +216,37 @@ for (const { world, id, file } of readmes) {
 // Two characters in the SAME world sharing one voice makes them
 // indistinguishable when both can speak; across worlds it is fine (the same
 // actor, or a deliberate house style).
+//
+// Undeclared characters are counted here as the DEFAULT voice, not skipped:
+// the earlier `filter(v => v !== null)` let two voiceless characters collide in
+// playback (both fall to the server default) while the gate stayed green — a
+// hole that a reviewer caught. The voice a character ACTUALLY speaks in is the
+// only thing worth comparing.
 for (const [world, chars] of byWorld) {
-  const voices = chars.map((c) => c.voice).filter((v) => v !== null);
+  const voices = chars.map((c) => c.voice);
   const dupes = voices.filter((v, i) => voices.indexOf(v) !== i);
   check(
     `${world}: no two characters share a voice`,
     dupes.length === 0,
     dupes.length > 0 ? `${[...new Set(dupes)].join(', ')} used by multiple characters` : ''
+  );
+}
+
+// --------------------------------------------------------------------- V5
+
+// The palette reference is a SECOND copy of the palette (08 §4.1). Hand-editing
+// it is the drift this assertion forbids: the skill would advertise a voice the
+// resolver no longer knows, which is the exact "correct-looking but wrong" state
+// the alias vocabulary exists to prevent.
+const expectedRef = renderPaletteRef();
+if (!fs.existsSync(REF_PATH)) {
+  check(`${rel(REF_PATH)} exists (run with --write-ref)`, false, 'missing');
+} else {
+  const actualRef = fs.readFileSync(REF_PATH, 'utf-8');
+  check(
+    `${rel(REF_PATH)} matches the palette (08 §4.1)`,
+    actualRef === expectedRef,
+    'stale — run `node tools/check-voices.mjs --write-ref`'
   );
 }
 
