@@ -666,16 +666,24 @@ export function createWorldRouter(
         (manifest.characters || []).map(async (c) => {
           let avatar = c.avatar;
           let bio = c.description;
+          let voice: string | undefined;
           try {
             const raw = await store.readFile(`characters/${c.id}/README.md`);
             const { frontmatter, body } = parseFrontmatter(raw);
             if (frontmatter?.avatar) avatar = frontmatter.avatar;
             if (!bio) bio = body.slice(0, 100);
+            // `voice` is a character property declared in the README frontmatter
+            // (docs/tts/00 §3.1) — passed through as a bare name. Absent ⇒ the key
+            // is omitted and the client falls back to the server default (§15.5).
+            if (typeof frontmatter?.voice === 'string' && frontmatter.voice.trim() !== '') {
+              voice = frontmatter.voice.trim();
+            }
           } catch {}
           return {
             ...c,
             avatar: avatar || '/assets/characters/portraits/fella_1.png',
             bio,
+            ...(voice ? { voice } : {}),
           };
         })
       );

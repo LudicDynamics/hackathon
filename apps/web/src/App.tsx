@@ -651,6 +651,9 @@ export function App() {
           bio={activeChar.bio}
           incoming={activeModalFrame}
           locale={locale}
+          worldId={manifest?.id}
+          voice={activeChar.voice}
+          language={manifest?.locale === 'ja' || manifest?.locale === 'en' ? manifest.locale : 'en'}
           onClose={closeCharacterModal}
           onSendMessage={(msg) => {
             sendMessage({

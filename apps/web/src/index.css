@@ -444,10 +444,10 @@ body:before {
   bottom: 5.5vh;
   z-index: 2;
   width: min(720px, 78vw);
-  padding: 1.2rem 1.6rem 0.9rem;
+  padding: 1.2rem 1.6rem 1.1rem;
   background: var(--paper);
   color: var(--ink);
-  border: 1px solid rgba(41, 40, 32, 0.35);
+  border: 1px solid rgba(41, 40, 32, 0.28);
   box-shadow: 0 18px 42px rgba(41, 40, 32, 0.32), 0 4px 10px rgba(41, 40, 32, 0.2);
   transform: translateX(-50%) rotate(-0.4deg);
   animation: speechRise 0.6s cubic-bezier(0.16, 1, 0.3, 1); /* rises from below */
@@ -502,10 +502,23 @@ body:before {
 /* fixed streaming stage: min-height 3.2em with line-height 2, per spec */
 .line-stage {
   min-height: 3.2em;
+  max-height: 9.6em;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 1.6rem; /* room for the ▼ advance indicator in the corner */
   line-height: 2;
   font-family: 'LXGW WenKai', 'KaiTi', serif;
   font-size: 1.12rem;
   color: var(--ink);
+}
+
+/* clickable advance affordance — pure visual hint, logic lives in `advance` */
+.line-stage.is-advanceable {
+  cursor: pointer;
+}
+
+.line-stage.is-advanceable:hover {
+  background: rgba(41, 40, 32, 0.03);
 }
 
 .speech-line {
@@ -544,7 +557,46 @@ body:before {
   }
 }
 
-/* player input — one bare bottom row inside the paper, no separate box */
+/* ▼ advance indicator: the galgame "click to continue" tell (docs/tts/00 §16.2) */
+.advance-indicator {
+  position: absolute;
+  right: 1.1rem;
+  bottom: 0.7rem;
+  font-size: 0.85rem;
+  color: var(--rust);
+  line-height: 1;
+  user-select: none;
+  pointer-events: none; /* clicks still land on .line-stage */
+  animation: advanceBlink 1.1s steps(1) infinite;
+}
+
+.advance-indicator.is-hidden {
+  visibility: hidden;
+}
+
+@keyframes advanceBlink {
+  50% {
+    opacity: 0.15;
+  }
+}
+
+/* player input — hidden until the pages are exhausted, then fades in (§6.6) */
+.speech-input-row {
+  border-top: 1px solid rgba(41, 40, 32, 0.12);
+  margin-top: 0.5rem;
+  padding-top: 0.35rem;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 0.35s ease, max-height 0.35s ease;
+}
+
+.speech-input-row.is-ready {
+  opacity: 1;
+  max-height: 4rem;
+  pointer-events: auto;
+}
 .speech-input {
   display: block;
   width: 100%;

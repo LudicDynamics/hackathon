@@ -479,6 +479,9 @@ const failCached = new Set<string>();
 const SAMPLE_LEVELS: Record<TrackId, number> = { ambient: 0.5, bgm: 0.35, theme: 0.22 };
 const FOLEY_SAMPLE_LEVEL = 0.7;
 const STINGER_SAMPLE_LEVEL = 0.8;
+/** Loudest tier: TTS narration outranks every existing bed/stinger
+ *  (0.22 < 0.35 < 0.5 < 0.7 < 0.8 < 0.85). */
+const VOICE_SAMPLE_LEVEL = 0.85;
 
 const isUrl = (ref: string): boolean => ref.startsWith('/') || ref.startsWith('http');
 
@@ -879,6 +882,89 @@ export function audioDebugState(): {
     if (!failCached.has(url)) loaded.push(url);
   }
   return { ambient: tracks.ambient.ref, bgm: tracks.bgm.ref, theme: tracks.theme.ref, loaded };
+}
+
+/* ============================================================
+ * Voice channel (TTS) — one line of character dialogue at a time.
+ * Orthogonal to the three main tracks: lives in its own slot, is never
+ * registered in `tracks`, and has NO synth fallback (the engine owns no
+ * speech synthesizer) — a failed load is simply silence.
+ * ============================================================ */
+
+/** Seconds — interrupt fade for voice. Shorter than the 1.5s main-track
+ *  crossfade: a dialogue switch must feel immediate (0.12s kills the click,
+ *  nothing more). */
+const VOICE_FADE = 0.12;
+
+let voiceClip: Clip | null = null; // what is sounding now (loop is always false)
+let voiceToken = 0; // async-race guard (same discipline as tracks[id].token)
+let voiceUrl: string | null = null; // declared ref verbatim (debug/test truth)
+
+/** Play one TTS line. A new call interrupts the previous one. Silently drops
+ *  when there is no context, when the context is not running (autoplay policy:
+ *  drop, don't queue — replaying after unlock would land the wrong line), or
+ *  when the sample fails to load. Never throws. */
+export function playVoice(url: string): void {
+  stopVoice(); // interrupt the previous line first
+  voiceUrl = url; // record the declared ref even when we go silent
+
+  const c = initAudio();
+  if (!c || !master) return; // no Web Audio → silent no-op
+  if (c.state !== 'running') return; // drop, don't queue
+
+  const token = voiceToken; // token taken after stopVoice's bump
+  void loadSample(url).then((buf) => {
+    if (token !== voiceToken) return; // superseded by a newer call / stop
+    if (!buf || !master || !ctx) return; // load failed → silence (no fallback)
+    if (ctx.state !== 'running') return; // suspended again during decode → drop
+    const nodes = playClip(master, buf, /* loop */ false, VOICE_SAMPLE_LEVEL);
+    if (!nodes) return;
+    nodes.src.onended = (): void => {
+      // Past playClip's own disconnect; add the slot clear so isVoicing()
+      // goes false when the line ends naturally.
+      nodes.src.disconnect();
+      nodes.gain.disconnect();
+      if (voiceClip?.src === nodes.src) voiceClip = null;
+    };
+    voiceClip = { url, src: nodes.src, gain: nodes.gain, loop: false };
+  });
+}
+
+/** Fade out and release the current voice line. Idempotent, never throws.
+ *  The slot is cleared synchronously (so `isVoicing()` is immediately false);
+ *  the physical stop/disconnect is deferred past the fade. */
+export function stopVoice(): void {
+  voiceToken += 1; // invalidate any in-flight load
+  voiceUrl = null;
+  const clip = voiceClip;
+  voiceClip = null; // synchronous release, mirroring stopClip
+  if (!clip) return; // idempotent
+  const c = ctx;
+  if (!c) return;
+  const t = c.currentTime;
+  clip.gain.gain.cancelScheduledValues(t);
+  clip.gain.gain.setValueAtTime(clip.gain.gain.value, t);
+  clip.gain.gain.linearRampToValueAtTime(0, t + VOICE_FADE);
+  setTimeout(() => {
+    try {
+      clip.src.stop();
+    } catch {
+      /* already stopped */
+    }
+    clip.src.disconnect();
+    clip.gain.disconnect();
+  }, VOICE_FADE * 1000 + 40);
+}
+
+/** Whether a voice line is currently sounding. False without a context. */
+export function isVoicing(): boolean {
+  return voiceClip !== null;
+}
+
+/** Test/diagnostic view: the declared voice ref verbatim. Independent of
+ *  `ctx`, and kept out of `audioDebugState()`'s frozen four-key shape. */
+export function voiceDebugState(): { url: string | null } {
+  return { url: voiceUrl };
 }
 
 /* ============================================================
