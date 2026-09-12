@@ -273,6 +273,50 @@ body:before {
   }
 }
 
+/* ---- phantom chalk: wet ink not yet dry (docs/perform/01 §6.6) ----
+   A chalk phantom is a promise, not a card: translucent, faintly blurred,
+   sitting on the world grid at the seat the real card will take. Both classes
+   are additive — `.chalk` / `.chalk--bare` and their tone/big/card variants
+   are untouched (ChalkCard.tsx composes from those). */
+.chalk--ghost {
+  opacity: 0.62;
+  filter: blur(0.6px);
+  pointer-events: none;
+}
+
+/* landed: let the ink-seep animation HOLD its dry 100% frame instead of
+   snapping back to the wet .chalk--ghost look (which has no fill-mode). */
+.chalk--ghost.ink-spread {
+  animation-fill-mode: forwards;
+}
+
+/* the pen is here, the words are not yet. A small breathing nib. */
+.ink-tip {
+  display: inline-block;
+  width: 2px;
+  height: 1.15em;
+  margin-left: 2px;
+  vertical-align: -0.2em;
+  background: currentColor;
+  border-radius: 1px;
+  animation: inkTip 1.1s ease-in-out infinite;
+}
+
+@keyframes inkTip {
+  0%, 100% { opacity: 0.15; transform: translateY(0); }
+  50% { opacity: 0.85; transform: translateY(1px); }
+}
+
+/* failed chalk: the ghost leaves visibly — right + fade — never a stub. */
+.ghost--evicting {
+  animation: ghostEvict 320ms ease-in forwards;
+}
+
+@keyframes ghostEvict {
+  0% { opacity: 0.62; transform: translateX(0); }
+  100% { opacity: 0; transform: translateX(10px); }
+}
+
 /* ============================================================
    Character modal — galgame overlay (T3.3, wave 2 Task D)
    Appended at the end of the cascade on purpose. Uses the v2
@@ -1467,6 +1511,15 @@ body:before {
   pointer-events: none;
 }
 
+/* The writer is mid-turn: the bar is not broken, it is occupied. A warm wash
+   instead of the frozen bar's dim-out, so "you cannot type now" reads as the
+   pen being busy, not the UI being dead (docs/perform/01 §6.4). */
+.writer-bar[data-writing="true"] {
+  background: var(--cream);
+  border-color: var(--hair);
+  opacity: 0.92;
+}
+
 /* 176x132 CSS box, filled by the canvas; DPR width/height attributes
    must not upscale it. */
 .minimap__canvas {
@@ -1746,5 +1799,398 @@ body:before {
     left: 16px;
     top: 16px;
     width: min(390px, calc(100% - 32px));
+  }
+}
+
+/* ============================================================
+   Image ghost — the placeholder that becomes the picture
+   (docs/perform/03; doc-10 E3: 幻影壳不可交互、不可拖).
+   A ghost reuses the paper family (--paper/--hair/--shadow-*) so a
+   shell that "will grow into a picture" does not read as a UI patch.
+   ============================================================ */
+/* Shell: same world-space box as `.object`, but never a drag target
+   (`Canvas` hit-tests with `closest('.object')`, which must not match). */
+.object--ghost {
+  position: absolute;
+  pointer-events: none;
+}
+
+.ghost-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--paper);
+  border: 1px solid var(--hair);
+}
+
+/* Pending: distant, airy, and a faint wash of light crossing the paper. */
+.ghost-card--pending {
+  box-shadow: var(--shadow-far);
+  animation: ghostForm 1.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ghost-card__skeleton {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    105deg,
+    rgba(255, 255, 255, 0) 38%,
+    rgba(255, 253, 245, 0.72) 50%,
+    rgba(255, 255, 255, 0) 62%
+  );
+  background-color: rgba(43, 33, 23, 0.07);
+  background-repeat: no-repeat;
+  background-size: 240% 100%;
+  animation: ghostShimmer 1.9s linear infinite;
+}
+
+/* Landed: the picture itself, heavier on the page. */
+.ghost-card--landed {
+  box-shadow: var(--shadow-mid);
+}
+
+/* Evicted: fade, do not vanish (the exit must be visible — 03 §7). */
+.ghost-card--evicted {
+  box-shadow: var(--shadow-far);
+  animation: ghostFade 0.7s ease forwards;
+}
+
+.ghost-card__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The heartbeat line — same voice as the chrome labels. */
+.ghost-card__stage {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 7px 10px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: rgba(255, 254, 246, 0.82);
+  border-top: 1px solid var(--hair);
+}
+
+/* Reused: quiet, out of the way — the reveal is smaller, not louder. */
+.ghost-card__badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 8px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  background: var(--cream);
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+  box-shadow: var(--shadow-far);
+  transform: rotate(-1.2deg);
+}
+
+@keyframes ghostShimmer {
+  from { background-position: 140% 0; }
+  to   { background-position: -140% 0; }
+}
+
+@keyframes ghostForm {
+  from { opacity: 0; transform: scale(0.985); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ghostFade {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+
+/* ============================================================
+   Dice ceremony — frame path (`dice_result`, docs/perform/02).
+   Same visual language as the player's roll (the .dice-ceremony
+   block above: 40% warm-black dim, 160px faces, crit bloom,
+   fumble crack / tremor, oversized mono result) but the faces are
+   NUMBER tiles, not a pip cube: `rolls` can hold 1d100 / 4d6
+   values that a six-face cube cannot express.
+   ============================================================ */
+
+/* Panel: mirrors DiceRoller's ceremony card (paper, deep shadow). */
+.dice-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  padding: 40px 64px;
+  border-radius: 24px;
+  background: rgba(251, 248, 241, 0.95);
+  border: 1px solid rgba(41, 40, 32, 0.1);
+  box-shadow: 0 26px 60px rgba(35, 28, 20, 0.35);
+}
+
+/* Roll-in for the group: the spread of dice settling onto the table. */
+.dice-stage__faces {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  max-width: 640px;
+  perspective: 1000px;
+}
+
+/* One die: 160px, same edge as .dice-cube-ceremony, same paper face. */
+.dice-face-tile {
+  width: 160px;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 24px;
+  border: 1px solid rgba(41, 40, 32, 0.12);
+  background: var(--cream);
+  font-family: 'DM Mono', monospace;
+  font-size: 56px;
+  font-weight: 800;
+  color: var(--ink);
+  box-shadow: 0 14px 30px rgba(35, 28, 20, 0.18);
+  animation: diceTileIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Up to 6 dice keeps the 160px face; beyond that the spread would overflow. */
+.dice-stage__faces:has(> .dice-face-tile:nth-child(7)) .dice-face-tile {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  font-size: 28px;
+}
+
+.dice-stage__caption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+/* One glance back at the card that was judged (§3.2 step 7): transient,
+   data-driven (the class is removed on unmount / after 800ms). */
+.dice-ceremony-highlight {
+  outline: 2px solid var(--rust);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 8px rgba(201, 111, 76, 0.18);
+  transition: box-shadow 0.2s ease, outline-color 0.2s ease;
+}
+
+@keyframes diceTileIn {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) rotateX(-40deg) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotateX(0) scale(1);
+  }
+}
+
+/* Reduced motion: no tumble, no tremor, no bloom (docs/perform/02 §7.2 —
+   less movement, never less information). */
+@media (prefers-reduced-motion: reduce) {
+  .dice-face-tile {
+    animation: none;
+  }
+  .dice-stage.dice-shake {
+    animation: none;
+  }
+  .crit-glow,
+  .fumble-crack {
+    animation: none;
+  }
+}
+/* ============================================================
+   Performance shows (docs/perform/05) — the 7 show_frame
+   performances. All classes are `.show-` prefixed so they never
+   collide with card / thread / dice classes. The layer itself is
+   z-20: below the dice ceremony (z-50) and its fumble crack (z-55).
+   ============================================================ */
+
+.show-root {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Full-canvas dim veil. --show-dim is the brightness the frame asked for
+   (doc 10 §14.3: spotlight def .15 / lights_out def .08), so the sheet's
+   opacity is its complement — two stacked veils multiply toward black,
+   which is why the store keeps only ONE 'dim' show alive at a time. */
+.show-dim {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: calc(1 - var(--show-dim, 0.15));
+  animation: showFadeIn 0.35s ease-out;
+}
+
+/* Spotlight beam — a warm radial bloom centred on the target card, sized by
+   --show-beam-spread. It is positioned by JS with left/top at the card centre. */
+.show-beam {
+  position: absolute;
+  width: var(--show-beam-spread, 520px);
+  height: var(--show-beam-spread, 520px);
+  margin-left: calc(var(--show-beam-spread, 520px) / -2);
+  margin-top: calc(var(--show-beam-spread, 520px) / -2);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    var(--show-beam-tone, rgba(235, 205, 140, 0.55)) 0%,
+    transparent 68%
+  );
+  animation: showBeamIn 0.5s ease-out;
+}
+
+/* lights_out's "one card stays faintly lit" halo. */
+.show-focus-lift {
+  position: absolute;
+  border-radius: 18px;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(244, 240, 232, 0.28) 0%, transparent 72%);
+  animation: showFadeIn 0.6s ease-out;
+}
+
+/* evidence_burst threads. The container carries the world transform (written by
+   JS from the camera), so its children use world coordinates. */
+.show-thread-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.show-thread {
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-dasharray: 6 5;
+  opacity: 0;
+  animation: showThreadIn 0.4s ease-out forwards;
+}
+
+/* Shared caption line — one faint italic line for any show (§4.3). */
+.show-caption {
+  position: absolute;
+  left: 50%;
+  bottom: 12%;
+  transform: translateX(-50%);
+  max-width: 70%;
+  text-align: center;
+  pointer-events: none;
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-style: italic;
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+  color: var(--cream);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+  animation: showFadeIn 0.6s ease-out both;
+}
+
+/* ink_burst splash over a target card; --show-ms is the frame's durationMs. */
+.show-ink {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  margin-left: -60px;
+  margin-top: -60px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(41, 40, 32, 0.45) 0%, transparent 70%);
+  transform: scale(var(--show-scale, 1));
+  animation: textInkSpread var(--show-ms, 1200ms) cubic-bezier(0.16, 1, 0.3, 1);
+}
+.show-ink[data-tone='rust'] {
+  background: radial-gradient(circle, rgba(201, 111, 76, 0.5) 0%, transparent 70%);
+}
+.show-ink[data-tone='blue'] {
+  background: radial-gradient(circle, rgba(120, 147, 162, 0.5) 0%, transparent 70%);
+}
+.show-ink[data-tone='sage'] {
+  background: radial-gradient(circle, rgba(137, 155, 135, 0.5) 0%, transparent 70%);
+}
+
+/* roll_ceremony: the die's entrance tumble. Geometry reuses the face-N
+   transforms from .dice-cube-ceremony at a 120px variant; this show renders
+   NO faces and NO result — it only performs the entrance (docs/perform/05 §3.3). */
+.show-ceremony {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.show-ceremony-scene {
+  perspective: 900px;
+}
+.show-ceremony-cube {
+  width: 120px;
+  height: 120px;
+  position: relative;
+  transform-style: preserve-3d;
+  animation: showCubeIn var(--show-ms, 2200ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--show-anticipation, 0ms);
+}
+.show-ceremony-cube .dice-face {
+  width: 120px;
+  height: 120px;
+  border-radius: 20px;
+}
+.show-ceremony-cube .face-1 { transform: rotateY(0deg) translateZ(60px); }
+.show-ceremony-cube .face-2 { transform: rotateY(90deg) translateZ(60px); }
+.show-ceremony-cube .face-3 { transform: rotateY(180deg) translateZ(60px); }
+.show-ceremony-cube .face-4 { transform: rotateY(-90deg) translateZ(60px); }
+.show-ceremony-cube .face-5 { transform: rotateX(90deg) translateZ(60px); }
+.show-ceremony-cube .face-6 { transform: rotateX(-90deg) translateZ(60px); }
+
+@keyframes showFadeIn {
+  from { opacity: 0; }
+}
+@keyframes showBeamIn {
+  from { opacity: 0; transform: scale(0.86); }
+}
+@keyframes showThreadIn {
+  from { opacity: 0; stroke-dashoffset: 24; }
+  to { opacity: 0.85; stroke-dashoffset: 0; }
+}
+@keyframes showCubeIn {
+  0% { transform: rotateX(-120deg) rotateY(220deg) scale(0.6); opacity: 0; }
+  55% { transform: rotateX(20deg) rotateY(60deg) scale(1.06); opacity: 1; }
+  100% { transform: rotateX(12deg) rotateY(20deg) scale(1); opacity: 1; }
+}
+
+/* Reduced motion: the dim/veil IS information (docs/perform/05 §3.7) so it
+   still appears, but without transitions or tumble. */
+@media (prefers-reduced-motion: reduce) {
+  .show-dim,
+  .show-beam,
+  .show-focus-lift,
+  .show-thread,
+  .show-ceremony-cube {
+    animation: none;
+  }
+  .show-ink {
+    animation: none;
+    opacity: 0.5;
+  }
+  .show-thread {
+    opacity: 0.85;
   }
 }

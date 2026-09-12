@@ -11,8 +11,8 @@ import { test } from 'node:test';
 import { mapEngineEvent, messageText } from '../dist/engine/event-bridge.js';
 
 /** Strip the broadcast timestamp so a frame compares structurally. */
-function frames(source, event, args = new Map(), characterId = undefined) {
-  return mapEngineEvent(source, event, args, characterId).map(({ timestamp: _t, ...rest }) => rest);
+function frames(source, event, args = new Map(), characterId = undefined, buf = new Map()) {
+  return mapEngineEvent(source, event, args, characterId, buf).map(({ timestamp: _t, ...rest }) => rest);
 }
 
 test('chalk_landed reads details.path (the frozen shape) and result.path (legacy)', () => {
@@ -215,14 +215,58 @@ test('A1: character frames carry characterId; writer frames do not', () => {
     { type: 'character_idle', source: 'character', characterId: 'nanami' },
   ]);
 
-  // Writer source: no id is threaded, so no field is added.
-  assert.deepEqual(frames('writer', { ...delta }, new Map()), [
-    { type: 'writer_delta', source: 'writer', delta: 'hi' },
-  ]);
+  // Writer source + text_delta: NO frame (docs/perform/00 §3 — the writer's
+  // narration is the chalk tool's `content`, never its text reply).
+  assert.deepEqual(frames('writer', { ...delta }, new Map()), []);
 
   // Character source WITHOUT an id (legacy / empty clientKey): field omitted,
   // not present as '' or null — the frontend's `??` fallback depends on it.
   assert.deepEqual(frames('character', { ...delta }, new Map()), [
     { type: 'character_delta', source: 'character', delta: 'hi' },
   ]);
+});
+
+test('writer_delta comes from chalk toolcall fragments, not text_delta', () => {
+  const buf = new Map();
+  const delta = (d, contentIndex = 0) => ({
+    type: 'message_update',
+    usage: { input: 0, output: 0 },
+    assistantMessageEvent: { type: 'toolcall_delta', contentIndex, delta: d },
+  });
+  const endCall = (name, args, id = 'tc1', contentIndex = 0) => ({
+    type: 'message_update',
+    usage: { input: 0, output: 0 },
+    assistantMessageEvent: { type: 'toolcall_end', contentIndex, toolCall: { id, name, arguments: args } },
+  });
+
+  // Fragments accumulate; no frame until toolcall_end confirms the tool name.
+  assert.deepEqual(frames('writer', delta('{"content":"The fog '), new Map(), undefined, buf), []);
+  assert.deepEqual(frames('writer', delta('parts"}'), new Map(), undefined, buf), []);
+
+  const out = frames('writer', endCall('chalk', { content: 'The fog parts' }), new Map(), undefined, buf);
+  const joined = out.filter((f) => f.type === 'writer_delta').map((f) => f.delta).join('');
+  assert.equal(joined, 'The fog parts');
+  assert.ok(out.every((f) => f.toolCallId === 'tc1'));
+
+  // A non-chalk tool (write also has a `content` arg) yields NO writer_delta.
+  const buf2 = new Map();
+  frames('writer', delta('{"path":"a.md","content":"hi"}'), new Map(), undefined, buf2);
+  assert.deepEqual(frames('writer', endCall('write', { path: 'a.md', content: 'hi' }, 'tc2'), new Map(), undefined, buf2), []);
+});
+
+test('chalk delta backstop uses replacement mode when the extractor lags', () => {
+  const buf = new Map();
+  // A raw fragment whose decoded prefix cannot reach the authoritative content
+  // (simulate a lost escape) → one final replace frame.
+  frames('writer', {
+    type: 'message_update', usage: { input: 0, output: 0 },
+    assistantMessageEvent: { type: 'toolcall_delta', contentIndex: 0, delta: '{"content":"par' },
+  }, new Map(), undefined, buf);
+  const out = frames('writer', {
+    type: 'message_update', usage: { input: 0, output: 0 },
+    assistantMessageEvent: { type: 'toolcall_end', contentIndex: 0, toolCall: { id: 'tc9', name: 'chalk', arguments: { content: 'parts' } } },
+  }, new Map(), undefined, buf);
+  const replace = out.find((f) => f.mode === 'replace');
+  assert.ok(replace, 'expected a replacement backstop frame');
+  assert.equal(replace.delta, 'parts');
 });

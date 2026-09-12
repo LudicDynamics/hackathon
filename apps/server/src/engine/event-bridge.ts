@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { WebSocketServer } from 'ws';
 import type { JsonAgentSessionEvent } from '../../../../vendor/pi-rp/packages/coding-agent/dist/index.js';
 import type { LocalWorldStore } from '@airp/shared';
+import { extractContentPrefix } from './chalk-delta.js';
 
 export type EventSource = 'writer' | 'character';
 
@@ -29,6 +30,35 @@ export function messageText(message: unknown): string {
 }
 
 /**
+ * Replay the buffered `chalk` argument fragments as `writer_delta` frames
+ * (docs/perform/01 §3.2.1). Each frame carries the newly-decoded suffix since
+ * the previous fragment, so the frontend accumulates ink progressively. If the
+ * extractor ever lags the authoritative `content`, one final `mode:'replace'`
+ * frame snaps the frontend to the truth (never a double-paste — R3/P1-1).
+ */
+function emitChalkDeltas(
+  push: (msg: Record<string, unknown>) => void,
+  frags: string[],
+  toolCallId: string,
+  authoritative: unknown,
+): void {
+  let acc = '';
+  let prev = '';
+  for (const frag of frags) {
+    acc += frag;
+    const got = extractContentPrefix(acc);
+    if (got.text.length > prev.length) {
+      push({ type: 'writer_delta', source: 'writer', delta: got.text.slice(prev.length), toolCallId });
+      prev = got.text;
+    }
+  }
+  const truth = typeof authoritative === 'string' ? authoritative : '';
+  if (truth && prev !== truth) {
+    push({ type: 'writer_delta', source: 'writer', delta: truth, toolCallId, mode: 'replace' });
+  }
+}
+
+/**
  * Translates one pi-rp `JsonAgentSessionEvent` into zero or more AIRP WS messages.
  *
  * Deliberately a pure function — the bridge (and the probe) can call it directly
@@ -47,7 +77,8 @@ export function mapEngineEvent(
   source: EventSource,
   event: JsonAgentSessionEvent,
   toolArgs: Map<string, unknown>,
-  characterId?: string
+  characterId?: string,
+  toolcallBuf?: Map<number, string[]>,
 ): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
   // A1: stamp every frame this call produces in ONE place. `characterId` is
@@ -63,12 +94,26 @@ export function mapEngineEvent(
   switch (event.type) {
     case 'message_update': {
       const assistantEvent = event.assistantMessageEvent;
-      if (assistantEvent?.type === 'text_delta' && assistantEvent.delta) {
-        push({
-          type: source === 'writer' ? 'writer_delta' : 'character_delta',
-          source,
-          delta: assistantEvent.delta,
-        });
+      // docs/perform/00 §3 — the writer's narration is the `chalk` TOOL's
+      // `content` argument, NOT its text reply ("text that lives only in your
+      // reply never reaches the player"). So a writer `text_delta` produces NO
+      // frame; the writer lane is driven by `toolcall_delta` buffered until
+      // `toolcall_end` confirms the tool is `chalk` (its name is unknown while
+      // the argument fragments stream — docs/perform/00 §3.1).
+      if (assistantEvent?.type === 'text_delta' && assistantEvent.delta && source !== 'writer') {
+        push({ type: 'character_delta', source, delta: assistantEvent.delta });
+      } else if (assistantEvent?.type === 'toolcall_delta' && assistantEvent.delta && source === 'writer' && toolcallBuf) {
+        const frags = toolcallBuf.get(assistantEvent.contentIndex) ?? [];
+        frags.push(assistantEvent.delta);
+        toolcallBuf.set(assistantEvent.contentIndex, frags);
+      } else if (assistantEvent?.type === 'toolcall_end' && source === 'writer' && toolcallBuf) {
+        // Deferred confirmation: only NOW is `toolCall.name` known.
+        const frags = toolcallBuf.get(assistantEvent.contentIndex) ?? [];
+        toolcallBuf.delete(assistantEvent.contentIndex);
+        const tc = assistantEvent.toolCall as { id?: string; name?: string; arguments?: { content?: unknown } } | undefined;
+        if (tc?.name === 'chalk' && typeof tc.id === 'string') {
+          emitChalkDeltas(push, frags, tc.id, tc.arguments?.content);
+        }
       }
       break;
     }
@@ -121,7 +166,7 @@ export function mapEngineEvent(
         isError: event.isError,
       });
       if (event.toolName === 'chalk' || event.toolName === 'write') {
-        const landed: Record<string, unknown> = { type: 'chalk_landed', source };
+        const landed: Record<string, unknown> = { type: 'chalk_landed', source, toolCallId: event.toolCallId };
         // doc-tools/02 §6.3: the path lives in `details.path`; the flat
         // `result.path` shape is legacy, kept so both work.
         const resultPath =
@@ -207,6 +252,9 @@ export class EventBridge {
   private fileWatcher: fs.FSWatcher | null = null;
   private watchDebounceTimer: NodeJS.Timeout | null = null;
   private toolArgsByCallId = new Map<string, unknown>();
+  /** Accumulated raw `toolcall_delta` fragments per contentIndex, until
+   *  `toolcall_end` reveals the tool name (docs/perform/00 §3.1/§3.2). */
+  private toolcallBuf = new Map<number, string[]>();
 
   private tailTimer: NodeJS.Timeout | null = null;
   /** Tail-read cursor: the highest `seq` already broadcast. */
@@ -252,7 +300,12 @@ export class EventBridge {
 
   /** Fan an engine event out to every WS client as the mapped AIRP frames. */
   emitEngine(source: EventSource, event: JsonAgentSessionEvent, characterId?: string): void {
-    for (const message of mapEngineEvent(source, event, this.toolArgsByCallId, characterId)) {
+    // A buffered tool-call that never reached `toolcall_end` (aborted turn)
+    // would leak across turns; clear it when the turn settles.
+    if (event.type === 'message_end' || event.type === 'agent_settled') {
+      this.toolcallBuf.clear();
+    }
+    for (const message of mapEngineEvent(source, event, this.toolArgsByCallId, characterId, this.toolcallBuf)) {
       this.broadcast(message);
     }
   }

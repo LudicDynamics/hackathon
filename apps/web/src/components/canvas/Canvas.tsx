@@ -3,6 +3,8 @@ import { CanvasObject, clearAllLifts, pruneLifts, raiseObject } from './CanvasOb
 import { LinkLayer, highlightLinks, updateAllLinks } from './LinkLayer.js';
 import { CanvasGrid } from './CanvasGrid.js';
 import { SceneBackdrop } from './SceneBackdrop.js';
+import { PhantomLayer } from './PhantomLayer.js';
+import type { GhostCopy } from '../narrative/GhostCard.js';
 import { ParticleLayer } from './ParticleLayer.js';
 import { SceneChalk } from '../narrative/SceneChalk.js';
 import { useCamera } from '../../state/useCamera.js';
@@ -23,6 +25,7 @@ interface CanvasProps {
   bg: { src: string | null; tone: string; grain: string };
   scene: LayerItem | null;
   sceneCopy: { label: string; collapse: string; expand: string };
+  ghostCopy: GhostCopy;
   onMoveCard?: (path: string, x: number, y: number) => Promise<void> | void;
   onSelectChoice?: (path: string, choice: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
@@ -84,6 +87,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   bg,
   scene,
   sceneCopy,
+  ghostCopy,
   onMoveCard,
   onSelectChoice,
   onDiceRolled,
@@ -136,8 +140,9 @@ export const Canvas: React.FC<CanvasProps> = ({
   }, [currentLayer, camera]);
 
   // Session z-lifts die with the payload that carries the server order: the
-  // `links` array reference only changes on fetchLayer-driven refreshes (never
-  // on optimistic moveCard merges), so it is the "server order restored" signal.
+  // `links` array reference only changes on fetchLayer-driven refreshes and on
+  // a `canvas_patched` kind:'links' frame (never on optimistic moveCard merges,
+  // docs/perform/04 §9), so it is the "server order restored" signal.
   useEffect(() => {
     clearAllLifts();
   }, [links]);
@@ -147,6 +152,15 @@ export const Canvas: React.FC<CanvasProps> = ({
   useEffect(() => {
     invalidateMeasures();
   }, [items, links]);
+
+  // `arrange` / `canvas_patched` kind:'cards' change card coordinates WITHOUT
+  // touching the `links` reference, so LinkLayer's [links] rebuild never runs.
+  // Recompute the hand-drawn geometry here, after React has written the new
+  // left/top (docs/perform/04 §3.4) — otherwise the lines stay anchored to the
+  // cards' old positions until the next fetchLayer.
+  useEffect(() => {
+    updateAllLinks();
+  }, [items]);
 
   // Cards that left the layer can no longer hold a lift.
   useEffect(() => {
@@ -493,6 +507,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             still={item.path !== playingPortrait}
           />
         ))}
+        <PhantomLayer currentLayer={currentLayer} bgSrc={bg.src} copy={ghostCopy} />
       </div>
 
       <SceneChalk

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { Compass, Clock, Layers, ArrowLeft } from 'lucide-react';
 import { Canvas } from './components/canvas/Canvas.js';
 import { RightSidebar } from './components/sidebar/RightSidebar.js';
@@ -17,6 +17,17 @@ import { preloadAudio } from './lib/audio.js';
 import { UI_COPY, type Locale } from './lib/i18n.js';
 import { useViewpointReport } from './hooks/useViewpointReport.js';
 import { NookView } from './components/nook/NookView.js';
+import { DiceCeremony } from './components/performance/DiceCeremony.js';
+import { PerformanceLayer } from './components/performance/PerformanceLayer.js';
+import {
+  parseDiceFrame,
+  shouldPlayFrame,
+  markPlayed,
+  playCeremony,
+  clearCeremony,
+  subscribeCeremony,
+  getCeremonySnapshot,
+} from './lib/dice-ceremony.js';
 
 interface WorldManifest {
   id: string;
@@ -54,6 +65,12 @@ export function App() {
 
   // 角色演出帧（A3）：useWorld 转发的原始帧；按 activeModalCharId 路由后再下推给遮罩。
   const [activeModalFrame, setActiveModalFrame] = useState<CharacterFrame | null>(null);
+
+  // Dice ceremony (presentation channel, docs/perform/02): the fullscreen roll
+  // driven by the `dice_result` frame. Module store (lib/dice-ceremony.ts) so
+  // the WS listener need not thread the verdict through React state; App is
+  // only the mount point.
+  const ceremony = useSyncExternalStore(subscribeCeremony, getCeremonySnapshot);
 
   // World Studio Creator Radial Menu
   const [radialState, setRadialState] = useState<{
@@ -182,6 +199,24 @@ export function App() {
     window.addEventListener('airp:character-frame', onCharacterFrame);
     return () => window.removeEventListener('airp:character-frame', onCharacterFrame);
   }, [activeModalCharId]);
+
+  // Dice ceremony: forwarded raw frame → boundary guard → layer filter / dedup
+  // → ceremony layer. Rebinds on currentLayer so the filter reads the current
+  // value; the cleanup ends an in-flight ceremony when the player switches
+  // layers (docs/perform/02 §7.2).
+  useEffect(() => {
+    const onDiceFrame = (e: Event) => {
+      const v = parseDiceFrame((e as CustomEvent).detail);
+      if (!v || !shouldPlayFrame(v, currentLayer)) return;
+      markPlayed(v.path);
+      playCeremony(v);
+    };
+    window.addEventListener('airp:dice-frame', onDiceFrame);
+    return () => {
+      window.removeEventListener('airp:dice-frame', onDiceFrame);
+      clearCeremony();
+    };
+  }, [currentLayer]);
 
   const fetchManifest = async () => {
     try {
@@ -591,6 +626,11 @@ export function App() {
                   collapse: copy.collapseScene,
                   expand: copy.expandScene,
                 }}
+                ghostCopy={{
+                  reused: copy.ghostReused,
+                  failed: copy.ghostFailed,
+                  unreachable: copy.ghostUnreachable,
+                }}
                 onMoveCard={moveCard}
                 onSelectChoice={handleSelectChoice}
                 onDiceRolled={(res, pass) => showToast(`Dice: ${res} (${pass ? 'Pass' : 'Fail'})`)}
@@ -611,6 +651,7 @@ export function App() {
               <HintBar text={copy.controls} showLabel={copy.showControls} hideLabel={copy.hideControls} />
               <WriterBar
                 disabled={worldFrozen}
+                writingPlaceholder={copy.writerWriting}
                 placeholder={copy.writerPlaceholder}
                 sendLabel={locale === 'ja' ? '送信' : 'Send'}
                 onSend={(text) => {
@@ -619,6 +660,9 @@ export function App() {
                 }}
               />
               <Minimap items={worldState?.items ?? []} camera={camera} label={copy.minimap} />
+              {/* Performance shows (docs/perform/05) — z-20, below the dice
+                  ceremony (z-50). Cancels its own shows on layer change / freeze. */}
+              <PerformanceLayer layer={currentLayer} frozen={worldFrozen} />
             </>
           )}
         </div>
@@ -675,6 +719,11 @@ export function App() {
           onClose={() => setRadialState(null)}
           onCreate={handleCreateEntityAt}
         />
+      )}
+
+      {/* Dice ceremony overlay (screen-fixed layer, same visual language as the player path) */}
+      {ceremony && (
+        <DiceCeremony key={ceremony.key} verdict={ceremony.verdict} onDone={clearCeremony} />
       )}
     </div>
   );

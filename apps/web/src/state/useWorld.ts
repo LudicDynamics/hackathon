@@ -6,6 +6,13 @@ import {
   measureHeights,
   type FootprintScheduler,
 } from '../lib/footprint.js';
+import { CARD_FORMS } from '@airp/shared/forms';
+import { register as registerPhantom, land as landPhantom, appendInk, setInk, evict as evictPhantom, reconcileLanded } from '../lib/phantom.js';
+import { phantomSeatFor, publishSeatItems } from '../lib/phantom-seat.js';
+import { mergeItemPatch, mergeLinkPatch } from '../lib/canvas-patch.js';
+import { beginTurn, endTurn, reset as resetWriter } from '../lib/writer-state.js';
+import { playFoley, playCharge, endCharge, setAmbient } from '../lib/audio.js';
+import { ghostSizeFor, stageText, GHOST_WAIT_AMBIENT } from '../lib/ghost.js';
 
 export interface LayerItem {
   path: string;
@@ -136,6 +143,9 @@ export function useWorld(): UseWorldApi {
       };
       stateRef.current = next;
       setState(next);
+      // 幻影排座镜像 + 真实卡一到就把对应幻影撤掉（docs/perform/00 §6b-5）。
+      publishSeatItems(next.layer, next.items);
+      reconcileLanded(next.items.map((it) => it.path));
     } catch (err) {
       console.warn('Could not fetch layer:', err);
     } finally {
@@ -307,9 +317,11 @@ export function useWorld(): UseWorldApi {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
     wsRef.current = ws;
-    // Reconnect guard: a dropped `tool_end` would leave the count stuck > 0.
+    // Reconnect guard: a dropped `tool_end` would leave the count stuck > 0, and
+    // a lost `writer_idle` would leave the writer input permanently disabled.
     ws.onopen = () => {
       writerToolsInFlight.current = 0;
+      resetWriter();
     };
 
     ws.onmessage = (event) => {
@@ -345,16 +357,14 @@ export function useWorld(): UseWorldApi {
               typeof msg.x === 'number' &&
               typeof msg.y === 'number'
             ) {
-              setState((s) =>
-                s
-                  ? {
-                      ...s,
-                      items: s.items.map((it) =>
-                        it.path === msg.path ? { ...it, x: msg.x, y: msg.y } : it
-                      ),
-                    }
-                  : s
-              );
+              setState((s) => {
+                if (!s) return s;
+                const items = mergeItemPatch(s.items, { path: msg.path, x: msg.x, y: msg.y });
+                if (items === s.items) return s;
+                const out = { ...s, items: items as LayerItem[] };
+                stateRef.current = out; // footprint/moveCard read stateRef as truth
+                return out;
+              });
             }
             break;
           case 'tool_start':
@@ -363,6 +373,11 @@ export function useWorld(): UseWorldApi {
           case 'tool_end':
             if (msg.source === 'writer') {
               writerToolsInFlight.current = Math.max(0, writerToolsInFlight.current - 1);
+              // 失败也要收笔：撤掉未落地的幻影并归位状态机（docs/perform/01 §7）。
+              if (msg.isError === true && typeof msg.toolCallId === 'string') {
+                evictPhantom(msg.toolCallId);
+                endTurn();
+              }
               // The file's stable window opens now → arm one measurement.
               fpRef.current?.notify();
             }
@@ -379,6 +394,103 @@ export function useWorld(): UseWorldApi {
             if (msg.source === 'character' && typeof msg.characterId === 'string') {
               window.dispatchEvent(new CustomEvent('airp:character-frame', { detail: msg }));
             }
+            break;
+          // ---- 演出通道（docs/perform/00 §4）----
+          case 'chalk_writing': {
+            if (msg.source !== 'writer' || typeof msg.toolCallId !== 'string') break;
+            const seat = phantomSeatFor(CARD_FORMS.chalk, layerRef.current).seat;
+            registerPhantom(msg.toolCallId, {
+              kind: 'chalk',
+              source: 'writer',
+              seat,
+              layer: layerRef.current,
+            });
+            beginTurn('chalk');
+            playCharge(0);
+            break;
+          }
+          case 'writer_delta': {
+            if (msg.source !== 'writer' || typeof msg.toolCallId !== 'string' || typeof msg.delta !== 'string') break;
+            if (msg.mode === 'replace') setInk(msg.toolCallId, msg.delta);
+            else appendInk(msg.toolCallId, msg.delta);
+            break;
+          }
+          case 'chalk_landed': {
+            if (msg.source !== 'writer' || typeof msg.toolCallId !== 'string') break;
+            landPhantom(msg.toolCallId, typeof msg.path === 'string' ? { path: msg.path } : {});
+            endCharge();
+            playFoley('paper-slide');
+            break;
+          }
+          case 'writer_idle': {
+            if (msg.source !== 'writer') break;
+            endTurn();
+            break;
+          }
+          case 'dice_result': {
+            // 与玩家点击的 /api/dice 同形；交给 App 的仪式层演出。
+            window.dispatchEvent(new CustomEvent('airp:dice-frame', { detail: msg }));
+            break;
+          }
+          case 'image_generation_progress': {
+            if (typeof msg.toolCallId !== 'string') break;
+            const size = ghostSizeFor(msg.width, msg.height);
+            registerPhantom(msg.toolCallId, {
+              kind: 'image',
+              source: 'writer',
+              seat: phantomSeatFor(size, layerRef.current).seat,
+              layer: layerRef.current,
+              label: stageText(msg.stage, msg.elapsedMs),
+              elapsedMs: typeof msg.elapsedMs === 'number' ? msg.elapsedMs : undefined,
+            });
+            setAmbient(GHOST_WAIT_AMBIENT);
+            break;
+          }
+          case 'image_landed': {
+            if (typeof msg.toolCallId !== 'string') break;
+            landPhantom(msg.toolCallId, {
+              asset: typeof msg.asset === 'string' ? msg.asset : undefined,
+              reused: msg.reused === true,
+            });
+            playFoley('crit-chime');
+            break;
+          }
+          case 'canvas_patched': {
+            // 帧带 layer：不匹配（或缺失）整帧忽略 —— 作家在别的层摆位不该让当前页抖一下。
+            if (typeof msg.layer !== 'string' || msg.layer !== layerRef.current) break;
+            if (msg.kind === 'links') {
+              if (!Array.isArray(msg.links)) break;
+              setState((s) => {
+                if (!s) return s;
+                const links = mergeLinkPatch(s.links, msg.links, msg.action);
+                if (links === s.links) return s;
+                const out = { ...s, links: links as LayerLink[] };
+                stateRef.current = out;
+                return out;
+              });
+            } else if (msg.kind === 'cards') {
+              if (!Array.isArray(msg.cards)) break;
+              setState((s) => {
+                if (!s) return s;
+                let items: readonly LayerItem[] = s.items;
+                for (const c of msg.cards) {
+                  if (!c || typeof c.path !== 'string') continue;
+                  items = mergeItemPatch(items, c as { path: string; x: number; y: number; z?: number });
+                }
+                if (items === s.items) return s;
+                const out = { ...s, items: items as LayerItem[] };
+                stateRef.current = out;
+                return out;
+              });
+            } else {
+              // 未知 kind 是契约漂移信号 —— 必须看得见（docs/perform/04 §7）。
+              console.warn('[canvas_patched] unknown kind', msg.kind);
+            }
+            break;
+          }
+          case 'show_frame':
+            // 演出库（docs/perform/05）：交给 PerformanceLayer 的分发器。
+            window.dispatchEvent(new CustomEvent('airp:show-frame', { detail: msg }));
             break;
           default:
             // agent_event / roll_resolved 等仍在此忽略（docs/tools/12 §6.2）。
