@@ -19,14 +19,14 @@
 
 ### 0.1 当前 Fri–Tue 冲刺看板（覆盖旧三天叙述的执行优先级）
 
-当前冲刺先搭**五个世界骨架与至少一条完整可玩主线**，再接语音能力。TTS、GPT Live L1、Voice Agent 与 Voice Agent 操作光标 / 角色原点都保留在工作池，但不作为世界内容成立的前置条件。
+当前冲刺先评审**五个世界的整体体验骨架**，再逐个搭一条 6–10 分钟短 Demo；不以完整后日谈、全结局或下一章作为完成标准。TTS、GPT Live L1、Voice Agent 与 Voice Agent 操作光标 / 角色原点都保留在工作池，但不作为世界内容成立的前置条件。
 
 | 日期 | 里程碑 | 当天结束时必须证明 |
 |---|---|---|
 | **09-11 Fri** | **Core Game Ready** | 基础底座可进入世界、完成一次 Writer Chalk 循环，并能切换到 Character Agent |
 | **09-12 Sat** | **Multi-modal Ready** | 玩家眼前直接出现的图片、立绘、关键特效与声音有可用资产或接入路径；世界骨架和 CG 构图已反推资产需求 |
-| **09-13 Sun** | **Sample World Game Play Ready** | 至少一个世界可从导言玩到 punch line / Outcome Folder，能够重复演示 |
-| **09-14 Mon** | **Extended + Tutorial Ready** | 越过预写边界后能带 Context 生成新内容；新玩家无需口头讲解可完成首轮 |
+| **09-13 Sun** | **Sample World Game Play Ready** | 至少一个世界可在 6–10 分钟内从导言玩到 punch line / 短结算，能够重复演示 |
+| **09-14 Mon** | **Extended + Tutorial Ready** | 结尾能带 Context 生成 / 解锁一个后续钩子；新玩家无需口头讲解可完成首轮，不要求实现完整下一章 |
 | **09-15 Tue** | **Video Edit** | 产品功能冻结，录制素材完整，只修阻断录制的问题 |
 
 ```mermaid
