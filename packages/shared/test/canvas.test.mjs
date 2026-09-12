@@ -466,13 +466,9 @@ test('arrange layout rejects a card outside the target layer', async () => {
 
 // ------------------------------------------------------- delete/rename (04)
 
-test('dropCard cascades: removing a card deletes every line that touches it (doc-09 §4.4)', async (t) => {
+test('dropCard cascades: removing a card deletes every line that touches it (doc-09 §4.4)', async () => {
   const { store, root } = await tempStore();
   try {
-    if (typeof store.dropCard !== 'function') {
-      t.skip('dropCard is owned by doc 04 and has not landed yet');
-      return;
-    }
     const svc = service(store);
     await svc.linkCards({ op: 'create', from: 'world/inn/a.md', to: 'world/inn/b.md' });
     await svc.linkCards({ op: 'create', from: 'world/inn/c.md', to: 'world/inn/a.md' });

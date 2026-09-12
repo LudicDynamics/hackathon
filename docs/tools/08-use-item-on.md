@@ -151,7 +151,7 @@ export async function useItemOn(
 
 ### 3.4 handler 查找与契约
 
-**查找键 = target 的 component kind**，与 item 的 kind 无关（钥匙开锁：锁是 target，查 `lock.handler`）。契约与 `10 §15.3` **逐字一致**（已 IRC 对齐），本文照抄并补两条纪律：
+**查找键 = target 的 component kind**，与 item 的 kind 无关（钥匙开锁：锁是 target，查 `lock.handler`）。**查找 helper 是 `componentDefOf(kind)`**（`components/registry.ts:86`）——**不是** `getComponent(...)`：那一个是 `get_component` **工具动作**的名字（给模型看 schema），两者同名会误导。契约与 `10 §15.3` **逐字一致**（已 IRC 对齐），本文照抄并补两条纪律：
 
 ```ts
 type UseItemOnHandler = (args: {
@@ -165,8 +165,10 @@ type UseItemOnHandler = (args: {
   | { handled: false; reason?: string }
 >;
 
-interface EntityRef { path: string; name: string; frontmatter: Record<string, any> }
+interface EntityRef { path: string; name: string; frontmatter: Record<string, any>; body?: string }
 ```
+
+> **`body?` 是实现期追加的**（`components/types.ts:42`）：`10 §15.3` 的示例 handler 要**原地重写文件并保留正文**（只改 `status.data.locked`），所以调用方把已读到的 body 一并传入；缺失时 handler 按空正文处理。这是对 `10 §15.3` 冻结形状的一次**加法**，字段名与语义同步写进 `10`。
 
 **六条纪律（前四条与 `10 §15.3` 共同冻结，后两条是本文补的）**：
 

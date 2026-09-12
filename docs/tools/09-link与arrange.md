@@ -359,8 +359,8 @@ placeCard(layer: string, path: string, box: {
 /** 批量落位（layout 用）。一条事务；返回写入后的行。 */
 placeCards(rows: Array<{ layer: string; path: string; x: number; y: number; z?: number }>): Promise<CardRecord[]>;
 
-/** 删卡片行 + 级联删掉所有碰它的线（§4.4）。 */
-dropCard(path: string): Promise<{ card: boolean; links: number }>;
+/** 删卡片行 + 级联删掉所有碰它的线（§4.4）。**同步**（一条 `BEGIN IMMEDIATE` 事务，无 await）；返回各自影响了多少行，供调用方报告。 */
+dropCard(path: string): { cards: number; links: number };
 
 /** 一行线（前端 `/api/layer` 与 `look_at` 的画布摘要共用；`layer` 可省略 = 全层）。 */
 getLayerLinks(layer?: string): Promise<LinkRecord[]>;
