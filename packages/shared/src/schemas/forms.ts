@@ -57,7 +57,7 @@ export interface CardForm {
 /**
  * Every card's footprint. `h` only serves seating — the painted height comes
  * from the content — so this table is a seating/identity contract, not CSS.
- * The eighteen component kinds (doc 10 appendix A.2) sit beside the five
+ * The nineteen component kinds (doc 10 appendix A.2) sit beside the five
  * non-component kinds; adding a kind to the registry WITHOUT a row here throws
  * at module load (registry.ts), which is the guard against "two size tables".
  */
@@ -93,6 +93,10 @@ export const CARD_FORMS: Record<string, CardForm> = {
   // room
   diary: { label: 'Diary', w: 208, h: 240, chrome: 'paper' },
   thread: { label: 'Conversation', w: 300, h: 200, chrome: 'paper' },
+  // A living figure: the ONE kind whose box ratio is pinned by its own CSS
+  // (`aspect-ratio: 3 / 4` on `.portrait__media`), so the painted height equals
+  // `h` exactly and this row does not drift on measurement (nook 03 §③-1).
+  portrait: { label: 'Portrait', w: 288, h: 384, chrome: 'bare' },
 };
 
 /**

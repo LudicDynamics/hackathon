@@ -11,7 +11,10 @@ import {
   boxSizeOf,
   dirOfLayer,
   createActionService,
+  isValidCharacterId,
   listBackpack,
+  nookCardPaths,
+  nookIdOf,
   parseFrontmatter,
   cardFormOf,
   cardKindOf,
@@ -286,6 +289,21 @@ function readLayerAudio(
   return out;
 }
 
+/**
+ * Read card files into the route's `LayerItem` (no seat fields yet). Same shape
+ * as the inline map in `/api/layer`; used by `/api/nook` so "one md -> one
+ * LayerItem" has one definition the nook docs can point at (docs/nook/01 §2.4).
+ */
+async function readLayerItems(store: LocalWorldStore, paths: string[]): Promise<LayerItem[]> {
+  return Promise.all(
+    paths.map(async (file): Promise<LayerItem> => {
+      const raw = await store.readFile(file);
+      const { frontmatter, body } = parseFrontmatter(raw);
+      return { path: file, filename: path.basename(file), frontmatter, body };
+    })
+  );
+}
+
 export function createWorldRouter(
   repoRoot: string,
   lifecycle: AgentLifecycleManager,
@@ -354,6 +372,7 @@ export function createWorldRouter(
   router.get('/manifest', async (_req, res) => {
     const store = getActiveStore();
     if (!store) return res.status(400).json({ error: 'No active world' });
+
     try {
       const manifest = await store.getManifest();
       // Resolve the world theme key to a URL here — the frontend never resolves
@@ -365,6 +384,111 @@ export function createWorldRouter(
           ? resolveAudioRef(themeKey, 'bgm', store, AUDIO_ROOT)
           : null;
       res.json({ ...manifest, audio: { theme } });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  /**
+   * Get a character's nook (docs/nook/00 §3.1). Same `LayerState` shape as
+   * `/api/layer`, but a nook is NOT a layer: `resolveLayer` returns null for
+   * `characters/**` by construction, so the layer gate cannot be reused. The
+   * READ side that shares its assembly is only the seat half (nook 00 §3.3).
+   *
+   * `?character=<id>` is a BARE id — never a path (nook 00 §3.2). The id shape
+   * gate is the security boundary; the store's own `resolvePath` guards are a
+   * second line, not the first (they throw, which would surface as a 500).
+   */
+  router.get('/nook', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    try {
+      const id = typeof req.query.character === 'string' ? req.query.character : '';
+      if (!isValidCharacterId(id)) {
+        return res.status(400).json({
+          ok: false,
+          code: 'invalid_argument',
+          error: 'character must be a lower-kebab-case id',
+        });
+      }
+      const nookId = nookIdOf(id)!;
+      // `statKind` is the only primitive that separates "missing" from "empty":
+      // `listFiles` returns [] for both (local-store.ts:226-228), so using it
+      // here would make the 404 unreachable and dress "no such character" up as
+      // "the nook is empty" (docs/nook/01 §③ step 3).
+      if ((await store.statKind(nookId)) !== 'dir') {
+        return res.status(404).json({
+          ok: false,
+          code: 'not_found',
+          error: `No such character: "${id}"`,
+        });
+      }
+
+      // `listFiles(prefix)` walks RECURSIVELY, so the direct-child cut is ours
+      // to make — `nookCardPaths` does it (direct-child .md minus README).
+      const mdFiles = nookCardPaths(await store.listFiles(nookId), nookId);
+      const items = await readLayerItems(store, mdFiles);
+
+      const rowByPath = new Map(store.getLayerCards(items.map((it) => it.path)).map((r) => [r.id, r]));
+
+      const unseated = items
+        .filter((it) => !rowByPath.has(it.path))
+        .map((it) => ({ path: it.path, ...storedSizeOf(it, rowByPath.get(it.path)) }));
+      if (unseated.length > 0) {
+        for (const row of await store.seatUnplaced(nookId, unseated)) rowByPath.set(row.id, row);
+      }
+      for (const row of await store.reseatLayer(
+        nookId,
+        items.map((it) => ({ path: it.path, ...declaredSizeOf(it) }))
+      )) {
+        rowByPath.set(row.id, row);
+      }
+
+      const enriched = items.map((it) => {
+        const row = rowByPath.get(it.path);
+        const { kind, w, h } = storedSizeOf(it, row);
+        return {
+          ...it,
+          kind,
+          x: row ? row.x : SEAT_ANCHOR.x,
+          y: row ? row.y : SEAT_ANCHOR.y,
+          w,
+          h,
+          z: row ? row.z : 1,
+          rot: rotOf(it.path),
+        };
+      });
+
+      // The nook's README is its facade (`scene`), kept out of `items` so one
+      // path never has two positions (same rule as /api/layer). NO stub is
+      // synthesised: a nook without a README has no door visual to fake, so the
+      // frontend shows its empty state instead (nook 00 §3.1).
+      let scene: SceneReadme | null = null;
+      let bg: { src: string | null; tone: string; grain: string } = { src: null, tone: 'warm', grain: 'parchment' };
+      let audio: { ambient: string | null; bgm: string | null } = { ambient: null, bgm: null };
+      try {
+        const readmePath = `${nookId}/README.md`;
+        const raw = await store.readFile(readmePath);
+        const parsed = parseFrontmatter(raw);
+        scene = {
+          path: readmePath,
+          filename: 'README.md',
+          frontmatter: parsed.frontmatter,
+          body: parsed.body,
+          kind: 'scene',
+        };
+        bg = readLayerBg(raw);
+        // OWN-only: `characters/` does not inherit the map's audio tri-state
+        // (nook 00 §3.1). The inheritance block of /api/layer reads
+        // world/README.md, which is the wrong source here.
+        audio = readLayerAudio(parsed.frontmatter, store, AUDIO_ROOT);
+      } catch {
+        // README missing -> scene null, bg/audio keep their defaults.
+      }
+
+      // Literal empty arrays: a nook has no links or presence this batch (nook
+      // 00 §3.1). Querying `WHERE layer = ?` would look like support; it is not.
+      res.json({ layer: nookId, scene, bg, audio, items: enriched, links: [], presence: [], worldFrozen });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -642,10 +766,31 @@ export function createWorldRouter(
     if (typeof layer !== 'string' || layer === '') {
       return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'layer must be a non-empty layer id' });
     }
-    // L3: the store matches rows by `id = path` ONLY, so this layer check is the
-    // single gate that keeps a mistyped layer name from silently writing rows
-    // that live in another layer. 404 (not 400): an unknown layer is "not found".
-    if ((await store.resolveLayer(dirOfLayer(layer))) !== layer) {
+    // L3: the store matches rows by `id = path` ONLY, so this gate is what keeps
+    // a mistyped name from silently writing rows that live elsewhere. It has TWO
+    // shapes because a nook is NOT a layer: `resolveLayer` returns null for
+    // `characters/**` by construction (local-store.ts:552-555), so routing a nook
+    // through it would 404 every nook footprint forever — the C plan this batch
+    // rejected (docs/nook/00 §3.1). Same shape as `arrangeCards`' nook branch
+    // (§3.7); both share `isValidCharacterId` (§5.2).
+    if (layer.startsWith('characters/')) {
+      const characterId = layer.slice('characters/'.length);
+      // Shape gate first (NEVER path-normalise: §3.2), then existence.
+      if (!isValidCharacterId(characterId)) {
+        return res.status(400).json({
+          ok: false,
+          code: 'invalid_argument',
+          error: `character "${characterId}" is not a valid nook id`,
+        });
+      }
+      if ((await store.statKind(`characters/${characterId}`)) !== 'dir') {
+        return res.status(404).json({
+          ok: false,
+          code: 'not_found',
+          error: `character "${characterId}" has no nook directory`,
+        });
+      }
+    } else if ((await store.resolveLayer(dirOfLayer(layer))) !== layer) {
       return res.status(404).json({ ok: false, code: 'not_found', error: 'layer must be an existing layer id' });
     }
     if (!Array.isArray(boxes)) {

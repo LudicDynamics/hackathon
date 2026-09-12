@@ -651,7 +651,15 @@ export class LocalWorldStore implements WorldStore {
           serializeCardMetadata({ seatW: w, seatH: h }),
         ]
       );
+      // BLOCKER-N1 (contract §2.7): the batch must SEE its own seats, or every
+      // rowless card in this pass spirals to the same first cell. Mirrors
+      // `reseatLayer`'s two pushes (:807 legacy / :826 measured), verbatim.
+      occupied.push({ cx: placedX + w / 2, cy: placedY + h / 2, w, h });
       seats.push({ id: file.path, layer: layerId, x: placedX, y: placedY, w, h, z: nextZ });
+      // BLOCKER-N1 second half: `nextZ` was computed once and never advanced,
+      // so a whole batch shared one z_index (stack order = row order accident).
+      // Same shape as `reseatLayer` (:818) and `seatNear` (:1191, re-reads max).
+      nextZ++;
     }
     return seats;
   }

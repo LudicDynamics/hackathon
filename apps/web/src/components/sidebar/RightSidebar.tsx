@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Backpack, Users, Navigation, MessageCircle, UserCheck, GripVertical } from 'lucide-react';
+import { Backpack, Users, Navigation, MessageCircle, UserCheck, GripVertical, DoorOpen } from 'lucide-react';
 import { MarkdownText } from '../../lib/md.js';
 import type { UiCopy } from '../../lib/i18n.js';
 
@@ -19,6 +19,7 @@ interface RightSidebarProps {
   }>;
   onNavigateToCharacter?: (homeLayer: string) => void;
   onChatWithCharacter?: (charId: string) => void;
+  onOpenNook?: (charId: string) => void;
   onToggleFollow?: (charId: string) => void;
   followingCharacters?: Record<string, boolean>;
   copy: UiCopy;
@@ -29,6 +30,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
   characters,
   onNavigateToCharacter,
   onChatWithCharacter,
+  onOpenNook,
   onToggleFollow,
   followingCharacters = {},
   copy,
@@ -165,6 +167,18 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                   >
                     <UserCheck className="w-3.5 h-3.5" />
                     <span>{isFollowing ? copy.following : copy.follow}</span>
+                  </button>
+
+                  {/* Nook — the character's private space (fourth action;
+                      mutually exclusive with navigate / talk / follow,
+                      doc-06 §5.4). */}
+                  <button
+                    onClick={() => onOpenNook?.(char.id)}
+                    className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl bg-paper-card text-ink/70 hover:bg-sage hover:text-white transition-all"
+                    title="Enter this character's private nook"
+                  >
+                    <DoorOpen className="w-3.5 h-3.5" />
+                    <span>{copy.nook}</span>
                   </button>
                 </div>
               </div>

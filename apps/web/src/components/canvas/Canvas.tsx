@@ -11,11 +11,14 @@ import { makeBox, pushFrom, relaxAll } from '../../lib/collide.js';
 import { unlock, playFoley } from '../../lib/audio.js';
 import { elementBox, invalidateMeasures } from '../../lib/measure.js';
 import { setParallax } from '../../lib/parallax.js';
+import { portraitPlayStateOf } from '../../lib/motion.js';
 import type { LayerItem, LayerLink } from '../../state/useWorld.js';
 
 interface CanvasProps {
   currentLayer: string;
   items: LayerItem[];
+  /** true = no portrait on this canvas may play (global motion preference, nook 03 §③-6). */
+  stillPortraits?: boolean;
   links: LayerLink[];
   bg: { src: string | null; tone: string; grain: string };
   scene: LayerItem | null;
@@ -76,6 +79,7 @@ function readTop(el: HTMLElement): number {
 export const Canvas: React.FC<CanvasProps> = ({
   currentLayer,
   items,
+  stillPortraits = false,
   links,
   bg,
   scene,
@@ -112,6 +116,13 @@ export const Canvas: React.FC<CanvasProps> = ({
     for (const it of items) if (it.kind === 'gate') map.set(it.path, ++n);
     return map;
   }, [items]);
+
+  // At most ONE portrait plays per canvas (AGENTS §7.6). `items` is in server
+  // row order (z ascending), so the last portrait is the visual focus.
+  const playingPortrait = useMemo(
+    () => (stillPortraits ? null : portraitPlayStateOf(items).playing),
+    [items, stillPortraits]
+  );
 
 
   // Camera follows the layer: remember where we leave one, return to the other.
@@ -479,6 +490,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             onOpenCharacterModal={onOpenCharacterModal}
             onItemDropOnTarget={onItemDropOnTarget}
             onTakeItem={onTakeItem}
+            still={item.path !== playingPortrait}
           />
         ))}
       </div>

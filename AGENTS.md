@@ -150,6 +150,8 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 
 `world.json.entry` 指定打开世界后的 0 级导入层（缺省 `map`）。当前层自己的 `README.md` 由 `/api/layer` 单独作为 `scene` 返回并显示为入场 Chalk；它在父层仍是 Gate，不进入普通卡片排座。P0 Gate 可用 README 的 `requires.items` 要求玩家背包中的精确文件路径，详见 `docs/doc-15` 与 `docs/doc-20`。
 
+**角色小天地（nook）是与「层」并列的一条通路，不是层**（2026-09-13 落地）。`characters/<id>/` 根目录本身就是小天地（doc-06 §4.1 / doc-11 §4），但它**被层派生显式排除**（`layers.ts` 只收 `world/` 子树；`resolveLayer()` 对 `characters/**` 返回 `null`）。因此它走**独立端点** `GET /api/nook?character=<id>`——返回体与 `LayerState` 同形（`layer` 字段填 `characters/<id>`、`scene` 为角色 README、`items` 只含**直接子级 md**（`nookCardPaths`）、`links`/`presence` 为空）。前端入口在**角色 tab 每行的第 4 个按钮**，视图是 `apps/web/src/components/nook/NookView.tsx`（复用 `Canvas`，**不自己 `useWorld()`**，避免第二个 WebSocket）。小天地里的卡片同样有 `cards` 行（`layer` 列存完整 nookId）、同样走 `POST /api/card/footprint` 回写（该路由对 `characters/<id>` 有并列分支）；拖卡走 `arrangeCards`（其 place/layout 两条分支均有 nook 分支）。微动立绘是 `portrait` kind（room pack，`component: portrait` + `video:` + `poster:`，透明 VP9 webm 由 `tools/motion-clip.mjs` 从绿幕产出）。设计真相源：`docs/nook/00…05`。
+
 ---
 
 ## 4. 文档导航

@@ -16,6 +16,7 @@ import { useWorld } from './state/useWorld.js';
 import { preloadAudio } from './lib/audio.js';
 import { UI_COPY, type Locale } from './lib/i18n.js';
 import { useViewpointReport } from './hooks/useViewpointReport.js';
+import { NookView } from './components/nook/NookView.js';
 
 interface WorldManifest {
   id: string;
@@ -45,6 +46,11 @@ export function App() {
 
   // Active Character Modal (Galgame Overlay)
   const [activeModalCharId, setActiveModalCharId] = useState<string | null>(null);
+
+  // Character nook (private space). Non-null = the workspace shows NookView.
+  // Kept OUT of useWorld: `layer` is the WS/footprint cursor and must not
+  // carry nook semantics (docs/nook/00 §3.4).
+  const [nookChar, setNookChar] = useState<string | null>(null);
 
   // 角色演出帧（A3）：useWorld 转发的原始帧；按 activeModalCharId 路由后再下推给遮罩。
   const [activeModalFrame, setActiveModalFrame] = useState<CharacterFrame | null>(null);
@@ -276,6 +282,22 @@ export function App() {
     }
   };
 
+  // Enter a character's private nook. Saves the layer camera so leaving the
+  // nook puts the player back where they were (useCamera CAM_MEMORY).
+  const handleOpenNook = (charId: string) => {
+    camera.save(currentLayer);
+    setNookChar(charId);
+  };
+
+  // Leave the nook: drop back to the layer, restore its camera BEFORE the
+  // layer refetch paints (optimistic, same convention as enterLayer), then
+  // refetch as a safety net (useWorld keeps the layer warm in the meantime).
+  const handleCloseNook = useCallback(() => {
+    setNookChar(null);
+    camera.restore(currentLayer);
+    void refresh();
+  }, [camera, currentLayer, refresh]);
+
   // Back one level: follow the DERIVED parent (manifest layer graph), never
   // string surgery on the id. Slicing `world/crime-scene` to `world` landed on
   // a non-existent pseudo-layer whose page held no children — the map's doors
@@ -290,12 +312,17 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' || (e.altKey && e.key === 'ArrowLeft')) {
+        // Inside a nook, Esc closes it and must NOT also walk the layer tree.
+        if (nookChar !== null) {
+          handleCloseNook();
+          return;
+        }
         handleReturnToParent();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleReturnToParent]);
+  }, [handleReturnToParent, nookChar, handleCloseNook]);
 
   // Choice Selection
   const handleSelectChoice = async (choicePath: string, choice: string) => {
@@ -541,45 +568,59 @@ export function App() {
       {/* Main Workspace Area: Infinite Canvas + Right Sidebar */}
       <div className="flex-1 flex overflow-hidden relative">
         <div className="flex-1 h-full relative">
-          <Canvas
-            currentLayer={currentLayer}
-            items={worldState?.items ?? []}
-            links={worldState?.links ?? []}
-            bg={worldState?.bg ?? { src: null, tone: 'warm', grain: 'parchment' }}
-            scene={worldState?.scene ?? null}
-            sceneCopy={{
-              label: copy.sceneChalk,
-              collapse: copy.collapseScene,
-              expand: copy.expandScene,
-            }}
-            onMoveCard={moveCard}
-            onSelectChoice={handleSelectChoice}
-            onDiceRolled={(res, pass) => showToast(`Dice: ${res} (${pass ? 'Pass' : 'Fail'})`)}
-            onEnterGate={handleEnterGate}
-            onOpenCharacterModal={openCharacterModal}
-            onItemDropOnTarget={handleItemDropOnTarget}
-            onDropItemToScene={handleDropItemToScene}
-            onTakeItem={handleTakeItem}
-            onOpenRadialMenu={(x, y, wx, wy) => setRadialState({ x, y, worldX: wx, worldY: wy })}
-          />
+          {nookChar !== null ? (
+            <NookView
+              characterId={nookChar}
+              onClose={handleCloseNook}
+              locale={locale}
+              onMoveCard={moveCard}
+              onSelectChoice={handleSelectChoice}
+              onDiceRolled={(res, pass) => showToast(`Dice: ${res} (${pass ? 'Pass' : 'Fail'})`)}
+              onTakeItem={handleTakeItem}
+            />
+          ) : (
+            <>
+              <Canvas
+                currentLayer={currentLayer}
+                items={worldState?.items ?? []}
+                links={worldState?.links ?? []}
+                bg={worldState?.bg ?? { src: null, tone: 'warm', grain: 'parchment' }}
+                scene={worldState?.scene ?? null}
+                sceneCopy={{
+                  label: copy.sceneChalk,
+                  collapse: copy.collapseScene,
+                  expand: copy.expandScene,
+                }}
+                onMoveCard={moveCard}
+                onSelectChoice={handleSelectChoice}
+                onDiceRolled={(res, pass) => showToast(`Dice: ${res} (${pass ? 'Pass' : 'Fail'})`)}
+                onEnterGate={handleEnterGate}
+                onOpenCharacterModal={openCharacterModal}
+                onItemDropOnTarget={handleItemDropOnTarget}
+                onDropItemToScene={handleDropItemToScene}
+                onTakeItem={handleTakeItem}
+                onOpenRadialMenu={(x, y, wx, wy) => setRadialState({ x, y, worldX: wx, worldY: wy })}
+              />
 
-          {/* Canvas chrome — the prototype's navigation + writing affordances */}
-          <LayerBadge
-            name={manifest?.layers?.[currentLayer]?.name || currentLayer}
-            material={worldState?.bg?.grain ?? 'parchment'}
-            materialLabel={copy.material}
-          />
-          <HintBar text={copy.controls} showLabel={copy.showControls} hideLabel={copy.hideControls} />
-          <WriterBar
-            disabled={worldFrozen}
-            placeholder={copy.writerPlaceholder}
-            sendLabel={locale === 'ja' ? '送信' : 'Send'}
-            onSend={(text) => {
-              sendToWriter(text);
-              showToast(copy.sentToWriter);
-            }}
-          />
-          <Minimap items={worldState?.items ?? []} camera={camera} label={copy.minimap} />
+              {/* Canvas chrome — the prototype's navigation + writing affordances */}
+              <LayerBadge
+                name={manifest?.layers?.[currentLayer]?.name || currentLayer}
+                material={worldState?.bg?.grain ?? 'parchment'}
+                materialLabel={copy.material}
+              />
+              <HintBar text={copy.controls} showLabel={copy.showControls} hideLabel={copy.hideControls} />
+              <WriterBar
+                disabled={worldFrozen}
+                placeholder={copy.writerPlaceholder}
+                sendLabel={locale === 'ja' ? '送信' : 'Send'}
+                onSend={(text) => {
+                  sendToWriter(text);
+                  showToast(copy.sentToWriter);
+                }}
+              />
+              <Minimap items={worldState?.items ?? []} camera={camera} label={copy.minimap} />
+            </>
+          )}
         </div>
 
 
@@ -598,6 +639,7 @@ export function App() {
             }));
             showToast(`${charId} follow status toggled`);
           }}
+          onOpenNook={handleOpenNook}
         />
       </div>
 

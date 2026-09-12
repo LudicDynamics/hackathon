@@ -32,9 +32,9 @@ function exampleFrontmatter(example) {
 
 // ------------------------------------------------------- registry completeness
 
-test('T2: the registry holds 18 kinds, each with a CARD_FORMS row and a full entry', () => {
+test('T2: the registry holds 19 kinds, each with a CARD_FORMS row and a full entry', () => {
   const kinds = Object.keys(COMPONENT_REGISTRY);
-  assert.equal(kinds.length, 18, 'doc 10 §14.2: 18 docked kinds');
+  assert.equal(kinds.length, 19, 'doc 10 §14.2: 19 docked kinds');
   assert.deepEqual([...COMPONENT_KINDS].sort(), kinds.slice().sort(), 'COMPONENT_KINDS matches the registry');
   for (const [kind, def] of Object.entries(COMPONENT_REGISTRY)) {
     assert.ok(CARD_FORMS[kind], `${kind} has no CARD_FORMS row`);
@@ -93,7 +93,7 @@ test('T6: the index text marks every accepts-bearing kind as a use_item_on targe
   }
   // Spot check the doc 10 §2.1 sample line shape.
   assert.ok(/lock\s+adventure\s+/.test(text), 'index lines are `kind pack purpose`');
-  assert.ok(text.includes('18 registered'), 'index reports the count');
+  assert.ok(text.includes('19 registered'), 'index reports the count');
 });
 
 test('T7 (M-5 corrected): lock accepts a note-tagged key, and rejects an unrelated item', () => {
@@ -177,7 +177,7 @@ test('T10: getComponent is read-only and fails loudly on unknown kinds', async (
 
   const index = await getComponent(ctx, {});
   assert.equal(index.details.mode, 'index');
-  assert.equal(index.details.components.length, 18);
+  assert.equal(index.details.components.length, 19);
 
   const full = await getComponent(ctx, { component: ['lock', 'lock'] });
   assert.equal(full.details.mode, 'full');
@@ -189,7 +189,7 @@ test('T10: getComponent is read-only and fails loudly on unknown kinds', async (
   await assert.rejects(() => getComponent(ctx, { component: 'puzzel-box' }), (err) => {
     assert.equal(err.code, 'not_found');
     assert.match(err.message, /Unknown component "puzzel-box"/);
-    assert.match(err.message, /18 registered kinds/);
+    assert.match(err.message, /19 registered kinds/);
     return true;
   });
 
