@@ -28,6 +28,11 @@ assets/**
 **/.airpworld/prompt-presets/
 **/.airpworld/model-preferences.json
 **/.airpworld/model-preferences.json.tmp
+# Per-world gameplay preferences (docs/settings/00): a save-specific runtime
+# choice (auto-write), not template content. Same single-file policy as
+# model-preferences above — deliberately not `**/.airpworld/`.
+**/.airpworld/settings.json
+**/.airpworld/settings.json.tmp
 # pi-rp session memory is runtime state, never template content truth
 **/.pi/*.db*
 
