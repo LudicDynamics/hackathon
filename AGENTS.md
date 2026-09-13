@@ -125,7 +125,7 @@ tools/                  # 单一职责脚本：探针（probe-*）/ 门禁（che
 
 assets/                 # worldlines-assets 素材车间；整树 .gitignore，**只白名单 audio/ 与 skills/**（见 §7.8）
   audio/                # 平台级音频池（已入库）：bgm（3 情绪主线）/ themes（逐世界主题曲）/ ambient（基础三轨 + pool/ 声场族）/ foley（拟音）+ PLAN.md 需求清单 + CREDITS.md
-  skills/               # 素材生产手艺包（文本，无大二进制）：motion-portrait 等
+  skills/               # 素材生产手艺包（文本，无大二进制）：character-asset-batch（6 情绪+微动立绘整链）/ motion-portrait / flow-media
   worlds/ _inbox/       # AI 生图原始产出与筛选（约 587MB，不入库）——发布位是平台 IP 包，不是这里
 
 docs/                   # 设计文档（真相源）；各实现批次目录见 §4
@@ -157,6 +157,8 @@ graph LR
 ### 3.1 单轮管线（作家）
 
 未写之门 Demo 的 choice、自由输入与 stub 首次进入，经 `lifecycle.submitWriter` 串行派发作家；新场景当前走亲写 W1，未启用 scene-init 委托。根 `.env.local` 指定模型/图像网关/超时；图像经 pi-ai 调用。从模板加载先复制到 worlds 再游玩。范围见 `docs/doc-25-未写之门Demo.md`。
+
+**「交互 → 叙事后果」默认不自动发生**：玩家的 choice / 掷骰 / 用物 / 开门 / 上帝动作默认**只落一条事件**，作家在下一轮输入时经 Hook 注入读到；只有每世界开关 `autoWrite`（默认 `off`）显式打开才自动起作家一轮。**唯一真相源与逐交互档位表：`docs/settings/00-共同上下文.md §1bis`**；`/api/enter-layer` MUST NOT 起作家（门走 I1 初始化器）。
 
 Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → write/edit 演化场景物件 → 轻量收敛。
 **chat history 不进画布，只有 chalk 落板。**
@@ -262,6 +264,7 @@ pnpm gen video --prompt "..." --seconds 6 -o out.mp4
 node tools/gen-emotions.mjs --world whitechapel   # 6 情绪差分批产（图片免费，见 docs/assets/00 §4.1）
 node tools/gen-motion.mjs --world whitechapel --parallel 2   # 角色微动立绘批产（扣额度 ~10/条）
 node tools/record-emotion-assets.mjs             # 写 character-media.json 溯源；--check 核验
+#   角色素材整链（6 情绪 + 微动立绘）见 assets/skills/character-asset-batch/SKILL.md
 node tools/scaffold.mjs --template holmes-world --out worlds/my-holmes
 pnpm --filter @airp/server dev                  # 只起后端
 ```
@@ -502,11 +505,11 @@ pnpm pi commit "fix(...): …" [--no-build]   # build 红线 → 子模块 commi
 | 子目录 | 入库 | 说明 |
 |---|---|---|
 | `assets/audio/**` | ✅ | 我们自己产出的音乐（Pixabay 免版税 BGM / 环境声 / 拟音）。**平台级音频池的真相源**就是这里——`routes/world.ts` 的 `AUDIO_ROOT` 指 `assets/audio`，`/api/audio?path=…` 从这里伺服。需求清单/缺口登记在 `assets/audio/PLAN.md`，授权信息在 `CREDITS.md` |
-| `assets/skills/**` | ✅ | 素材生产手艺包（纯文本，无大二进制），如 `motion-portrait`（抠像/循环）、`flow-media`（生图/生视频） |
+| `assets/skills/**` | ✅ | 素材生产手艺包（纯文本，无大二进制）：`character-asset-batch`（6 情绪差分 + 透明微动立绘整链）、`motion-portrait`（抠像/循环）、`flow-media`（生图/生视频） |
 | `assets/worlds/**`、`assets/_inbox/**` | ❌ | AI 生图原始产出与筛选（**合计约 587MB**），只作生产参考。**发布位不是这里**——定稿后经平台上传端点落入 IP 包，runtime 读 IP 包 |
 
 **坑（2026-09-13 实际踩到）**：`assets/README.md` 写的是"本目录不进 git"，**这句已过期**——`audio/` 与 `skills/` 现在是入库的。找音频资产时**不要只查 `apps/web/public/` 或 `templates/**/`**，平台池在仓库根 `assets/audio/`；世界级样本则走 `templates/<world>/assets/`（`/api/asset` 伺服）。判据：平台池 = `/api/audio?path=…`，世界级 = `/api/asset?…`。
 
 **改素材时**：音频走 `docs/audio/`（`00` 冻结契约）；`assets/audio/**` 增删 MUST 同步 `assets/audio/PLAN.md` 的状态列与 `CREDITS.md`（授权合规）。**路径引用由 `pnpm check:docs` 守着**——`assets/` 下 git-tracked 的文本路径（PLAN/CREDITS/skills）都有引用核验，写错即红；世界相对的 `assets/...` 与媒体自动跳过（见 §6.4）。
 
-**改角色素材时**（6 情绪差分 / 微动立绘）：走 `docs/assets/`（`00` 冻结契约）。车间落点 `<world>-demo/characters/<id>/variants/`，发布位 `templates/<world>/assets/characters/<id>/<emo>.webp` 与 `assets/motion/seedance/characters/<id>-transparent.webm`。**增删后 MUST 跑 `node tools/record-emotion-assets.mjs` 重写 `templates/<world>/assets/character-media.json`**（`--check` 可核验，`pnpm check:emotions` 是总门禁）；**不并入** `source-manifest.json` / `motion/seedance/manifest.json`（其测试断言精确行数绑死各自的 sync 工具，见 `docs/assets/00 §4.4`）。
+**改角色素材时**（6 情绪差分 / 微动立绘）：**先读手艺包 `assets/skills/character-asset-batch/SKILL.md`**（整链操作手册：车间→发布位→前端接线→验收），规格走 `docs/assets/`（`00` 冻结契约）。车间落点 `<world>-demo/characters/<id>/variants/`，发布位 `templates/<world>/assets/characters/<id>/<emo>.webp` 与 `assets/motion/seedance/characters/<id>-transparent.webm`。**增删后 MUST 跑 `node tools/record-emotion-assets.mjs` 重写 `templates/<world>/assets/character-media.json`**（`--check` 可核验，`pnpm check:emotions` 是总门禁）；**不并入** `source-manifest.json` / `motion/seedance/manifest.json`（其测试断言精确行数绑死各自的 sync 工具，见 `docs/assets/00 §4.4`）。

@@ -12,7 +12,7 @@
 
 `world/outside/` 用 `.gitkeep` 保留空目录，不放 README。`door.md` 的 target 指向它；显式 gate 替代同目标的自动目录门牌。
 
-前端开门调用 `/api/enter-layer`，动作层落事件，首次进入派发作家。choice 也先落账再派发。`submitWriter` 串行处理道具与开门，避免信封、手机的上下文还未回写就生成门外。返回成功只表示行动已接受，模型错误通过 WS 显示。
+前端开门调用 `/api/enter-layer`，动作层落 `layer_entered` 事件。**是否随后生成门外场景由每世界开关 `autoWrite` 决定（默认 `off`，即只落事件、作家在玩家下一轮读到）**；开启时走 I1 初始化器（`airp_init` → scene-init preset），**不是**路由里直接起作家。choice 也先落账；是否起作家一轮同样由 `autoWrite` 决定。`submitWriter` 串行处理道具与开门，避免信封、手机的上下文还未回写就生成门外。返回成功只表示行动已接受，模型错误通过 WS 显示。**总口径见 `docs/settings/00-共同上下文.md §1bis`**。
 
 当前走作家亲写 W1，**尚未接 scene-init 委托 R1/R2**。作家按世界 skill 读取两份 Context：无发现则自由补完现代场景，有信或通话则承接已揭示事实。目标 README 已存在时不重生成。初次只补 README、两个物件、短 chalk 与回程门。
 
