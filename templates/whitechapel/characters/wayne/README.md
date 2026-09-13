@@ -3,6 +3,7 @@
 type: "readme"
 name: "Arthur Wayne"
 avatar: "assets/characters/wayne.webp"
+avatarVideo: "assets/motion/seedance/characters/wayne-transparent.webm"
 voice: cool-composed
 ---
 

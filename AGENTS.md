@@ -69,7 +69,7 @@ apps/
       presets.ts        # preset 安装到 <worldRoot>/.airpworld/prompt-presets/；extensionArgs/skillArgs/airpEnv
   web/src/
     lib/                   # 纯前端库：camera（插值相机）/ collide（软碰撞）/ seat（排座镜像）/ measure（卡片盒尺寸缓存）/ parallax（指针视差模块态，走 DOM 不触发 React 渲染）/ footprint（实测盒回写）/ audio（采样优先声场，synth 兜底）
-                           #   phantom + phantom-seat + ghost（生成中占位与座位过户，docs/perform/03）/ canvas-patch（增量合并）/ writer-state（笔尖状态机）/ chalk-reveal / dice-ceremony / motion / i18n / md / fm
+                           #   phantom + phantom-seat + ghost（生成中占位与座位过户，docs/perform/03）/ canvas-patch（增量合并）/ writer-state（笔尖状态机）/ chalk-reveal / dice-ceremony / motion / i18n / md / fm / agent-activity（工具感知胶囊，TTS 文本清洗见 packages/shared/src/rules/tts-text.ts）
                            #   ui-shell.mjs（Header / journal 独立显隐、人物分区与测量后排版）
     state/                 # useCamera（相机与层级记忆）/ useWorld（层数据 + WS + 落库；唯一 WebSocket）/ useAudio（声场主轨）
     prototype.css          # 沉浸式原型外壳样式（niko 界面批次）
@@ -115,7 +115,7 @@ tools/                  # 单一职责脚本：探针（probe-*）/ 门禁（che
   flow-gen.mjs          # 生图 / 生视频（pnpm gen）：调本地反代 ../flow-proxy-api，封装异步轮询与降级告警
                         #   手艺包见 assets/skills/flow-media/SKILL.md（认证链与静默降级在彼）
   gen-emotions.mjs      # 6 情绪差分批产（docs/assets/00 §4.1）：base.png --(img2img)→ 绿幕图 → chromakey → 透明 webp；**图片链路不扣额度**
-  gen-motion.mjs        # 角色微动立绘批产（docs/assets/00 §4.2）：绿幕 normal 图 --(i2v 720p 6s)→ motion-clip 360w 乒乓；**扣额度（实测 10/条）**
+  gen-motion.mjs        # 角色微动立绘批产（docs/assets/00 §4.2）：绿幕 normal 图 --(i2v 720p 6s)→ motion-clip（建议 360w）乒乓；**扣额度（实测 10/条）**
   record-emotion-assets.mjs # 本批媒体溯源：写 templates/<world>/assets/character-media.json；--check 可核验（不并入 sync-* 的两张账）
   probe-writer.mjs      # 全链路探针（pnpm probe）
   probe-tools.mjs       # 工具面探针：jiti 载入 extensions/tools.ts，断言注册表 + 真执行（probe:tools 第一段）
@@ -142,6 +142,7 @@ docs/                   # 设计文档（真相源）；各实现批次目录见
   nook/ footprint/      # 角色小天地 N1 / 卡片占位尺寸
   audio/                # 音频接线（A1）：00 契约 + 01 服务端路由与解析 / 02 采样链与主轨 / 03 前端贯通 / 04 Foley 与 stinger / 05 素材缺口 / 06 回写
   tools/ hooks/ wiring/ perform/ prompts/ tts/ # 各实现批次：00 冻结契约 + 分篇 + REVIEW-*（§4 有逐批说明）
+  agent-awareness/       # Agent 感知统一批次：00 冻结契约 + 角色多消息/TTS + writer/functional activity + 前端 rail + 验收
   components/            # 组件多样化独立设计批次：00 共同契约 + 01 schema/registry + 02 resolver + 03 作者 + 04 前端 + 05 迁移验收
   merge/                # 合并登记（§6.6）：00-合并纪律.md（契约）+ BASELINE.md（立法前豁免 SHA）+ 逐次登记 + archive/ 两份 niko 复盘原始报告
   前端接线体检.md        # 2026-09-12 跨端 WS 契约静默漂移的核实报告（含缺陷分级与文档漂移清单）
@@ -226,6 +227,7 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 | `docs/前端接线体检.md` | 动 WS 帧 / 前端消费面 / `useWorld.ts` 前必读——冻结契约的机械核验（`pnpm check:ws`）与已知漂移清单 |
 | `docs/wiring/` | **前端接线 A 档（止血 + 文档回写）真相源**：`00-共同上下文.md` 是冻结契约（角色身份/去重/转发集合/请求体），`01`–`04` 逐模块设计，`05-文档回写.md` 是回写清单。**动 `useWorld.ts` WS switch / `CharacterModal` / `DiceRoller` / 角色帧载荷前必读** |
 | `docs/perform/` | **演出通道（残余 9 条 DARK 接线）真相源**：`00-共同上下文.md` 是冻结契约（`writer_delta` 来源流 / 幻影与座位过户 / `show_frame` 分发 / `canvas_patched` 归属 / 声响落点 / phantom 字段集），`01`–`05` 逐帧设计 + `06-文档回写.md` 回写清单 + `REVIEW-R1..R5` 五视角评审。**动 `event-bridge.ts` 帧映射 / `useWorld.ts` WS switch / `lib/{phantom,phantom-seat,writer-state,ghost,canvas-patch}.ts` / 演出组件前必读** |
+| `docs/agent-awareness/` | **Agent 感知统一批次真相源**：`00-共同上下文.md` 冻结 `agent_activity` 帧、角色 turn 保序、TTS 动作过滤、全局/角色 activity rail；`01`–`04` 覆盖角色与 TTS、writer/functional relay、前端演出、测试回写。**动 `event-bridge.ts` / `lifecycle.ts` / `useWorld.ts` / `CharacterModal.tsx` / TTS 路由或 agent 工具感知前必读** |
 | `docs/layout/` | **生成组件自动排版设计真相源**：`00-共同上下文.md` 冻结 `flowColumns`、页面全量 occupied、批次顺序、幻影同源座位与 Chalk 拖拽锁；`01`–`05` 分别覆盖服务端几何、演出幻影、God Hand 交互、生成/初始化接缝与验收。**动 `seatUnplaced` / `reseatLayer` / `phantom-seat` / Canvas 拖拽 / 初始化幻影前必读；实现后同步回写 `perform`、`footprint`、`init`、`wiring` 的 00 文档** |
 | `docs/tts/` | **角色语音 TTS 批次真相源**：`00-共同上下文.md` 是冻结契约（`POST /api/tts` 请求/响应体、缓存 key、角色 `voice` frontmatter、前端 `playVoice`/`stopVoice`/`isVoicing`、页语义、env），`01`–`06` 逐模块设计，**`07` 音色别名映射 + `08` 音色 skill/门禁**。**动 `routes/tts.ts` / `lib/audio.ts` 语音面 / `CharacterModal` 分页 / `skills/voice-casting` / `voices.ts` 前必读** |
 | `docs/doc-08~18` | 各专题（多为待完善），实现对应模块前再读 |
@@ -269,7 +271,7 @@ pnpm probe:init                                 # 初始化探针（真 spawn �
 pnpm check:skills                               # skill 语料门禁（frontmatter / 语言分层 / 命名 / 平台清单与触发词）
 pnpm check:voices                               # 音色门禁（角色 voice 解析到调色板；docs/tts/07）
 pnpm check:i18n                                 # i18n 键门禁（`t('…')` 键必须解析到 messages.json 且 zh-CN/ja 齐全）
-pnpm check:emotions                             # 角色素材门禁（6/6 齐备 + 真透明 + 9:16 + webm 真 alpha + 溯源 SHA；见 docs/assets/00 §7）
+pnpm check:emotions                             # 角色素材门禁（所有 templates：6/6 已存在情绪集 + 真透明 + webm 真 alpha + 溯源 SHA；尺寸仅 advisory，见 docs/assets/00 §7）
 pnpm check:merge                                # 合并登记门禁（first-parent merge 必须有 docs/merge/<title>-<7hex>-<作者>.md；见 §6.6）
 pnpm hooks:install                              # 启用 pre-push 钩子（git config core.hooksPath .githooks），每台机器一次
 pnpm pi status                                  # pi-rp 子模块 + dist 新鲜度体检（见 §7.2）
@@ -358,6 +360,7 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 | 角色语音 / 音色（`voice:` 声明、调色板、TTS 引擎） | `docs/tts/**`（`00` 冻结契约 + `07` 音色映射唯一真相源）+ `packages/shared/src/rules/voices.ts`；跑 `pnpm check:voices`（**增删音色 MUST 先实测出声**）|
 | 交互 / 演出 / 视觉 | `docs/doc-06` / `doc-04`（视觉以 §10 为准） |
 | 注入协议 / 钩子接线 / 分节表 | `docs/hooks/00…06`（冻结契约 `00` 唯一真相源） |
+| Agent 感知（`agent_activity` 帧 / 角色 turn 聚合 / TTS 动作清洗 / activity rail） | `docs/agent-awareness/00…04` + `docs/tools/12 §6.2` + `docs/tts/00`；实现落点 `apps/server/src/engine/{agent-activity,event-bridge,lifecycle}.ts`、`extensions/toolkit/{activity-relay,init-command}.ts`、`apps/web/src/{lib/agent-activity*,state/useAgentActivity.ts,components/chrome/ActivityRail.tsx}`、`packages/shared/src/rules/tts-text.ts`；跑专项测试、`pnpm check:ws`、`pnpm check:bodies`、`pnpm check:i18n` |
 | 角色 preset 的 compaction | `presets/character.json` 是**唯一真源模板**（新角色从它复制）；改 `hiddenOverrides.compaction` 必须**同 commit** 铺到 **全部**模板/world 角色 preset，并跑 `apps/server/test/character-preset-parity.test.mjs`（逐字一致，缺一份即静默失效） |
 | 跨端 WS 帧契约（增删帧 / 改载荷 / 前端消费面） | `docs/tools/12` §6.2（唯一帧清单）+ `docs/前端接线体检.md`；跑 `pnpm check:ws`（门禁会因两端不一致而红） |
 | 角色来源的 WS 帧载荷（`characterId`） | `docs/wiring/00` §3（唯一形状源）+ `apps/server/src/engine/{lifecycle,event-bridge}.ts` 的 sink 链 |
@@ -367,7 +370,7 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 | 卡片占位尺寸（`cards` 行 / footprint 回写 / reseat 漂移） | `docs/footprint/00`（冻结契约）+ `01…05`；`packages/shared/src/store/local-store.ts` 的建行路径、`lib/{measure,footprint}.ts`（与 §7.5 三条契约配套）|
 | 生成组件自动排版（列流 / 页面 occupied / 幻影 / Chalk 权限） | `docs/layout/00`（冻结契约）+ `01…05`；`packages/shared/src/layout/flow-columns.ts`（NEW）、`packages/shared/src/store/local-store.ts` 的 `seatUnplaced/reseatLayer`、`apps/web/src/lib/phantom-seat.ts`、`Canvas.tsx` pointer dispatcher；实施验收必须覆盖同批顺序、旧卡障碍、并发事务、幻影过户与非 God Chalk 拖拽锁 |
 | 组件多样化（appearance / 多轴主题组合） | `docs/components/00-共同上下文.md`（冻结契约）+ `01`–`05`；`packages/shared/src/schemas/appearance.ts`、`components/appearance-registry.ts`、`appearance/resolver.ts`、`apps/server/src/routes/world.ts` 的 layer+nook enriched 分支、`apps/web/src/lib/appearance-view.ts` 与 `CardRenderer`/`ChalkCard`；实现前必须核对唯一 registry/resolver、严格写入/宽容读取、Chalk 默认透明、letter surface allowlist、无新增 WS、footprint/互动不变 |
-| 角色素材（6 情绪枚举 / `<id>/<emo>.webp` 约定 / `/api/characters` 的 `emotions`） | `docs/assets/00`（冻结契约）+ `01…04`；`packages/shared/src/rules/emotions.ts`（枚举唯一源）、`apps/server/src/routes/world.ts` 的 `/characters` 探测、`apps/web/src/components/overlay/CharacterModal.tsx` 的立绘分支、`tools/{gen-emotions,gen-motion,record-emotion-assets}.mjs`；跑 `node tools/record-emotion-assets.mjs --check` + `pnpm test` |
+| 角色素材（6 情绪枚举 / `<id>/<emo>.webp` 约定 / `/api/characters` 的 `emotions`） | `docs/assets/00`（冻结契约）+ `01…04`；`packages/shared/src/rules/emotions.ts`（枚举唯一源）、`apps/server/src/routes/world.ts` 的 `/characters` 探测、`apps/web/src/components/overlay/CharacterModal.tsx` 的立绘分支、`tools/{gen-emotions,gen-motion,record-emotion-assets}.mjs`；门禁扫描所有 templates，尺寸与比例仅 advisory；跑 `node tools/record-emotion-assets.mjs --check` + `pnpm test` |
 | 每世界设置（`autoWrite` 三态、`.airpworld/settings.json`、`/api/world-settings`） | `docs/settings/00`（冻结契约）；`packages/shared/src/schemas/world-settings.ts`（档位谓词唯一源）、`apps/server/src/engine/world-settings.ts`、`apps/server/src/routes/world.ts` 的 `/choice`·`/enter-layer`、`apps/web/src/state/useWorld.ts::enterLayer`、`components/AgentSettings.tsx`；**门走 I1（`airp_init`）、选项走 `dispatch`**，`/enter-layer` MUST NOT dispatch |
 | 文档里写的仓库路径（目录树 / 链接 / `file:line` 引用） | 无需手改同步表——**跑 `pnpm check:docs` 即可**：它核验 `docs/hooks` + `docs/audio` + `AGENTS.md` + `assets/README.md` 里的每条路径引用能否解析。改名/移动文件后引用悬空，门禁直接红 |
 | 合并（任何 `git merge` 落在这条线上） | **同 commit 写 `docs/merge/<title>-<merge 短哈希 7 位>-<作者>.md`**，跑 `pnpm check:merge`；见 §6.6 |
