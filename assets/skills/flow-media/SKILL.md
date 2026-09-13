@@ -263,13 +263,30 @@ pnpm gen music --prompt "轻快的夏日海边电子流行歌，女声，副歌�
 
 别名 `lyria-3.5` / `lyria-fast` / `flowmusic` → `lyria`。
 
-### 4.2 凭据（唯一门槛，但基本自动化了）
+### 4.2 凭据与自动续期（唯一门槛）
 
-扩展已内置监听：**浏览器访问过一次 flowmusic.app** 就会自动把凭据抓进代理。
-没抓到时按 `flow-proxy-api/README.md` 的「Flow Music」一节排查。
+**会话不在 Cookie 里** —— 扩展能看到的 `.flowmusic.app` Cookie 只有 posthog，
+一条 `sb-*` 都没有。它是 Supabase 会话（JWT + refresh_token）。
 
-> 注意：该站**既不写 localStorage 也不写可读 Cookie**（实测），
-> 所以"从浏览器里翻开找 token"这条路是死的——只能靠抓请求头。
+扩展用 `music-hook.js`（MAIN world）从页面里钩取：
+
+| 来源 | 拿到什么 |
+|---|---|
+| `fetch` / XHR 钩子 | `/auth/v1/token` 的**响应体** —— 唯一含 `refresh_token` 的地方 |
+| 存储扫描 | `localStorage` / `sessionStorage` |
+
+**access_token 实测恰好 60 分钟寿命**，但**不需要你每小时手动推**：
+凭据里带上 `refresh_token` 后，反代自己走 Supabase 续期
+（`grant_type=refresh_token`，无验证码）。续期会轮换 refresh_token，
+反代落盘并回写浏览器存储。
+
+所以：**打开并登录 flowmusic.app → 点一次扩展的「③ 推送」→ 之后不用管**。
+
+> ⚠️ 别在 flowmusic.app 上点登出 —— 登出会**吊销 refresh_token**，
+> 那就必须重新登录再推一次。
+
+没抓到时按 `flow-proxy-api/README.md` 的「Flow Music」一节排查，
+那里有完整的诊断路径（扩展会把页面里到底有什么报给反代）。
 
 ### 4.3 时长约 1–3 分钟
 
