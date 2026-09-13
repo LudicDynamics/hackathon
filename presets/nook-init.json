@@ -5,6 +5,24 @@
   "description": "Generates the initial furnishings, bearing traces of a life, for a character's or the player's private nook",
   "delegatable": true,
   "inheritHistory": 0,
+  "tools": {
+    "deny": [
+      "recall",
+      "retrieve",
+      "memorize",
+      "revise",
+      "forget",
+      "relocate",
+      "associate",
+      "trigger",
+      "consolidate",
+      "retrace",
+      "set_time",
+      "awaken",
+      "get_state",
+      "state_update"
+    ]
+  },
   "items": [
     {
       "kind": "slot",
