@@ -591,7 +591,7 @@ interface WorldStore {
 
 ### 8.4 世界 manifest（world.json）——世界级配置
 
-可选 `player: { id: string, name: string, avatar?: string }` 声明玩家身份和世界内相对头像路径，供左下角玩家入口使用；不把玩家混入 NPC 的 `characters`。旧模板未声明时仍兼容默认展示。素材同步与来源校验见 `模板资源对齐清单.md`。
+可选 `player: { id: string, name: string, avatar?: string }` 声明玩家身份和世界内相对头像路径，供左下角玩家入口使用；不把玩家混入 NPC 的 `characters`。旧模板未声明时仍兼容默认展示。素材同步与来源校验见 `worlds/模板资源对齐清单.md`。
 
 > **层级不在这里（2026-09-11 修正）**：`world.json` 只写**世界级**事实（名字、题材、角色清单、世界默认材质、扩展）。**层级拓扑由目录树扫描得出**——`world/**/` 下每个目录就是一个层，目录里的 `README.md` 是它的场景配置（有 README = 已写层；没有 = `stub` 懒加载层）。曾在 `world.json` 里声明 `layers`，那是第二个真相源，与目录漂移过（manifest 写 `world/baker-street/abandoned-orchard`、目录却是 `world/abandoned-orchard`），已删除。派生逻辑：`packages/shared/src/store/layers.ts`。
 >

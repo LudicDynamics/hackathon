@@ -6,7 +6,7 @@
 
 图片适配边界：`extensions/toolkit/image-openai-provider.ts` 在项目内实现 `ImageProvider`，直接请求 OpenAI-compatible Images 接口；OpenRouter 继续复用 pi-rp。图片供应商接入不修改引擎内建注册表，动作层仍负责素材落盘与复用。
 
-模型与执行进度：`apps/server/src/engine/model-preferences.ts` 管理世界存档内的运行偏好，`GET/POST /api/agent-settings` 与 `agent_progress` 接前端 Agents 面板和行动状态。协议及验证见 `docs/Agent模型选择与进度.md`。这不是独立叙事状态文件；正文仍是世界真相源。
+模型与执行进度：`apps/server/src/engine/model-preferences.ts` 管理世界存档内的运行偏好，`GET/POST /api/agent-settings` 与 `agent_progress` 接前端 Agents 面板和行动状态。协议及验证见 `docs/agent/Agent模型选择与进度.md`。这不是独立叙事状态文件；正文仍是世界真相源。
 每世界设置：`apps/server/src/engine/world-settings.ts` 管理存档内的玩法偏好（`<worldRoot>/.airpworld/settings.json` 的 `autoWrite`），`GET/POST /api/world-settings` 接前端 Agents 面板。三态 `off`（默认，回到 doc-21 §5.5）/ `scenes` / `scenes-and-choices`：**「进未写场景」走 I1 初始化器（门），「玩家选项」才可能起作家一轮**；`/api/enter-layer` MUST NOT 起作家。契约见 `docs/settings/00-共同上下文.md`。这不是独立叙事状态文件；正文仍是世界真相源。
 
 > 在这个仓库里干活的人与 agent 的入口手册。
@@ -31,7 +31,7 @@
 
 ### 1.1 语言规范（硬要求）
 
-**稳定 ID 一律英文；标题、正文与世界提示词随世界语言；内部文档中文。** 2026-09-13 用户最新确认：所有体验版世界统一 ASCII 小写 kebab-case 文件/目录/人物 ID，日语世界仍显示日语。路径与显示名分离，迁移清单见 `docs/世界日语化迁移.md`。
+**稳定 ID 一律英文；标题、正文与世界提示词随世界语言；内部文档中文。** 2026-09-13 用户最新确认：所有体验版世界统一 ASCII 小写 kebab-case 文件/目录/人物 ID，日语世界仍显示日语。路径与显示名分离，迁移清单见 `docs/worlds/世界日语化迁移.md`。
 
 | 范围 | 语言 | 理由 |
 |---|---|---|
@@ -59,8 +59,8 @@ apps/
     index.ts            # Express + WS 入口（/api、静态托管 apps/web/dist、端口 3001）；入站 WS 分流（writer_prompt / airp_init）
     routes/world.ts     # 玩家 UI 路由 → 动作服务（/move, /dice, /use-item, /choice, /enter-layer, /layer, /nook, /card/*, /god-action, /audio, …）
     routes/tts.ts       # POST /api/tts 合成 + GET /api/tts/audio/:file 回放；唯一合成点，无模块级状态（docs/tts/01）
-    world-shelf.ts      # 世界/存档书架投影与可恢复删除；见 docs/世界与存档.md
-                        # Agent 帧到前端的身份与状态接线见 docs/Agent前端接线.md
+    world-shelf.ts      # 世界/存档书架投影与可恢复删除；见 docs/worlds/世界与存档.md
+                        # Agent 帧到前端的身份与状态接线见 docs/agent/Agent前端接线.md
     engine/
       launch.ts         # spawn 参数单一来源（preset / --session-dir / --continue / env / AIRP_AGENT_ROLE / --model(--provider) / --thinking / --no-* 资源隔离 / modelPreferenceArgs），服务端与探针共用
       lifecycle.ts      # Agent 生命周期编排（单例复用 / spawn / warmup / 崩溃退避重启 / stopAll）
@@ -167,7 +167,7 @@ graph LR
 
 ### 3.1 单轮管线（作家）
 
-未写之门 Demo 的 choice、自由输入与 stub 首次进入，经 `lifecycle.submitWriter` 串行派发作家；新场景当前走亲写 W1，未启用 scene-init 委托。根 `.env.local` 指定模型/图像网关/超时；图像经 pi-ai 调用。从模板加载先复制到 worlds 再游玩。范围见 `docs/doc-25-未写之门Demo.md`。
+未写之门 Demo 的 choice、自由输入与 stub 首次进入，经 `lifecycle.submitWriter` 串行派发作家；新场景当前走亲写 W1，未启用 scene-init 委托。根 `.env.local` 指定模型/图像网关/超时；图像经 pi-ai 调用。从模板加载先复制到 worlds 再游玩。范围见 `docs/gameplay/doc-25-未写之门Demo.md`。
 
 **「交互 → 叙事后果」默认不自动发生**：玩家的 choice / 掷骰 / 用物 / 开门 / 上帝动作默认**只落一条事件**，作家在下一轮输入时经 Hook 注入读到；只有每世界开关 `autoWrite`（默认 `off`）显式打开才自动起作家一轮。**唯一真相源与逐交互档位表：`docs/settings/00-共同上下文.md §1bis`**；`/api/enter-layer` MUST NOT 起作家（门走 I1 初始化器）。
 
@@ -180,7 +180,7 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 
 前端 Markdown 类型渲染与互动分离：`CanvasObject` 统一挂载 `EntityInteractions`，共享 `buildInteractiveFields` 归一化 `choice / status / roll_dice`，`actions` 保留为带源文件上下文的文字请求。Chalk 锚点为临时呈现态。玩家 `/api/choice` 与 Agent choose 共用 `createActionService().chooseOption` 校验并落账，通过 `world_event` 广播；详 `docs/doc-09`。
 
-模板玩家身份可用 `world.json.player`（id / name / avatar）声明；角色列表仍只承载 NPC。图片随世界放在该世界的 `assets/` 下，同步来源与 SHA-256 见各世界的 `templates/<world>/assets/source-manifest.json`（由 `tools/sync-template-assets.mjs` 生成）。同步范围与未决剧情见 `docs/模板资源对齐清单.md`。
+模板玩家身份可用 `world.json.player`（id / name / avatar）声明；角色列表仍只承载 NPC。图片随世界放在该世界的 `assets/` 下，同步来源与 SHA-256 见各世界的 `templates/<world>/assets/source-manifest.json`（由 `tools/sync-template-assets.mjs` 生成）。同步范围与未决剧情见 `docs/worlds/模板资源对齐清单.md`。
 
 默认服务入口载入 `templates/wuwu`（Fogwharf）。前端世界外 Header 与 journal 默认收起；场景画布首次显示测量实际内容边界，修正遮挡后通过原坐标 API 保存，初始镜头按窗口适配。素材版根场景采用叙事与证物分区；当前实现每次重新载入页面会重新整理根场景，保留手动排版是后续验收项。
 
