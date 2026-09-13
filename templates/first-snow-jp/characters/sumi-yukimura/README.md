@@ -2,8 +2,9 @@
 
 type: readme
 name: 雪村澄
-avatar: assets/characters/sumi-yukimura.webp
+avatar: "assets/motion/seedance/characters/sumi-transparent.webp"
 voice: warm-cheerful
+avatarVideo: "assets/motion/seedance/characters/sumi-transparent.webm"
 ---
 
 # 雪村澄

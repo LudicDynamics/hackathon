@@ -1,5 +1,7 @@
 # AGENTS.md — AIRP
 
+当前存档被外部删除时，世界路由解除失效 store、停止 Agent 与监听，以 `409 no_active_world` 通知前端清空画布并打开世界选择；不自动恢复存档。世界列表和连接设置不依赖活跃世界。连接设置路由 `GET/POST /api/connection-settings` 只允许本机访问，密钥不回显，保存到后端 `.env.local`，详见 `docs/TTS设置面板.md`。
+
 语音设置：`GET /api/tts/config` 仅暴露配置就绪状态、模型和默认音色；前端 Voice settings 控制本浏览器语音开关，未配置时停止合成请求并单次提醒，详情见 `docs/TTS设置面板.md`。
 
 图片适配边界：`extensions/toolkit/image-openai-provider.ts` 在项目内实现 `ImageProvider`，直接请求 OpenAI-compatible Images 接口；OpenRouter 继续复用 pi-rp。图片供应商接入不修改引擎内建注册表，动作层仍负责素材落盘与复用。

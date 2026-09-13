@@ -42,7 +42,8 @@
       "home": "world/winter-schedule/amber-cafe",
       "role": "npc",
       "description": "A newly debuted singer who asks for forty minutes without work.",
-      "avatar": "assets/characters/sumi-yukimura.webp"
+      "avatar": "assets/motion/seedance/characters/sumi-transparent.webp",
+      "avatarVideo": "assets/motion/seedance/characters/sumi-transparent.webm"
     }
   ],
   "createdAt": "2026-09-12T00:00:00Z",

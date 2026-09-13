@@ -112,6 +112,11 @@ export function useWorld(): UseWorldApi {
   const stateRef = useRef<LayerState | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reqSeqRef = useRef(0);
+  useEffect(() => {
+    const unavailable = () => { ++reqSeqRef.current; setState(null); setLoading(false); };
+    window.addEventListener('airp:world-unavailable', unavailable);
+    return () => window.removeEventListener('airp:world-unavailable', unavailable);
+  }, []);
   // world_event 去重（docs/tools/12 §6.4）：集合与 FIFO 队列同进同出。
   const seenEventIdsRef = useRef<Set<string>>(new Set());
   const seenEventOrderRef = useRef<string[]>([]);

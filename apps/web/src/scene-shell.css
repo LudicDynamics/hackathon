@@ -179,8 +179,8 @@
 .prototype-nook{position:fixed;inset:76px 24px 90px;z-index:800;background:#292332e8;border:1px solid #cdbda44d;border-radius:16px;overflow:hidden}
 .tts-notice { position:fixed; z-index:100; bottom:24px; right:24px; max-width:360px; padding:14px 18px; background:#302939; color:#f1e7d7; border:1px solid #b6a08566; border-radius:12px; font:14px/1.6 Georgia,serif; box-shadow:0 6px 24px #0003; }
 .tts-notice button { margin-left:12px; text-decoration:underline; }
-.writer-result { position:absolute; z-index:45; left:50%; bottom:150px; transform:translateX(-50%); width:min(620px,80%); pointer-events:none; color:#fff4df; text-shadow:0 2px 5px #000,0 0 14px #0009; font:22px/1.65 var(--serif,Georgia,serif); white-space:normal; animation:writer-result-fade 7s ease both; }
+.prototype-world-meta .writer-result { position:static; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; line-clamp:3; overflow:hidden; overflow-wrap:anywhere; margin-top:8px; max-width:350px; pointer-events:none; color:#e7dccc; text-shadow:0 1px 4px #000b; font:12px/1.6 var(--sans,Arial,sans-serif); white-space:normal; animation:writer-result-fade 7s ease both; }
 @keyframes writer-result-fade { 0% {opacity:0} 8%,75% {opacity:1} 100% {opacity:0} }
-@media (prefers-reduced-motion:reduce) { .writer-result {animation:none} }
+@media (prefers-reduced-motion:reduce) { .prototype-world-meta .writer-result {animation:none} }
 .writer-stop-control { position:fixed; z-index:120; right:24px; bottom:82px; padding:10px 16px; border:1px solid #e4b8a880; border-radius:22px; color:#ffe9df; background:#392b36; box-shadow:0 4px 16px #0003; font:14px/1.4 Georgia,serif; cursor:pointer; }
 .writer-stop-control:focus-visible { outline:2px solid #ffe9df; outline-offset:3px; }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ConnectionSettings } from './ConnectionSettings.js';
 import { readTtsConfig, setTtsEnabled, ttsEnabled, type TtsConfig } from '../lib/tts-readiness.js';
 
 export function TtsSettings() {
@@ -18,7 +19,7 @@ export function TtsSettings() {
     return () => window.removeEventListener('airp:tts-unavailable', warn);
   }, []);
   return <>
-    <button type="button" onClick={() => { setOpen(true); void refresh(); }}>Voice settings</button>
+    <button type="button" onClick={() => { setOpen(true); void refresh(); }}>Voice & connections</button>
     {notice && !open && createPortal(<aside className="tts-notice" role="status">
       Voice is unavailable. Check TTS configuration; text dialogue still works.
       <button onClick={() => { setOpen(true); setNotice(false); void refresh(); }}>Settings</button>
@@ -31,8 +32,9 @@ export function TtsSettings() {
         <label><input type="checkbox" checked={enabled} onChange={e => { setEnabled(e.target.checked); setTtsEnabled(e.target.checked); }} /> Enable character voice on this browser</label>
         <p role="status">{error || (config ? config.configured ? 'Configured · availability is checked when speaking' : 'TTS is not configured. Text dialogue remains available.' : 'Checking configuration…')}</p>
         {config && <><p>Model: {config.model}</p><p>Default voice: {config.defaultVoice} (characters may override it)</p></>}
-        {config && !config.configured && <p>Set DASHSCOPE_API_KEY in the server environment and restart the server, then recheck. Never paste your key into chat.</p>}
+        {config && !config.configured && <p>Add your DashScope API key below. Text dialogue remains available.</p>}
         <button onClick={() => { void refresh(); }}>Recheck configuration</button>
+        <ConnectionSettings onSaved={() => { void refresh(); }} />
       </section>
     </div>, document.body)}
   </>;

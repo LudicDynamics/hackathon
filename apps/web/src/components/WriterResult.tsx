@@ -19,7 +19,7 @@ export function WriterResult({ worldKey }: { worldKey?: string }) {
       if (frame.type === 'writer_idle' && active.current) {
         active.current = false;
         const text = lastReply.current.replace(/\s+/g, ' ').trim();
-        setResult({ text: text ? text.slice(0, 240) + (text.length > 240 ? '…' : '') : 'Your action has been processed.', id: Date.now() });
+        setResult({ text: text || 'Your action has been processed.', id: Date.now() });
         lastReply.current = '';
         clearTimeout(timer); timer = setTimeout(() => setResult(null), 7000);
       }

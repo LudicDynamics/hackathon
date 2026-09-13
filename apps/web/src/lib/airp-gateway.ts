@@ -23,6 +23,9 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     const message = await response.text();
     let payload: Record<string, unknown> | null = null;
     try { payload = JSON.parse(message); } catch { /* Keep non-JSON diagnostics. */ }
+    if (payload?.code === 'no_active_world' && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('airp:world-unavailable'));
+    }
     throw new AirpRequestError(`${init?.method ?? 'GET'} ${url} -> ${response.status}${message ? ` ${message}` : ''}`, response.status, payload);
   }
   return response.json() as Promise<T>;

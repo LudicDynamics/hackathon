@@ -202,6 +202,19 @@ export function App() {
   };
 
   useEffect(() => {
+    const unavailable = () => {
+      setManifest(null);
+      setCharacters([]);
+      setBackpack([]);
+      setWriterWorking(false);
+      setWorldPickerOpen(true);
+      void airpGateway.worlds().then(setShelf).catch(() => notify('Could not load the world shelf. Please retry.'));
+    };
+    window.addEventListener('airp:world-unavailable', unavailable);
+    return () => window.removeEventListener('airp:world-unavailable', unavailable);
+  }, []);
+
+  useEffect(() => {
     const onNotice = (event: Event) => notify(String((event as CustomEvent).detail));
     window.addEventListener('airp:notice', onNotice);
     return () => window.removeEventListener('airp:notice', onNotice);
@@ -560,6 +573,7 @@ export function App() {
             <h1>{currentName}</h1>
             <p>{layer === 'map' ? t('The first moment') : t('The story continues')} · {state?.worldFrozen ? t('Time stands still') : t('Time flows')}</p>
             {sceneStatus.map(([key, value]) => <span className="prototype-stat" key={key}>{labelOf(key)} · {String(value)}</span>)}
+            <WriterResult worldKey={`${manifest?.id}:${layer}`} />
           </div>
 
           <div className="prototype-tools prototype-chrome" aria-label={t("Canvas tools")}>
@@ -629,7 +643,6 @@ export function App() {
           </div>
           <button className="prototype-action-toggle prototype-chrome" onClick={() => { setAttention(current => current === 'authoring' ? 'ambient' : 'authoring'); window.setTimeout(() => writerRef.current?.focus(), 0); }} aria-label={t("Write an action")}><Sparkles size={17} /><span aria-live="polite">{writerWorking ? `${t(writerStage)} · ${writerElapsed}s` : t('What do you do?')}</span></button>
 
-          <WriterResult worldKey={`${manifest?.id}:${layer}`} />
           {writerWorking && <button type="button" className="writer-stop-control" onClick={() => { setWriterStopRequested(true); sendMessage({ type: 'writer_abort' }); }} aria-label="Stop writing">
             ■ {writerStopRequested ? 'Stop requested · retry' : 'Stop writing'} · {writerElapsed}s
           </button>}

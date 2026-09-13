@@ -31,6 +31,13 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Reuse server connection settings without exposing credentials to the browser.
+for (const name of ['.env.local', '.env']) {
+  const file = fileURLToPath(new URL(`../${name}`, import.meta.url));
+  if (fs.existsSync(file)) process.loadEnvFile(file);
+}
 
 // ---------------------------------------------------------------------------
 // config
