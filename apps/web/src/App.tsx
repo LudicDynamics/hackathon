@@ -5,6 +5,7 @@ import { WriterResult } from './components/WriterResult.js';
 import { WorldActivityToast } from './components/WorldActivityToast.js';
 import { ItemArtwork } from './components/ItemArtwork.js';
 import { NookView } from './components/nook/NookView.js';
+import { ghostItemFor } from './lib/init-ghost.js';
 import { useViewpointReport } from './hooks/useViewpointReport.js';
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Canvas } from './components/canvas/Canvas.js';
@@ -241,6 +242,18 @@ export function App() {
     return () => window.removeEventListener('airp:notice', onNotice);
   }, []);
 
+  // I1 initialiser outcome (docs/init/03 §3.6): a failed materialisation must be
+  // visible — never a silent canvas (contract §8 anti-pattern 8). The success
+  // path needs no UI here; the ghost clears and the refetched layer replaces it.
+  useEffect(() => {
+    const onLayerInit = (event: Event) => {
+      const ev = (event as CustomEvent).detail?.event as { type?: string } | undefined;
+      if (['layer_init_failed'].includes(ev?.type ?? '')) notify(t('It never quite took shape here.'));
+    };
+    window.addEventListener('airp:layer-init', onLayerInit);
+    return () => window.removeEventListener('airp:layer-init', onLayerInit);
+  }, [t]);
+
   // 角色演出帧（A3）：useWorld 转发的原始帧；按当前打开的角色过滤后下推给遮罩。
   // 归属过滤放在这里而不是 useWorld：遮罩是唯一消费者，且须随开关重绑。
   useEffect(() => {
@@ -364,6 +377,15 @@ export function App() {
   const handItems = backpack.filter((item) => item.filename.toLowerCase() !== 'readme.md');
   useViewpointReport({ camera, layer, bagCount: handItems.length, enabled: nookChar === null });
   const canvasItems = (state?.items || []).filter((item) => item.path !== readme?.path);
+  // The provisional "taking shape" card while this layer's I1 init runs
+  // (docs/init/03 §3.5). Client-only; deliberately NOT part of `canvasItems`.
+  // Memoised: the seat reads module-level seat state, so recomputing per render
+  // would let the card drift between frames.
+  const ghostLabel = t('Taking shape…');
+  const ghostItem = useMemo(
+    () => (world.initializingLayer === layer ? ghostItemFor(layer, ghostLabel) : null),
+    [world.initializingLayer, layer, ghostLabel]
+  );
   const currentName = readme?.frontmatter?.title || sceneName(manifest, layer);
   const playerRole = manifest?.player?.name || (manifest?.id === 'wuwu' ? 'Harbor Investigator' : 'Traveler');
   const playerAvatar = assetUrl(manifest?.player?.avatar);
@@ -583,6 +605,8 @@ export function App() {
             key={manifest?.id || 'opening'}
             effectsEnabled={effectsEnabled}
             currentLayer={layer}
+            ghost={ghostItem}
+            ghostLabel={ghostLabel}
             ghostCopy={{
               reused: t('Already had this image'),
               failed: t('The picture could not be drawn.'),

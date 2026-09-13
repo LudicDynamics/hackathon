@@ -1,0 +1,29 @@
+#!/bin/sh
+# .githooks/pre-push — AGENTS.md §6.6, docs/merge/00-合并纪律.md §4.
+#
+# WHY THIS EXISTS
+# A merge is the one git operation that rewrites your code without erroring when
+# it gets it wrong. `813c0f3` lost an inbound WS frame that way: a two-parent merge
+# dropped the frontend sender while the server handler survived, and nothing
+# flagged it — it read as "deprecated", not "lost", for two days (00-合并纪律.md §5).
+#
+# The registry (docs/merge/<title>-<7hex>-<author>.md) is the fix, and this hook
+# is what gives the registry teeth: without it, "you must register a merge" is a
+# convention that decays the first busy afternoon. $0 is not enforced for install
+# (git does not propagate hooks), so `pnpm check:merge` in the self-check chain is
+# the primary gate and this is the backstop.
+#
+# Bypass (rare, and you own the consequences): git push --no-verify
+# While a branch-internal merge is rebased away, set PI_ALLOW_MERGE_CHECK=0.
+
+if [ "${PI_ALLOW_MERGE_CHECK:-1}" = "0" ]; then
+  exit 0
+fi
+
+# Read the pushed refs on stdin anyway — git closes it if we do not, and some
+# clients dislike a hook that ignores its input.
+while read -r local_ref local_sha remote_ref remote_sha; do
+  :
+done
+
+exec node tools/check-merge-log.mjs

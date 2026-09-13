@@ -68,6 +68,9 @@ export interface UseWorldApi {
   loading: boolean;
   /** The layer currently being shown (reactive; src of truth for layer). */
   layer: string;
+  /** Layer whose I1 initialiser is in flight; drives the "taking shape" ghost
+   *  (docs/init/03 §3.6). null = no ghost. */
+  initializingLayer: string | null;
   /** Switch layer + fetch it. When auto-write is on and the target is a stub,
    *  fires the I1 initialiser (`airp_init`) after the server confirms `first`. */
   enterLayer(next: string, options?: { initialize?: boolean }): Promise<boolean>;
@@ -119,6 +122,10 @@ export function useWorld(): UseWorldApi {
   const [state, setState] = useState<LayerState | null>(null);
   const [layer, setLayer] = useState<string>(INITIAL_LAYER);
   const [loading, setLoading] = useState<boolean>(true);
+  // The layer whose I1 initialiser is in flight (docs/init/03 §3.6). Drives the
+  // provisional "taking shape" ghost; cleared ONLY by the `layer_initialized` /
+  // `layer_init_failed` event — events are the single change source, so no timer.
+  const [initializingLayer, setInitializingLayer] = useState<string | null>(null);
 
   const layerRef = useRef<string>(INITIAL_LAYER);
   const stateRef = useRef<LayerState | null>(null);
@@ -193,6 +200,7 @@ export function useWorld(): UseWorldApi {
         // fire-and-forget, since the I1 initialiser runs 45–60s and its outcome
         // returns as a `layer_initialized` world event, not this reply.
         if (options?.initialize !== false && result.first === true && startsSceneInit(settingsRef.current.autoWrite)) {
+          setInitializingLayer(next);
           sendSocket(wsRef.current, { type: 'airp_init', kind: 'scene', target: next, by: 'player' });
         }
         await fetchLayer(next);
@@ -356,10 +364,24 @@ export function useWorld(): UseWorldApi {
         case 'world_event':
           // 世界事件（docs/tools/12 §6.3）：先判重，再转发，最后整层重取。
           {
-            const ev = msg.event as { id?: string } | undefined;
+            const ev = msg.event as
+              | { id?: string; type?: string; layer?: string | null; detail?: { layer?: string } }
+              | undefined;
             if (!ev || typeof ev.id !== 'string') break; // 畸形帧不污染去重集合
             if (!noteWorldEvent(ev.id)) break; // 同一行的重复副本到此为止
             forwardWorldEvent(msg as unknown as WorldEventFrame);
+            // The I1 initialiser's outcome (docs/init/03 §3.6): clear the ghost.
+            // `layer_initialized` -> the refetched product replaces it (handover);
+            // `layer_init_failed` must ALSO be visible (contract §8 anti-pattern 8),
+            // but the toast copy is localised in App — this hook has no `t()`.
+            // `ev.type` is an EVENT type nested in `world_event`, NOT a frame name —
+            // the `.includes()` form keeps `check:ws` from reading them as frames
+            // (same convention as `forwardWorldEvent` above).
+            if (['layer_initialized', 'layer_init_failed'].includes(ev.type ?? '')) {
+              const done = ev.detail?.layer ?? ev.layer ?? null;
+              setInitializingLayer((cur) => (cur !== null && (done === null || done === cur) ? null : cur));
+              window.dispatchEvent(new CustomEvent('airp:layer-init', { detail: msg }));
+            }
             void fetchLayer(layerRef.current);
           }
           break;
@@ -581,6 +603,7 @@ export function useWorld(): UseWorldApi {
     state,
     loading,
     layer,
+    initializingLayer,
     enterLayer,
     refresh,
     moveCard,

@@ -24,6 +24,11 @@ interface CanvasProps {
   stillPortraits?: boolean;
   links: LayerLink[];
   bg: { src: string | null; video?: string; tone: string; grain: string };
+  /** Provisional "taking shape" card while an I1 init runs (docs/init/03 §3.5).
+   *  Purely client-side: never in `items`, never measured, never persisted. */
+  ghost?: LayerItem | null;
+  /** Copy for the ghost card face (i18n). */
+  ghostLabel?: string;
   ghostCopy: GhostCopy;
   onMoveCard?: (path: string, x: number, y: number) => Promise<void> | void;
   onSelectChoice?: (path: string, choice: string) => void;
@@ -82,6 +87,8 @@ function readTop(el: HTMLElement): number {
 export const Canvas: React.FC<CanvasProps> = ({
   effectsEnabled = false,
   currentLayer,
+  ghost = null,
+  ghostLabel,
   items,
   stillPortraits = false,
   links,
@@ -552,6 +559,25 @@ export const Canvas: React.FC<CanvasProps> = ({
             still={item.path !== playingPortrait}
           />
         ))}
+        {/* Provisional "taking shape" card (docs/init/03 §3.5). Rendered with
+            the `.object--ghost` shell — OUTSIDE `items`, so it never enters
+            `itemsByPath`, the drag dispatcher, or footprint measurement, and
+            `pointer-events: none` makes it non-interactive (doc-10 E3). It reuses
+            the image-ghost skeleton visual and sits at the anchor cell the first
+            real product will claim: the handover is a no-jump swap. */}
+        {ghost && (
+          <div
+            data-path={ghost.path}
+            className="object--ghost"
+            style={{ left: ghost.x, top: ghost.y, width: ghost.w, zIndex: ghost.z }}
+            aria-hidden
+          >
+            <div className="ghost-card ghost-card--pending" style={{ height: ghost.h }}>
+              <div className="ghost-card__skeleton" />
+              <div className="ghost-card__stage">{ghostLabel ?? ghost.body}</div>
+            </div>
+          </div>
+        )}
         <PhantomLayer currentLayer={currentLayer} bgSrc={bg.src} copy={ghostCopy} />
       </div>
 

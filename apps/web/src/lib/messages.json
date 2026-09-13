@@ -489,6 +489,14 @@
     "zh-CN": "图片未能显示。",
     "ja": "絵を表示できなかった。"
   },
+  "Taking shape…": {
+    "zh-CN": "正在成形…",
+    "ja": "形になりつつある…"
+  },
+  "It never quite took shape here.": {
+    "zh-CN": "这里终究没能成形。",
+    "ja": "ここはまだ形にならなかった"
+  },
   "Could not move item": {
     "zh-CN": "无法移动物品",
     "ja": "アイテムを移動できませんでした"

@@ -4,6 +4,7 @@ import type { PhantomEntry } from '../../lib/phantom.js';
 import { ghostVisibleOn, LANDED_DWELL_MS, REUSED_DWELL_MS } from '../../lib/ghost.js';
 import { GhostCard } from '../narrative/GhostCard.js';
 import type { GhostCopy } from '../narrative/GhostCard.js';
+import { ChalkMark } from '../performance/WriterInkLayer.js';
 
 /**
  * The ONE mount point for provisional cards (docs/perform/00 §5, ruling E).
@@ -47,7 +48,6 @@ export const PhantomLayer: React.FC<PhantomLayerProps> = ({ currentLayer, bgSrc,
     const timers: number[] = [];
     const now = Date.now();
     for (const p of phantoms) {
-      if (p.kind === 'chalk' && p.phase === 'evicted') { drop(p.toolCallId); continue; }
       if (p.kind !== 'image') continue;
       if (p.phase === 'evicted') {
         timers.push(window.setTimeout(() => drop(p.toolCallId), EVICT_FADE_MS));
@@ -68,8 +68,7 @@ export const PhantomLayer: React.FC<PhantomLayerProps> = ({ currentLayer, bgSrc,
     };
   }, [phantoms, bgSrc]);
 
-  // Niko shows one settled-turn receipt, not every provisional Chalk body.
-  const visible = phantoms.filter((p) => p.kind === 'image' && ghostVisibleOn(p.layer, currentLayer));
+  const visible = phantoms.filter((p) => ghostVisibleOn(p.layer, currentLayer));
   if (visible.length === 0) return null;
 
   return (
@@ -81,7 +80,7 @@ export const PhantomLayer: React.FC<PhantomLayerProps> = ({ currentLayer, bgSrc,
           className="object--ghost"
           style={{ left: p.seat.x, top: p.seat.y, width: p.seat.w, zIndex: p.seat.z }}
         >
-          <GhostCard entry={p} copy={copy} />
+          {p.kind === 'image' ? <GhostCard entry={p} copy={copy} /> : <ChalkMark entry={p} />}
         </div>
       ))}
     </>
