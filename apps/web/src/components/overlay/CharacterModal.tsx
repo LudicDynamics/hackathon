@@ -425,7 +425,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     clearWatchdog();
     turnWatchdog.current = window.setTimeout(() => {
       turnWatchdog.current = null;
-      const silence = SILENCE_LINE[locale];
+      const silence = SILENCE_LINE[language === 'ja' ? 'ja' : 'en'];
       lineRef.current = silence.text;
       streamingRef.current = false;
       syncPages(silence.text, { final: true, reset: true });
@@ -440,7 +440,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
       setEmo(silence.emo);
       setPhase('done');
     }, TURN_WATCHDOG_MS);
-  }, [clearWatchdog, locale, syncPages, enterPage, cancelStreamTimer]);
+  }, [clearWatchdog, language, syncPages, enterPage, cancelStreamTimer]);
 
   /** 彻底收尾（卸载 / 切角色）：清所有定时器并复位流状态。 */
   const streamTurn = useCallback(() => {
@@ -503,7 +503,8 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     phaseRef.current = 'idle';
     phaseBeforeTurnRef.current = 'idle';
 
-    const key = worldId === undefined ? null : `airp:greeted:${worldId}:${characterId}`;
+    const contentLanguage = language === 'ja' ? 'ja' : 'en';
+    const key = worldId === undefined ? null : `airp:greeted:v2:${worldId}:${characterId}:${contentLanguage}`;
     let greeted: string | null = null;
     if (key !== null) {
       try {
@@ -514,7 +515,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     }
     if (greeted !== null) return;
 
-    const g = GREETING_LINE[locale] ?? GREETING_LINE.en;
+    const g = GREETING_LINE[contentLanguage];
     const mockPage: StagePage = { text: g.text, emo: g.emo, sealed: true, voiceState: 'idle' };
     pagesRef.current = [mockPage];
     mockRef.current = true;
@@ -534,7 +535,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     setPhase('streaming');
     void prefetchVoice(mockPage, 0); // §15.18 B1：mock 页必须走同一语音路径
     enterPage(0, { announce: true }); // 逐字 + 朗读，不响 stinger
-  }, [characterId, locale, worldId, prefetchVoice, enterPage]);
+  }, [characterId, language, worldId, prefetchVoice, enterPage]);
 
   // 帧消费：App 已按 activeModalCharId 过滤；所有推进读 ref，consumedFrameRef
   // 保证同一帧对象只消费一次（StrictMode 双跑可重入）。

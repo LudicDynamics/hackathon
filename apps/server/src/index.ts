@@ -277,8 +277,9 @@ wss.on('connection', (ws: WebSocket) => {
 });
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`[AIRP Server] Listening on http://0.0.0.0:${PORT} and http://localhost:${PORT}`);
+const HOST = process.env.AIRP_HOST || '0.0.0.0';
+server.listen(PORT, HOST, () => {
+  console.log(`[AIRP Server] Listening on http://${HOST}:${PORT} and http://localhost:${PORT}`);
 });
 
 // Retire every spawned agent on shutdown — otherwise pi-rp processes outlive the server.

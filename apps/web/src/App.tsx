@@ -30,6 +30,7 @@ import { airpGateway, type WorldShelf } from './lib/airp-gateway.js';
 import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
 import { BagItemDialog } from './components/BagItemDialog.js';
 import { appendItemAction, buildItemActionPrompt } from './lib/item-action-draft.js';
+import { PLAY_HINT_REQUEST } from './lib/play-hints.js';
 import { initialShell, transitionShell, splitCharacters } from './lib/ui-shell.mjs';
 import { MarkdownText } from './lib/md.js';
 import { BookOpen, ChevronDown, ChevronUp, Maximize, Minimize, UserRound, Backpack, Sparkles } from 'lucide-react';
@@ -159,6 +160,13 @@ export function App() {
     return () => window.removeEventListener('airp:agent-frame', receive);
   }, []);
   const writerRef = useRef<HTMLInputElement>(null);
+  const activeSavePath = shelf.groups?.flatMap(group => group.saves).find(save => save.active)?.path;
+  useEffect(() => {
+    if (writerRef.current) writerRef.current.value = '';
+    preparedSource.current = null;
+    setPreparedAction('');
+    setSelectedBagPath(null);
+  }, [manifest?.id, activeSavePath]);
   const writerHistory = useRef<string[]>([]);
   const writerHistoryCursor = useRef(0);
   const writerDraft = useRef('');
@@ -637,7 +645,7 @@ export function App() {
             <h1>{currentName}</h1>
             <p>{layer === 'map' ? t('The first moment') : t('The story continues')} · {state?.worldFrozen ? t('Time stands still') : t('Time flows')}</p>
             {sceneStatus.map(([key, value]) => <span className="prototype-stat" key={key}>{labelOf(key)} · {String(value)}</span>)}
-            <WriterResult worldKey={`${manifest?.id}:${layer}`} onContinue={() => prepareWriter('Continue this scene by one short narrative beat, then wait for my next action.')} />
+            <WriterResult worldKey={`${activeSavePath ?? manifest?.id}:${worldLoadGeneration.current}`} onContinue={manifest ? () => prepareWriter(t(PLAY_HINT_REQUEST)) : undefined} />
           </div>
 
           <div className="prototype-tools prototype-chrome" aria-label={t("Canvas tools")}>

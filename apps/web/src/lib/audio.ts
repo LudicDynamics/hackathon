@@ -64,7 +64,34 @@ const BGM_TARGETS: Record<BGMood, number> = {
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
+let musicBus: GainNode | null = null;
+let voiceBus: GainNode | null = null;
 let mutedState = false;
+
+export type VolumeChannel = 'music' | 'voice';
+function readVolume(channel: VolumeChannel): number {
+  try {
+    const raw = localStorage.getItem(`airp-volume-${channel}`);
+    const value = raw === null ? 1 : Number(raw);
+    return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
+  } catch { return 1; }
+}
+const channelVolumes = { music: readVolume('music'), voice: readVolume('voice') };
+export function getChannelVolume(channel: VolumeChannel): number { return channelVolumes[channel]; }
+/** Post-envelope channel gain: volume changes never restart a clip or reset its fade. */
+export function setChannelVolume(channel: VolumeChannel, value: number): void {
+  if (!Number.isFinite(value)) return;
+  const next = Math.min(1, Math.max(0, value));
+  channelVolumes[channel] = next;
+  try { localStorage.setItem(`airp-volume-${channel}`, String(next)); } catch { /* private mode */ }
+  const bus = channel === 'music' ? musicBus : voiceBus;
+  if (ctx && bus) {
+    const t = ctx.currentTime;
+    bus.gain.cancelScheduledValues(t);
+    bus.gain.setValueAtTime(bus.gain.value, t);
+    bus.gain.linearRampToValueAtTime(next, t + 0.03);
+  }
+}
 
 const noiseCache = new Map<'white' | 'brown', AudioBuffer>();
 
@@ -81,6 +108,12 @@ export function initAudio(): AudioContext | null {
     master = ctx.createGain();
     master.gain.value = 0; // silent until the first unlock()/setMuted() reasserts
     master.connect(ctx.destination);
+    musicBus = ctx.createGain();
+    musicBus.gain.value = channelVolumes.music;
+    musicBus.connect(master);
+    voiceBus = ctx.createGain();
+    voiceBus.gain.value = channelVolumes.voice;
+    voiceBus.connect(master);
   } catch (err) {
     console.warn('Web Audio unavailable:', err);
     ctx = null;
@@ -367,7 +400,7 @@ function buildBgmEngines(): void {
   calmPadLp.connect(calmPadG);
   calmBus.connect(calmG);
   calmPadG.connect(calmG);
-  calmG.connect(master!);
+  calmG.connect(musicBus!);
   a1.start();
   e2.start();
   calmPad.start();
@@ -395,7 +428,7 @@ function buildBgmEngines(): void {
   lfo.connect(lfoG);
   lfoG.connect(trem.gain);
   trem.connect(tenseG);
-  tenseG.connect(master!);
+  tenseG.connect(musicBus!);
   t1.start();
   t2.start();
   lfo.start();
@@ -404,7 +437,7 @@ function buildBgmEngines(): void {
   // ---- crisis: low pulse every 0.5s + rising noise sweep, interval-driven ----
   const crisisG = c.createGain();
   crisisG.gain.value = 0;
-  crisisG.connect(master!);
+  crisisG.connect(musicBus!);
   const crisisBeat = (): void => {
     // heartbeat thump
     toneThump(crisisG, { from: 110, to: 55, dur: 0.08, peak: 0.4, attack: 0.004, decay: 0.2 });
@@ -622,7 +655,7 @@ function stopClip(track: TrackId, clip: Clip, fade: number): void {
 /** Play a main-track sample loop and register it in the track table. */
 function playTrackLoop(track: TrackId, url: string, buffer: AudioBuffer, token: number): void {
   if (!master) return;
-  const nodes = playClip(master, buffer, true, SAMPLE_LEVELS[track]);
+  const nodes = playClip(track === 'ambient' ? master : musicBus!, buffer, true, SAMPLE_LEVELS[track]);
   if (!nodes) return;
   // A newer set() landed while we were decoding → discard this clip.
   if (token !== tracks[track].token) {
@@ -939,7 +972,7 @@ export function playVoice(url: string): void {
     if (token !== voiceToken) return; // superseded by a newer call / stop
     if (!buf || !master || !ctx) return; // load failed → silence (no fallback)
     if (ctx.state !== 'running') return; // suspended again during decode → drop
-    const nodes = playClip(master, buf, /* loop */ false, VOICE_SAMPLE_LEVEL);
+    const nodes = playClip(voiceBus!, buf, /* loop */ false, VOICE_SAMPLE_LEVEL);
     if (!nodes) return;
     nodes.src.onended = (): void => {
       // Past playClip's own disconnect; add the slot clear so isVoicing()

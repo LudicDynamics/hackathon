@@ -1,5 +1,6 @@
 {
   "id": "firstsnow",
+  "locale": "en",
   "audio": {
     "theme": "canvas-firstsnow"
   },

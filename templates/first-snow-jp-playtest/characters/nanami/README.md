@@ -1,7 +1,7 @@
 ---
 type: readme
 name: 七海
-voice: gentle-calm
+voice: girl-next-door
 avatar: assets/motion/seedance/characters/nanami-transparent.webp
 avatarVideo: assets/motion/seedance/characters/nanami-transparent.webm
 ---
