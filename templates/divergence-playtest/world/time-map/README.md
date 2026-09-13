@@ -1,13 +1,13 @@
 ---
 type: gate
-name: 三つの時間
-title: 三つの時間
-bg: assets/scenes/tokiwa-electrics.webp
+name: 三つの時間 · 同じ店
+title: 三つの時間 · 同じ店
+bg: assets/scenes/tonight.webp
 requires:
   items:
     - player/clockwork-frog.md
-blocked: 導入でぜんまいの蛙を持ってから、時間の地図へ。
-bgVideo: assets/motion/seedance/backgrounds/map.webm
+blocked: 修理した蛙を手に取ろう。その重さが、あなたを別の時間へつないでいる。
+bgVideo: assets/motion/seedance/backgrounds/tonight.webm
 ---
 
-一九九四年、今夜、三十年後。まず時間を選び、その時代の常盤電器へ入る。場所が同じでも、待っている人は違う。
+一九九四年十二月三十一日、送修の日。一九九五年一月一日の今夜。そして二〇二四年。同じ自分の、それぞれの時点に入る。蛙とあなたの記憶だけが前の時間を覚えている。

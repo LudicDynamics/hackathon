@@ -1,0 +1,14 @@
+goal: "分支线三时刻修青蛙短闭环，不改引擎"
+keyresults:
+  - kr-1: "1994 与 1995 共用背景，人物证物不同"
+  - kr-2: "事故、传真、替代干预与未来因果完整"
+  - kr-3: "确认才发送，缺草稿有下一步，缺图仍可玩"
+rules:
+  - id: timeline-contract
+    name: timeline-causality
+    apply: "tools/experiences/timeline.mjs"
+    level: error
+    desc:
+      - "三个时间入口；2024 原路径改写；无第四必游结局"
+      - "1995-01-01 20:00 发往当天 08:00，事故09:00"
+      - "未授权发送不改史；重访不重复生成；成年人物先文字 Mock"

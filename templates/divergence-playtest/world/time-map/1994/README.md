@@ -1,9 +1,9 @@
 ---
 type: gate
-name: 一九九四年
-title: 一九九四年
-bg: assets/scenes/1994-11-02.webp
-bgVideo: assets/motion/seedance/backgrounds/y1994.webm
+name: 一九九四年十二月三十一日 · 送修の日
+title: 一九九四年十二月三十一日 · 送修の日
+bg: assets/scenes/tonight.webp
+bgVideo: assets/motion/seedance/backgrounds/tonight.webm
 ---
 
-この時間の場所を選ぶ。十一月二日。七歳のリョウは、蛙を直してもらうためカウンターを見上げている。未来の事故のことは知らない。
+一九九四年十二月三十一日 · 送修の日。この時刻の常盤電器へ。時間の地図へ戻れば、別の時刻を選べる。
