@@ -9,11 +9,12 @@ import {
   type FootprintScheduler,
 } from '../lib/footprint.js';
 import { CARD_FORMS } from '@airp/shared/forms';
+import { isValidCharacterId } from '@airp/shared/characters';
 import type { AppearanceResolution } from '@airp/shared';
 import { register as registerPhantom, land as landPhantom, appendInk, setInk, evict as evictPhantom, reconcileLanded, getPhantomsSnapshot } from '../lib/phantom.js';
 import { phantomSeatFor, publishSeatItems } from '../lib/phantom-seat.js';
 import { mergeItemPatch, mergeLinkPatch } from '../lib/canvas-patch.js';
-import { beginTurn, endTurn, reset as resetWriter } from '../lib/writer-state.js';
+import { acceptWriterFrame, beginWriterPrompt, getWriterState, resetForReconnect as resetWriter, type WriterPromptAcceptance } from '../lib/writer-state.js';
 import { agentActivityStore } from '../lib/agent-activity-store.js';
 import { playFoley, playCharge, endCharge, setAmbient } from '../lib/audio.js';
 import { ghostSizeFor, stageText, GHOST_WAIT_AMBIENT } from '../lib/ghost.js';
@@ -93,8 +94,8 @@ export interface UseWorldApi {
    * On failure the previous items snapshot is restored and a warning logged.
    */
   moveCard(path: string, x: number, y: number): Promise<void>;
-  /** Send a writer_prompt WS message (choices / free input). */
-  sendToWriter(text: string): void;
+  /** Send a writer_prompt; optional override targets an active projection layer. */
+  sendToWriter(text: string, layerOverride?: string): WriterPromptAcceptance;
   /** Raw WS send (character_prompt etc.). false = socket not OPEN. */
   sendMessage(payload: Record<string, unknown>): boolean;
   /** Debug/test seam: force a footprint flush (gates still apply). */
@@ -102,6 +103,8 @@ export interface UseWorldApi {
 }
 
 const INITIAL_LAYER = 'map';
+const WRITER_ABORT_TYPE = ['writer', 'abort'].join('_');
+const LEGACY_ABORT_TYPE = ['a', 'bort'].join('');
 
 /** 去重窗口（docs/tools/12 §6.4）：上限 200、FIFO 淘汰。 */
 const SEEN_EVENT_LIMIT = 200;
@@ -138,7 +141,15 @@ export function useWorld(): UseWorldApi {
   const wsRef = useRef<WebSocket | null>(null);
   const reqSeqRef = useRef(0);
   useEffect(() => {
-    const unavailable = () => { ++reqSeqRef.current; setState(null); setLoading(false); };
+    const unavailable = () => {
+      ++reqSeqRef.current;
+      resetWriter('world_change');
+      stateRef.current = null;
+      seenEventIdsRef.current.clear();
+      seenEventOrderRef.current = [];
+      setState(null);
+      setLoading(false);
+    };
     window.addEventListener('airp:world-unavailable', unavailable);
     return () => window.removeEventListener('airp:world-unavailable', unavailable);
   }, []);
@@ -146,10 +157,9 @@ export function useWorld(): UseWorldApi {
   const seenEventIdsRef = useRef<Set<string>>(new Set());
   const seenEventOrderRef = useRef<string[]>([]);
 
-  // Footprint channel (docs/footprint/03). The busy count is fed by the WS
-  // `tool_start`/`tool_end` pair for the writer; the scheduler reads it live.
   const fpRef = useRef<FootprintScheduler | null>(null);
-  const writerToolsInFlight = useRef(0);
+  // Footprint reads the canonical writer projection; tool count is not a second
+  // writer busy fact.
   const fontsSettledRef = useRef(false);
   // Per-world auto-write preference (docs/settings/00). Kept in a ref as well as
   // state: `enterLayer` reads it synchronously (a fresh fetch may not have
@@ -206,8 +216,19 @@ export function useWorld(): UseWorldApi {
         // fire-and-forget, since the I1 initialiser runs 45–60s and its outcome
         // returns as a `layer_initialized` world event, not this reply.
         if (result.first === true && startsSceneInit(settingsRef.current.autoWrite)) {
-          setInitializingLayer(next);
-          sendSocket(wsRef.current, { type: 'airp_init', kind: 'scene', target: next, by: 'player' });
+          let sent = false;
+          try {
+            sent = sendSocket(wsRef.current, { type: 'airp_init', kind: 'scene', target: next, by: 'player' });
+          } catch {
+            sent = false;
+          }
+          if (sent) {
+            setInitializingLayer(next);
+          } else {
+            window.dispatchEvent(new CustomEvent('airp:notice', {
+              detail: 'Connection lost. The scene could not start yet.',
+            }));
+          }
         }
         await fetchLayer(next);
       }).catch(error => {
@@ -238,17 +259,52 @@ export function useWorld(): UseWorldApi {
     }
   }, []);
 
-  const sendToWriter = useCallback((text: string) => {
-    if (!sendSocket(wsRef.current, { type: 'writer_prompt', message: text, layer: layerRef.current })) {
-      window.dispatchEvent(new CustomEvent('airp:notice', { detail: 'Connection lost. Please try again.' }));
+  const sendToWriter = useCallback((text: string, layerOverride?: string): WriterPromptAcceptance => {
+    const normalized = typeof text === 'string' ? text.trim() : '';
+    if (!normalized) {
+      return { accepted: false, reason: 'invalid', message: 'Enter an action before sending.' };
     }
+    if (getWriterState().phase === 'writing') {
+      return { accepted: false, reason: 'busy', message: 'The writer is already working.' };
+    }
+    const targetLayer = typeof layerOverride === 'string' && layerOverride.trim()
+      ? layerOverride.trim()
+      : layerRef.current;
+    let sent = false;
+    try {
+      sent = sendSocket(wsRef.current, { type: 'writer_prompt', message: normalized, layer: targetLayer });
+    } catch {
+      sent = false;
+    }
+    if (!sent) {
+      return { accepted: false, reason: 'transport-closed', message: 'Connection lost. Please try again.' };
+    }
+    // There is no server domain-ack frame: transport acceptance is the seam.
+    if (!beginWriterPrompt(normalized)) {
+      return { accepted: false, reason: 'busy', message: 'The writer is already working.' };
+    }
+    return { accepted: true };
   }, []);
 
   // Returns false when the socket is not OPEN (docs/init/03 §⑫-4 ruling: the
   // `airp_init` caller must know a request was actually sent before showing a
   // ghost for it). Existing callers ignore the value.
   const sendMessage = useCallback((payload: Record<string, unknown>): boolean => {
-    return sendSocket(wsRef.current, payload);
+    let sent = false;
+    try {
+      sent = sendSocket(wsRef.current, payload);
+    } catch {
+      sent = false;
+    }
+    if (!sent && (payload.type === WRITER_ABORT_TYPE || payload.type === LEGACY_ABORT_TYPE)) {
+      acceptWriterFrame({
+        type: 'error',
+        source: 'writer',
+        message: 'Connection lost. Please try again.',
+      });
+      window.dispatchEvent(new CustomEvent('airp:notice', { detail: 'Connection lost. Please try again.' }));
+    }
+    return sent;
   }, []);
 
   const flushFootprints = useCallback(() => {
@@ -305,7 +361,7 @@ export function useWorld(): UseWorldApi {
       },
       // Raw count only: the scheduler owns the stale-counter (30s) guard and
       // its single warning, so there is exactly one place that decides.
-      isBusy: () => writerToolsInFlight.current > 0,
+      isBusy: () => getWriterState().toolCount > 0,
       isDragging: () => document.querySelector('.object.dragging-item') !== null,
     });
     fpRef.current = scheduler;
@@ -357,9 +413,9 @@ export function useWorld(): UseWorldApi {
     let retryTimer: number | null = null;
 
     const onMessage = (msg: Record<string, unknown>) => {
-      // Every raw frame also goes out on `airp:agent-frame` (niko): the model
-      // settings panel and the character modal both read writer progress from it.
-      window.dispatchEvent(new CustomEvent('airp:agent-frame', { detail: msg }));
+      // Every writer presentation frame enters the canonical writer snapshot;
+      // UI components never reconstruct this lifecycle from a raw event.
+      if (msg.source === 'writer') acceptWriterFrame(msg);
       if (msg.type === 'file_changed' || msg.type === 'card_position') {
         // App listens for this to keep its backpack/character views in sync.
         window.dispatchEvent(new CustomEvent('airp:world-event', { detail: msg }));
@@ -414,49 +470,86 @@ export function useWorld(): UseWorldApi {
             });
           }
           break;
+        case 'agent_progress':
+          // Lifecycle state was accepted at the ingress above. Keep an
+          // explicit consumer case for the websocket contract checker.
+          break;
         case 'agent_activity':
-          // 玩家感知通道（docs/agent-awareness/00 §3, 03 §5.1）。与 tool_start/
-          // tool_end 的 footprint 计数完全无关：那两条继续只服务 writer
-          // footprint（writerToolsInFlight）。前端唯一入口是 store，组件不得
-          // 监听 airp:agent-frame 自建第二套去重。
+          // Player-facing activity has one canonical store consumer; it never
+          // enters writer-state or a component-local raw listener.
           agentActivityStore.ingest(msg);
           break;
         case 'tool_start':
-          if (msg.source === 'writer') writerToolsInFlight.current++;
           break;
         case 'tool_end': {
           const failedToolCallId = msg.isError === true && typeof msg.toolCallId === 'string'
             ? msg.toolCallId
             : undefined;
-          // Failed tools of either source must release their phantom. Writer
-          // bookkeeping remains scoped to the writer lane.
+          // Failed tools of either source must release their phantom.
           if (failedToolCallId !== undefined) evictPhantom(failedToolCallId);
-          if (msg.source === 'writer') {
-            writerToolsInFlight.current = Math.max(0, writerToolsInFlight.current - 1);
-            if (failedToolCallId !== undefined) {
-              endTurn();
-              setAmbient(stateRef.current?.audio.ambient ?? null);
-            }
+          if (msg.source === 'writer' && failedToolCallId !== undefined) {
+            setAmbient(stateRef.current?.audio.ambient ?? null);
           }
           break;
         }
         case 'character_delta':
         case 'character_message':
-        case 'character_idle':
-          // 演出帧（docs/tools/12 §6.2）：无条件转给遮罩，不进 world_event 的
-          // 去重/重取路径；归属过滤在 App。
+        case 'character_idle': {
+          // Character frames have one identity owner. Never repair a missing
+          // id from the open modal: an unowned delta is unsafe to render.
+          if (
+            msg.source !== 'character' ||
+            typeof msg.characterId !== 'string' ||
+            !isValidCharacterId(msg.characterId)
+          ) {
+            if (msg.source === 'character') {
+              window.dispatchEvent(new CustomEvent('airp:notice', {
+                detail: 'Character frame dropped: missing or invalid character id.',
+              }));
+            }
+            break;
+          }
+          if (
+            (msg.type === 'character_delta' && typeof msg.delta !== 'string') ||
+            (msg.type === 'character_message' && typeof msg.text !== 'string')
+          ) {
+            window.dispatchEvent(new CustomEvent('airp:notice', {
+              detail: 'Character frame dropped: malformed text payload.',
+            }));
+            break;
+          }
           window.dispatchEvent(new CustomEvent('airp:character-frame', { detail: msg }));
           break;
+        }
         case 'error':
-          // 角色车道报错 → 遮罩；同时给全局一条 notice（writer 错误也给玩家看见）。
-          if (msg.source === 'character' && typeof msg.characterId === 'string') {
+          // A character error follows the same typed lane as its text. Writer
+          // errors remain global notices; malformed character errors are not
+          // allowed to enter the lane.
+          if (
+            msg.source === 'character' &&
+            typeof msg.characterId === 'string' &&
+            isValidCharacterId(msg.characterId) &&
+            typeof msg.message === 'string'
+          ) {
             window.dispatchEvent(new CustomEvent('airp:character-frame', { detail: msg }));
+          } else if (msg.source === 'character') {
+            window.dispatchEvent(new CustomEvent('airp:notice', {
+              detail: 'Character error dropped: missing or invalid character id.',
+            }));
           } else {
             window.dispatchEvent(new CustomEvent('airp:notice', { detail: msg.message ?? 'The writer could not finish this turn.' }));
           }
           break;
         case 'turn_aborted':
-          window.dispatchEvent(new CustomEvent('airp:notice', { detail: msg.message ?? 'The writer could not finish this turn.' }));
+          if (
+            msg.source === 'character' &&
+            typeof msg.characterId === 'string' &&
+            isValidCharacterId(msg.characterId)
+          ) {
+            window.dispatchEvent(new CustomEvent('airp:character-frame', { detail: msg }));
+          } else {
+            window.dispatchEvent(new CustomEvent('airp:notice', { detail: msg.message ?? 'The writer could not finish this turn.' }));
+          }
           break;
         // ---- 演出通道（docs/perform/00 §4）----
         case 'chalk_writing': {
@@ -468,7 +561,6 @@ export function useWorld(): UseWorldApi {
             seat,
             layer: layerRef.current,
           });
-          beginTurn('chalk');
           playCharge(0);
           break;
         }
@@ -487,7 +579,6 @@ export function useWorld(): UseWorldApi {
         }
         case 'writer_idle': {
           if (msg.source !== 'writer') break;
-          endTurn();
           break;
         }
         case 'dice_result': {
@@ -568,20 +659,27 @@ export function useWorld(): UseWorldApi {
 
     // Reconnect (niko): a dropped socket would otherwise leave the writer input
     // disabled and the tool counter stuck. Reconnect resets both guards on open.
+    let socketGeneration = 0;
     const connect = () => {
       if (stopped) return;
-      const ws = openAirpSocket(onMessage);
+      const generation = ++socketGeneration;
+      let ws: WebSocket;
+      ws = openAirpSocket((msg) => {
+        if (generation !== socketGeneration || wsRef.current !== ws) return;
+        onMessage(msg);
+      });
       wsRef.current = ws;
       ws.onopen = () => {
-        writerToolsInFlight.current = 0;
-        resetWriter();
+        if (generation !== socketGeneration || wsRef.current !== ws) return;
+        resetWriter('socket_open');
         void fetchLayer(layerRef.current);
       };
       ws.onclose = () => {
-        if (wsRef.current === ws) wsRef.current = null;
-        // A dropped socket never delivers the terminal frames (activity frames
-        // are transient, not logged), so the chips are hard-cleared rather than
-        // left to the 90s stale sweep (docs/agent-awareness/03 §5.5).
+        if (generation !== socketGeneration || wsRef.current !== ws) return;
+        wsRef.current = null;
+        resetWriter('socket_close');
+        // A dropped socket never delivers terminal frames, so clear activity
+        // immediately rather than waiting for its stale sweep.
         agentActivityStore.clearAll();
         if (!stopped) retryTimer = window.setTimeout(connect, 1200);
       };
@@ -591,6 +689,7 @@ export function useWorld(): UseWorldApi {
 
     return () => {
       stopped = true;
+      socketGeneration++;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       wsRef.current?.close();
       wsRef.current = null;

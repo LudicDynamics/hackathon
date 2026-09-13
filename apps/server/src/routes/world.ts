@@ -22,6 +22,9 @@ import {
   listBackpack,
   nookCardPaths,
   nookIdOf,
+  NookNoteInputSchema,
+  NookNoteOutcomeSchema,
+  writeNookNote,
   parseFrontmatter,
   cardFormOf,
   cardKindOf,
@@ -409,7 +412,7 @@ export function createWorldRouter(
     if (releasingWorld) {
       try { await releasingWorld; } catch { /* The unavailable world stays detached. */ }
     }
-    const needsWorld = ['/agent-settings', '/manifest', '/nook', '/layer', '/backpack', '/characters', '/move', '/card/position', '/card/footprint', '/dice', '/use-item', '/choice', '/enter-layer', '/viewpoint', '/freeze', '/god-action', '/asset', '/audio'].includes(req.path);
+    const needsWorld = ['/agent-settings', '/manifest', '/nook', '/nook-note', '/layer', '/backpack', '/characters', '/move', '/card/position', '/card/footprint', '/dice', '/use-item', '/choice', '/enter-layer', '/viewpoint', '/freeze', '/god-action', '/asset', '/audio'].includes(req.path);
     if (!getActiveStore() && needsWorld) {
       return res.status(409).json({ code: 'no_active_world', error: 'Choose a world or start a new save.' });
     }
@@ -657,6 +660,40 @@ export function createWorldRouter(
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
+  });
+
+  /**
+   * Leave a player-authored note in a character's Nook. The request is a
+   * deliberately narrow transport seam: it carries no path, frontmatter,
+   * link, or actor. `writeNookNote` performs the shared id/path checks and
+   * delegates serialization + entity_created to the existing writeChalk action.
+   * The event bridge's tail reader observes that event and the normal
+   * world_event refresh path re-reads the Nook.
+   */
+  router.post('/nook-note', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const parsed = NookNoteInputSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return res.status(400).json({
+        ok: false,
+        code: 'invalid_argument',
+        error: issue?.message ?? 'Invalid nook note input',
+      });
+    }
+
+    const service = serviceFor(store, { type: 'player' });
+    await reply(res, async () => {
+      const result = await writeNookNote(service.ctx, parsed.data);
+      const details = NookNoteOutcomeSchema.parse({
+        path: result.details.path,
+        eventSeq: result.details.eventSeq,
+        actor: result.details.actor,
+        created: result.details.created,
+      });
+      return { details };
+    });
   });
 
   // Get layer contents (cards, files)

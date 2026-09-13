@@ -166,7 +166,7 @@ function shellStyle(item: CanvasObjectProps['item'], kind: string, reading: bool
     // grows the shell. Mutating width here was a 4th collision authority
     // (docs/footprint §3.5, AGENTS §7.5①).
     width: item.w,
-    zIndex: reading ? 100 : liftFor(item.path, item.z),
+    zIndex: reading ? 'var(--depth-entity-reading)' : liftFor(item.path, item.z),
     '--target-rot': kind === 'chalk' || kind === 'sprite' ? '0deg' : `${item.rot}deg`,
   };
 }

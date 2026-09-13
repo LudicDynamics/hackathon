@@ -5,6 +5,7 @@ import { WriterBar } from '../chrome/WriterBar.js';
 import { StubPrompt } from '../chrome/StubPrompt.js';
 import { ghostItemFor } from '../../lib/init-ghost.js';
 import type { LayerState } from '../../state/useWorld.js';
+import { NookNoteComposer } from './NookNoteComposer.js';
 import { UI_COPY, type Locale } from '../../lib/i18n.js';
 import { useStill } from '../../lib/motion.js';
 import { whenFontsSettled } from '../../lib/fonts.js';
@@ -35,8 +36,15 @@ export interface NookViewProps {
   // Forwarded layer callbacks (02 §⑫-2): the nook MUST NOT build its own
   onMoveCard?: (path: string, x: number, y: number) => Promise<void> | void;
   onSelectChoice?: (path: string, choice: string) => void;
+  onEntityAction?: (prompt: string, targetLayer?: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
+  onOpenCharacterModal?: (characterId: string) => void;
+  onItemDropOnTarget?: (itemPath: string, targetPath: string) => void;
+  onDropItemToScene?: (itemPath: string, targetLayer?: string) => void;
   onTakeItem?: (path: string) => void;
+  /** True while a CharacterModal owns focus above this projection. */
+  inactive?: boolean;
+  writerLocked?: boolean;
   /**
    * Ask the engine to materialise this empty nook (docs/init/03 §3.7: the N1
    * view owns the ENTRY, the `airp_init` kernel stays in one place). `request`
@@ -120,25 +128,25 @@ async function fetchNook(characterId: string): Promise<FetchResult> {
     };
   }
 }
-
 export const NookView: React.FC<NookViewProps> = ({
   characterId,
   onClose,
   locale,
   onMoveCard,
   onSelectChoice,
+  onEntityAction,
   onDiceRolled,
+  onOpenCharacterModal,
+  onItemDropOnTarget,
+  onDropItemToScene,
   onTakeItem,
+  inactive = false,
+  writerLocked = false,
   onRequestInit,
 }) => {
   const [state, setState] = useState<LayerState | null>(null);
   const [error, setError] = useState<NookError | null>(null);
   const [loading, setLoading] = useState(true);
-  // The nook whose I1 initialiser is in flight (docs/init/03 §3.6). Cleared ONLY
-  // by the `layer_initialized` / `layer_init_failed` event — events are the single
-  // change source, so there is no timer here. `useWorld` already dispatches
-  // `airp:layer-init` for ANY layer (its `ev.type` check is not layer-scoped),
-  // so the nook reuses that channel with zero new contract.
   const [initializing, setInitializing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -146,11 +154,11 @@ export const NookView: React.FC<NookViewProps> = ({
 
   const nookIdRef = useRef('');
   const stateRef = useRef<LayerState | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const reqSeqRef = useRef(0);
   const fpRef = useRef<FootprintScheduler | null>(null);
   const fontsSettledRef = useRef(false);
   const reduceMotion = useStill();
-
   const load = useCallback(async (id: string) => {
     const seq = ++reqSeqRef.current;
     setLoading(true);
@@ -192,6 +200,36 @@ export const NookView: React.FC<NookViewProps> = ({
     return () => window.removeEventListener('airp:layer-init', onLayerInit);
   }, [characterId, load, copy.nookInitFailed]);
 
+  const handleMoveCard = useCallback(
+    async (path: string, x: number, y: number) => {
+      const previous = stateRef.current;
+      if (!previous) return;
+      const next = {
+        ...previous,
+        items: previous.items.map(item => item.path === path ? { ...item, x, y } : item),
+      };
+      stateRef.current = next;
+      setState(next);
+      if (!onMoveCard) return;
+      try {
+        await onMoveCard(path, x, y);
+        await load(characterId);
+      } catch {
+        stateRef.current = previous;
+        setState(previous);
+      }
+    },
+    [characterId, load, onMoveCard],
+  );
+  const handleDropItemToScene = useCallback(
+    (path: string) => onDropItemToScene?.(path, stateRef.current?.layer),
+    [onDropItemToScene],
+  );
+  const handleEntityAction = useCallback(
+    (prompt: string) => onEntityAction?.(prompt, stateRef.current?.layer),
+    [onEntityAction],
+  );
+
   /**
    * The one exit of the empty-state prompt (docs/init/03 §3.3/§3.7): Submit and
    * Skip are the same call; `''` means "leave it blank". `onRequestInit` returns
@@ -210,13 +248,40 @@ export const NookView: React.FC<NookViewProps> = ({
     [onRequestInit, characterId]
   );
 
-  // A world file changed (writer added a furnishing / drag persisted) → re-read
-  // the whole nook. `useWorld` already forwards `file_changed` before its own
-  // switch, so this costs zero new contract (02 §⑥).
+  // World changes (writer edits, entity lifecycle, and authoritative card
+  // positions) are the Nook's refresh seam; no second WS is created here.
   useEffect(() => {
     const onWorldEvent = (e: Event) => {
-      const msg = (e as CustomEvent).detail as { type?: string } | undefined;
-      if (msg?.type === 'file_changed') void load(characterId);
+      const msg = (e as CustomEvent).detail as {
+        type?: string;
+        path?: string;
+        x?: number;
+        y?: number;
+        event?: { type?: string };
+      } | undefined;
+      const eventType = msg?.event?.type ?? msg?.type;
+      if (
+        eventType === 'file_changed' ||
+        ['entity_created', 'entity_edited', 'entity_deleted', 'entity_moved'].includes(eventType ?? '')
+      ) {
+        void load(characterId);
+        return;
+      }
+      if (
+        eventType === 'card_position' &&
+        typeof msg?.path === 'string' &&
+        typeof msg.x === 'number' &&
+        typeof msg.y === 'number'
+      ) {
+        const current = stateRef.current;
+        if (!current || !current.items.some(item => item.path === msg.path)) return;
+        const next = {
+          ...current,
+          items: current.items.map(item => item.path === msg.path ? { ...item, x: msg.x!, y: msg.y! } : item),
+        };
+        stateRef.current = next;
+        setState(next);
+      }
     };
     window.addEventListener('airp:world-event', onWorldEvent);
     return () => window.removeEventListener('airp:world-event', onWorldEvent);
@@ -224,13 +289,13 @@ export const NookView: React.FC<NookViewProps> = ({
 
   // Footprint channel (02 §3.6): the layer scheduler only knows layer items,
   // so nook cards would never have their measured height written back. This
-  // second instance submits ONLY the paths in its own widths map, so the two
-  // schedulers cannot collide even though both scan the global DOM.
+  // scheduler submits only Nook paths and measures inside this active root;
+  // the layer projection is unmounted while Nook is active.
   useEffect(() => {
     const scheduler = createFootprintScheduler({
       layer: () => nookIdRef.current,
       widths: () => new Map((stateRef.current?.items ?? []).map((it) => [it.path, it.w])),
-      measure: () => measureHeights(),
+      measure: () => measureHeights(rootRef.current ?? document),
       post: async (l, boxes) => {
         const res = await fetch('/api/card/footprint', {
           method: 'POST',
@@ -246,7 +311,7 @@ export const NookView: React.FC<NookViewProps> = ({
       },
       // The nook consumes no writer tool_start/tool_end frames this batch.
       isBusy: () => false,
-      isDragging: () => document.querySelector('.object.dragging-item') !== null,
+      isDragging: () => rootRef.current?.querySelector('.object.dragging-item') !== null,
     });
     fpRef.current = scheduler;
     return () => {
@@ -266,7 +331,9 @@ export const NookView: React.FC<NookViewProps> = ({
     });
     frame = requestAnimationFrame(() => {
       if (disposed) return;
-      for (const el of document.querySelectorAll('.object[data-path]')) observer.observe(el);
+      for (const el of rootRef.current?.querySelectorAll<HTMLElement>('.object[data-path]') ?? []) {
+        observer.observe(el);
+      }
       if (fontsSettledRef.current) {
         fpRef.current?.notify();
         return;
@@ -297,7 +364,16 @@ export const NookView: React.FC<NookViewProps> = ({
   const canRetry = error !== null && (error.status === 0 || error.status >= 500);
 
   return (
-    <div className="relative w-full h-full overflow-hidden" data-nook={characterId}>
+    <div
+      ref={rootRef}
+      className="relative w-full h-full overflow-hidden"
+      data-nook={characterId}
+      data-airp-projection={`nook:${characterId}`}
+      data-airp-projection-active="true"
+      aria-hidden={inactive || undefined}
+      inert={inactive || undefined}
+      aria-label={`Nook projection for ${displayName}`}
+    >
       {/* Character existence core — always visible, read-only (00 §4.2). */}
       <div
         role="group"
@@ -431,13 +507,21 @@ export const NookView: React.FC<NookViewProps> = ({
             failed: copy.ghostFailed,
             unreachable: copy.ghostUnreachable,
           }}
-          onMoveCard={onMoveCard}
+          onMoveCard={handleMoveCard}
           onSelectChoice={onSelectChoice}
+          onEntityAction={handleEntityAction}
           onDiceRolled={onDiceRolled}
+          onOpenCharacterModal={onOpenCharacterModal}
+          onDropItemToScene={handleDropItemToScene}
+          onItemDropOnTarget={onItemDropOnTarget}
           onTakeItem={onTakeItem}
-          stillPortraits={reduceMotion}
         />
       ) : null}
+      <NookNoteComposer
+        characterId={characterId}
+        disabled={inactive || writerLocked || state?.worldFrozen === true}
+        lockMessage={writerLocked ? 'The writer is working.' : undefined}
+      />
     </div>
   );
 };

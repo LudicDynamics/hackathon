@@ -44,6 +44,10 @@
     "./appearance-schema": {
       "types": "./dist/schemas/appearance.d.ts",
       "import": "./dist/schemas/appearance.js"
+    },
+    "./characters": {
+      "types": "./dist/rules/characters.d.ts",
+      "import": "./dist/rules/characters.js"
     }
   },
   "scripts": {

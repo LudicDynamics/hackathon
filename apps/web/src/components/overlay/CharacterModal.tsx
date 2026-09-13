@@ -16,6 +16,11 @@ import {
   type CharacterTurnBuffer,
   type DialoguePage,
 } from './dialogue-pages.js';
+import {
+  getCharacterFrameQueue,
+  type CharacterFrame,
+  type CharacterFrameQueue,
+} from '../../lib/character-frame-queue.js';
 
 /**
  * CharacterModal — galgame dialogue overlay (wave 2 Task D T3.3; TTS pagination T1/03).
@@ -32,10 +37,11 @@ import {
  * out and speaks its own TTS line; the player clicks the stage to fast-forward
  * or advance, and the input only fades in once the last page has been reached.
  *
- * A3 (docs/wiring/03): the text comes from the real character agent. App routes
- * raw WS frames to this modal via the `incoming` prop. T1 (docs/tts/00): the
- * page split, per-page voice, click/keyboard advance and the mock greeting are
- * frozen in `docs/tts/00`; the pure helpers live in `./dialogue-pages.js`.
+ * A3 (docs/wiring/03): the text comes from the real character agent. App
+ * routes identity into the shared FIFO; this modal only drains that queue.
+ * T1 (docs/tts/00): the page split, per-page voice, click/keyboard advance
+ * and the mock greeting are frozen in `docs/tts/00`; pure helpers live in
+ * `./dialogue-pages.js`.
  */
 
 interface CharacterModalProps {
@@ -50,8 +56,8 @@ interface CharacterModalProps {
   /** character_prompt protocol — the app wraps this in the message type; unchanged. */
   onSendMessage?: (msg: string) => void;
   locale?: 'en' | 'ja';
-  /** 最近一条属于本角色的真实帧；App 已按 activeModalCharId 过滤。null = 无。 */
-  incoming?: CharacterFrame | null;
+  /** Shared FIFO owner; App routes identity, this component only drains it. */
+  frameQueue?: CharacterFrameQueue;
   /** NEW: current world manifest.id — the `airp:greeted:<worldId>:<charId>` key segment. */
   worldId?: string;
   /** NEW: the character's DashScope voice (README frontmatter `voice`, via /api/characters). undefined → server default. */
@@ -59,19 +65,13 @@ interface CharacterModalProps {
   /** NEW: TTS request-body `language` — the world content language. Defaults to 'en'. */
   language?: string;
   /**
-   * NEW: per-emotion portrait URLs (docs/assets/00 §5.2). Present only when the
-   * world ships all six; when set, the stage shows the matching still per
+   * NEW: per-emotion portrait URLs (docs/assets/00 §5.2). Present only when
+   * the world ships all six; when set, the stage shows the matching still per
    * `[emo: tag]` instead of the single MotionPortrait clip.
    */
   emotions?: Record<string, string>;
 }
 
-/** Raw character-lane frame as forwarded by useWorld (`detail: msg` verbatim). */
-export type CharacterFrame =
-  | { type: 'character_delta'; characterId?: string; delta: string; timestamp?: string }
-  | { type: 'character_message'; characterId?: string; text: string; timestamp?: string }
-  | { type: 'character_idle'; characterId?: string; timestamp?: string }
-  | { type: 'error'; source?: string; characterId?: string; message: string; timestamp?: string };
 
 /**
  * 真实流缺席时的沉默兜底——一句诚实的"舞台指示"，绝不是伪造的角色台词。
@@ -111,7 +111,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   onOpenNook,
   onSendMessage,
   locale = 'en',
-  incoming: suppliedFrame = null,
+  frameQueue = getCharacterFrameQueue(),
   worldId,
   voice,
   language = 'en',
@@ -119,18 +119,6 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 }) => {
   const { locale: uiLocale, t } = useLocale();
   locale = uiLocale === 'ja' ? 'ja' : locale;
-  const [receivedFrame, setReceivedFrame] = useState<CharacterFrame | null>(null);
-  const incoming = suppliedFrame ?? receivedFrame;
-  useEffect(() => {
-    const receive = (event: Event) => {
-      const frame = (event as CustomEvent).detail;
-      if (frame.characterId !== characterId) return;
-      if (['character_delta', 'character_message', 'character_idle'].includes(frame.type)) setReceivedFrame(frame);
-      if (['error', 'turn_aborted'].includes(frame.type)) setReceivedFrame({ ...frame, type: 'error' });
-    };
-    window.addEventListener('airp:agent-frame', receive);
-    return () => window.removeEventListener('airp:agent-frame', receive);
-  }, [characterId]);
   const [phase, setPhase] = useState<Phase>('idle');
   const [emo, setEmo] = useState<Emotion>('normal');
   const [pages, setPages] = useState<DialoguePage[]>([]); // read-only projection of pagesRef
@@ -163,7 +151,8 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const stingerFiredRef = useRef(false); // 当前页情绪音是否已了结（由语音取代或已响）
   const turnWatchdog = useRef<number | null>(null);
   const busyRef = useRef(false);
-  const consumedFrameRef = useRef<CharacterFrame | null>(null); // StrictMode 重入守卫
+  const [, setQueueVersion] = useState(0);
+  useEffect(() => frameQueue.subscribe(() => setQueueVersion((version) => version + 1)), [frameQueue]);
 
   const cancelStreamTimer = useCallback(() => {
     if (streamTimer.current !== null) window.clearTimeout(streamTimer.current);
@@ -554,12 +543,9 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     enterPage(0, { announce: true }); // 逐字 + 朗读，不响 stinger
   }, [characterId, locale, worldId, prefetchVoice, enterPage]);
 
-  // 帧消费：App 已按 activeModalCharId 过滤；所有推进读 ref，consumedFrameRef
-  // 保证同一帧对象只消费一次（StrictMode 双跑可重入）。
-  useEffect(() => {
-    if (closing || !incoming) return;
-    if (incoming === consumedFrameRef.current) return;
-    consumedFrameRef.current = incoming;
+  // Frames are drained from the shared FIFO in delivery order. The callback
+  // below handles one frame; the effect after it drains every queued frame.
+  const consumeCharacterFrameFromQueue = useCallback((frame: CharacterFrame) => {
 
     /** 真实帧到达 → mock 引导语整块退场（不是插在真页前面，contract §7.2）。 */
     const dropMock = () => {
@@ -582,22 +568,22 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
       clearStingerGrace();
     };
 
-    if (incoming.type === 'character_delta') {
+    if (frame.type === 'character_delta') {
       dropMock();
       if (!streamingRef.current) beginStream();
       const buffer = turnBufferRef.current ?? createCharacterTurn();
-      const projection = consumeCharacterFrame(buffer, { type: 'character_delta', delta: incoming.delta });
+      const projection = consumeCharacterFrame(buffer, { type: 'character_delta', delta: frame.delta });
       turnBufferRef.current = projection.buffer;
       syncPages(projection.rawText, { final: false });
       pump();
       return;
     }
 
-    if (incoming.type === 'character_message') {
+    if (frame.type === 'character_message') {
       dropMock();
       if (!streamingRef.current) beginStream(); // 首个真实帧也能建立新 turn
       const buffer = turnBufferRef.current ?? createCharacterTurn();
-      const projection = consumeCharacterFrame(buffer, { type: 'character_message', text: incoming.text });
+      const projection = consumeCharacterFrame(buffer, { type: 'character_message', text: frame.text });
       turnBufferRef.current = projection.buffer;
       finalRef.current = true;
       // message_end closes only this assistant message; idle remains the turn boundary.
@@ -609,7 +595,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
       return;
     }
 
-    if (incoming.type === 'character_idle') {
+    if (frame.type === 'character_idle') {
       dropMock();
       const buffer = turnBufferRef.current ?? createCharacterTurn();
       const projection = consumeCharacterFrame(buffer, { type: 'character_idle' });
@@ -639,7 +625,10 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     channelIdleRef.current = false;
     finalRef.current = true;
     turnBufferRef.current = createCharacterTurn();
-    syncPages(incoming.message, { final: true, reset: true });
+    const errorMessage = typeof frame.message === 'string' && frame.message.trim() !== ''
+      ? frame.message
+      : 'The character could not finish this turn.';
+    syncPages(errorMessage, { final: true, reset: true });
     enterPage(0, { announce: false });
     const errPage = pagesRef.current[0];
     if (errPage) {
@@ -650,7 +639,13 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     lastEmoRef.current = 'normal';
     setPhase('done');
 
-  }, [incoming, closing, beginStream, pump, syncPages, enterPage, settleIfDrained, cancelStreamTimer, clearWatchdog, clearStingerGrace]);
+  }, [beginStream, pump, syncPages, enterPage, settleIfDrained, cancelStreamTimer, clearWatchdog, clearStingerGrace]);
+
+  useEffect(() => {
+    if (closing) return;
+    const frames = frameQueue.drainUntil(characterId);
+    for (const frame of frames) consumeCharacterFrameFromQueue(frame);
+  }, [frameQueue, characterId, closing, consumeCharacterFrameFromQueue]);
 
   // Unmount: cancel every pending timer + stop the voice channel.
   useEffect(() => streamTurn, [streamTurn]);

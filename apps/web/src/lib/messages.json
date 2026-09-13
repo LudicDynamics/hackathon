@@ -714,5 +714,13 @@
   "{count} actions finished": {
     "zh-CN": "{count} 项已完成",
     "ja": "{count}件完了"
+  },
+  "Stop requested": {
+    "zh-CN": "正在请求停止",
+    "ja": "停止を要求中"
+  },
+  "Nothing readable here.": {
+    "zh-CN": "这里没有可读取的内容。",
+    "ja": "ここには読める内容がありません。"
   }
 }

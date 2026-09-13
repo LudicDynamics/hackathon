@@ -27,6 +27,7 @@
     "typecheck:extensions": "tsc -p extensions/tsconfig.json",
     "check:docs": "node tools/check-hooks-docs.mjs",
     "check:ws": "node tools/check-ws-contract.mjs",
+    "check:ux": "node tools/check-ux-contract.mjs",
     "check:bodies": "node tools/check-request-bodies.mjs",
     "check:voices": "node tools/check-voices.mjs",
     "check:i18n": "node tools/check-i18n.mjs",

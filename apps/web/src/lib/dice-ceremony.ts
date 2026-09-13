@@ -1,18 +1,14 @@
-/**
- * dice-ceremony.ts — boundary guard, layer filter and de-dup for the
- * `dice_result` presentation frame (docs/perform/02). Module state, no React,
- * no side effects (same shape as lib/phantom.ts / lib/writer-state.ts).
- *
- * The frame is the agent's counterpart to the player's own /api/dice roll: the
- * server emits it the moment `roll_dice` lands, and the frontend replays the
- * exact same ceremony (docs/perform/02 §1). It changes no data, posts no
- * request and writes no event (§5) — a missed frame costs nothing, because
- * `roll_resolved` → `world_event` → `fetchLayer` still shows the result.
- */
+import type { RollDiceDetails } from '@airp/shared';
 
-/** Frame after the boundary guard: same shape as DiceVerdict (DiceRoller.tsx)
- *  plus the presentation-only fields the ceremony reads. */
+/**
+ * The untrusted transport shape emitted by EventBridge. It is deliberately not
+ * the consumer contract: all sources must pass through the canonical ingress
+ * below before a ceremony is staged.
+ */
 export interface DiceFrameVerdict {
+  source: 'writer' | 'character';
+  characterId?: string;
+  timestamp?: string;
   path: string;
   name: string;
   dice: string;
@@ -26,73 +22,244 @@ export interface DiceFrameVerdict {
   layer: string | null;
 }
 
-/** One pending ceremony. `key` changes per play so React remounts the
- *  component and the CSS animations restart from zero (docs/perform/02 §8.1). */
+/** The sole internal contract consumed by DiceCeremony. */
+export interface DiceCeremonyInput extends RollDiceDetails {
+  source: 'player-http' | 'writer-frame' | 'character-frame';
+  sourceId: string;
+  requestKey: string;
+  fingerprint: string;
+  /** Allocated by the canonical ingress; never copied from transport data. */
+  sourceSeq: number;
+}
+
 export interface CeremonySnapshot {
+  /** Canonical input retained for consumers other than the legacy App prop. */
+  input: DiceCeremonyInput;
+  /** Compatibility alias for App's existing `verdict={snapshot.verdict}` mount. */
   verdict: DiceFrameVerdict;
   key: number;
 }
 
-/** De-dup window / cap (§6.2): replay after a WS reconnect must not roll twice. */
+export interface DiceIngressAllocator {
+  fingerprint(raw: RollDiceDetails | DiceFrameVerdict, source: DiceCeremonyInput['source']): string;
+  allocate(fingerprint: string): { requestKey: string; sourceSeq: number; isDuplicate: boolean };
+  reset(): void;
+}
+
 const SEEN_TTL_MS = 5000;
 const SEEN_LIMIT = 50;
-
-/** path → playedAt, in insertion order (Map order = FIFO for eviction). */
 const seen = new Map<string, number>();
+const pendingFingerprintByPath = new Map<string, string>();
+const inputByFingerprint = new Map<string, DiceCeremonyInput>();
+const detailsKeys = ['path', 'name', 'dice', 'desc', 'expect', 'result', 'passed', 'rolls', 'crit', 'fumble', 'forged', 'layer'] as const;
 
-/**
- * Boundary guard for the untrusted frame payload. Any missing required field
- * or type mismatch → null: the whole frame is dropped, never half-rendered
- * (docs/perform/02 §7.2).
- *
- * Stricter than `parseDiceVerdict` (DiceRoller.tsx) on purpose: that one guards
- * the HTTP response and has no `path`, while the frame is unusable without one.
- */
-export function parseDiceFrame(raw: unknown): DiceFrameVerdict | null {
-  if (raw === null || typeof raw !== 'object') return null;
-  const o = raw as Record<string, unknown>;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object';
+}
 
-  if (typeof o.path !== 'string' || o.path === '') return null;
-  if (typeof o.result !== 'number' || !Number.isFinite(o.result)) return null;
-  if (typeof o.passed !== 'boolean') return null;
-  // `rolls` is the per-die face list (rules/dice.ts). No fallback to `[result]`:
-  // that would stage a 2d6 as a single die (docs/perform/02 §2.3, §7.2).
-  if (!Array.isArray(o.rolls) || o.rolls.length === 0) return null;
-  if (!o.rolls.every((r) => typeof r === 'number' && Number.isFinite(r))) return null;
+function hasOwn(o: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(o, key);
+}
 
-  return {
-    path: o.path,
-    name: typeof o.name === 'string' ? o.name : '',
-    dice: typeof o.dice === 'string' ? o.dice : '',
-    desc: typeof o.desc === 'string' ? o.desc : '',
-    expect: typeof o.expect === 'string' ? o.expect : '',
-    result: o.result,
-    passed: o.passed,
-    rolls: o.rolls as number[],
-    // No 95/5 heuristic: the engine decides crit/fumble (roll-dice.ts). The
-    // frame either carries them or the roll is plain (docs/perform/02 §7.2).
-    crit: typeof o.crit === 'boolean' ? o.crit : false,
-    fumble: typeof o.fumble === 'boolean' ? o.fumble : false,
-    // `null` (backpack / nook entity) and missing both mean "no layer filter".
-    layer: typeof o.layer === 'string' ? o.layer : null,
-  };
+/** Strict guard for an authoritative HTTP details object. */
+export function parseRollDiceDetails(raw: unknown): RollDiceDetails | null {
+  if (!isRecord(raw)) return null;
+  for (const key of detailsKeys) if (!hasOwn(raw, key)) return null;
+  if (typeof raw.path !== 'string' || raw.path === '') return null;
+  for (const key of ['name', 'dice', 'desc', 'expect'] as const) {
+    if (typeof raw[key] !== 'string') return null;
+  }
+  if (typeof raw.result !== 'number' || !Number.isFinite(raw.result)) return null;
+  if (typeof raw.passed !== 'boolean' || typeof raw.crit !== 'boolean' || typeof raw.fumble !== 'boolean') return null;
+  if (typeof raw.forged !== 'boolean') return null;
+  if (!Array.isArray(raw.rolls) || raw.rolls.length === 0 || !raw.rolls.every((face) => typeof face === 'number' && Number.isFinite(face))) return null;
+  if (typeof raw.layer !== 'string' && raw.layer !== null) return null;
+  const path = raw.path as string;
+  const name = raw.name as string;
+  const dice = raw.dice as string;
+  const desc = raw.desc as string;
+  const expect = raw.expect as string;
+  const result = raw.result as number;
+  const passed = raw.passed as boolean;
+  const rolls = raw.rolls as number[];
+  const crit = raw.crit as boolean;
+  const fumble = raw.fumble as boolean;
+  const forged = raw.forged as boolean;
+  const layer = raw.layer as string | null;
+  return { path, name, dice, desc, expect, result, passed, rolls: [...rolls], crit, fumble, forged, layer };
+}
+export function parsePlayerDiceResponse(raw: unknown, httpOk: boolean): RollDiceDetails | null {
+  if (!httpOk || !isRecord(raw) || raw.ok !== true) return null;
+  const nested = isRecord(raw.details) ? raw.details : raw;
+  return parseRollDiceDetails(nested);
 }
 
 /**
- * Layer filter + de-dup (§6.2, §6.4). A frame for another layer is discarded,
- * never queued: queuing would replay a stale ceremony after a layer switch.
+ * Boundary guard for the writer/character frame. Legacy frames may omit the
+ * presentation strings and crit flags; they are normalized to empty/false
+ * here, then rejected by the canonical details guard if they enter ingress.
+ * Source is required: an unknown source must never be silently treated as writer.
  */
+export function parseDiceFrame(raw: unknown): DiceFrameVerdict | null {
+  if (!isRecord(raw)) return null;
+  if (typeof raw.path !== 'string' || raw.path === '') return null;
+  if (typeof raw.result !== 'number' || !Number.isFinite(raw.result)) return null;
+  if (typeof raw.passed !== 'boolean') return null;
+  if (!Array.isArray(raw.rolls) || raw.rolls.length === 0 || !raw.rolls.every((face) => typeof face === 'number' && Number.isFinite(face))) return null;
+  if (typeof raw.layer !== 'string' && raw.layer !== null && raw.layer !== undefined) return null;
+  if (raw.source !== 'writer' && raw.source !== 'character') return null;
+  if (raw.source === 'character' && (typeof raw.characterId !== 'string' || raw.characterId === '')) return null;
+  return {
+    source: raw.source === 'character' ? 'character' : 'writer',
+    ...(typeof raw.characterId === 'string' ? { characterId: raw.characterId } : {}),
+    ...(typeof raw.timestamp === 'string' ? { timestamp: raw.timestamp } : {}),
+    path: raw.path,
+    name: typeof raw.name === 'string' ? raw.name : '',
+    dice: typeof raw.dice === 'string' ? raw.dice : '',
+    desc: typeof raw.desc === 'string' ? raw.desc : '',
+    expect: typeof raw.expect === 'string' ? raw.expect : '',
+    result: raw.result,
+    passed: raw.passed,
+    rolls: [...(raw.rolls as number[])],
+    crit: typeof raw.crit === 'boolean' ? raw.crit : false,
+    fumble: typeof raw.fumble === 'boolean' ? raw.fumble : false,
+    layer: raw.layer === undefined ? null : raw.layer as string | null,
+  };
+}
+export type DiceFrameParseResult =
+  | { ok: true; value: DiceFrameVerdict }
+  | { ok: false; reason: 'invalid_frame' };
+
+/** Diagnostic adapter for App: malformed transport is distinguishable from a
+ * valid frame without making the compatibility parser throw. */
+export function parseDiceFrameResult(raw: unknown): DiceFrameParseResult {
+  const value = parseDiceFrame(raw);
+  return value ? { ok: true, value } : { ok: false, reason: 'invalid_frame' };
+}
+
+function stableDetails(raw: RollDiceDetails | DiceFrameVerdict): Record<string, unknown> {
+  return {
+    path: raw.path,
+    name: raw.name,
+    dice: raw.dice,
+    desc: raw.desc,
+    expect: raw.expect,
+    result: raw.result,
+    passed: raw.passed,
+    rolls: raw.rolls,
+    crit: raw.crit,
+    fumble: raw.fumble,
+    forged: 'forged' in raw ? raw.forged : false,
+    layer: raw.layer,
+    characterId: 'characterId' in raw ? raw.characterId ?? null : null,
+    timestamp: 'timestamp' in raw ? raw.timestamp ?? null : null,
+  };
+}
+
+function hashFingerprint(value: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function createAllocator(): DiceIngressAllocator {
+  const allocations = new Map<string, { requestKey: string; sourceSeq: number }>();
+  let sourceSeqCounter = 0;
+  return {
+    fingerprint(raw, source) {
+      return `${source}:${JSON.stringify(stableDetails(raw))}`;
+    },
+    allocate(value) {
+      const previous = allocations.get(value);
+      if (previous) return { ...previous, isDuplicate: true };
+      const sourceSeq = ++sourceSeqCounter;
+      const next = { requestKey: `dice:${sourceSeq}:${hashFingerprint(value)}`, sourceSeq };
+      allocations.set(value, next);
+      return { ...next, isDuplicate: false };
+    },
+    reset() {
+      allocations.clear();
+      sourceSeqCounter = 0;
+    },
+  };
+}
+
+/** Factory is exported for isolated tests; production uses the singleton. */
+export const createDiceIngressAllocator = createAllocator;
+/** Singleton allocator: all ingress adapters share one monotonic sequence. */
+export const diceIngressAllocator = createAllocator();
+export const fingerprint = diceIngressAllocator.fingerprint;
+export const allocate = diceIngressAllocator.allocate;
+
+function inputFromDetails(
+  details: RollDiceDetails,
+  source: DiceCeremonyInput['source'],
+  sourceId: string,
+  requestKeyPrefix?: string,
+  frame?: DiceFrameVerdict,
+): DiceCeremonyInput | null {
+  const rawFingerprint = diceIngressAllocator.fingerprint(frame ?? details, source);
+  const fingerprintValue = requestKeyPrefix ? `${requestKeyPrefix}:${rawFingerprint}` : rawFingerprint;
+  const allocation = diceIngressAllocator.allocate(fingerprintValue);
+  if (allocation.isDuplicate) return inputByFingerprint.get(fingerprintValue) ?? null;
+  const input: DiceCeremonyInput = {
+    ...details,
+    rolls: [...details.rolls],
+    source,
+    sourceId: source === 'player-http' ? sourceId : `${sourceId}:${details.path}:${allocation.sourceSeq}`,
+    requestKey: requestKeyPrefix ?? allocation.requestKey,
+    fingerprint: fingerprintValue,
+    sourceSeq: allocation.sourceSeq,
+  };
+  inputByFingerprint.set(fingerprintValue, input);
+  return input;
+}
+
+/** Normalize an accepted writer/character verdict into the sole consumer shape. */
+export function toDiceCeremonyInput(
+  verdict: DiceFrameVerdict,
+  source: 'writer-frame' | 'character-frame',
+): DiceCeremonyInput | null {
+  if (source === 'character-frame' && !verdict.characterId) return null;
+  if (verdict.name === '' || verdict.dice === '' || verdict.desc === '' || verdict.expect === '') return null;
+  const details = parseRollDiceDetails({ ...verdict, forged: false });
+  if (!details) return null;
+  const identity = source === 'character-frame' ? verdict.characterId! : 'writer';
+  return inputFromDetails(details, source, `${source}:${identity}`, undefined, verdict);
+}
+/** Normalize an authoritative player response after its domain verdict exists. */
+export function ingestPlayerRoll(details: unknown, requestKey: string): DiceCeremonyInput | null {
+  if (typeof requestKey !== 'string' || requestKey === '') return null;
+  const parsed = parseRollDiceDetails(details);
+  if (!parsed) return null;
+  const fingerprintValue = `${requestKey}:${diceIngressAllocator.fingerprint(parsed, 'player-http')}`;
+  if (inputByFingerprint.has(fingerprintValue)) return null;
+  const input = inputFromDetails(parsed, 'player-http', requestKey, requestKey, undefined);
+  if (!input) return null;
+  stageCeremony(input);
+  return input;
+}
+
 export function shouldPlayFrame(v: DiceFrameVerdict, currentLayer: string, now = Date.now()): boolean {
+  if (v.source === 'character' && !v.characterId) return false;
   if (v.layer !== null && v.layer !== currentLayer) return false;
-  const at = seen.get(v.path);
+  const source = v.source === 'character' ? 'character-frame' : 'writer-frame';
+  const candidate = diceIngressAllocator.fingerprint(v, source);
+  pendingFingerprintByPath.set(v.path, candidate);
+  const at = seen.get(candidate) ?? seen.get(v.path);
   if (at !== undefined && now - at < SEEN_TTL_MS) return false;
   return true;
 }
 
-/** Register a play (by path), FIFO-capped at SEEN_LIMIT entries. */
-export function markPlayed(path: string, now = Date.now()): void {
-  seen.delete(path); // re-insert at the tail so re-plays refresh the window
-  seen.set(path, now);
+/** Register a played frame. The path overload preserves App's existing call. */
+export function markPlayed(requestKeyOrPath: string, now = Date.now()): void {
+  const candidate = pendingFingerprintByPath.get(requestKeyOrPath);
+  const keyToMark = candidate ?? requestKeyOrPath;
+  seen.delete(keyToMark);
+  seen.set(keyToMark, now);
   while (seen.size > SEEN_LIMIT) {
     const oldest = seen.keys().next().value;
     if (oldest === undefined) break;
@@ -100,55 +267,56 @@ export function markPlayed(path: string, now = Date.now()): void {
   }
 }
 
-// ---- Subscription (React side, useSyncExternalStore) ----
-
 let snapshot: CeremonySnapshot | null = null;
 let key = 0;
 const listeners = new Set<() => void>();
+function notify(): void { for (const cb of listeners) cb(); }
+export function subscribeCeremony(cb: () => void): () => void { listeners.add(cb); return () => listeners.delete(cb); }
+export function getCeremonySnapshot(): CeremonySnapshot | null { return snapshot; }
 
-function notify(): void {
-  for (const cb of listeners) cb();
-}
-
-export function subscribeCeremony(cb: () => void): () => void {
-  listeners.add(cb);
-  return () => listeners.delete(cb);
-}
-
-/** Current pending ceremony. The reference only changes when it changes — the
- *  `Object.is` requirement of useSyncExternalStore. */
-export function getCeremonySnapshot(): CeremonySnapshot | null {
-  return snapshot;
-}
-
-/**
- * Face shown while a die is still tumbling: a deterministic roll-in so the
- * spin survives React re-renders (never Math.random during render). Values
- * above a d6 cycle up to 100 — the tiles show raw numbers, not pips, because
- * `rolls` can hold 1d100 / 4d6 faces (docs/perform/02 §8).
- */
 export function rollingFace(index: number, tick: number, value: number): number {
   const ceiling = value > 6 ? 100 : 6;
   return ((index * 7 + tick * 13) % ceiling) + 1;
 }
-
-
-/** Stage one ceremony (App's `setCeremony`); a new `key` remounts the view. */
-export function playCeremony(verdict: DiceFrameVerdict): void {
+export function stageCeremony(input: DiceCeremonyInput, legacyVerdict?: DiceFrameVerdict): boolean {
   key += 1;
-  snapshot = { verdict, key };
+  const frame: DiceFrameVerdict = legacyVerdict ?? {
+    source: input.source === 'character-frame' ? 'character' : 'writer',
+    path: input.path,
+    name: input.name,
+    dice: input.dice,
+    desc: input.desc,
+    expect: input.expect,
+    result: input.result,
+    passed: input.passed,
+    rolls: [...input.rolls],
+    crit: input.crit,
+    fumble: input.fumble,
+    layer: input.layer,
+  };
+  snapshot = { input, verdict: frame, key };
   notify();
+  return true;
 }
 
-/** End the ceremony (played out / dismissed / layer switched). Idempotent. */
+/** Legacy App entry point: normalize before staging, retaining its mount API. */
+export function playCeremony(verdict: DiceFrameVerdict): void {
+  const source = verdict.source === 'character' ? 'character-frame' : 'writer-frame';
+  const input = toDiceCeremonyInput(verdict, source);
+  if (input) stageCeremony(input, verdict);
+}
+
 export function clearCeremony(): void {
   if (snapshot === null) return;
   snapshot = null;
   notify();
 }
 
-/** Test-only seam: forget every played path (one test must not leak into the
- *  next). Mirrors the debug seams in lib/audio.ts / useWorld.ts. */
 export function resetSeenForTest(): void {
   seen.clear();
+  pendingFingerprintByPath.clear();
+  inputByFingerprint.clear();
+  diceIngressAllocator.reset();
+  snapshot = null;
+  key = 0;
 }

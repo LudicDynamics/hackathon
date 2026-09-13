@@ -79,6 +79,7 @@ export const PhantomLayer: React.FC<PhantomLayerProps> = ({ currentLayer, bgSrc,
           data-path={`phantom:${p.toolCallId}`}
           className="object--ghost"
           style={{ left: p.seat.x, top: p.seat.y, width: p.seat.w, zIndex: p.seat.z }}
+          aria-hidden
         >
           {p.kind === 'image' ? <GhostCard entry={p} copy={copy} /> : <ChalkMark entry={p} />}
         </div>

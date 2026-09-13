@@ -17,7 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 import express from 'express';
 import { test } from 'node:test';
-import { LocalWorldStore } from '@airp/shared';
+import { LocalWorldStore, NookNoteOutcomeSchema } from '@airp/shared';
 import { createWorldRouter } from '../dist/routes/world.js';
 import { EventBridge } from '../dist/engine/event-bridge.js';
 
@@ -29,7 +29,7 @@ const MANIFEST = JSON.stringify({
   genre: 'test',
   createdAt: '',
   updatedAt: '',
-  characters: [{ id: 'ryo', name: 'Ryo' }],
+  characters: [{ id: 'ryo', name: 'Ryo', home: 'world/map' }],
 });
 
 const README = [
@@ -218,6 +218,93 @@ test('N1-A8b footprint nook gate: bad id -> 400, missing dir -> 404', async () =
     });
     assert.equal(missing.status, 404, JSON.stringify(missing.body));
     assert.equal(missing.body.code, 'not_found');
+  } finally {
+    await h.close();
+  }
+});
+
+// ── UX player Nook note seam ──
+test('POST /api/nook-note writes a direct-child chalk, returns its event sequence, and refreshes through GET', async () => {
+  const h = await harness();
+  try {
+    const input = {
+      characterId: 'ryo',
+      title: 'A player note',
+      body: 'Remember the blue umbrella.',
+      clientRef: 'note-test-1',
+    };
+    const r = await h.post('/nook-note', input);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const outcome = { path: r.body.path, eventSeq: r.body.eventSeq, actor: r.body.actor, created: r.body.created };
+    assert.equal(NookNoteOutcomeSchema.safeParse(outcome).success, true, JSON.stringify(outcome));
+    assert.equal(r.body.ok, true);
+    assert.match(r.body.path, /^characters\/ryo\/\d+-a-player-note\.md$/);
+    assert.deepEqual(r.body.actor, { type: 'player' });
+    assert.equal(r.body.created, true);
+
+    const raw = await h.store.readFile(r.body.path);
+    assert.match(raw, /title: A player note/);
+    assert.match(raw, /Remember the blue umbrella\./);
+
+    const events = await h.store.getEventsSince(0);
+    assert.equal(events.length, 1);
+    assert.equal(events[0].seq, r.body.eventSeq);
+    assert.equal(events[0].type, 'entity_created');
+    assert.deepEqual(events[0].actor, { type: 'player' });
+    assert.equal(events[0].subject, r.body.path);
+    assert.equal(events[0].detail.kind, 'chalk');
+
+    // The next read is the refresh contract: no local-only append is needed.
+    const page = await h.get('/nook?character=ryo');
+    assert.equal(page.status, 200, JSON.stringify(page.body));
+    assert.ok(page.body.items.some((item) => item.path === r.body.path));
+  } finally {
+    await h.close();
+  }
+});
+
+test('POST /api/nook-note rejects traversal, README/path/frontmatter/link, and actor forgery before writing', async () => {
+  const h = await harness();
+  try {
+    const invalidInputs = [
+      { characterId: 'ryo/../ghost', title: 'x', body: 'y' },
+      { characterId: 'ryo', title: 'x', body: 'y', path: 'characters/ryo/README.md' },
+      { characterId: 'ryo', title: 'x', body: 'y', frontmatter: { type: 'chalk' } },
+      { characterId: 'ryo', title: 'x', body: 'y', linkTo: 'world/map/door.md' },
+      { characterId: 'ryo', title: 'x', body: 'y', actor: { type: 'god' } },
+    ];
+    for (const input of invalidInputs) {
+      const r = await h.post('/nook-note', input);
+      assert.equal(r.status, 400, `${JSON.stringify(input)} -> ${r.status} ${JSON.stringify(r.body)}`);
+      assert.equal(r.body.code, 'invalid_argument');
+    }
+    assert.deepEqual((await h.store.listFiles('characters/ryo')).sort(), [
+      'characters/ryo/README.md',
+      'characters/ryo/erased-line.md',
+      'characters/ryo/letters/unsent.md',
+      'characters/ryo/preset.json',
+      'characters/ryo/ten-years.md',
+    ]);
+  } finally {
+    await h.close();
+  }
+});
+
+test('POST /api/nook-note rejects a missing nook and blank note fields', async () => {
+  const h = await harness();
+  try {
+    const missing = await h.post('/nook-note', { characterId: 'ghost', title: 'x', body: 'y' });
+    assert.equal(missing.status, 404, JSON.stringify(missing.body));
+    assert.equal(missing.body.code, 'not_found');
+
+    for (const input of [
+      { characterId: 'ryo', title: 'x', body: '   ' },
+      { characterId: 'ryo', title: 'x', body: '   ' },
+    ]) {
+      const r = await h.post('/nook-note', input);
+      assert.equal(r.status, 400, JSON.stringify(r.body));
+      assert.equal(r.body.code, 'invalid_argument');
+    }
   } finally {
     await h.close();
   }

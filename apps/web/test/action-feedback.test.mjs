@@ -1,0 +1,66 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { readFile } from 'node:fs/promises';
+import { createJiti } from '../../../vendor/pi-rp/node_modules/jiti/lib/jiti.mjs';
+
+const jiti = createJiti(import.meta.url);
+const {
+  ActionFeedbackStore,
+  actionDetailsOf,
+  classifyActionResult,
+  runAction,
+} = await jiti.import('../src/lib/action-feedback.ts');
+const { AirpRequestError } = await jiti.import('../src/lib/airp-gateway.ts');
+
+test('domain details classify a handled refusal as conflict, not HTTP success', () => {
+  const result = { ok: true, item: 'player/key.md', target: 'world/lock.md', handled: false, reason: 'wrong_item', event: { id: 'evt-3' } };
+  assert.equal(classifyActionResult('present', result), 'conflict');
+  assert.deepEqual(actionDetailsOf(result), { item: 'player/key.md', target: 'world/lock.md', handled: false, reason: 'wrong_item', event: { id: 'evt-3' } });
+});
+
+test('a failed dice check is still an accepted persisted fact', () => {
+  assert.equal(classifyActionResult('dice', { ok: true, path: 'world/lock.md', result: 2, passed: false, rolls: [2], crit: false, fumble: false }), 'accepted');
+});
+
+test('structured errors distinguish conflict, rejection, and transport failure', () => {
+  assert.equal(classifyActionResult('choice', { ok: false, code: 'choice_not_found', error: 'stale option' }), 'conflict');
+  assert.equal(classifyActionResult('act', { ok: false, code: 'dice_forced_not_allowed', error: 'forbidden' }), 'rejected');
+  assert.equal(classifyActionResult('act', { ok: false, code: 'internal', error: 'disk down' }), 'failed');
+});
+
+test('feedback keys settle once and preserve the first authoritative details', async () => {
+  const store = new ActionFeedbackStore();
+  const first = await runAction(store, { key: 'choice:world/door:1', verb: 'choice', target: 'world/door.md' }, async () => ({ ok: true, choice: 'Open', index: 1, event: { id: 'evt-9' } }));
+  assert.equal(first.status, 'accepted');
+  assert.equal(first.eventId, 'evt-9');
+  assert.equal(store.begin({ key: first.key, verb: 'choice' }).eventId, 'evt-9');
+  const second = store.settle(first.key, { ok: false, code: 'internal', error: 'late failure' });
+  assert.equal(second, first);
+});
+
+test('pending and explicit local cancel remain visible terminal outcomes', () => {
+  const store = new ActionFeedbackStore();
+  const pending = store.begin({ key: 'present:item:target', verb: 'present' });
+  assert.equal(pending.outcome, 'pending');
+  const cancelled = store.cancel(pending.key);
+  assert.equal(cancelled.outcome, 'cancelled');
+  assert.equal(cancelled.status, null);
+  assert.equal(store.cancel(pending.key), cancelled);
+});
+
+test('gateway ActionRequestError payload codes survive the rejected Promise boundary', async () => {
+  const store = new ActionFeedbackStore();
+  const result = await runAction(store, { key: 'enter:world/harbor', verb: 'enter' }, async () => {
+    throw new AirpRequestError('blocked', 409, { code: 'requirements_not_met' });
+  });
+  assert.equal(result.outcome, 'conflict');
+  assert.equal(result.status, 'conflict');
+  assert.equal(result.message, 'That requirement is not met.');
+});
+test('action UI keeps domain choices out of the Writer prompt callback', async () => {
+  const entity = await readFile(new URL('../src/components/narrative/EntityInteractions.tsx', import.meta.url), 'utf8');
+  const dialog = await readFile(new URL('../src/components/BagItemDialog.tsx', import.meta.url), 'utf8');
+  assert.match(entity, /runGatewayAction\('choice'/);
+  assert.doesNotMatch(entity, /Look closer[\s\S]{0,300}send\(/);
+  assert.match(dialog, /runAction\(/);
+});

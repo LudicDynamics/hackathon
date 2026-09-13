@@ -18,6 +18,34 @@
   --canvas-bg: #d9d0bf; /* == --wall */
   --card-cream: #fbf8f1; /* == --cream */
   --ink-secondary: #777468; /* == --muted */
+
+  /* Semantic depth tokens. Values stay local to the owning stacking context;
+     consumers must reference the token instead of introducing numeric z-index
+     literals (docs/ux/02 §4.3). */
+  --depth-entity-base: 4;
+  --depth-entity-focus: 30;
+  --depth-entity-drag: 40;
+  --depth-background-grain: 10;
+  --depth-dialogue-root: 50;
+  --depth-dialogue-portrait: 1;
+  --depth-dialogue-speech: 2;
+  --depth-dialogue-close: 60;
+  --depth-performance-fumble: 55;
+  --depth-entity-inspect: 20;
+  --depth-dialogue-media-back: 0;
+  --depth-dialogue-media-front: 1;
+  --depth-dialogue-caption: 2;
+  --depth-entity-control: 2;
+  --depth-background-scene: 0;
+  --depth-chrome-minimap: 50;
+  --depth-chrome-writer: 40;
+  --depth-chrome-stub: 45;
+  --depth-chrome-hint: 50;
+  --depth-chrome-badge: 50;
+  --depth-performance-root: 20;
+  --depth-chrome-carried-reader: 90;
+  --depth-entity-reading: 100;
+  --depth-chrome-gate-threshold: 240;
 }
 
 body {
@@ -117,14 +145,14 @@ body {
   position: absolute;
   touch-action: none;
   cursor: grab;
-  z-index: 4;
+  z-index: var(--depth-entity-base);
   transform: rotate(var(--target-rot, 0deg));
 }
 .object:hover {
   /* the shell's z-index is written inline (server row order), so a plain
      declaration here would never win. !important lets hover/drag lift the
      card above its neighbours — needed for the gate's floating detail sheet. */
-  z-index: 30 !important;
+  z-index: var(--depth-entity-focus) !important;
 }
 .object:active {
   cursor: grabbing;
@@ -137,7 +165,7 @@ body {
   box-shadow: 0 22px 50px rgba(35, 28, 20, 0.32);
   /* must beat the hover lift below (both !important); the dragged card is also
      :hover, so without a higher value a neighbour's hover could cover it. */
-  z-index: 40 !important;
+  z-index: var(--depth-entity-drag) !important;
 }
 /* Smooth slide when a neighbour pushes this card (v2 L51). */
 .object.pushed {
@@ -201,7 +229,7 @@ body:before {
   pointer-events: none;
   opacity: 0.18;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.22'/%3E%3C/svg%3E");
-  z-index: 10;
+  z-index: var(--depth-background-grain);
 }
 
 /* ---- ink animation: paperForm mount entrance ----
@@ -332,7 +360,7 @@ body:before {
 .character-modal-layer {
   position: fixed;
   inset: 0;
-  z-index: 50; /* above canvas + grain (z ≤ 10) */
+  z-index: var(--depth-dialogue-root); /* above canvas + grain */
   overflow: hidden;
   backdrop-filter: brightness(0.35) blur(6px);
   -webkit-backdrop-filter: brightness(0.35) blur(6px);
@@ -363,7 +391,7 @@ body:before {
   align-items: flex-end;
   justify-content: space-between;
   padding: 0 6vw 20vh;
-  z-index: 1;
+  z-index: var(--depth-dialogue-portrait);
 }
 
 .portrait-slot {
@@ -466,7 +494,7 @@ body:before {
   position: absolute;
   left: 50%;
   bottom: 5.5vh;
-  z-index: 2;
+  z-index: var(--depth-dialogue-speech);
   width: min(720px, 78vw);
   padding: 1.2rem 1.6rem 1.1rem;
   background: var(--paper);
@@ -682,7 +710,7 @@ body:before {
   position: absolute;
   top: 1.4rem;
   right: 1.6rem;
-  z-index: 60;
+  z-index: var(--depth-dialogue-close);
   width: 2.2rem;
   height: 2.2rem;
   display: flex;
@@ -812,7 +840,7 @@ body:before {
 .fumble-crack {
   position: fixed;
   inset: 0;
-  z-index: 55;
+  z-index: var(--depth-performance-fumble);
   pointer-events: none;
   background:
     radial-gradient(ellipse at 50% 46%, rgba(176, 32, 32, 0.3) 0%, rgba(176, 32, 32, 0) 62%),
@@ -1151,7 +1179,7 @@ body:before {
   left: 50%;
   bottom: calc(100% - 2px);
   transform: translateX(-50%) translateY(-4px);
-  z-index: 20;
+  z-index: var(--depth-entity-inspect);
   width: 300px;
   max-height: 340px;
   overflow: auto;
@@ -1207,7 +1235,7 @@ body:before {
   position: absolute;
   top: 8px;
   left: 10px;
-  z-index: 2;
+  z-index: var(--depth-entity-control);
   width: 34px;
   height: 34px;
 }
@@ -1421,10 +1449,10 @@ body:before {
 /* Shown while the video decodes its first frame; sits UNDER the video so
    the swap is invisible. */
 .portrait__still {
-  z-index: 0;
+  z-index: var(--depth-dialogue-media-back);
 }
 .portrait__video {
-  z-index: 1;
+  z-index: var(--depth-dialogue-media-front);
 }
 
 /* The visible end of the fallback chain: a name plate, never a blank box.
@@ -1463,7 +1491,7 @@ body:before {
   line-height: 1.5;
   color: var(--ink-2);
   transform: translateX(-50%) rotate(-1deg);
-  z-index: 2;
+  z-index: var(--depth-dialogue-caption);
   pointer-events: none;     /* never eats the drag/collision pointer events */
 }
 
@@ -1508,7 +1536,7 @@ body:before {
 .scene-backdrop {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: var(--depth-background-scene);
   overflow: hidden;
   pointer-events: none;
 }
@@ -1565,7 +1593,7 @@ body:before {
   position: absolute;
   right: 20px;
   bottom: 18px;
-  z-index: 50;
+  z-index: var(--depth-chrome-minimap);
   width: 176px;
   height: 132px;
   overflow: hidden;
@@ -1594,7 +1622,7 @@ body:before {
   position: absolute;
   left: 50%;
   bottom: 24px;
-  z-index: 40;
+  z-index: var(--depth-chrome-writer);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1695,7 +1723,7 @@ body:before {
   position: absolute;
   left: 50%;
   bottom: 24px;
-  z-index: 45;
+  z-index: var(--depth-chrome-stub);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1764,7 +1792,7 @@ body:before {
   position: absolute;
   left: 20px;
   bottom: 18px;
-  z-index: 50;
+  z-index: var(--depth-chrome-hint);
   max-width: min(420px, calc(100% - 40px));
   padding: 6px 12px;
   text-align: left;
@@ -1808,7 +1836,7 @@ body:before {
   position: absolute;
   top: 18px;
   right: 20px;
-  z-index: 50;
+  z-index: var(--depth-chrome-badge);
   padding: 9px 16px 10px;
   text-align: right;
   background: var(--paper);
@@ -1921,6 +1949,11 @@ body:before {
    (`Canvas` hit-tests with `closest('.object')`, which must not match). */
 .object--ghost {
   position: absolute;
+  pointer-events: none;
+}
+/* Keep the inherited contract explicit for future ghost content additions:
+   a descendant cannot opt back into pointer input. */
+.object--ghost > * {
   pointer-events: none;
 }
 
@@ -2133,7 +2166,7 @@ body:before {
 .show-root {
   position: absolute;
   inset: 0;
-  z-index: 20;
+  z-index: var(--depth-performance-root);
   pointer-events: none;
   overflow: hidden;
 }

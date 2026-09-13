@@ -14,7 +14,7 @@
 .cabin-prop--door i{position:absolute;right:9%;top:53%;width:18%;height:7px;border-radius:4px;background:linear-gradient(#c2b9a3,#6c6b65);box-shadow:0 3px 3px #0008}
 .paper-reading{--paper-ink:#3c3935;position:relative;box-sizing:border-box;width:100%;padding:26px 30px 22px;background:#e4dfd3 url('/materials/ivory-paper-v1.webp') repeat;background-size:384px;color:var(--paper-ink);border:1px solid #c6beaa;border-radius:2px 3px 4px 1px;box-shadow:0 2px 3px #0003,3px 9px 18px #0003;font:18px/1.85 'Iowan Old Style','Palatino Linotype','Hiragino Mincho ProN','Yu Mincho','Songti SC',Georgia,serif;letter-spacing:.018em;overflow-wrap:anywhere;text-align:left;text-shadow:none}
 .paper-reading--inline{position:absolute;top:0;left:0;width:min(500px,calc(100vw - 32px));max-width:none}
-.paper-reading--carried{position:fixed;z-index:90;left:clamp(16px,6vw,100px);bottom:100px;width:min(460px,calc(100vw - 32px));transform:rotate(-.5deg)}
+.paper-reading--carried{position:fixed;z-index:var(--depth-chrome-carried-reader);left:clamp(16px,6vw,100px);bottom:100px;width:min(460px,calc(100vw - 32px));transform:rotate(-.5deg)}
 .paper-reading header{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px;border-bottom:1px solid #584f3b22;padding-bottom:12px}
 .paper-reading h2{flex:1;margin:0;font:500 23px/1.45 'Iowan Old Style','Palatino Linotype','Hiragino Mincho ProN','Yu Mincho','Songti SC',Georgia,serif;letter-spacing:.03em}
 .paper-reading h2 button{text-align:left;font:inherit;color:inherit;background:none;border:0;cursor:pointer}
@@ -24,5 +24,5 @@
 .paper-reading__content{max-height:min(48vh,440px);overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#8f887066 transparent;padding-right:6px}
 .paper-reading p{margin:0 0 1em}.paper-reading strong{font-weight:600}.paper-reading h3{font:600 19px/1.5 inherit;margin:1em 0 .6em}.paper-reading fieldset{border:0;padding:0;margin-top:20px}.paper-reading fieldset>button{border:1px solid #302c2840;border-radius:3px;padding:6px 14px;font:14px system-ui;cursor:pointer}
 .paper-reading .fm-block{--ink:#3c3935;background:transparent;color:#3c3935}.paper-reading .fm-head{font:12px system-ui;color:#716958}.paper-reading .fm-body button{border-radius:3px;background:#74654d0a;color:#3c3935}
-.object:has(.paper-reading){z-index:100!important}
+.object:has(.paper-reading){z-index:var(--depth-entity-reading)!important}
 @media(max-width:600px){.paper-reading{padding:18px 20px;font-size:17px}.paper-reading h2{font-size:21px}.paper-reading--carried{bottom:88px}.paper-reading__content{max-height:42vh}}

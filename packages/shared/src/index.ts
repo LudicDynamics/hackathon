@@ -5,6 +5,7 @@ export * from './schemas/frontmatter.js';
 export * from './schemas/components.js';
 export * from './schemas/events.js';
 export * from './schemas/canvas.js';
+export * from './schemas/nook-note.js';
 export * from './store/world-store.js';
 export * from './store/local-store.js';
 export * from './schemas/forms.js';
@@ -54,6 +55,7 @@ export * from './actions/chalk.js';
 export * from './actions/create.js';
 export * from './actions/layer.js';
 export * from './actions/talk.js';
+export * from './actions/nook-note.js';
 
 // B2/B3 injection surface. TS `export *` has no glob, so every new module MUST
 // be added here by hand — a missing line is a SILENT unreachable module
