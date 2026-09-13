@@ -73,3 +73,37 @@ pnpm typecheck:extensions                   # → 全 PASSED
 **未决/遗留**（登记但不擅改）：`Minimap`/`HintBar` 未挂载（niko 用 breadcrumb 导航，恢复位置需按其视觉重排）；`EntityInteractions` hover 的强制布局（niko 新交互，改动有布局回归风险）；`/choice` 的作家提示词仍是 niko 的粗版（玩法节奏待与 nikoloside 定）。
 
 > 详细证据见归档的两份报告（`docs/merge/archive/`）。
+
+## 4. 合并后补做（2026-09-13 第二轮，`ad88fb9` 暴露）
+
+`ad88fb9`（nikoloside，分叉期独立提交）在 niko 侧还砍掉了两处幻影相关的东西。逐条核实后**分开处置**：
+
+| 项 | 性质 | 处置 |
+|---|---|---|
+| **chalk 湿墨车道** | **误删**——只把 `PhantomLayer` 的渲染 filter 收窄成 `kind === 'image'` 并删掉 `<ChalkMark>` 分支，无设计论证、无门禁；注册侧还在跑，成「半条链」 | **已恢复**（与 main 逐字一致）。`ChalkMark`/`WriterInkLayer` 复活，`write`/`chalk` 的湿墨演出重新可见 |
+| **初始化「幻影占位」** | **缺失功能**（非合并丢；`docs/nook/04` 一直登记为 P2 未实现） | **已补**（见下） |
+| **`SceneChalk` 场景入口面板** | **有意删除**——`doc-06` 开头有 niko 的展示约定裁决，另有门禁 `tools/no-scene-panel.test.mjs` 禁止复活；README 的 `scene` 数据保留 | **尊重删除**，不恢复；回写 `AGENTS §3.3` 那句已失效的「显示为入场 Chalk」 |
+
+### 4.1 恢复 chalk 湿墨
+
+`apps/web/src/components/canvas/PhantomLayer.tsx` 的 exit-discipline 与渲染 filter 回到 main 版本：`phantoms.filter(ghostVisibleOn(...))`（不再收窄到 image），渲染分支 `p.kind === 'image' ? <GhostCard/> : <ChalkMark/>`。修后主画布/小天地都能看到作家的逐字湿墨。
+
+### 4.2 补初始化幻影占位（I1 前端最后一块）
+
+真相源 `docs/init/03 §3.5/§3.6`。玩家进一个 **stub 层**（无 README 的子层）时，画布落一张「成形中」的临时卡，填掉 45–60s 的裸等待；`layer_initialized` 到达 → 幻影清、产物落座（**过户**）；`layer_init_failed` → 幻影清 **+ 可见提示**（契约 §8 反模式 8）。
+
+落点：
+
+| 文件 | 改动 |
+|---|---|
+| `apps/web/src/lib/init-ghost.ts`（NEW） | `ghostItemFor(layer, label)`——**座位走 `phantomSeatFor`**（唯一 seater），非特判 `SEAT_ANCHOR`；`path` 用 `__init__/<layer>`（非 `.md` 结尾，避免被层扫描误认） |
+| `apps/web/src/state/useWorld.ts` | 新增 `initializingLayer` state + 导出；`enterLayer` 触发 `airp_init` 时置位；`case 'world_event'` 里 `layer_initialized`/`layer_init_failed` → 清位 + 派发 `airp:layer-init`（用 `.includes()` 形式，避免 `check:ws` 把**事件 type** 误读成**帧名**） |
+| `apps/web/src/components/canvas/Canvas.tsx` | 新增 `ghost`/`ghostLabel` prop；渲染在 `items.map` **之外**、复用 `.object--ghost` 壳（`pointer-events:none`、不进 `itemsByPath`、不进拖拽、不进 footprint 测量） |
+| `apps/web/src/App.tsx` | `ghost` 传值（`useMemo`，座位读模块态故须 memo）；`airp:layer-init` 监听 → 失败走 `notify(t(...))` |
+| `apps/web/src/lib/messages.json` | `Taking shape…` / `It never quite took shape here.`（en/zh-CN/ja 三语） |
+
+**与并行 `docs/layout` 批次的接缝**（该批正把 `phantomSeatFor` 内部从 spiral 换成 `flowColumns`）：本实现**只消费 `phantomSeatFor` 的签名**，不碰其内部——`docs/layout/02 §8.5` 明确要求初始化幻影走同一 seater、禁止 anchor 特判，本实现即按此写。`flowColumns` 落地后幻影自动跟随。
+
+**浏览器实测**（真 Chromium + 真 server，`world/test-stub` 空层 fixture）：进 stub → 幻影出现（`pointer-events:none`，坐标 = anchor 中心 816/420 = 960−144/540−120）；init 失败 → 幻影消失 + 三语提示「ここはまだ形にならなかった」；成功路径 → 产物落座、幻影清零。
+
+**验证**：`pnpm build` ✓；`pnpm test` **655/655** ✓；六个门禁（含新 `check:i18n`）全绿；`probe:tools`/`probe:inject`/`probe:init`/`typecheck:extensions` 全 PASSED。
