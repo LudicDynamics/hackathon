@@ -76,7 +76,8 @@
 .entity-action-arrows button:hover { background: #423647; color: #eee3d1; }
 .chalk-anchor-thread { position: absolute; height: 0; border-top: 1px dashed #c3a5d8; transform-origin: 0 0; pointer-events: none; z-index: 1001; }
 .chalk-anchor-lit { outline: 1px dashed #c3a5d8; outline-offset: 5px; }
-.object:hover > .chalk, .object:focus-within > .chalk { filter: brightness(1.08); }
+.object:hover, .object:focus-within,
+.object:hover > .chalk, .object:focus-within > .chalk { filter: none; }
 @media (hover: none) { .object:focus-within > .entity-interactions { visibility: visible; pointer-events: auto; } }
 .object:focus-visible { outline: 1px solid #b9a1c0; outline-offset: 5px; }
 .character-modal-layer .modal-close { top: max(84px, calc(env(safe-area-inset-top) + 68px)); right: max(88px, calc(env(safe-area-inset-right) + 72px)); }
@@ -92,7 +93,18 @@
 .prototype-belongings { position: absolute; z-index: 38; right: 25px; bottom: 24px; }
 .prototype-bag-toggle { width: 58px; height: 48px; border-radius: 12px; }
 .prototype-bag-toggle span { font-size: 11px; }
-.prototype-bag-content { position: absolute; bottom: 66px; right: 0; width: 250px; max-height: 350px; overflow: auto; padding: 20px; border-radius: 10px; background: #e8ddc9f5; box-shadow: 0 14px 40px #130c2050; }
+.prototype-bag-content { position: absolute; bottom: 62px; right: 0; width: min(340px,calc(100vw - 40px)); max-height: min(480px,65dvh); overflow: auto; padding: 14px; border: 1px solid #a78d6970; border-radius: 16px; background: linear-gradient(145deg,#342c39,#25212d); color:#f4e8d5; box-shadow: 0 18px 48px #100c1859,inset 0 1px #f5deb324; scrollbar-width:thin; scrollbar-color:#8f7b65 #292330; }
+.inventory-heading{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 12px;color:#dcc69e;font:600 11px/1.5 system-ui,sans-serif;letter-spacing:.14em;border-bottom:1px solid #b99c6f33;margin-bottom:8px}
+.inventory-heading button{width:30px;height:30px;color:#f4e8d5;font:24px/1 system-ui;letter-spacing:0;border-radius:6px}
+.prototype-bag-content>p{padding:20px 8px;color:#ded1be;font:15px/1.6 system-ui,sans-serif}
+.inventory-item{display:flex;align-items:center;gap:13px;width:100%;min-height:76px;padding:10px 7px;text-align:left;border-radius:10px;border:1px solid transparent;color:#f4e8d5;background:transparent;cursor:pointer}
+.inventory-item+.inventory-item{border-top-color:#e8c79116}
+.inventory-item:hover{background:#e7cfab12;border-color:#c8a87955}.inventory-item:focus-visible,.inventory-heading button:focus-visible{outline:2px solid #e8c78b;outline-offset:2px}
+.inventory-item__name{flex:1;min-width:0;overflow-wrap:anywhere;font:500 16px/1.45 Georgia,'Noto Serif JP',serif;color:#f4e8d5;text-shadow:none;letter-spacing:.01em}
+.inventory-item__open{flex:none;color:#cbb78f;font:17px/1 system-ui}
+.item-artwork{display:grid;place-items:center;flex:none;width:58px;height:58px;overflow:hidden;border-radius:10px;background:radial-gradient(ellipse at 35% 25%,#584751,#302b36);border:1px solid #c8ab773b;color:#edd2a0;box-shadow:inset 0 1px #f8e7c515}
+.item-artwork img{width:100%;height:100%;object-fit:contain;padding:3px}.item-artwork__symbol{font:28px/1 system-ui}
+.carried-item-artwork{display:flex;justify-content:center;margin:4px 0 20px}.carried-item-artwork .item-artwork{width:104px;height:104px}.carried-item-artwork svg{width:44px;height:44px}
 .prototype-hand-chip { display: inline-flex; margin: 14px 14px 24px 0; }
 .prototype-residents { position: absolute; z-index: 36; top: 155px; right: 26px; display: flex; flex-direction: column; gap: 30px; }
 .prototype-residents .prototype-companion-orb { position: relative; inset: auto; width: 58px; height: 58px; border: 1px solid #d1b7dbbb; }

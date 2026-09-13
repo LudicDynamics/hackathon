@@ -1,5 +1,6 @@
 import { useLocale } from './lib/i18n.js';
 import { AgentSettings } from './components/AgentSettings.js';
+import { ItemArtwork } from './components/ItemArtwork.js';
 import { NookView } from './components/nook/NookView.js';
 import { useViewpointReport } from './hooks/useViewpointReport.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -130,6 +131,9 @@ export function App() {
     return () => window.removeEventListener('airp:agent-frame', receive);
   }, []);
   const writerRef = useRef<HTMLInputElement>(null);
+  const writerHistory = useRef<string[]>([]);
+  const writerHistoryCursor = useRef(0);
+  const writerDraft = useRef('');
   const toastTimer = useRef<number | null>(null);
 
   const camera = useCamera();
@@ -300,6 +304,10 @@ export function App() {
     const input = writerRef.current;
     const text = input?.value.trim() || '';
     if (!text) return;
+    if (writerHistory.current.at(-1) !== text) writerHistory.current.push(text);
+    if (writerHistory.current.length > 50) writerHistory.current.shift();
+    writerHistoryCursor.current = writerHistory.current.length;
+    writerDraft.current = '';
     setWriterWorking(true);
     sendToWriter(text);
     input!.value = '';
@@ -489,20 +497,19 @@ export function App() {
           </div>
           <div className="prototype-belongings prototype-chrome" aria-label={t("Belongings")}>
             <button className="prototype-bag-toggle" onClick={() => setBagOpen(open => !open)} aria-label={t("Open belongings")} aria-expanded={bagOpen}><Backpack size={19} /><span>{handItems.length}</span></button>
-            {bagOpen && <div className="prototype-bag-content"><span className="prototype-eyebrow">{t("BELONGINGS")}</span>{handItems.length === 0 && <p>{t("Nothing carried yet.")}</p>}{handItems.map((item) => {
-              const image = assetUrl(item.frontmatter?.image || item.frontmatter?.cover);
+            {bagOpen && <div className="prototype-bag-content"><div className="inventory-heading"><span>{t("BELONGINGS")}</span><button type="button" onClick={() => setBagOpen(false)} aria-label={t('Close')}>×</button></div>{handItems.length === 0 && <p>{t("Nothing carried yet.")}</p>}{handItems.map((item) => {
               return (
                 <button
                   key={item.path}
-                  className="prototype-hand-chip"
+                  className="inventory-item"
                   draggable
                   onClick={() => setSelectedBagPath(item.path)}
                   onDragStart={(event) => event.dataTransfer.setData('text/plain', item.path)}
-                  title={item.body}
-                  style={image ? { backgroundImage: `url("${image}")` } : undefined}
+                  aria-label={String(item.frontmatter?.title || labelOf(item.filename.replace(/\.md$/, '')))}
                 >
-                  <span>{item.frontmatter?.icon || '◇'}</span>
-                  <small>{item.frontmatter?.title || labelOf(item.filename.replace(/\.md$/, ''))}</small>
+                  <ItemArtwork item={item} />
+                  <span className="inventory-item__name">{item.frontmatter?.title || labelOf(item.filename.replace(/\.md$/, ''))}</span>
+                  <span className="inventory-item__open" aria-hidden="true">↗</span>
                 </button>
               );
             })}</div>}
@@ -542,7 +549,15 @@ export function App() {
             </div>
             <div className="prototype-dockrow">
               {writerWorking && <span role="status">{t(writerStage)} · {writerElapsed}s <button type="button" onClick={() => { sendMessage({ type: 'writer_abort' }); }}>{t('Stop writing')}</button></span>}
-              <input ref={writerRef} aria-label={t("Action")} placeholder={t("What do you do? You can also address someone by name…")} autoComplete="off" />
+              <input ref={writerRef} aria-label={t("Action")} placeholder={t("What do you do? You can also address someone by name…")} autoComplete="off" onKeyDown={event => {
+                if (event.nativeEvent.isComposing || !['ArrowUp', 'ArrowDown'].includes(event.key) || !writerHistory.current.length) return;
+                event.preventDefault(); event.stopPropagation();
+                const history = writerHistory.current;
+                if (writerHistoryCursor.current === history.length) writerDraft.current = event.currentTarget.value;
+                writerHistoryCursor.current = Math.max(0, Math.min(history.length, writerHistoryCursor.current + (event.key === 'ArrowUp' ? -1 : 1)));
+                event.currentTarget.value = writerHistoryCursor.current === history.length ? writerDraft.current : history[writerHistoryCursor.current];
+                event.currentTarget.setSelectionRange(event.currentTarget.value.length, event.currentTarget.value.length);
+              }} />
               <button className="prototype-primary" aria-label={t("Send action")}>↑</button>
             </div>
           </form>
