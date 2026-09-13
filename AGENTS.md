@@ -130,6 +130,7 @@ tools/                  # 单一职责脚本：探针（probe-*）/ 门禁（che
   check-skills.mjs      # skill 语料门禁（pnpm check:skills）：frontmatter 真解析 / 语言分层 / 命名 / 非法工具名
   check-voices.mjs      # 音色门禁（pnpm check:voices）：角色 voice 必须解析到调色板（docs/tts/07）
   check-i18n.mjs        # i18n 键门禁（pnpm check:i18n）：`t('…')` 字面量必须解析到 messages.json 且 zh-CN/ja 翻译齐全（缺键会静默回落成英文）
+  check-merge-log.mjs   # 合并登记门禁（pnpm check:merge）：first-parent merge 必须有 docs/merge/<title>-<7hex>-<作者>.md；单测 tools/check-merge-log.test.mjs（§6.6）
 
 assets/                 # worldlines-assets 素材车间；整树 .gitignore，**只白名单 audio/ 与 skills/**（见 §7.8）
   audio/                # 平台级音频池（已入库）：bgm（3 情绪主线）/ themes（逐世界主题曲）/ ambient（基础三轨 + pool/ 声场族）/ foley（拟音）+ PLAN.md 需求清单 + CREDITS.md
@@ -141,6 +142,7 @@ docs/                   # 设计文档（真相源）；各实现批次目录见
   nook/ footprint/      # 角色小天地 N1 / 卡片占位尺寸
   audio/                # 音频接线（A1）：00 契约 + 01 服务端路由与解析 / 02 采样链与主轨 / 03 前端贯通 / 04 Foley 与 stinger / 05 素材缺口 / 06 回写
   tools/ hooks/ wiring/ perform/ prompts/ tts/ # 各实现批次：00 冻结契约 + 分篇 + REVIEW-*（§4 有逐批说明）
+  merge/                # 合并登记（§6.6）：00-合并纪律.md（契约）+ BASELINE.md（立法前豁免 SHA）+ 逐次登记 + archive/ 两份 niko 复盘原始报告
   前端接线体检.md        # 2026-09-12 跨端 WS 契约静默漂移的核实报告（含缺陷分级与文档漂移清单）
 ```
 
@@ -232,6 +234,7 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 | `docs/prompts/` | **提示词与 skill 体系真相源**：`00-共同上下文.md` 是冻结契约，`01`–`03` 是作家/角色/初始化器**正文逐字源**（`extensions/instructions.ts` 与之对应），`04` skill 体系，`05` 装配与验证 + 四份评审。**改任何 preset / skill / instruction slot 前必读** |
 | `docs/assets/` | **角色素材批次真相源（6 情绪差分 + 微动立绘 + 氛围音）**：`00-共同上下文.md` 是冻结契约（`EMOTIONS` 六枚举 / `assets/characters/<id>/<emo>.webp` 约定 / `/api/characters` 的 `emotions`（6 张全在才回传）/ 微动片归小天地 `portrait`），`01`–`04` 分篇。生产工具 `tools/gen-emotions.mjs`、`tools/gen-motion.mjs`、`tools/record-emotion-assets.mjs`。**动 `routes/world.ts` 的 `/characters` / `CharacterModal` 立绘 / 6 情绪素材 / nook portrait 前必读** |
 | `docs/settings/` | **每世界设置（S1）真相源**：`00-共同上下文.md` 是冻结契约（`autoWrite` 三态语义 / `.airpworld/settings.json` 形状 / `GET|POST /api/world-settings` / 门控点：门走 I1、选项走 dispatch）。**动 `routes/world.ts` 的 `/choice`·`/enter-layer` / `useWorld.enterLayer` / `AgentSettings` 前必读** |
+| `docs/merge/` | **合并纪律真相源**：`00-合并纪律.md` 是契约（登记命名 `/ 必含三节 / 合并执行清单 / 强制机制 / `origin/niko` 复盘）；`BASELINE.md` 是立法前豁免 SHA 名单。**每次 `git merge` 动手前必读**（§6.6） |
 
 **参考实现（都在本项目的兄弟目录，不进本仓库）**：
 
@@ -265,6 +268,8 @@ pnpm check:skills                               # skill 语料门禁（frontmatt
 pnpm check:voices                               # 音色门禁（角色 voice 解析到调色板；docs/tts/07）
 pnpm check:i18n                                 # i18n 键门禁（`t('…')` 键必须解析到 messages.json 且 zh-CN/ja 齐全）
 pnpm check:emotions                             # 角色素材门禁（6/6 齐备 + 真透明 + 9:16 + webm 真 alpha + 溯源 SHA；见 docs/assets/00 §7）
+pnpm check:merge                                # 合并登记门禁（first-parent merge 必须有 docs/merge/<title>-<7hex>-<作者>.md；见 §6.6）
+pnpm hooks:install                              # 启用 pre-push 钩子（git config core.hooksPath .githooks），每台机器一次
 pnpm pi status                                  # pi-rp 子模块 + dist 新鲜度体检（见 §7.2）
 pnpm motion <绿幕.mp4> -o out.webm --scale 360   # 微动立绘 / 背景视频（见 assets/skills/motion-portrait）
 pnpm gen image --prompt "..." -o assets/_inbox/   # 生图 / 生视频（见 assets/skills/flow-media）
@@ -317,7 +322,7 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 **`git commit` 之后立刻 `git push`，不要攒在本地。**
 
 - push 前先 `git fetch`，确认与远端的关系。
-- 远端有新提交 → **merge**，不要 rebase 别人已经拉过的分支。
+- 远端有新提交 → **merge**，不要 rebase 别人已经拉过的分支；**每次 merge 都要按 §6.6 写登记**（`docs/merge/<title>-<7hex>-<作者>.md`），没登记推不出去。
 - **绝不 `force-push` `main`。**
 
 **并发下的暂存纪律**（工作区经常同时有多个 agent 在改，已实际发生过）：
@@ -361,13 +366,14 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 | 角色素材（6 情绪枚举 / `<id>/<emo>.webp` 约定 / `/api/characters` 的 `emotions`） | `docs/assets/00`（冻结契约）+ `01…04`；`packages/shared/src/rules/emotions.ts`（枚举唯一源）、`apps/server/src/routes/world.ts` 的 `/characters` 探测、`apps/web/src/components/overlay/CharacterModal.tsx` 的立绘分支、`tools/{gen-emotions,gen-motion,record-emotion-assets}.mjs`；跑 `node tools/record-emotion-assets.mjs --check` + `pnpm test` |
 | 每世界设置（`autoWrite` 三态、`.airpworld/settings.json`、`/api/world-settings`） | `docs/settings/00`（冻结契约）；`packages/shared/src/schemas/world-settings.ts`（档位谓词唯一源）、`apps/server/src/engine/world-settings.ts`、`apps/server/src/routes/world.ts` 的 `/choice`·`/enter-layer`、`apps/web/src/state/useWorld.ts::enterLayer`、`components/AgentSettings.tsx`；**门走 I1（`airp_init`）、选项走 `dispatch`**，`/enter-layer` MUST NOT dispatch |
 | 文档里写的仓库路径（目录树 / 链接 / `file:line` 引用） | 无需手改同步表——**跑 `pnpm check:docs` 即可**：它核验 `docs/hooks` + `docs/audio` + `AGENTS.md` + `assets/README.md` 里的每条路径引用能否解析。改名/移动文件后引用悬空，门禁直接红 |
+| 合并（任何 `git merge` 落在这条线上） | **同 commit 写 `docs/merge/<title>-<merge 短哈希 7 位>-<作者>.md`**，跑 `pnpm check:merge`；见 §6.6 |
 
 文档里已被推翻的说法**直接改掉**，不要另起一段解释——`docs/archive/` 才是存废案的地方。
 
 ### 6.4 收工自检
 
 ```bash
-pnpm build && pnpm test && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:bodies && pnpm check:docs && pnpm probe:prompt && pnpm check:skills && pnpm check:voices && pnpm check:i18n && pnpm probe:init && pnpm check:emotions
+pnpm build && pnpm test && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:bodies && pnpm check:docs && pnpm probe:prompt && pnpm check:skills && pnpm check:voices && pnpm check:i18n && pnpm probe:init && pnpm check:emotions && pnpm check:merge
 ```
 
 `pnpm test` 覆盖 `packages/shared/test/`、`apps/server/test/`、`apps/web/test/`、`tools/*.test.mjs` 四处（纯函数与非空性断言落在这里）。
@@ -379,6 +385,8 @@ pnpm build && pnpm test && pnpm probe && pnpm probe:inject && pnpm check:ws && p
 `pnpm check:i18n` 是**文案键门禁**（`tools/check-i18n.mjs`）：`translate()` 在缺键时**回落成 key 本身**，于是 `t('Some English')` 少了 messages.json 条目就在**每个语言**下都显示英文——静默去本地化。origin/niko 合并正是这样丢了 7 个键（场景 Chalk / 图片失败提示 / 作家书写提示）+ 1 个新增调用点。门禁只对**用到的键必须翻译齐全**这一向失败（死键只 warn，因为 `t(variable)` 扫不到）。
 
 `pnpm check:docs` 是**设计文档门禁**（`tools/check-hooks-docs.mjs`）：符号归属 / barrel union / sentinel 三条只在 hooks 批契约内成立，故只扫 `docs/hooks/`；**引用核验（file:line 必须能解析）跑更宽的语料**——`docs/hooks/` + `docs/audio/` + `AGENTS.md` + `assets/README.md`——因为"死路径在哪都是死路径"，而**入口文档的路径表恰恰是最容易悄悄过期的地方**（2026-09-13 加：§7.8 与 `assets/README.md` 都写过一句已经变了的 gitignore）。`assets/` 引用只核验 **git-tracked** 的文本路径（平台音频池 `assets/audio/PLAN.md` 等），世界相对的 `assets/...`（`<worldRoot>/assets/audio/rain.mp3`，测试 fixture）与媒体文件一律跳过——它们只是共享 `assets/` 这个前缀。**改了文档里的任何路径引用必须让它变绿**；批次文档顶部声明 `NEW` 的文件享文档级豁免。
+
+`pnpm check:merge` 是**合并登记门禁**（`tools/check-merge-log.mjs`）：`git log --merges --first-parent HEAD` 上的每个 merge（`docs/merge/BASELINE.md` 的豁免名单除外）**都必须有 `docs/merge/<title>-<7hex>-<author>.md`**，且含三节、引用 merge 与两个父提交、`## 2. 冲突处理` 非空。**没登记就推不出去**（`tools/git-hooks/pre-push`）。规矩见 §6.6。
 
 改动涉及引擎或 preset 时，额外确认探针里**没有 `not found` / `unknown slot` 警告**。
 
@@ -393,6 +401,25 @@ pnpm build && pnpm test && pnpm probe && pnpm probe:inject && pnpm check:ws && p
 | `apps/web/src/` | 生产由服务端伺服 `apps/web/dist/` | `pnpm build`（vite dev 的 HMR 只证明 dev 模式对） |
 
 判据很简单：**`import` 的是 `dist` 就必须 build**。不确定时比对 `dist/` 的 mtime，或直接 grep 新逻辑在不在产物里。
+
+### 6.6 合并必须登记（硬要求，2026-09-13 立）
+
+**每一次 `git merge` 落在本分支线上，都必须写一份人看得懂的登记；没有登记，不许推送。** 全文（命名规则 / 必含三节 / 执行清单 / 强制机制 / `origin/niko` 复盘）见 **`docs/merge/00-合并纪律.md`**——**动手合并前先读它**。
+
+为什么值得单独立法：合并是**唯一一种「git 自己会改你的代码、改错了还不报错」的操作**。`813c0f3` 合 `origin/niko` 时**静默丢了入站 `airp_init` WS 帧**（前端发送方消失、服务端 handler 还在——"半条链"读起来像"已弃用"而非"丢了"）、**8 个 i18n 键**、**21 个角色的 `voice:`**；三处都不在冲突块里，事后两天才靠人肉清点补回。
+
+```text
+docs/merge/<title>-<merge 短哈希 7 位>-<作者>.md      # 例：niko-沉浸式界面-813c0f3-yoshi.md
+```
+
+顺序不可颠倒：`merge` → **写登记** → `pnpm check:merge` 绿 → `commit` → `push`。
+
+```bash
+pnpm hooks:install   # 每台机器一次：git config core.hooksPath .githooks（装 pre-push 兜底）
+pnpm check:merge     # 门禁
+```
+
+**合完之后必做「静默丢失自查」**（§3.3，按连接面整面扫，不按冲突块扫）：WS 帧 `check:ws` / 请求体 `check:bodies` / i18n `check:i18n` / 音色 `check:voices` / preset slot `probe:prompt` / 删除文件 `--diff-filter=D`。**一个能力若生产端与消费端只有一端存活，去两侧查它原来是不是成对的。**
 
 ---
 

@@ -31,6 +31,8 @@
     "check:voices": "node tools/check-voices.mjs",
     "check:i18n": "node tools/check-i18n.mjs",
     "check:emotions": "node tools/verify-emotions.mjs",
+    "check:merge": "node tools/check-merge-log.mjs",
+    "hooks:install": "git config core.hooksPath .githooks",
     "pi": "node tools/pi-rp.mjs"
   },
   "devDependencies": {
