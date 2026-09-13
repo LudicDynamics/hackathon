@@ -297,11 +297,19 @@ export class LocalWorldStore implements WorldStore {
     const sites = await scanRefs(this, from, to);
 
     await fs.mkdir(path.dirname(absTo), { recursive: true });
-    // Link creation is exclusive: never overwrite another carried item's file.
-    // Both paths belong to the same world filesystem; directory moves are not
-    // part of this item API. Unlink only after the destination exists safely.
-    await fs.link(absFrom, absTo);
-    await fs.unlink(absFrom);
+    // Move without ever clobbering: the destination is checked first, then a
+    // single atomic `rename`. Docs/tools/04 §process step 3 requires
+    // `already_exists` ("绝不覆盖") and warns that `fs.rename` alone silently
+    // overwrites a same-named entity. A bare rename would do exactly that, so
+    // the guard is explicit here — `store.move` is a public entry point and may
+    // be called directly (tools/hover-actions.test.mjs), not only via
+    // `moveEntity` (which validates too, non-atomically, before reaching here).
+    if ((await this.statKind(to)) !== 'missing') {
+      const err = new Error(`EEXIST: destination already exists: "${to}"`) as NodeJS.ErrnoException;
+      err.code = 'EEXIST';
+      throw err;
+    }
+    await fs.rename(absFrom, absTo);
 
     const { rewrote, dangling } = await rewriteRefs(this, from, to, sites);
 

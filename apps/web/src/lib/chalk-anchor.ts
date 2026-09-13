@@ -22,13 +22,14 @@ export function highlightChalkAnchor(source: HTMLElement, sourcePath: string, an
     Object.assign(line.style, { left: `${x}px`, top: `${y}px`, width: `${Math.hypot(dx, dy)}px`, transform: `rotate(${Math.atan2(dy, dx)}rad)` });
   };
   update();
-  plane.addEventListener('pointermove', update);
+  // No `pointermove` listener: the thread spans two fixed shells, so it only
+  // changes when either box resizes. A pointermove handler that reads `offset*`
+  // forces reflow on every move (AGENTS §7.6③).
   const observer = new ResizeObserver(update);
   observer.observe(source);
   observer.observe(target);
   return () => {
     observer.disconnect();
-    plane.removeEventListener('pointermove', update);
     line.remove();
     target.classList.remove('chalk-anchor-lit');
   };

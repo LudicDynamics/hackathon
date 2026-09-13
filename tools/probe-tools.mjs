@@ -154,6 +154,37 @@ for (const [name, props] of Object.entries(EXPECTED_PARAMS)) {
   check(`${name} parameter names`, JSON.stringify(actual) === JSON.stringify(props), actual.join(','));
 }
 
+/**
+ * Gemini function-declaration validation rejects `anyOf: [string, array]` with
+ * "For schema with items, schema type should be ARRAY" — its schema merger
+ * conflates the scalar branch with the array branch's `items`. The fix (already
+ * used by pi-rp's own `core/tools/read.ts:22-25`) is to list the ARRAY branch
+ * FIRST. A scalar-first `string | string[]` parameter therefore makes EVERY
+ * request to a Gemini-backed provider fail with HTTP 400 — which is exactly how
+ * the character dialogue went silent on 2026-09-13 (no delta, no audio, no
+ * error the player could see). This guard makes that class of schema a red test,
+ * not a silent runtime failure.
+ */
+const unionBranches = (schema) => {
+  const branches = schema?.anyOf ?? schema?.oneOf;
+  return Array.isArray(branches) ? branches : null;
+};
+const hasArrayBranch = (branches) => branches.some((b) => b?.type === 'array');
+const firstArrayBranch = (branches) => branches.findIndex((b) => b?.type === 'array') === 0;
+
+for (const [name, tool] of container.entries()) {
+  for (const [param, schema] of Object.entries(tool.parameters.properties ?? {})) {
+    const branches = unionBranches(schema);
+    if (branches && hasArrayBranch(branches)) {
+      check(
+        `${name}.${param}: array branch is FIRST in the union (Gemini function-declaration rule)`,
+        firstArrayBranch(branches),
+        branches.map((b) => b?.type).join('|')
+      );
+    }
+  }
+}
+
 /* ── 3. Execution through the extension host path ────────────────────────── */
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'airp-probe-tools-'));

@@ -51,16 +51,20 @@ export const airpGateway = {
   enterLayer: (layer: string) => request('/api/enter-layer', json('POST', { layer })),
   moveCard: (path: string, x: number, y: number) =>
     request('/api/card/position', json('POST', { path, x, y })),
-  rollDice: (filePath: string, rollType: string, expect: string) =>
+  // Frozen request bodies (docs/wiring/00 §6): the server reads `path` only;
+  // rollType/expect are parsed server-side from frontmatter.
+  rollDice: (path: string) =>
     request<{ ok: boolean; result: number; passed: boolean }>(
       '/api/dice',
-      json('POST', { filePath, rollType, expect }),
+      json('POST', { path }),
     ),
-  useItem: (itemPath: string, targetPath: string, targetType = 'card') =>
-    request('/api/use-item', json('POST', { itemPath, targetPath, targetType })),
+  // Server reads `{ item, target }` (docs/tools/12:182).
+  useItem: (item: string, target: string) =>
+    request('/api/use-item', json('POST', { item, target })),
   toggleFreeze: () => request<{ worldFrozen: boolean }>('/api/freeze', json('POST')),
-  godAction: (action: 'create' | 'update' | 'delete', filePath: string, content?: string) =>
-    request('/api/god-action', json('POST', { action, filePath, content })),
+  // Server reads `path` (docs/tools/12:1403).
+  godAction: (action: 'create' | 'update' | 'delete', path: string, content?: string) =>
+    request('/api/god-action', json('POST', { action, path, content })),
   assetUrl: (path: string) => `/api/asset?path=${encodeURIComponent(path)}&session=${assetSession}`,
 };
 

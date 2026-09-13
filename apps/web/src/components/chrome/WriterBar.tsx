@@ -4,9 +4,13 @@
  * browser (single-line input ignores it anyway).
  *
  * `onSend` is only called with non-empty, trimmed text. The parent owns
- * `disabled` (world frozen / request in flight), so this stays presentational.
+ * `disabled` (world frozen / request in flight), so this stays presentational
+ * — except for the writer's own busy phase: while the writer is mid-turn the
+ * field locks and the placeholder explains why, instead of silently queueing
+ * input the writer will never read (docs/perform/01 §6.4).
  */
 import React, { useState } from 'react';
+import { useWriterPhase } from '../../lib/writer-state.js';
 
 export interface WriterBarProps {
   /** Receives the trimmed prompt text. Called after the field is cleared. */
@@ -14,6 +18,8 @@ export interface WriterBarProps {
   /** Locks the bar (no input, no submit) when true. */
   disabled?: boolean;
   placeholder?: string;
+  /** Copy swapped in while the writer is mid-turn. */
+  writingPlaceholder?: string;
   sendLabel?: string;
 }
 
@@ -21,26 +27,33 @@ export const WriterBar: React.FC<WriterBarProps> = ({
   onSend,
   disabled = false,
   placeholder = 'Ask the writer…',
+  writingPlaceholder = 'The writer is writing…',
   sendLabel = 'Send',
 }) => {
   const [text, setText] = useState('');
+  const writing = useWriterPhase() === 'writing';
+  const locked = disabled || writing;
 
   const submit = (): void => {
     const trimmed = text.trim();
-    if (!trimmed || disabled) return;
+    if (!trimmed || locked) return;
     onSend(trimmed);
     setText('');
   };
 
   return (
-    <div className="writer-bar" data-disabled={disabled ? 'true' : undefined}>
+    <div
+      className="writer-bar"
+      data-disabled={disabled ? 'true' : undefined}
+      data-writing={writing ? 'true' : undefined}
+    >
       <input
-        className="writer-bar__input"
+        className={writing ? 'writer-bar__input busy' : 'writer-bar__input'}
         type="text"
         value={text}
-        placeholder={placeholder}
+        placeholder={writing ? writingPlaceholder : placeholder}
         autoComplete="off"
-        disabled={disabled}
+        disabled={locked}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -52,7 +65,7 @@ export const WriterBar: React.FC<WriterBarProps> = ({
       <button
         className="writer-bar__send"
         type="button"
-        disabled={disabled}
+        disabled={locked}
         onClick={submit}
       >
         {sendLabel}

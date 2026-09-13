@@ -1,7 +1,9 @@
 ---
+
 type: "readme"
 name: "Mr. Tokiwa"
 avatar: "assets/characters/shopkeeper.webp"
+voice: casual-drawl
 ---
 
 # Mr. Tokiwa

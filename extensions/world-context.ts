@@ -28,6 +28,13 @@ export default function registerWorldContext(pi: ExtensionAPI): void {
     const actor = agentActor();
     const turn = currentTurnAnchor(ctx);
     if (!tracked.existed && tracked.file.endsWith('/README.md')) {
+      // During `airp-init` the command owns `layer_initialized` and records it
+      // from the on-disk outcome (docs/init/02 §6); the subagent's native write
+      // must not also land one, or the layer gets two rows (docs/tools/00 §6
+      // requires the two entry points be mutually exclusive). The flag is set
+      // across the spawn by init-command.ts; jiti gives each extension its own
+      // module instance, so `process.env` is the only channel between files.
+      if (process.env.AIRP_INIT_IN_FLIGHT === '1') return;
       await store.appendEvent({ type: 'layer_initialized', actor, turn, layer: layer ?? undefined,
         subject: layer ?? tracked.file, detail: { layer: layer ?? tracked.file.replace('/README.md', ''), name, by: 'writer', files: [tracked.file] } });
       return;

@@ -2,6 +2,7 @@
 type: readme
 name: Watson
 material: parchment
+voice: wise-elder
 ---
 
 # Watson

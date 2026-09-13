@@ -1,7 +1,9 @@
 ---
+
 type: "readme"
 name: "Old Mo"
 avatar: "assets/characters/old-mo.webp"
+voice: rustic-storyteller
 ---
 
 # Old Mo

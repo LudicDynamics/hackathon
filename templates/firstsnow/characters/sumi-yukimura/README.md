@@ -1,7 +1,9 @@
 ---
+
 type: "readme"
 name: "Sumi Yukimura"
 avatar: "assets/characters/sumi-yukimura.webp"
+voice: mature-elegant
 ---
 
 # Sumi Yukimura

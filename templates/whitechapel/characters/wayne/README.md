@@ -1,7 +1,9 @@
 ---
+
 type: "readme"
 name: "Arthur Wayne"
 avatar: "assets/characters/wayne.webp"
+voice: cool-composed
 ---
 
 # Arthur Wayne

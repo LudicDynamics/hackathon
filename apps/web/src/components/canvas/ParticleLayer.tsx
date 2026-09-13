@@ -3,6 +3,12 @@ import { getParallax } from '../../lib/parallax.js';
 
 export interface ParticleLayerProps {
   tone?: string;
+  /**
+   * Ambient dust/rain (pure decoration). Show bursts (`playBurst`) draw on this
+   * same canvas and MUST keep working when ambient is off (docs/perform/05
+   * §4.4), so this only gates the mote field — never the canvas itself.
+   */
+  ambient?: boolean;
 }
 
 interface Particle {
@@ -46,12 +52,131 @@ function makeGlowSprite(): HTMLCanvasElement {
 }
 
 let glowSprite: HTMLCanvasElement | null = null;
+/* ---- Show fireworks: a short-lived burst channel on the SAME canvas ----
+   docs/perform/05 §4.4. Opening a second full-screen canvas costs half a
+   frame budget (AGENTS §7.6-1: an empty full-screen canvas alone drops
+   57→34fps). This canvas already pays that cost, so a burst is just N extra
+   `drawImage` calls through the loop's existing 30fps cap and parallax read.
+   Particles are drawn from a per-color pre-rendered sprite, exactly like the
+   ambient motes, so no gradient is allocated per frame. */
 
-export const ParticleLayer: React.FC<ParticleLayerProps> = ({ tone = 'warm' }) => {
+/** One burst group: `bursts × 12` particles (≤ 96, docs/perform/05 §4.4). */
+interface BurstGroup {
+  particles: BurstParticle[];
+  sprite: HTMLCanvasElement;
+  startedAt: number;
+  durationMs: number;
+  /** Ratios expand to pixels on the first draw, once the canvas size is known. */
+  seeded: boolean;
+}
+
+interface BurstParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  maxLife: number;
+}
+
+export interface BurstSpec {
+  color?: string; // CSS color; default warm gold (matches the ambient sprite)
+  bursts?: number; // burst clusters (show-geometry clamps to 8)
+  origin?: string; // screen ratio "<0..1>,<0..1>"; default "0.5,0.2"
+  durationMs: number; // frame value, never clamped here
+}
+
+/** Particles per cluster — 8 clusters × 12 = the frozen 96-particle ceiling. */
+const BURST_PER_CLUSTER = 12;
+
+const burstSpriteCache = new Map<string, HTMLCanvasElement>();
+
+/** Pre-render one burst sprite per color (same rationale as `makeGlowSprite`). */
+function makeBurstSprite(color: string): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = c.height = GLOW_SPRITE_PX;
+  const g = c.getContext('2d')!;
+  const r = GLOW_SPRITE_PX / 2;
+  const grad = g.createRadialGradient(r, r, 0, r, r, r);
+  grad.addColorStop(0, color);
+  grad.addColorStop(0.45, color);
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, GLOW_SPRITE_PX, GLOW_SPRITE_PX);
+  return c;
+}
+
+function burstSpriteFor(color: string): HTMLCanvasElement {
+  let s = burstSpriteCache.get(color);
+  if (!s) {
+    s = makeBurstSprite(color);
+    burstSpriteCache.set(color, s);
+  }
+  return s;
+}
+
+/** Parse the frozen `origin` format: two ratios in [0,1], else the default. */
+function parseOrigin(origin?: string): { x: number; y: number } {
+  const m = (origin ?? '').split(',');
+  if (m.length !== 2) return { x: 0.5, y: 0.2 };
+  const x = Number(m[0]);
+  const y = Number(m[1]);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) {
+    return { x: 0.5, y: 0.2 };
+  }
+  return { x, y };
+}
+
+let burstGroups: BurstGroup[] = [];
+
+/**
+ * Play one fireworks burst (docs/perform/05 §4.4). Returns a cancel that drops
+ * this group immediately. A later call replaces any running burst — the show
+ * resource key is a single `'fireworks'` lane, so the newest intent wins.
+ */
+export function playBurst(spec: BurstSpec): () => void {
+  const color = typeof spec.color === 'string' && spec.color ? spec.color : 'rgb(235, 205, 140)';
+  const clusters = Math.max(1, Math.min(8, Math.floor(spec.bursts ?? 5)));
+  const durationMs = Number.isFinite(spec.durationMs) ? spec.durationMs : 3000;
+  const sprite = burstSpriteFor(color);
+  const particles: BurstParticle[] = [];
+
+  // Ratios expand to pixels on the first draw (the canvas size is known in the
+  // render loop, not here). Each cluster gets a small random offset so the
+  // bursts read as separate blooms rather than one ring.
+  const origin = parseOrigin(spec.origin);
+  for (let c = 0; c < clusters; c++) {
+    const ox = origin.x + (Math.random() - 0.5) * 0.18;
+    const oy = origin.y + (Math.random() - 0.5) * 0.12;
+    for (let i = 0; i < BURST_PER_CLUSTER; i++) {
+      const angle = (i / BURST_PER_CLUSTER) * Math.PI * 2 + Math.random() * 0.4;
+      const speed = 1.4 + Math.random() * 3.6;
+      particles.push({
+        x: ox,
+        y: oy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: 3 + Math.random() * 4,
+        maxLife: durationMs,
+      });
+    }
+  }
+  const group: BurstGroup = { particles, sprite, startedAt: performance.now(), durationMs, seeded: false };
+  burstGroups = [group]; // latest intent takes the lane
+  return () => {
+    burstGroups = burstGroups.filter((g) => g !== group);
+  };
+}
+
+export const ParticleLayer: React.FC<ParticleLayerProps> = ({ tone = 'warm', ambient = true }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const toneRef = useRef(tone);
   toneRef.current = tone;
+  // Read imperatively in the render loop so toggling ambient never re-runs the
+  // effect (which would reset the particle field and drop live bursts).
+  const ambientRef = useRef(ambient);
+  ambientRef.current = ambient;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -118,52 +243,80 @@ export const ParticleLayer: React.FC<ParticleLayerProps> = ({ tone = 'warm' }) =
       const shiftX = -p.x * 24;
       const shiftY = -p.y * 24;
 
-      for (let i = 0; i < particles.length; i++) {
-        const part = particles[i];
+      // Ambient motes are decoration and gated; show bursts below are not.
+      if (ambientRef.current) {
+        for (let i = 0; i < particles.length; i++) {
+          const part = particles[i];
 
-        if (isCurrentRain) {
-          // Rain streaks
-          part.x += part.vx;
-          part.y += part.vy;
-          if (part.y > height) {
-            part.y = -20;
-            part.x = Math.random() * (width + 100);
+          if (isCurrentRain) {
+            // Rain streaks
+            part.x += part.vx;
+            part.y += part.vy;
+            if (part.y > height) {
+              part.y = -20;
+              part.x = Math.random() * (width + 100);
+            }
+            if (part.x < -20) part.x = width + 20;
+
+            const drawX = part.x + shiftX;
+            const drawY = part.y + shiftY;
+
+            ctx.beginPath();
+            ctx.strokeStyle = `rgba(180, 205, 225, ${part.alpha * 0.4})`;
+            ctx.lineWidth = 1.2;
+            ctx.moveTo(drawX, drawY);
+            ctx.lineTo(drawX + part.vx * 3, drawY + part.vy * 3);
+            ctx.stroke();
+          } else {
+            // Warm floating motes / dust
+            part.baseY += part.vy;
+            if (part.baseY < -20) {
+              part.baseY = height + 20;
+              part.baseX = Math.random() * width;
+            }
+
+            const wobble =
+              Math.sin(time * part.wobbleSpeed + part.pulseOffset) * part.wobbleRadius;
+            const currentAlpha =
+              (Math.sin(time * part.pulseSpeed + part.pulseOffset) * 0.5 + 0.5) * part.maxAlpha;
+
+            // Glowing dust mote — one pre-rendered sprite, scaled and faded.
+            const d = part.size * 4.4; // sprite diameter in CSS px
+            ctx.globalAlpha = currentAlpha;
+            ctx.drawImage(
+              glowSprite!,
+              part.baseX + wobble + shiftX - d / 2,
+              part.baseY + shiftY - d / 2,
+              d,
+              d
+            );
           }
-          if (part.x < -20) part.x = width + 20;
-
-          const drawX = part.x + shiftX;
-          const drawY = part.y + shiftY;
-
-          ctx.beginPath();
-          ctx.strokeStyle = `rgba(180, 205, 225, ${part.alpha * 0.4})`;
-          ctx.lineWidth = 1.2;
-          ctx.moveTo(drawX, drawY);
-          ctx.lineTo(drawX + part.vx * 3, drawY + part.vy * 3);
-          ctx.stroke();
-        } else {
-          // Warm floating motes / dust
-          part.baseY += part.vy;
-          if (part.baseY < -20) {
-            part.baseY = height + 20;
-            part.baseX = Math.random() * width;
-          }
-
-          const wobble =
-            Math.sin(time * part.wobbleSpeed + part.pulseOffset) * part.wobbleRadius;
-          const currentAlpha =
-            (Math.sin(time * part.pulseSpeed + part.pulseOffset) * 0.5 + 0.5) * part.maxAlpha;
-
-          // Glowing dust mote — one pre-rendered sprite, scaled and faded.
-          const d = part.size * 4.4; // sprite diameter in CSS px
-          ctx.globalAlpha = currentAlpha;
-          ctx.drawImage(
-            glowSprite!,
-            part.baseX + wobble + shiftX - d / 2,
-            part.baseY + shiftY - d / 2,
-            d,
-            d
-          );
         }
+      }
+
+      // ---- Show fireworks bursts (docs/perform/05 §4.4) ----
+      // Drawn on the SAME canvas/loop: N `drawImage` calls, no second
+      // full-screen composite. `now` drives aging so a burst expires even if
+      // its cancel timer fires late.
+      if (burstGroups.length) {
+        for (const group of burstGroups) {
+          const age = now - group.startedAt;
+          const fade = Math.max(0, 1 - age / group.durationMs);
+          for (const bp of group.particles) {
+            if (!group.seeded) {
+              bp.x *= width;
+              bp.y *= height;
+            }
+            bp.x += bp.vx;
+            bp.y += bp.vy + 0.06; // gravity
+            const d = bp.size * 3;
+            ctx.globalAlpha = fade;
+            ctx.drawImage(group.sprite, bp.x - d / 2, bp.y - d / 2 + shiftY, d, d);
+          }
+          group.seeded = true;
+        }
+        // Reap finished groups so the array never grows unbounded.
+        burstGroups = burstGroups.filter((g) => now - g.startedAt < g.durationMs);
       }
       ctx.globalAlpha = 1;
     };

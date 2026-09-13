@@ -2,7 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { airpGateway, openAirpSocket, sendSocket } from '../lib/airp-gateway.js';
 import { invalidateMeasures } from '../lib/measure.js';
 import { whenFontsSettled } from '../lib/fonts.js';
-import { createFootprintScheduler, measureHeights, type FootprintScheduler } from '../lib/footprint.js';
+import {
+  createFootprintScheduler,
+  measureHeights,
+  type FootprintScheduler,
+} from '../lib/footprint.js';
+import { CARD_FORMS } from '@airp/shared/forms';
+import { register as registerPhantom, land as landPhantom, appendInk, setInk, evict as evictPhantom, reconcileLanded } from '../lib/phantom.js';
+import { phantomSeatFor, publishSeatItems } from '../lib/phantom-seat.js';
+import { mergeItemPatch, mergeLinkPatch } from '../lib/canvas-patch.js';
+import { beginTurn, endTurn, reset as resetWriter } from '../lib/writer-state.js';
+import { playFoley, playCharge, endCharge, setAmbient } from '../lib/audio.js';
+import { ghostSizeFor, stageText, GHOST_WAIT_AMBIENT } from '../lib/ghost.js';
 
 export interface LayerItem {
   path: string;
@@ -128,6 +139,9 @@ export function useWorld(): UseWorldApi {
       };
       stateRef.current = next;
       setState(next);
+      // 幻影排座镜像 + 真实卡一到就把对应幻影撤掉（docs/perform/00 §6b-5）。
+      publishSeatItems(next.layer, next.items);
+      reconcileLanded(next.items.map((it) => it.path));
     } catch (err) {
       console.warn('Could not fetch layer:', err);
     } finally {
@@ -289,35 +303,28 @@ export function useWorld(): UseWorldApi {
   useEffect(() => {
     let stopped = false;
     let retryTimer: number | null = null;
-    let ws: WebSocket | null = null;
 
     const onMessage = (msg: Record<string, unknown>) => {
+      // Every raw frame also goes out on `airp:agent-frame` (niko): the model
+      // settings panel and the character modal both read writer progress from it.
       window.dispatchEvent(new CustomEvent('airp:agent-frame', { detail: msg }));
-      if (msg.type === 'world_event') {
-        const ev = msg.event as { id?: string } | undefined;
-        if (!ev?.id || !noteWorldEvent(ev.id)) return;
-      }
-      if (
-        msg.type === 'file_changed' ||
-        msg.type === 'world_event' ||
-        msg.type === 'item_moved' ||
-        msg.type === 'god_action'
-      ) {
+      if (msg.type === 'file_changed' || msg.type === 'card_position') {
+        // App listens for this to keep its backpack/character views in sync.
         window.dispatchEvent(new CustomEvent('airp:world-event', { detail: msg }));
       }
       switch (msg.type) {
-        case 'error':
-        case 'turn_aborted':
-          window.dispatchEvent(new CustomEvent('airp:notice', { detail: msg.message ?? 'The writer could not finish this turn.' }));
-          break;
-        case 'image_generation_progress':
-          window.dispatchEvent(new CustomEvent('airp:notice', { detail: 'Painting the scene… You can keep exploring.' }));
-          break;
         case 'file_changed':
-        case 'world_event':
-        case 'item_moved':
-        case 'god_action':
           void fetchLayer(layerRef.current);
+          break;
+        case 'world_event':
+          // 世界事件（docs/tools/12 §6.3）：先判重，再转发，最后整层重取。
+          {
+            const ev = msg.event as { id?: string } | undefined;
+            if (!ev || typeof ev.id !== 'string') break; // 畸形帧不污染去重集合
+            if (!noteWorldEvent(ev.id)) break; // 同一行的重复副本到此为止
+            forwardWorldEvent(msg as unknown as WorldEventFrame);
+            void fetchLayer(layerRef.current);
+          }
           break;
         case 'world_frozen':
           setState((s) => (s ? { ...s, worldFrozen: true } : s));
@@ -331,34 +338,166 @@ export function useWorld(): UseWorldApi {
             typeof msg.x === 'number' &&
             typeof msg.y === 'number'
           ) {
-            setState((s) =>
-              s
-                ? {
-                    ...s,
-                    items: s.items.map((it) =>
-                      it.path === msg.path ? { ...it, x: msg.x as number, y: msg.y as number } : it
-                    ),
-                  }
-                : s
-            );
+            setState((s) => {
+              if (!s) return s;
+              const items = mergeItemPatch(s.items, { path: msg.path as string, x: msg.x as number, y: msg.y as number });
+              if (items === s.items) return s;
+              const out = { ...s, items: items as LayerItem[] };
+              stateRef.current = out; // footprint/moveCard read stateRef as truth
+              return out;
+            });
           }
           break;
         case 'tool_start':
           if (msg.source === 'writer') writerToolsInFlight.current++;
           break;
         case 'tool_end':
-          if (msg.source === 'writer') { writerToolsInFlight.current = Math.max(0, writerToolsInFlight.current - 1); fpRef.current?.notify(); }
+          if (msg.source === 'writer') {
+            writerToolsInFlight.current = Math.max(0, writerToolsInFlight.current - 1);
+            // 失败也要收笔：撤掉未落地的幻影并归位状态机（docs/perform/01 §7）。
+            if (msg.isError === true && typeof msg.toolCallId === 'string') {
+              evictPhantom(msg.toolCallId);
+              endTurn();
+              // A failed image also took the ambience; give it back (perform/03 §3.2).
+              setAmbient(stateRef.current?.audio.ambient ?? null);
+            }
+          }
+          break;
+        case 'character_delta':
+        case 'character_message':
+        case 'character_idle':
+          // 演出帧（docs/tools/12 §6.2）：无条件转给遮罩，不进 world_event 的
+          // 去重/重取路径；归属过滤在 App。
+          window.dispatchEvent(new CustomEvent('airp:character-frame', { detail: msg }));
+          break;
+        case 'error':
+          // 角色车道报错 → 遮罩；同时给全局一条 notice（writer 错误也给玩家看见）。
+          if (msg.source === 'character' && typeof msg.characterId === 'string') {
+            window.dispatchEvent(new CustomEvent('airp:character-frame', { detail: msg }));
+          } else {
+            window.dispatchEvent(new CustomEvent('airp:notice', { detail: msg.message ?? 'The writer could not finish this turn.' }));
+          }
+          break;
+        case 'turn_aborted':
+          window.dispatchEvent(new CustomEvent('airp:notice', { detail: msg.message ?? 'The writer could not finish this turn.' }));
+          break;
+        // ---- 演出通道（docs/perform/00 §4）----
+        case 'chalk_writing': {
+          if (msg.source !== 'writer' || typeof msg.toolCallId !== 'string') break;
+          const seat = phantomSeatFor(CARD_FORMS.chalk, layerRef.current).seat;
+          registerPhantom(msg.toolCallId, {
+            kind: 'chalk',
+            source: 'writer',
+            seat,
+            layer: layerRef.current,
+          });
+          beginTurn('chalk');
+          playCharge(0);
+          break;
+        }
+        case 'writer_delta': {
+          if (msg.source !== 'writer' || typeof msg.toolCallId !== 'string' || typeof msg.delta !== 'string') break;
+          if (msg.mode === 'replace') setInk(msg.toolCallId, msg.delta);
+          else appendInk(msg.toolCallId, msg.delta);
+          break;
+        }
+        case 'chalk_landed': {
+          if (msg.source !== 'writer' || typeof msg.toolCallId !== 'string') break;
+          landPhantom(msg.toolCallId, typeof msg.path === 'string' ? { path: msg.path } : {});
+          endCharge();
+          playFoley('paper-slide');
+          break;
+        }
+        case 'writer_idle': {
+          if (msg.source !== 'writer') break;
+          endTurn();
+          break;
+        }
+        case 'dice_result': {
+          // 与玩家点击的 /api/dice 同形；交给 App 的仪式层演出。
+          window.dispatchEvent(new CustomEvent('airp:dice-frame', { detail: msg }));
+          break;
+        }
+        case 'image_generation_progress': {
+          if (typeof msg.toolCallId !== 'string') break;
+          const size = ghostSizeFor(msg.width as number, msg.height as number);
+          registerPhantom(msg.toolCallId, {
+            kind: 'image',
+            source: 'writer',
+            seat: phantomSeatFor(size, layerRef.current).seat,
+            layer: layerRef.current,
+            label: stageText(msg.stage as string, msg.elapsedMs as number),
+            elapsedMs: typeof msg.elapsedMs === 'number' ? msg.elapsedMs : undefined,
+          });
+          setAmbient(GHOST_WAIT_AMBIENT);
+          break;
+        }
+        case 'image_landed': {
+          if (typeof msg.toolCallId !== 'string') break;
+          landPhantom(msg.toolCallId, {
+            asset: typeof msg.asset === 'string' ? msg.asset : undefined,
+            reused: msg.reused === true,
+          });
+          playFoley('crit-chime');
+          // Hand the sound bed back to the layer's authority (docs/perform/03
+          // §3.1 step 9): `image_generation_progress` took it with a wait bed.
+          setAmbient(stateRef.current?.audio.ambient ?? null);
+          break;
+        }
+        case 'canvas_patched': {
+          // 帧带 layer：不匹配（或缺失）整帧忽略 —— 作家在别的层摆位不该让当前页抖一下。
+          if (typeof msg.layer !== 'string' || msg.layer !== layerRef.current) break;
+          if (msg.kind === 'links') {
+            if (!Array.isArray(msg.links)) break;
+            setState((s) => {
+              if (!s) return s;
+              const links = mergeLinkPatch(s.links, msg.links as never, msg.action as never);
+              if (links === s.links) return s;
+              const out = { ...s, links: links as LayerLink[] };
+              stateRef.current = out;
+              return out;
+            });
+          } else if (msg.kind === 'cards') {
+            if (!Array.isArray(msg.cards)) break;
+            setState((s) => {
+              if (!s) return s;
+              let items: readonly LayerItem[] = s.items;
+              for (const c of msg.cards as { path: string; x: number; y: number; z?: number }[]) {
+                if (!c || typeof c.path !== 'string') continue;
+                items = mergeItemPatch(items, c);
+              }
+              if (items === s.items) return s;
+              const out = { ...s, items: items as LayerItem[] };
+              stateRef.current = out;
+              return out;
+            });
+          } else {
+            // 未知 kind 是契约漂移信号 —— 必须看得见（docs/perform/04 §7）。
+            console.warn('[canvas_patched] unknown kind', msg.kind);
+          }
+          break;
+        }
+        case 'show_frame':
+          // 演出库（docs/perform/05）：交给 PerformanceLayer 的分发器。
+          window.dispatchEvent(new CustomEvent('airp:show-frame', { detail: msg }));
           break;
         default:
+          // agent_event / roll_resolved 等仍在此忽略（docs/tools/12 §6.2）。
           break;
       }
     };
 
+    // Reconnect (niko): a dropped socket would otherwise leave the writer input
+    // disabled and the tool counter stuck. Reconnect resets both guards on open.
     const connect = () => {
       if (stopped) return;
-      ws = openAirpSocket(onMessage);
+      const ws = openAirpSocket(onMessage);
       wsRef.current = ws;
-      ws.onopen = () => { writerToolsInFlight.current = 0; void fetchLayer(layerRef.current); };
+      ws.onopen = () => {
+        writerToolsInFlight.current = 0;
+        resetWriter();
+        void fetchLayer(layerRef.current);
+      };
       ws.onclose = () => {
         if (wsRef.current === ws) wsRef.current = null;
         if (!stopped) retryTimer = window.setTimeout(connect, 1200);
@@ -370,9 +509,10 @@ export function useWorld(): UseWorldApi {
     return () => {
       stopped = true;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
-      ws?.close();
+      wsRef.current?.close();
+      wsRef.current = null;
     };
-  }, [fetchLayer]);
+  }, [fetchLayer, noteWorldEvent, forwardWorldEvent]);
 
   // Initial load of the default layer.
   useEffect(() => {

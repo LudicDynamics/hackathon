@@ -20,9 +20,17 @@ test('body tooltip is removed while dialogue close keeps its safe offset', async
   assert.doesNotMatch(css, /markdown-chalk-preview/);
   assert.match(css, /character-modal-layer \.modal-close \{ top: max\(84px/);
 });
-test('all Markdown forms share one interaction footer with source context', async () => {
+test('every Markdown form renders its interaction widgets exactly once', async () => {
+  // Canvas cards: EntityInteractions is the single footer (CanvasObject mounts
+  // it over the card body).
   assert.match(await read('components/canvas/CanvasObject.tsx'), /<EntityInteractions item=\{item\}/);
-  assert.doesNotMatch(await read('components/narrative/ChalkCard.tsx'), /renderFrontmatterWidgets/);
+  // Scene Chalk (the layer README) renders outside any `.object`, so it has no
+  // EntityInteractions layer and its card must render its own widgets — or the
+  // scene's choice/status/dice disappear. The inline canvas ChalkCard delegates
+  // to EntityInteractions and MUST NOT also render them (no double footer);
+  // CardRenderer is the only such caller and passes no handlers.
+  assert.match(await read('components/narrative/ChalkCard.tsx'), /renderFrontmatterWidgets/);
+  assert.match(await read('components/canvas/CardRenderer.tsx'), /<ChalkCard item=\{item\} \/>/);
   const code = await read('components/narrative/EntityInteractions.tsx');
   assert.match(code, /JSON.stringify\(item.path\)/);
   assert.match(code, /filePath: item.path/);

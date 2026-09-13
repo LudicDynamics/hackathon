@@ -13,14 +13,17 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Dices, CheckCircle2, AlertCircle } from 'lucide-react';
 import { unlock, playFoley, playCharge, endCharge } from '../../lib/audio.js';
 
-const CHARGE_MS = 1200; // hold time for a full bar
+// Timing constants shared with the frame-driven DiceCeremony (docs/perform/02
+// §11.3): both entry points must play the same beat. ROLL_MS / SETTLE_MS /
+// FACES are imported directly; CHARGE_MS is exported so the set stays whole.
+export const CHARGE_MS = 1200; // hold time for a full bar
 const TAP_MS = 300; // presses shorter than this are taps → auto-fill
 const AUTO_FILL_MS = 600; // tap auto-fill duration
-const ROLL_MS = 1200; // cube tween length (also the animation gate)
-const SETTLE_MS = 1300; // result lingers before the overlay auto-closes
+export const ROLL_MS = 1200; // cube tween length (also the animation gate)
+export const SETTLE_MS = 1300; // result lingers before the overlay auto-closes
 const IDLE_TILT = { x: 12, y: 20 }; // resting pose before the roll
 
-const FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+export const FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 
 interface DiceRollerProps {
   filePath: string;

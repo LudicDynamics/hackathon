@@ -473,7 +473,7 @@ const resultPath = r?.path ?? r?.details?.path ?? undefined;
 | 帧 | 演出 | 出处 |
 |---|---|---|
 | `chalk_writing` | 红杆铅笔的笔尖飞到书写点；纸条飞出意象 | `doc-06 §2.1`、`doc-07 §3 D3` |
-| `writer_delta` | chalk 逐字湿墨流式 | `event-bridge.ts:46-50`、`doc-06 §2.1` |
+| `writer_delta` | chalk 逐字湿墨流式（**来源 = chalk 工具 `content` 参数**，非 `text_delta`） | `event-bridge.ts` 的 `toolcall_delta` 缓冲分支、`docs/perform/00 §3`、`doc-06 §2.1` |
 | `chalk_landed`（带 `path`） | 幻影壳 → 内容落地 → 座位过户；湿墨洇干 | `doc-10 E3`、`前端改造计划.md §T3.4` |
 
 **画布刷新走的是另一条**：`chalk` 落盘后 `fs.watch` 触发 `file_changed`（`event-bridge.ts:136-148`）→ `useWorld.fetchLayer` 重取本层（`useWorld.ts` 的 `file_changed` 分支）→ 新文件出现在 `items` 里 → 未排座卡片经 `seatUnplaced` 得到座位（`world.ts:164-169`）→ `ChalkCard` 渲染（`ChalkCard.tsx`）。**演出帧与数据刷新是两条独立通道**，这正是 `doc-21 §1.1` 第一行的意思（帧是动画，不是变化）。

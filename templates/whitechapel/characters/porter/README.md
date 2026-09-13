@@ -1,6 +1,8 @@
 ---
+
 type: "readme"
 name: "Ned Porter"
+voice: news-anchor
 ---
 
 # Ned Porter

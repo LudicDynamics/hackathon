@@ -1,7 +1,9 @@
 ---
+
 type: readme
 name: 雪村澄
 avatar: assets/characters/sumi-yukimura.webp
+voice: warm-cheerful
 ---
 
 # 雪村澄

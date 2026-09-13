@@ -35,7 +35,7 @@
 
 ## 特效优化回归
 
-测试命令：`node --test tools/effects.test.mjs tools/ui-shell.test.mjs`。
+测试命令：`node --test tools/ui-shell.test.mjs`。
 
 - 鼠标连续 100 次事件只预约一帧，取消后不再执行。
 - 在模拟 120 Hz 屏幕上粒子绘制保持 30 FPS。

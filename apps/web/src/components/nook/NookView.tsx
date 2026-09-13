@@ -345,6 +345,11 @@ export const NookView: React.FC<NookViewProps> = ({
             collapse: copy.collapseScene,
             expand: copy.expandScene,
           }}
+          ghostCopy={{
+            reused: copy.ghostReused,
+            failed: copy.ghostFailed,
+            unreachable: copy.ghostUnreachable,
+          }}
           onMoveCard={onMoveCard}
           onSelectChoice={onSelectChoice}
           onDiceRolled={onDiceRolled}

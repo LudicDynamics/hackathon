@@ -23,11 +23,28 @@ export const lookAtTool = defineTool({
     'Use read when you need the raw frontmatter to edit it.',
   parameters: Type.Object(
     {
+      // Array branch MUST come first — Vertex/Gemini function-declaration validation
+      // rejects `anyOf: [string, array]` with "For schema with items, schema type
+      // should be ARRAY" (its schema merger conflates the scalar branch with the
+      // array branch's `items`). Order is semantically irrelevant to JSON Schema;
+      // array-first passes everywhere. Same rule, same wording as pi-rp's own
+      // `core/tools/read.ts:22-25`.
       path: Type.Optional(
-        Type.Union([Type.String(), Type.Array(Type.String())], {
-          description:
-            'World-relative path of a .md entity or a directory (layer). Omit for the current layer.',
-        })
+        Type.Union(
+          [
+            Type.Array(Type.String(), {
+              description: 'World-relative paths of .md entities or directories (layers).',
+            }),
+            Type.String({
+              description:
+                'World-relative path of a .md entity or a directory (layer). Omit for the current layer.',
+            }),
+          ],
+          {
+            description:
+              'One path (entity or layer directory), or an array of paths. Omit for the current layer.',
+          }
+        )
       ),
     },
     { additionalProperties: false }

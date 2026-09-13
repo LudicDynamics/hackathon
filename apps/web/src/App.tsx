@@ -3,9 +3,20 @@ import { AgentSettings } from './components/AgentSettings.js';
 import { ItemArtwork } from './components/ItemArtwork.js';
 import { NookView } from './components/nook/NookView.js';
 import { useViewpointReport } from './hooks/useViewpointReport.js';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Canvas } from './components/canvas/Canvas.js';
-import { CharacterModal } from './components/overlay/CharacterModal.js';
+import { CharacterModal, type CharacterFrame } from './components/overlay/CharacterModal.js';
+import { DiceCeremony } from './components/performance/DiceCeremony.js';
+import { PerformanceLayer } from './components/performance/PerformanceLayer.js';
+import {
+  parseDiceFrame,
+  shouldPlayFrame,
+  markPlayed,
+  playCeremony,
+  clearCeremony,
+  subscribeCeremony,
+  getCeremonySnapshot,
+} from './lib/dice-ceremony.js';
 import { GodModeToolbar } from './components/god/GodModeToolbar.js';
 import { RadialMenu, type RadialItemType } from './components/god/RadialMenu.js';
 import { MuteButton } from './components/chrome/MuteButton.js';
@@ -50,6 +61,8 @@ interface CharacterView {
   avatar?: string;
   bio?: string;
   description?: string;
+  /** README frontmatter `voice` alias, via /api/characters. undefined → server default. */
+  voice?: string;
 }
 
 type Attention = 'ambient' | 'authoring';
@@ -136,6 +149,15 @@ export function App() {
   const writerDraft = useRef('');
   const toastTimer = useRef<number | null>(null);
 
+  // 角色演出帧（A3）：useWorld 转发给遮罩；本组件按 activeCharacter.id 路由后下推。
+  const [activeModalFrame, setActiveModalFrame] = useState<CharacterFrame | null>(null);
+
+  // Dice ceremony (presentation channel, docs/perform/02): the fullscreen roll
+  // driven by the `dice_result` frame. Module store (lib/dice-ceremony.ts) so
+  // the WS listener need not thread the verdict through React state; App is
+  // only the mount point.
+  const ceremony = useSyncExternalStore(subscribeCeremony, getCeremonySnapshot);
+
   const camera = useCamera();
   const { setAmbient, setBGM, setTheme } = useAudio();
 
@@ -144,6 +166,13 @@ export function App() {
   const { state, layer, enterLayer, refresh, moveCard, sendToWriter, sendMessage } = world;
   const chromeVisible = !shell.immersive;
   const isDusk = backdropReady;
+
+  // The free-input channel locks while the writer is mid-turn (docs/perform/01
+  // §6.4): a stray Enter must not queue a prompt the writer will never read.
+  // `writerWorking` is driven below from the writer frames (tool_start /
+  // writer_delta / chalk_writing → busy; writer_idle / error / turn_aborted →
+  // idle), so it covers a turn before its first chalk lands.
+  const writerLocked = writerWorking || state?.worldFrozen === true;
 
   const notify = (message: string) => {
     setToast(message);
@@ -173,6 +202,42 @@ export function App() {
     window.addEventListener('airp:notice', onNotice);
     return () => window.removeEventListener('airp:notice', onNotice);
   }, []);
+
+  // 角色演出帧（A3）：useWorld 转发的原始帧；按当前打开的角色过滤后下推给遮罩。
+  // 归属过滤放在这里而不是 useWorld：遮罩是唯一消费者，且须随开关重绑。
+  useEffect(() => {
+    const onCharacterFrame = (event: Event) => {
+      const msg = (event as CustomEvent).detail as CharacterFrame | undefined;
+      if (!msg) return;
+      const activeId = activeCharacter?.id;
+      if (msg.characterId !== undefined) {
+        if (msg.characterId !== activeId) return;
+      } else if (activeId === null) {
+        return;
+      }
+      setActiveModalFrame(msg);
+    };
+    window.addEventListener('airp:character-frame', onCharacterFrame);
+    return () => window.removeEventListener('airp:character-frame', onCharacterFrame);
+  }, [activeCharacter]);
+
+  // Dice ceremony: forwarded raw frame → boundary guard → layer filter / dedup
+  // → ceremony layer. Rebinds on the current layer so the filter reads the live
+  // value; the cleanup ends an in-flight ceremony when the player switches
+  // layers (docs/perform/02 §7.2).
+  useEffect(() => {
+    const onDiceFrame = (event: Event) => {
+      const v = parseDiceFrame((event as CustomEvent).detail);
+      if (!v || !shouldPlayFrame(v, layer)) return;
+      markPlayed(v.path);
+      playCeremony(v);
+    };
+    window.addEventListener('airp:dice-frame', onDiceFrame);
+    return () => {
+      window.removeEventListener('airp:dice-frame', onDiceFrame);
+      clearCeremony();
+    };
+  }, [layer]);
 
   useEffect(() => {
     void loadChromeData();
@@ -215,11 +280,21 @@ export function App() {
       const target = event.target as HTMLElement | null;
       const typing = target?.closest('input, textarea, select, button, a, [role="switch"], [contenteditable="true"]');
       if (event.key === 'Escape') {
-        setWorldPickerOpen(false);
-        setProfileOpen(false);
-        setBagOpen(false);
+        // Dismiss transient chrome first; if nothing was open, Esc is the
+        // documented "go back" key (HintBar: "Alt+← / Esc to return"). Inside a
+        // nook it closes the nook and MUST NOT also walk the layer tree.
+        if (activeCharacter || bagOpen || profileOpen || worldPickerOpen) {
+          setWorldPickerOpen(false);
+          setProfileOpen(false);
+          setBagOpen(false);
+          return;
+        }
         setAttention('ambient');
-        setShell(initialShell);
+        if (nookChar !== null) { setNookChar(null); camera.restore(layer); void refresh(); return; }
+        if (shell.header || shell.journal || shell.immersive) { setShell(initialShell); return; }
+        if (layer !== 'map') {
+          enterLayer(manifest?.layers?.[layer]?.parent || 'map');
+        }
         return;
       }
       if (typing || activeCharacter) return;
@@ -236,7 +311,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [activeCharacter]);
+  }, [activeCharacter, bagOpen, profileOpen, worldPickerOpen, nookChar, shell, layer, manifest, enterLayer, refresh, camera]);
 
   const chalks = useMemo(
     () => (state?.items || []).filter((item) => item.frontmatter?.type === 'chalk'),
@@ -301,6 +376,7 @@ export function App() {
 
   const submitWriter = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (writerLocked) return; // belt-and-braces: the input is disabled too
     const input = writerRef.current;
     const text = input?.value.trim() || '';
     if (!text) return;
@@ -355,6 +431,7 @@ export function App() {
     const worldId = manifest?.id || '';
     setEncounters(current => ({ ...current, [worldId]: [...new Set([...(current[worldId] || []), character.id])] }));
     camera.save('dialogue');
+    setActiveModalFrame(null); // 清上一轮残留，避免新遮罩先演旧台词
     setActiveCharacter(character);
     sendMessage({
       type: 'character_start',
@@ -413,11 +490,15 @@ export function App() {
         <section className="prototype-world" aria-label={t("Spatial story canvas")}>
           <Canvas
             key={manifest?.id || 'opening'}
-            openingComposition={manifest?.locale === 'ja' || ['wuwu', 'whitechapel', 'divergence', 'firstsnow', 'unwritten-door'].some(id => manifest?.id === id || manifest?.id?.startsWith(`${id}-`))}
             effectsEnabled={effectsEnabled}
             currentLayer={layer}
-            scene={null}
+            scene={state?.scene ?? null}
             sceneCopy={{ label: t('Scene Chalk'), collapse: t('Fold scene introduction'), expand: t('Read scene introduction') }}
+            ghostCopy={{
+              reused: t('Already had this image'),
+              failed: t('The picture could not be drawn.'),
+              unreachable: t('The picture could not be shown.'),
+            }}
             items={canvasItems}
             links={state?.links || []}
             bg={(!loadingWorld && state?.bg) || { src: null, tone: 'warm', grain: 'parchment' }}
@@ -436,8 +517,13 @@ export function App() {
             }}
             onItemDropOnTarget={handleItemDrop}
             onDropItemToScene={handleReturnItem}
+            onTakeItem={handleTakeItem}
             onOpenRadialMenu={(x, y, worldX, worldY) => { if (attention === 'authoring') setRadialState({ x, y, worldX, worldY }); }}
           />
+
+          {/* Performance shows (docs/perform/05) — z-20, below the dice ceremony
+              (z-50). Cancels its own shows on layer change / freeze. */}
+          <PerformanceLayer layer={layer} frozen={state?.worldFrozen === true} />
 
           <div className="prototype-vignette" aria-hidden="true" />
 
@@ -549,7 +635,7 @@ export function App() {
             </div>
             <div className="prototype-dockrow">
               {writerWorking && <span role="status">{t(writerStage)} · {writerElapsed}s <button type="button" onClick={() => { sendMessage({ type: 'writer_abort' }); }}>{t('Stop writing')}</button></span>}
-              <input ref={writerRef} aria-label={t("Action")} placeholder={t("What do you do? You can also address someone by name…")} autoComplete="off" onKeyDown={event => {
+              <input ref={writerRef} aria-label={t("Action")} placeholder={writerLocked ? t('The writer is writing…') : t("What do you do? You can also address someone by name…")} disabled={writerLocked} autoComplete="off" onKeyDown={event => {
                 if (event.nativeEvent.isComposing || !['ArrowUp', 'ArrowDown'].includes(event.key) || !writerHistory.current.length) return;
                 event.preventDefault(); event.stopPropagation();
                 const history = writerHistory.current;
@@ -590,6 +676,10 @@ export function App() {
           avatarVideo={assetUrl(activeCharacter.avatarVideo)}
           effectsEnabled={effectsEnabled}
           bio={activeCharacter.bio || activeCharacter.description}
+          incoming={activeModalFrame}
+          worldId={manifest?.id}
+          voice={activeCharacter.voice}
+          language={manifest?.locale === 'ja' || manifest?.locale === 'en' ? manifest.locale : 'en'}
           onClose={closeCharacter}
           onOpenNook={() => { const id = activeCharacter.id; closeCharacter(); camera.save(layer); setNookChar(id); }}
           onSendMessage={(message) => sendMessage({ type: 'character_prompt', characterId: activeCharacter.id, message })}
@@ -597,6 +687,11 @@ export function App() {
       )}
 
       {nookChar && <div className="prototype-nook"><NookView characterId={nookChar} locale={locale === 'ja' ? 'ja' : 'en'} onClose={() => { setNookChar(null); camera.restore(layer); void refresh(); }} onMoveCard={moveCard} onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }} onTakeItem={path => { void handleTakeItem(path); }} /></div>}
+
+      {/* Dice ceremony overlay (screen-fixed layer, same visual language as the player path) */}
+      {ceremony && (
+        <DiceCeremony key={ceremony.key} verdict={ceremony.verdict} onDone={clearCeremony} />
+      )}
 
       {toast && <div className="prototype-toast" role="status">{toast}</div>}
     </div>

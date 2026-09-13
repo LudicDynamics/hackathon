@@ -79,6 +79,15 @@ function roadPath(ax: number, ay: number, bx: number, by: number, seed: number):
   return `M ${ax} ${ay} Q ${qx} ${qy} ${bx} ${by}`;
 }
 
+/**
+ * Hand-drawn path for a `show_frame` thread (docs/perform/05 §8.2). Exposes
+ * `roadPath` so evidence_burst lines use the SAME deterministic curve language
+ * as relationship lines instead of a second bespoke bezier.
+ */
+export function handDrawnPath(ax: number, ay: number, bx: number, by: number, seed: number): string {
+  return roadPath(ax, ay, bx, by, seed);
+}
+
 interface Box {
   x: number;
   y: number;
@@ -120,6 +129,15 @@ function elForPath(path: string): HTMLElement | null {
   } catch {
     return null;
   }
+}
+
+/** A card's world-space box by world-relative path, or null when it is not on
+ *  the current layer's DOM (docs/perform/05 §8.2). Pairs `elForPath` + the
+ *  cached `readBox` so a performance does not force a reflow per read. */
+export function cardGeometry(path: string): { x: number; y: number; w: number; h: number } | null {
+  const el = elForPath(path);
+  if (!el) return null;
+  return readBox(el);
 }
 
 function readBox(el: HTMLElement): Box {

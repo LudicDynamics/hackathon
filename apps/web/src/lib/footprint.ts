@@ -62,13 +62,22 @@ export interface FootprintScheduler {
 const BUSY_MAX_MS = 30_000;
 
 /**
- * Measured heights of every laid-out card shell.
- *
- * Reads `offsetHeight` — the UNTRANSFORMED layout box, matching the drag
- * collision contract (`collide.ts`). `getBoundingClientRect` is camera-zoom
- * scaled and MUST NOT be used (04 §3.1). Zero-height and hovered shells are
- * omitted: 0 is not a real height, and `:hover` expands the chalk status
- * header (+86px, contract §3.5).
+ * True while a shell is in an *inflated* interaction state whose rendered box
+ * no longer equals its declared card box — hover (chalk status header opens,
+ * +86px) or the persistent `reading` panel. Both are exempt from measurement
+ * (contract §3.5). This is the single predicate: `measureHeights` and the
+ * scheduler's `isHovering` gate MUST agree, so new inflating states go here.
+ */
+export function isInflated(el: HTMLElement): boolean {
+  return el.matches(':hover') || el.hasAttribute('data-reading');
+}
+
+/**
+ * Measure rendered card heights for the footprint round-trip. Keys are
+ * world-relative paths. `offsetHeight` is untransformed layout px — `rect` is
+ * zoom-scaled and MUST NOT be used (04 §3.1). Zero-height and inflated shells
+ * are omitted: 0 is not a real height, and an inflated box is not the declared
+ * one (contract §3.5).
  */
 export function measureHeights(root: ParentNode = document): Map<string, number> {
   const out = new Map<string, number>();
@@ -76,7 +85,7 @@ export function measureHeights(root: ParentNode = document): Map<string, number>
   shells.forEach((el) => {
     const path = el.dataset.path;
     if (!path) return;
-    if (el.matches(':hover')) return; // hover expansion must not become the truth
+    if (isInflated(el)) return; // inflated box must not become the truth
     const h = el.offsetHeight;
     if (!(h > 0)) return; // display:none / not mounted yet → not a measurement
     out.set(path, h);
@@ -95,8 +104,11 @@ export function createFootprintScheduler(opts: FootprintSchedulerOptions): Footp
   const now = opts.now ?? (() => performance.now());
   const setTimer = opts.setTimeout ?? setTimeout;
   const clearTimer = opts.clearTimeout ?? clearTimeout;
+  // Same predicate as `measureHeights`: inflated shells must not be frozen into
+  // `cards.height` (contract §3.5).
   const isHovering =
-    opts.isHovering ?? (() => document.querySelector('.object[data-path]:hover') !== null);
+    opts.isHovering ??
+    (() => Array.from(document.querySelectorAll<HTMLElement>('.object[data-path]')).some(isInflated));
   const isHidden = opts.isHidden ?? (() => document.hidden);
 
   let timer: ReturnType<typeof setTimeout> | null = null;

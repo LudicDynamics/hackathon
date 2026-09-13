@@ -711,18 +711,28 @@ export function createWorldRouter(
           let avatar = c.avatar;
           let avatarVideo = c.avatarVideo;
           let bio = c.description;
+          let voice: string | undefined;
           try {
             const raw = await store.readFile(`characters/${c.id}/README.md`);
             const { frontmatter, body } = parseFrontmatter(raw);
             if (frontmatter?.avatar) avatar = frontmatter.avatar;
             if (typeof frontmatter?.avatarVideo === 'string') avatarVideo = frontmatter.avatarVideo;
             if (!bio) bio = body.slice(0, 100);
+            // `voice` is a character property declared in the README frontmatter
+            // (docs/tts/00 §3.1) — passed through VERBATIM, alias or raw id, and
+            // resolved exactly once, in `POST /api/tts` (docs/tts/07 §3: one
+            // resolver). Absent ⇒ the key is omitted and the client falls back to
+            // the server default (§15.5).
+            if (typeof frontmatter?.voice === 'string' && frontmatter.voice.trim() !== '') {
+              voice = frontmatter.voice.trim();
+            }
           } catch {}
           return {
             ...c,
             avatar: avatar || '/assets/characters/portraits/fella_1.png',
             avatarVideo,
             bio,
+            ...(voice ? { voice } : {}),
           };
         })
       );

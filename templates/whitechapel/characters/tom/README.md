@@ -1,7 +1,9 @@
 ---
+
 type: "readme"
 name: "Tom Hale"
 avatar: "assets/characters/tom.webp"
+voice: hoarse-weathered
 ---
 
 # Tom Hale

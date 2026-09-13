@@ -10,6 +10,10 @@
     "build": "pnpm --filter @airp/shared build && pnpm --filter @airp/server build && pnpm --filter @airp/web build",
     "scaffold": "node tools/scaffold.mjs",
     "motion": "node tools/motion-clip.mjs",
+    "gen": "node tools/flow-gen.mjs",
+    "gen:image": "node tools/flow-gen.mjs image",
+    "gen:video": "node tools/flow-gen.mjs video",
+    "test": "node --test packages/shared/test/ apps/server/test/ apps/web/test/ tools/*.test.mjs",
     "probe": "node tools/probe-writer.mjs",
     "probe:image": "node tools/probe-image.mjs",
     "probe:tools": "node tools/probe-tools.mjs && node tools/probe-tools-engine.mjs",
@@ -21,6 +25,7 @@
     "check:docs": "node tools/check-hooks-docs.mjs",
     "check:ws": "node tools/check-ws-contract.mjs",
     "check:bodies": "node tools/check-request-bodies.mjs",
+    "check:voices": "node tools/check-voices.mjs",
     "pi": "node tools/pi-rp.mjs"
   },
   "devDependencies": {
