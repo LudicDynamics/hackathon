@@ -1,0 +1,51 @@
+{
+  "id": "whitechapel-playtest",
+  "audio": {
+    "theme": "canvas-whitechapel"
+  },
+  "name": "ホワイトチャペルの手紙 · 体験版",
+  "version": "1.1.0",
+  "schema": 1,
+  "description": "あなたはホームズ。描かれた四件目を、まだ起きていない事件のまま止める。",
+  "author": "Worldlines Canvas / AIRP",
+  "genre": "物語体験",
+  "tags": [
+    "体験版",
+    "短い物語",
+    "生成する世界"
+  ],
+  "material": "kraft",
+  "cover": "assets/scenes/intro.webp",
+  "extensions": [
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
+  ],
+  "characters": [
+    {
+      "id": "watson",
+      "home": "world/london-map",
+      "role": "companion",
+      "avatar": "assets/motion/seedance/characters/watson-transparent.webp",
+      "description": "医師でありホームズの友人。イーディスを守る約束をしている。医学的観察と人間的な懸念を伝え、最終推論を横取りしない。",
+      "avatarVideo": "assets/motion/seedance/characters/watson-transparent.webm",
+      "name": "ワトソン"
+    }
+  ],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "player": {
+    "id": "player",
+    "name": "シャーロック・ホームズ",
+    "avatar": "assets/characters/sherlock-holmes.webp"
+  },
+  "locale": "ja",
+  "entry": "map"
+}

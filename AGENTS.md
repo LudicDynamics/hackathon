@@ -99,7 +99,8 @@ extensions/
   toolkit/              # 工具壳 + 共享 helper（deps/actor/turn/result）；init-command.ts = `airp-init` 初始化执行内核（R2 直唤：扩展命令 → ctx.spawnAgent）——子目录，不会被当扩展加载
 skills/                 # 项目级 skills：跨世界通用手艺（生图 / 组件叙事 / 音色选角 / 节奏 / 玩法咬合）
                         #   component-narration / tool-craft / voice-casting（音色选角，docs/tts/08）
-templates/              # 开箱世界模板；whitechapel（英文）/ firstsnow（日文）/ wuwu / divergence / first-snow-jp 等素材版世界
+templates/              # 已入 Git 的六个 *-playtest 当前体验版；无后缀目录保留为旧素材版 / 原型
+  *-playtest/           # wuwu / whitechapel / divergence / first-snow-jp / magic-academy / unwritten-door
   unwritten-door/       # 第六个体验 Demo：信封、手机与空白门外，见 doc-25
   <world>/skills/       # 世界级 skills：该世界自己的文风与剧情，与 world/ 同级、随包分发
 worlds/                 # 脚手架产出的玩家世界（.gitignore）

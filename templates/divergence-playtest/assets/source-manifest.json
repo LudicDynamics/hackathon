@@ -1,0 +1,66 @@
+{
+  "sourceRepository": "worldlines-assets",
+  "encoding": "webp-q82",
+  "assets": [
+    {
+      "source": "divergence-demo/backgrounds/intro.png",
+      "target": "assets/scenes/intro.webp",
+      "sourceSha256": "ea8ecb96ee42dbc4bb2212016c9ba7479acdaab7e178dcc96b9db9944213188b",
+      "targetSha256": "62c0689be67ea3f85ff5772b8e78df103a0c60df3c6a2f241740b1631c5e946b"
+    },
+    {
+      "source": "divergence-demo/backgrounds/map.png",
+      "target": "assets/scenes/tokiwa-electrics.webp",
+      "sourceSha256": "77757fcd8cc31836b4769ca9b5bfbfc86ed860fa62a10636361b60562a26ad59",
+      "targetSha256": "2273e7837e48ab6aa315bb92d38995d7c672cfd0dc4087492a5ed7e6fba83530"
+    },
+    {
+      "source": "divergence-demo/backgrounds/y1994.png",
+      "target": "assets/scenes/1994-11-02.webp",
+      "sourceSha256": "0115a11c61e882d1879267c7482cb8f733ec0612e353a5a27f3a8c90fc96428c",
+      "targetSha256": "621153899bf53079b61e27b15028b62a2a2a1981d94a60b1baa918ba32f48c37"
+    },
+    {
+      "source": "divergence-demo/backgrounds/tonight.png",
+      "target": "assets/scenes/tonight.webp",
+      "sourceSha256": "cbe8795ee4a37270b114ddf349868055d7c7e90ec2af0aec3affcab0566bab45",
+      "targetSha256": "0f4166c777a1369cf72d2ede30d515d261ccae00dd598ee028d683c24d351794"
+    },
+    {
+      "source": "divergence-demo/backgrounds/ruins.png",
+      "target": "assets/scenes/thirty-years-later.webp",
+      "sourceSha256": "58816e27670e09d86a2fa2793648c84b3f2bf379b3a44a75572eca72d70e9b49",
+      "targetSha256": "e1c789a0738e317e58c09248db69bf47c4cb07bb11f4c2883decff7c61f179b9"
+    },
+    {
+      "source": "divergence-demo/backgrounds/converge.png",
+      "target": "assets/scenes/convergence.webp",
+      "sourceSha256": "abfa16a16bd44c1ac1325ed25cd54a2311c9105472c66c32622f15bd78de07d4",
+      "targetSha256": "209421490ee8d5b1a11e34e51842bdbfbb1b4fae7e502c6796f9384c7aea12fc"
+    },
+    {
+      "source": "divergence-demo/characters/shopkeeper/base.png",
+      "target": "assets/characters/shopkeeper.webp",
+      "sourceSha256": "0a201c33446320de7542c5a4ba34ab2971f1cd17c6bdbdd7afc536c7d2caaf35",
+      "targetSha256": "0a9bdabba75535837422c1fce6b71e0796e0a429cf9fdc0088033646c87410be"
+    },
+    {
+      "source": "divergence-demo/characters/ryo/base.png",
+      "target": "assets/characters/ryo-child.webp",
+      "sourceSha256": "cf8ed099aed0cb2585e3265e46faf18d446d9c59cc2d735b1330e09b92d6fb1c",
+      "targetSha256": "be766e2af2ce24e313e3cc96f2f6d206e391fe21411cd868d2e15ad70c9d16e8"
+    },
+    {
+      "source": "divergence-demo/characters/returner/base.png",
+      "target": "assets/characters/returner.webp",
+      "sourceSha256": "6479e410fb68ab71e41772f21ca1e53c0edbbeedf4127d0646bb100b57aac342",
+      "targetSha256": "cccb85e5447b5039a5ca484b93f6ed7dbb54745eb5ad64255790aa49a20a3744"
+    },
+    {
+      "source": "divergence-demo/tokens/windfrog.png",
+      "target": "assets/items/wind-up-frog.webp",
+      "sourceSha256": "2ad516a4fa12fa97288509db3092b2b5712877369e8e143eb4c2047d7eeab43d",
+      "targetSha256": "078288abc3bd167eff694ce84ad1d55719dae5af280ad9e6f29c613a0826e275"
+    }
+  ]
+}

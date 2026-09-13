@@ -1,0 +1,51 @@
+{
+  "sourceRepository": "worldlines-assets",
+  "assets": [
+    {
+      "source": "templates/firstsnow/assets/backgrounds/intro.webm",
+      "target": "assets/motion/seedance/backgrounds/intro.webm",
+      "bytes": 2082920,
+      "sha256": "940c0c510037cf4010a3da0314b4f586cc45e0fe53741033d55bce854a9fec8a",
+      "sourceRepository": "hackathon",
+      "sourceCommit": "1120872bf46e89968c949d8fd27a31ff0bff2fff"
+    },
+    {
+      "source": "templates/firstsnow/assets/backgrounds/map.webm",
+      "target": "assets/motion/seedance/backgrounds/map.webm",
+      "bytes": 5484992,
+      "sha256": "ef8dff29ae3ad8ccd7aa11202cd972c3963fad7c0a08f422a2302fb4f5fb2725",
+      "sourceRepository": "hackathon",
+      "sourceCommit": "1120872bf46e89968c949d8fd27a31ff0bff2fff"
+    },
+    {
+      "source": "firstsnow-demo/backgrounds/studio.webm",
+      "target": "assets/motion/seedance/backgrounds/studio.webm",
+      "bytes": 1033747,
+      "sha256": "ec1ffa3d13fff1c247756c4ed110186bbae56c82547005a87bcda85532878431"
+    },
+    {
+      "source": "firstsnow-demo/backgrounds/cafe.webm",
+      "target": "assets/motion/seedance/backgrounds/cafe.webm",
+      "bytes": 961923,
+      "sha256": "ff4c601c8821397c404b92cf70cc9ab18bfa3cb30e18b0d99f48fe9e5ab22820"
+    },
+    {
+      "source": "firstsnow-demo/backgrounds/rooftop.webm",
+      "target": "assets/motion/seedance/backgrounds/rooftop.webm",
+      "bytes": 1905174,
+      "sha256": "0d2214bcdfa39bbd19fed53115a4944e8c905a687bff705be3558474f317d7cf"
+    },
+    {
+      "source": "firstsnow-demo/backgrounds/snowfall.webm",
+      "target": "assets/motion/seedance/backgrounds/snowfall.webm",
+      "bytes": 2465441,
+      "sha256": "bd2c5626dd203f3d61367a50f970e91bbf1625f5d30fedc5270562cf89ecde65"
+    },
+    {
+      "source": "firstsnow-demo/characters/nanami/base-transparent.webm",
+      "target": "assets/motion/seedance/characters/nanami-transparent.webm",
+      "bytes": 1974894,
+      "sha256": "0cce4fdc12aba40f819ba39f5e5ebc69857c77c8530c4655115057eb4f5536ca"
+    }
+  ]
+}

@@ -10,8 +10,7 @@ dist/
 .env.*.local
 .artifacts/
 worlds/
-# Reproducible six-world playtest packages, compiled from tools/experiences.
-templates/*-playtest/
+# Ship the six canonical *-playtest templates; ignore experimental revisions.
 templates/*-playtest-*/
 
 # --- assets/ : worldlines-assets 素材车间 ---
