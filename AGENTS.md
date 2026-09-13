@@ -54,7 +54,7 @@ apps/
     world-shelf.ts      # 世界/存档书架投影与可恢复删除；见 docs/世界与存档.md
                         # Agent 帧到前端的身份与状态接线见 docs/Agent前端接线.md
     engine/
-      launch.ts         # spawn 参数单一来源（preset / --session-dir / --continue / env / AIRP_AGENT_ROLE / --no-* 资源隔离），服务端与探针共用
+      launch.ts         # spawn 参数单一来源（preset / --session-dir / --continue / env / AIRP_AGENT_ROLE / --model(--provider) / --thinking / --no-* 资源隔离 / modelPreferenceArgs），服务端与探针共用
       lifecycle.ts      # Agent 生命周期编排（单例复用 / spawn / warmup / 崩溃退避重启 / stopAll）
       event-bridge.ts   # 引擎事件 → WS 帧；尾部读 events 表 → world_event 广播（见 §3.2）
       chalk-delta.ts    # chalk 落墨的逐字差分，`writer_delta` 演出源（docs/perform/01）
@@ -62,7 +62,7 @@ apps/
   web/src/
     lib/                   # 纯前端库：camera（插值相机）/ collide（软碰撞）/ seat（排座镜像）/ measure（卡片盒尺寸缓存）/ parallax（指针视差模块态，走 DOM 不触发 React 渲染）/ footprint（实测盒回写）/ audio（采样优先声场，synth 兜底）
                            #   phantom + phantom-seat + ghost（生成中占位与座位过户，docs/perform/03）/ canvas-patch（增量合并）/ writer-state（笔尖状态机）/ chalk-reveal / dice-ceremony / motion / i18n / md / fm
-                           #   ui-shell.mjs（Header / journal 独立显隐、人物分区与测量后排版）/ effects-clock.mjs（视差逐帧合并与粒子限帧调度）
+                           #   ui-shell.mjs（Header / journal 独立显隐、人物分区与测量后排版）
     state/                 # useCamera（相机与层级记忆）/ useWorld（层数据 + WS + 落库；唯一 WebSocket）/ useAudio（声场主轨）
     prototype.css          # 沉浸式原型外壳样式（niko 界面批次）
     scene-shell.css        # 素材版世界 UI：暖纸栏、玩家身份与人物圆牌
@@ -263,8 +263,8 @@ pnpm --filter @airp/server dev                  # 只起后端
 - 缺这个文件不报错：pi-rp `ModelConfig.load` 对 `ENOENT` 静默回落内建 provider（只是没有自定义模型可选）。`pnpm probe` 走离线确定性 provider，**不需要**它。
 - 探针的真模型分支（`AIRP_PROBE_REAL=1`）与手工全链路演示才需要真 provider。
 - **`.pi/agent/settings.json` = 默认模型**（另两个文件是 `models.json`（provider 与 key）、`auth.json`）。三者互相独立：`models.json` 只说"有哪些模型可选"，**选哪个**由 `settings.json` 的 `defaultProvider` + `defaultModel` 决定。同样不入库。
-- 当前实际生效的是 **`GG / gemini-2.5-pro`**（会话首行 `model_change` 记录为证）。`launch.ts` **不传 `--model`**，所以每个 agent 都走这份默认。
-- **模型解析顺序**（`sdk.ts:240` → `model-resolver.ts:621`）：① 已有会话 → 恢复会话里记的模型；② 否则 `settings.json` 的 `defaultProvider`/`defaultModel`（**须该 provider 有 auth**）；③ 否则 `defaultModelPerProvider` 表里第一个有 key 的；④ 否则第一个可用模型。所以**换默认模型对已存在的会话无效**——要删 `char-<id>.jsonl` 才会重新解析。
+- 当前实际生效的是 **`GG / gemini-2.5-pro`**（会话首行 `model_change` 记录为证）——**在没有任何显式覆盖时**。`launch.ts` 现在**会传 `--model`**：作家取 `AIRP_WRITER_MODEL`、角色取 `AIRP_CHARACTER_MODEL || AIRP_WRITER_MODEL`，两者都未设时不传；`--thinking` 作家取 `AIRP_WRITER_THINKING || 'low'`。此外两条 spec 都追加 `modelPreferenceArgs(worldRoot, role)`，从世界存档的 `.airpworld/model-preferences.json` 读 `--provider/--model/--thinking`（Agents 面板写这份文件，见 `docs/Agent模型选择与进度.md`）。这些都没设时才回落到上面那份默认。
+- **模型解析顺序**（`main.ts:480` `buildSessionOptions` → `sdk.ts:240` → `model-resolver.ts:621`）：① CLI `--model`/`--provider`——有则直接填 `options.model`（`main.ts:493-494`），且 `launch.ts` 的 `--model` 与环境变量会走这条；② 否则已有会话 → 恢复会话里记的模型（`sdk.ts:244` 的 `if (!model && hasExistingSession && existingSession.model)`）；③ 否则 `settings.json` 的 `defaultProvider`/`defaultModel`（**须该 provider 有 auth**）；④ 否则 `defaultModelPerProvider` 表里第一个有 key 的；⑤ 否则第一个可用模型。所以 **CLI 一旦给了 `--model` 就跳过了已有会话里记的模型**；而**只换 `settings.json` 默认对已存在的会话无效**（会话里记的模型优先于 settings）——要删 `char-<id>.jsonl` 才会重新解析。
 - **改哪个 settings**：全局落点 `<PI_CODING_AGENT_DIR>/settings.json`（即 `.pi/agent/`，对所有世界生效）；世界级落点 `<worldRoot>/<PI_PROJECT_CONFIG_DIR>/settings.json`（即 `<world>/ .airpworld/settings.json`，随世界走、覆盖全局）。**两者都已 gitignore**。实测 world 级能覆盖 global（project > global），global 能切到 `models.json` 里任一 provider。
 - `~/.pi/agent/settings.json` **读不到**：`PI_CODING_AGENT_DIR` 已 pin 到仓库内，user scope 整个指向那里——改自己 home 下的默认模型对 AIRP 无影响（实测：`~/.pi` 写的是 `clineFree`，AIRP 实际跑 `GG`）。
 
@@ -450,6 +450,8 @@ pnpm pi commit "fix(...): …" [--no-build]   # build 红线 → 子模块 commi
 6. **z 序**：`.object` 的 `z-index` 是内联写的（服务端行序），所以交互态抬升必须 `!important`——hover `.object{z-index:30}`、拖拽 `.object.dragging-item{z-index:40}`（拖拽值必须更高，否则被邻卡 hover 盖住）。
 
 7. **碰撞尺寸只有一个真相源**：服务端读 `cards.width/height`（列），前端拖拽读本地实测（`lib/measure.ts` 的 `offsetHeight`）。**MUST NOT 出现第三处现算 `cardFormOf` 的碰撞点。** `cards` 行的建行路径（`seatUnplaced`/`seatNear`/`arrange` 前的 seat）必须写入该 kind 的真实占位——**绝不落下 schema DEFAULT `280/180`**。前端实测经 `POST /api/card/footprint` 回写 `width/height` + `metadata.measuredAt`；`metadata` 另有 `formVersion`（kind 定义 hash）与 `seatW/seatH`（上次排座所用尺寸）。`reseatLayer` 据此判漂移：kind 改尺寸 → 用 declared 重排并清 `measuredAt`（**先于**实测判定）；实测占位变化 → 用行值重排。细则见 `docs/footprint/00-共同上下文.md`。
+
+8. **`Canvas` 的取景 effect 只许动相机，绝不许改卡坐标**（2026-09-13 实测）。首帧按 `separateBounds` 重排并把 x/y 经 `onMoveCard` 落库，是**第三处碰撞权威**（违反第 7 条）：它与拖拽松手的 `relaxAll` 布局不一致，于是**首次拖拽松手瞬间整层跳位**——实测四张卡同时跳（含未被推挤的卡），A/B（同树同脚本，`frame()` 开/关）确认因果。现在该 effect 只 `camera.flyTo` 包围盒，测量走 `whenFontsSettled()`。**任何"进层自动排版"需求都不得回写服务端座位。**
 
 ### 7.6 前端性能红线（实测，2026-09-12 诊断）
 

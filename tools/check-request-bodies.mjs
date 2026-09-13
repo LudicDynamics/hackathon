@@ -42,6 +42,41 @@ const BODIES = [
     keys: ['text', 'voice', 'language'],
     doc: 'docs/wiring/00-共同上下文.md §6',
   },
+  // The gateway (`airp-gateway.ts`) wraps bodies in `json('POST', {...})` rather
+  // than an inline `fetch(... JSON.stringify({...}))` — so `bodyKeysFor` MUST also
+  // read that shape, or a rename here sails through unseen. This is exactly how
+  // `/api/god-action` shipped posting `filePath` against the server's `path`
+  // (2026-09-13 merge): the gate's scan missed the wrapper entirely.
+  {
+    route: '/api/god-action',
+    file: 'apps/web/src/lib/airp-gateway.ts',
+    keys: ['action', 'path', 'content'],
+    doc: 'docs/wiring/00-共同上下文.md §6',
+  },
+  {
+    route: '/api/use-item',
+    file: 'apps/web/src/lib/airp-gateway.ts',
+    keys: ['item', 'target'],
+    doc: 'docs/tools/12-工具注册与路由统一.md §6',
+  },
+  {
+    route: '/api/move',
+    file: 'apps/web/src/lib/airp-gateway.ts',
+    keys: ['from', 'to'],
+    doc: 'docs/tools/12-工具注册与路由统一.md §6',
+  },
+  {
+    route: '/api/choice',
+    file: 'apps/web/src/lib/airp-gateway.ts',
+    keys: ['path', 'choice'],
+    doc: 'docs/tools/12-工具注册与路由统一.md §6',
+  },
+  {
+    route: '/api/card/position',
+    file: 'apps/web/src/lib/airp-gateway.ts',
+    keys: ['path', 'x', 'y'],
+    doc: 'docs/tools/12-工具注册与路由统一.md §6',
+  },
 ];
 
 /**
@@ -73,41 +108,66 @@ function splitTopLevel(inner) {
 }
 
 /**
- * Extract the key set of the object literal passed to `JSON.stringify({...})`
- * inside a `fetch('<route>', { ... body: JSON.stringify({...}) ... })` call.
+ * Extract the body key set for `route`, from whichever call shape carries it:
+ *   1. inline `fetch('<route>', { … body: JSON.stringify({...}) })`;
+ *   2. the gateway wrapper `request('<route>', json('POST', {...}))`.
  *
  * Handles both `name: value` and shorthand `name` properties — the shorthand
  * form is common and MUST not be read as an empty key set (that would make the
  * gate fire on already-correct code).
  *
- * Pure — takes file text, returns `{ keys, line } | null`. `null` means the
- * fetch/stringify shape could not be found (itself a finding).
+ * Pure — takes file text, returns `{ keys, line } | null`. `null` means neither
+ * shape could be found (itself a finding).
  */
 export function bodyKeysFor(text, route) {
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
-    if (!lines[i].includes('fetch(') || !lines[i].includes(route)) continue;
-    // Gather the fetch call's text until parens balance (bounded window).
-    let depth = 0;
-    let chunk = '';
-    let sawParen = false;
-    for (let j = i; j < Math.min(lines.length, i + 15); j++) {
-      chunk += lines[j] + '\n';
-      depth += (lines[j].match(/\(/g) ?? []).length - (lines[j].match(/\)/g) ?? []).length;
-      if (lines[j].includes('(')) sawParen = true;
-      if (sawParen && depth <= 0) break;
+    if (!lines[i].includes(route)) continue;
+    // Shape 1: inline fetch with a JSON.stringify body.
+    if (lines[i].includes('fetch(')) {
+      // Gather the fetch call's text until parens balance (bounded window).
+      let depth = 0;
+      let chunk = '';
+      let sawParen = false;
+      for (let j = i; j < Math.min(lines.length, i + 15); j++) {
+        chunk += lines[j] + '\n';
+        depth += (lines[j].match(/\(/g) ?? []).length - (lines[j].match(/\)/g) ?? []).length;
+        if (lines[j].includes('(')) sawParen = true;
+        if (sawParen && depth <= 0) break;
+      }
+      const s = chunk.match(/JSON\.stringify\(\s*\{([\s\S]*?)\}\s*\)/);
+      if (s) return { keys: keysOfObjectLiteral(s[1]), line: i + 1 };
+      return null;
     }
-    const s = chunk.match(/JSON\.stringify\(\s*\{([\s\S]*?)\}\s*\)/);
-    if (!s) return null;
-    const keys = [];
-    for (const part of splitTopLevel(s[1])) {
-      // `name:` (explicit) or `name` (shorthand); anything else is not a key.
-      const m = part.match(/^\s*(?:\.\.\.)?([A-Za-z_$][\w$]*)\s*(?::|$)/);
-      if (m) keys.push(m[1]);
+    // Shape 2: gateway `json('POST', {...})`. The route and the body may be on
+    // adjacent lines, so scan the call until parens balance.
+    if (lines[i].includes('json(')) {
+      let depth = 0;
+      let chunk = '';
+      let sawParen = false;
+      for (let j = i; j < Math.min(lines.length, i + 15); j++) {
+        chunk += lines[j] + '\n';
+        depth += (lines[j].match(/\(/g) ?? []).length - (lines[j].match(/\)/g) ?? []).length;
+        if (lines[j].includes('(')) sawParen = true;
+        if (sawParen && depth <= 0) break;
+      }
+      const s = chunk.match(/json\(\s*['"][A-Z]+['"]\s*,\s*\{([\s\S]*?)\}\s*\)/);
+      if (s) return { keys: keysOfObjectLiteral(s[1]), line: i + 1 };
+      return null;
     }
-    return { keys, line: i + 1 };
   }
   return null;
+}
+
+/** Property keys of an object literal's inner text (`name:` / shorthand `name`). */
+function keysOfObjectLiteral(inner) {
+  const keys = [];
+  for (const part of splitTopLevel(inner)) {
+    // `name:` (explicit) or `name` (shorthand); a `...spread` contributes none.
+    const m = part.match(/^\s*(?:\.\.\.)?([A-Za-z_$][\w$]*)\s*(?::|$)/);
+    if (m && !part.trim().startsWith('...')) keys.push(m[1]);
+  }
+  return keys;
 }
 
 const read = (rel) => fs.readFileSync(path.join(REPO, rel), 'utf-8');
