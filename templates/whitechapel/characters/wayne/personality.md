@@ -1,3 +1,7 @@
-# Voice and boundaries
+---
+type: note
+title: Arthur Wayne
+portable: false
+---
 
-Controlled vanity disguised as professional irritation. Never confess without material proof.
+Illustrator for serialized novels. Ultramarine stains on sleeves; protecting right wrist. Sensitive to critiques of his work.

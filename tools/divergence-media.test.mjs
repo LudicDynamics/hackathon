@@ -1,3 +1,4 @@
+// Historical fixtures; current bilingual coverage is in world-editions.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -13,14 +14,14 @@ test('published and freshly compiled divergence media match provenance and do no
   const pack = experiences.find(p => p.base === 'divergence');
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'airp-divergence-media-'));
   const result = await installExperience(process.cwd(), pack, { outputRoot: tmp });
-  for (const root of ['templates/divergence', 'templates/divergence-playtest', result.path]) {
+  for (const root of ['archive/templates/pre-bilingual-2026-09-14/divergence', 'archive/templates/pre-bilingual-2026-09-14/divergence-playtest', result.path]) {
     for (const asset of divergenceMedia.assets) {
       const bytes = await fs.readFile(path.join(root, asset.target));
       assert.equal(bytes.subarray(8, 12).toString(), 'WEBP');
       assert.equal(createHash('sha256').update(bytes).digest('hex'), asset.sha256);
     }
   }
-  for (const root of ['templates/divergence-playtest', result.path]) {
+  for (const root of ['archive/templates/pre-bilingual-2026-09-14/divergence-playtest', result.path]) {
     const read = f => fs.readFile(path.join(root, f), 'utf8');
     const fm = async f => parseFrontmatter(await read(f)).frontmatter;
     assert.deepEqual(JSON.parse(await read('assets/three-times-media.json')), divergenceMedia);

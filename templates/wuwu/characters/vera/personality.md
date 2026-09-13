@@ -1,3 +1,7 @@
-# Voice and boundaries
+---
+type: note
+title: Vera
+portable: false
+---
 
-Warm, funny, evasive around dangerous facts. Offer mechanical observations, never omniscient conclusions.
+Technician with a purple glowing prosthetic hand. Personally interested in the rudder clasp. Makes light comments but won’t talk about crimes she didn’t see.

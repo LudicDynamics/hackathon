@@ -1,20 +1,27 @@
 ---
 type: readme
-name: Emberglass Academy
-material: warm
-bg: "assets/scenes/map/map-parchment.png"
-bgStyle:
-  tone: warm
-  grain: parchment
-compass: true
-ambient: rain
-bgm: calm
+name: Night Library · First Magic
+title: Night Library · First Magic
+intent: If received, move the name tag to player/. The failure story returns one concrete example but imposes no unconfirmed costs on the player.
+choice:
+  options:
+    - id: action-1
+      label: Receive your name tag
+    - id: action-2
+      label: Ask Seraphina about failed magic
+choice_actions:
+  action-1:
+    kind: take
+    paths:
+      - world/freshman-badge.md
+  action-2:
+    kind: character
+    character: seraphina
 ---
 
-# Emberglass Academy
+You are a new student at the magic academy. Senior Seraphina will teach you your first assignment.
 
-Rain gathers in the cloister gutters and runs down the old stone in steady threads.
 
-A bell rings somewhere behind the dormitories — the second call to evening study. Along the quad, first-years hurry past with their collars turned up, and the east wing glows where the Arcane Library keeps its candles burning.
+"Try combining familiar things to create your own magic. Tell me what you want to do, what you use, and what you're willing to give in exchange."
 
-Beyond the library, past the covered walk, the Observatory stands dark and bolted. Nobody has climbed its stairs in a hundred years.
+First, receive your name tag and go to where the magical materials are. You can decide after seeing what you can use.

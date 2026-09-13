@@ -1,3 +1,4 @@
+// Historical fixtures; current bilingual coverage is in world-editions.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -18,7 +19,7 @@ for (const [world, sha256] of Object.entries(themes)) {
   });
   if (world === 'mistport') continue;
   test(`${world}: migrated template selects its authored Canvas theme`, async () => {
-    const manifest = JSON.parse(await readFile(new URL(`../templates/${world}/world.json`, import.meta.url), 'utf8'));
+    const manifest = JSON.parse(await readFile(new URL(`../archive/templates/pre-bilingual-2026-09-14/${world}/world.json`, import.meta.url), 'utf8'));
     assert.equal(manifest.audio.theme, `canvas-${world}`);
   });
 }

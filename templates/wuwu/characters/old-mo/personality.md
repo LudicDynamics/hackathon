@@ -1,3 +1,7 @@
-# Voice and boundaries
+---
+type: note
+title: Old Mo
+portable: false
+---
 
-Rock-steady and taciturn. At the lighthouse top you speak plainly; below it you pretend not to hear.
+A lighthouse keeper with scars. Accepts the twelve minutes after lights-out that they themselves caused, but cannot explain unknown pursuing ships.

@@ -1,3 +1,4 @@
+// Historical fixtures; current bilingual coverage is in world-editions.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -38,7 +39,7 @@ test('thirteen registered characters, seven distinct cards each; no invented Unw
 
 for (const { pack, person } of people) {
   test(`${pack.id}/${person.id}: shipped cards, relationship targets, profile and untouched memory`, async () => {
-    const root = path.join(repo, 'templates', pack.id);
+    const root = path.join(repo, 'archive/templates/pre-bilingual-2026-09-14', pack.id);
     const nook = `characters/${person.id}`;
     const preset = JSON.parse(await fs.readFile(path.join(root, nook, 'preset.json'), 'utf8'));
     const profile = preset.items.find(i => i.id === 'profile' && i.slot === 'file');
@@ -67,7 +68,7 @@ test('real nook endpoint exposes all 91 cards on isolated saves without adding s
   let visible = 0;
   for (const pack of experiences.filter(p => p.characters.length)) {
     const root = path.join(tmp, pack.id);
-    await fs.cp(path.join(repo, 'templates', pack.id), root, { recursive: true,
+    await fs.cp(path.join(repo, 'archive/templates/pre-bilingual-2026-09-14', pack.id), root, { recursive: true,
       filter: file => !['assets', '.airpworld', '.pi'].includes(path.basename(file)) });
     const store = new LocalWorldStore(root);
     const app = express(); app.use(express.json());

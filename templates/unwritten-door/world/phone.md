@@ -1,20 +1,26 @@
 ---
 type: note
-title: The Phone
-portable: false
+title: The phone
 visual: phone
-image: assets/tokens/phone.png
+portable: true
+choice:
+  options:
+    - id: action-1
+      label: Wake the screen
+    - id: action-2
+      label: Call the last number
 status:
   data:
     contacted: false
-choice:
-  - Wake the screen
-  - Call the last number
+intent: Screen inspection reveals limited information. A fictional call records actual words, one concrete audible detail, public Context and contacted=true. It is not a real telephone call.
+choice_actions:
+  action-1:
+    kind: writer
+  action-2:
+    kind: writer
 ---
-# The Phone
 
-A black smartphone with a faint scratch across the glass. It has power and a signal. You have not checked its messages or contacted anyone.
+A black phone lies face down.
 
 ## Context
-
-No caller, conversation, message, or outside location has been established.
+No information has been discovered.

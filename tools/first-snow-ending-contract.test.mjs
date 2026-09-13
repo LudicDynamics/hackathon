@@ -1,3 +1,4 @@
+// Historical fixtures; current bilingual coverage is in world-editions.test.mjs.
 // Content contracts only; live model compliance requires a separate rehearsal.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -18,7 +19,7 @@ const closing = 'world/tonight-promises/first-snow';
 
 test('real HTTP entry accepts an empty inventory without starting a writer', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'airp-snow-closing-'));
-  fs.copyFileSync(`templates/${pack.id}/world.json`, path.join(root, 'world.json'));
+  fs.copyFileSync(`archive/templates/pre-bilingual-2026-09-14/${pack.id}/world.json`, path.join(root, 'world.json'));
   for (const [file, text] of Object.entries(pack.files)) {
     fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     fs.writeFileSync(path.join(root, file), text);
@@ -46,7 +47,7 @@ test('real HTTP entry accepts an empty inventory without starting a writer', asy
 
 test('decision night is unlocked and does not offer preselected partner endings', () => {
   for (const name of ['README.md', '01-opening.md']) {
-    for (const text of [pack.files[`${closing}/${name}`], fs.readFileSync(`templates/${pack.id}/${closing}/${name}`, 'utf8')]) {
+    for (const text of [pack.files[`${closing}/${name}`], fs.readFileSync(`archive/templates/pre-bilingual-2026-09-14/${pack.id}/${closing}/${name}`, 'utf8')]) {
       const { frontmatter, errors } = parseFrontmatter(text);
       assert.deepEqual(errors, []);
       assert.equal(frontmatter.requires, undefined);
@@ -72,14 +73,14 @@ test('ending creates the README-only shell before CG; later play expands it', ()
   const endingRules = skill.slice(skill.indexOf('## 決断の夜'));
   assert.ok(endingRules.indexOf('画像を待たずに') < endingRules.indexOf('generate_image を一回'));
   assert.ok(!skill.includes('「後日談の入口を用意する」が送信された時だけ'));
-  assert.equal(fs.readFileSync(`templates/${pack.id}/${skillPath}`, 'utf8'), skill);
+  assert.equal(fs.readFileSync(`archive/templates/pre-bilingual-2026-09-14/${pack.id}/${skillPath}`, 'utf8'), skill);
 });
 
 test('README-only shell is a visible child gate, not an automatically initialized empty layer', async () => {
   // A deterministic protocol fixture, not a claim that a live Writer authored it.
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'airp-snow-shell-'));
   const child = `${closing}/after-story`;
-  fs.copyFileSync(`templates/${pack.id}/world.json`, path.join(root, 'world.json'));
+  fs.copyFileSync(`archive/templates/pre-bilingual-2026-09-14/${pack.id}/world.json`, path.join(root, 'world.json'));
   for (const [file, text] of Object.entries(pack.files)) {
     fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     fs.writeFileSync(path.join(root, file), text);

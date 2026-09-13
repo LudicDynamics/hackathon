@@ -1,19 +1,17 @@
 {
   "id": "wuwu",
-  "locale": "en",
   "audio": {
     "theme": "canvas-wuwu"
   },
-  "name": "Fogwharf",
-  "version": "1.0.0",
+  "name": "Fogwharf · English",
+  "version": "1.2.0",
   "schema": 1,
-  "description": "A medieval harbor mystery about a crewless ship, three incomplete testimonies, and a second vessel hidden by the fog.",
+  "description": "Find the second ship. As the fog clears, a path to the still unnamed town appears.",
   "author": "Worldlines Canvas / AIRP",
-  "genre": "medieval mystery",
+  "genre": "Story Experience",
   "tags": [
-    "adventure",
-    "mystery",
-    "spatial exploration"
+    "short story",
+    "generative world"
   ],
   "material": "parchment",
   "cover": "assets/scenes/intro.webp",
@@ -35,30 +33,35 @@
       "home": "world/harbor-chart/workshop",
       "role": "companion",
       "avatar": "assets/motion/seedance/characters/viola-transparent.webp",
-      "description": "A quick-talking mechanic with a violet-lit prosthetic arm and a private interest in the missing rudder pin.",
-      "avatarVideo": "assets/motion/seedance/characters/viola-transparent.webm"
+      "description": "Technician with a purple glowing prosthetic hand. Personally interested in the rudder clasp. Makes light comments but won’t talk about crimes she didn’t see.",
+      "avatarVideo": "assets/motion/seedance/characters/viola-transparent.webm",
+      "name": "Vera"
     },
     {
       "id": "silver-kite",
       "home": "world/harbor-chart/seventh-berth",
       "role": "npc",
       "avatar": "assets/motion/seedance/characters/silverkite-transparent.webp",
-      "description": "An elven knight guarding the gangplank and an empty case.",
-      "avatarVideo": "assets/motion/seedance/characters/silverkite-transparent.webm"
+      "description": "An elf knight guarding the empty box and gangway. Chooses words according to the evidence.",
+      "avatarVideo": "assets/motion/seedance/characters/silverkite-transparent.webm",
+      "name": "Silver Kite"
     },
     {
       "id": "old-mo",
       "home": "world/harbor-chart/old-lighthouse",
       "role": "npc",
       "avatar": "assets/characters/old-mo.webp",
-      "description": "The scarred lighthouse keeper who left twelve minutes blank in the log."
+      "description": "A lighthouse keeper with scars. Accepts the twelve minutes after lights-out that they themselves caused, but cannot explain unknown pursuing ships.",
+      "name": "Old Mo"
     }
   ],
   "createdAt": "2026-09-12T00:00:00Z",
   "updatedAt": "2026-09-12T00:00:00Z",
   "player": {
-    "id": "investigator",
+    "id": "player",
     "name": "Harbor Investigator",
     "avatar": "assets/characters/investigator.webp"
-  }
+  },
+  "locale": "en",
+  "entry": "map"
 }

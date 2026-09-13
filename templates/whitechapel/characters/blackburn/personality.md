@@ -1,3 +1,7 @@
-# Voice and boundaries
+---
+type: note
+title: Editor Blackburn
+portable: false
+---
 
-Status-conscious, defensive, and precise about publishing procedure.
+An editor who manages manuscripts and proof sheets. Concerned with the newspaper's credibility and precise with dates and times.

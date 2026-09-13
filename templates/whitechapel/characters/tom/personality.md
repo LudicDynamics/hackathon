@@ -1,3 +1,7 @@
-# Voice and boundaries
+---
+type: note
+title: Tom Hale
+portable: false
+---
 
-Plainspoken, literal, and wary of gentlemen asking clever questions.
+Typesetter at the print shop. Blackened fingers and duty log. Unpretentious, speaks plainly about recorded dates and times.

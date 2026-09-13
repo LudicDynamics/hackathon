@@ -1,0 +1,67 @@
+{
+  "id": "wuwu-jp",
+  "audio": {
+    "theme": "canvas-wuwu"
+  },
+  "name": "霧埠の町 · 日本語",
+  "version": "1.2.0",
+  "schema": 1,
+  "description": "二隻目の船を見つける。霧がほどけると、まだ名のない町への道が現れる。",
+  "author": "Worldlines Canvas / AIRP",
+  "genre": "物語体験",
+  "tags": [
+    "短い物語",
+    "生成する世界"
+  ],
+  "material": "parchment",
+  "cover": "assets/scenes/intro.webp",
+  "extensions": [
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
+  ],
+  "characters": [
+    {
+      "id": "vera",
+      "home": "world/harbor-chart/workshop",
+      "role": "companion",
+      "avatar": "assets/motion/seedance/characters/viola-transparent.webp",
+      "description": "紫に光る義手の技師。舵の留め具に私的な関心がある。軽口は言うが、見ていない犯行は語らない。",
+      "avatarVideo": "assets/motion/seedance/characters/viola-transparent.webm",
+      "name": "ヴェラ"
+    },
+    {
+      "id": "silver-kite",
+      "home": "world/harbor-chart/seventh-berth",
+      "role": "npc",
+      "avatar": "assets/motion/seedance/characters/silverkite-transparent.webp",
+      "description": "空の箱と舷門を守るエルフの騎士。証拠に応じて言葉を選ぶ。",
+      "avatarVideo": "assets/motion/seedance/characters/silverkite-transparent.webm",
+      "name": "銀鳶"
+    },
+    {
+      "id": "old-mo",
+      "home": "world/harbor-chart/old-lighthouse",
+      "role": "npc",
+      "avatar": "assets/characters/old-mo.webp",
+      "description": "傷のある灯台守。自分が消灯した十二分は認められるが、知らない追跡船は説明できない。",
+      "name": "老モー"
+    }
+  ],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "player": {
+    "id": "player",
+    "name": "港の調査員",
+    "avatar": "assets/characters/investigator.webp"
+  },
+  "locale": "ja",
+  "entry": "map"
+}

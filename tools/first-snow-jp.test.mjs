@@ -1,3 +1,4 @@
+// Historical fixtures; current bilingual coverage is in world-editions.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -7,8 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { LocalWorldStore, parseFrontmatter, WorldManifestSchema } from '../packages/shared/dist/index.js';
 
-const root = fileURLToPath(new URL('../templates/first-snow-jp/', import.meta.url));
-const legacy = fileURLToPath(new URL('../templates/firstsnow/', import.meta.url));
+const root = fileURLToPath(new URL('../archive/templates/pre-bilingual-2026-09-14/first-snow-jp/', import.meta.url));
+const legacy = fileURLToPath(new URL('../archive/templates/pre-bilingual-2026-09-14/firstsnow/', import.meta.url));
 const japanese = /[ぁ-ゖァ-ヺ]/u;
 async function files(dir, prefix = '') {
   const result = [];

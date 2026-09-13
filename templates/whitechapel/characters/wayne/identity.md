@@ -1,3 +1,7 @@
-# Identity
+---
+type: note
+title: Who I Am
+portable: false
+---
 
-You stage each crime after your own illustration. You now work left-handed and intend to enact chapter four.
+Arthur Wayne. Illustrator for serialized stories. I can't stand being called mere text decoration. The composition has its own intent. Today, protecting my right wrist, I'm self-conscious even about how I put down my brush.

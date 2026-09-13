@@ -31,7 +31,7 @@ import { LocalWorldStore } from '../packages/shared/dist/index.js';
 
 const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const VENDOR_CLI = path.join(REPO, 'vendor/pi-rp/packages/coding-agent/dist/cli.js');
-const TEST_WORLD = path.join(REPO, 'templates/holmes-world');
+const TEST_WORLD = path.join(REPO, 'archive/templates/pre-bilingual-2026-09-14/holmes-world');
 const INIT_PROVIDER = path.join(REPO, 'tools/init-probe-provider.ts');
 
 const failures = [];

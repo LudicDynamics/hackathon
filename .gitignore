@@ -11,7 +11,8 @@ dist/
 .env.*.local
 .artifacts/
 worlds/
-# Ship the six canonical *-playtest templates; ignore experimental revisions.
+# Canonical bilingual editions live directly in templates; legacy playtests are archived.
+templates/*-playtest/
 templates/*-playtest-*/
 
 # --- assets/ : worldlines-assets 素材车间 ---

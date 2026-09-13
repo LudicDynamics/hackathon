@@ -1,3 +1,4 @@
+// Historical fixtures; current bilingual coverage is in world-editions.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -10,7 +11,7 @@ import { LocalWorldStore, parseFrontmatter } from '../packages/shared/dist/index
 import { createWorldRouter } from '../apps/server/dist/routes/world.js';
 import { HOLMES_SUBMISSION_INTENT, HOLMES_RESOLUTION_RULES } from './experiences/holmes-resolution.mjs';
 const pack = experiences.find(p => p.base === 'whitechapel');
-const root = 'templates/whitechapel-playtest';
+const root = 'archive/templates/pre-bilingual-2026-09-14/whitechapel-playtest';
 const map = 'world/london-map';
 const expectedHomes = {
   watson: map, edith: `${map}/edith-room`, tom: `${map}/print-shop`,
@@ -73,6 +74,10 @@ test('fresh compile and isolated layer API expose the restored sprites only in t
   for (const file of [...Object.keys(pack.files), 'world.json']) {
     const fresh = parseFrontmatter(await fs.readFile(path.join(result.path, file), 'utf8'));
     const shipped = parseFrontmatter(await fs.readFile(`${root}/${file}`, 'utf8'));
+    // The archive also retains a later reward-declaration batch. This historical
+    // compiler comparison covers its original contract; world-editions tests
+    // separately require every reward declaration in both current languages.
+    for (const parsed of [fresh, shipped]) for (const band of parsed.frontmatter?.dice_outcomes ?? []) delete band.rewards;
     assert.deepEqual(shipped, fresh, file);
   }
   const require = createRequire(new URL('../apps/server/package.json', import.meta.url));
