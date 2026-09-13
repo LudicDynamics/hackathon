@@ -1,0 +1,20 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+test('missing config coalesces checks, warns once, and can recover explicitly', async () => {
+  const events = [];
+  globalThis.window = { dispatchEvent: event => events.push(event.type) };
+  const values = new Map();
+  globalThis.localStorage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  let checks = 0;
+  globalThis.fetch = async () => { checks++; return Response.json({ configured: false, model: 'test', defaultVoice: 'test' }); };
+  const tts = await import('../apps/web/src/lib/tts-readiness.ts');
+  assert.deepEqual(await Promise.all([tts.canRequestTts(), tts.canRequestTts(), tts.canRequestTts()]), [false, false, false]);
+  assert.equal(checks, 1); assert.equal(events.length, 1);
+  assert.equal(await tts.canRequestTts(), false); assert.equal(checks, 1);
+  globalThis.fetch = async () => Response.json({ configured: true, model: 'test', defaultVoice: 'test' });
+  await tts.readTtsConfig(true);
+  assert.equal(await tts.canRequestTts(), true);
+  tts.invalidateTts(); assert.equal(await tts.canRequestTts(), false);
+  await tts.readTtsConfig(true);
+  tts.setTtsEnabled(false); assert.equal(await tts.canRequestTts(), false);
+});

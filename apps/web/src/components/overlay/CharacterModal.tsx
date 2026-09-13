@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MotionPortrait } from './MotionPortrait.js';
+import { canRequestTts, invalidateTts, ttsEnabled } from '../../lib/tts-readiness.js';
 import { useLocale } from '../../lib/i18n.js';
 import { playStinger, playVoice, stopVoice, unlock, type Emotion } from '../../lib/audio.js';
 import {
@@ -82,8 +83,6 @@ type VoiceState = 'idle' | 'pending' | 'ready' | 'failed';
 /** A dialogue page (contract §6.1) plus its voice request state. */
 type StagePage = DialoguePage & { voiceUrl?: string; voiceState: VoiceState };
 
-/** TTS unavailable (503 / unconfigured) → warn once per session (contract §8). */
-let ttsWarned = false;
 
 /** Grace window while a page's voice prefetch is still in flight, before the
  *  fallback stinger fires (contract §6.5; value is an inferred initial). */
@@ -253,6 +252,9 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
       page.voiceState = 'pending';
       const token = voiceTurnRef.current;
       try {
+        const ready = await canRequestTts();
+        if (token !== voiceTurnRef.current) return;
+        if (!ready || !ttsEnabled()) { page.voiceState = 'failed'; onVoiceResolved(page, i); return; }
         const res = await fetch('/api/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -262,10 +264,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         const data = (await res.json()) as { ok?: boolean; url?: string; code?: string };
         if (!res.ok || !data.ok || typeof data.url !== 'string' || data.url === '') {
           page.voiceState = 'failed';
-          if (res.status === 503 && !ttsWarned) {
-            ttsWarned = true;
-            console.warn('[AIRP TTS] character voice disabled (server returned 503 tts_unconfigured).');
-          }
+          invalidateTts(data.code === 'tts_unconfigured');
           onVoiceResolved(page, i);
           return;
         }
@@ -274,6 +273,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         onVoiceResolved(page, i); // 若正是当前页 → playVoice（truncated 不重试）
       } catch {
         if (token !== voiceTurnRef.current) return;
+        invalidateTts();
         page.voiceState = 'failed';
         onVoiceResolved(page, i);
       }

@@ -339,12 +339,6 @@ export const NookView: React.FC<NookViewProps> = ({
           items={state.items}
           links={[]}
           bg={state.bg}
-          scene={state.scene}
-          sceneCopy={{
-            label: copy.sceneChalk,
-            collapse: copy.collapseScene,
-            expand: copy.expandScene,
-          }}
           ghostCopy={{
             reused: copy.ghostReused,
             failed: copy.ghostFailed,
