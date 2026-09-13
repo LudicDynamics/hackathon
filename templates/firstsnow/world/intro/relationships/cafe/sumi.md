@@ -1,6 +1,6 @@
 ---
 type: sprite
 id: sumi
-title: 雪村 澄
+title: Sumi Yukimura
 ---
-「最初の三十九分だけ、仕事じゃない話をしてもいい？」
+"Could we spend the first thirty-nine minutes talking about something other than work?"

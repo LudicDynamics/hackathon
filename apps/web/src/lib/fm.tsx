@@ -1,9 +1,11 @@
+import { useLocale } from './i18n.js';
 import React, { useState } from 'react';
 import { Activity, ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react';
 import { DiceRoller } from '../components/narrative/DiceRoller.js';
+import { buildInteractiveFields, visibleChoiceOptions, type NormalizedOption } from '@airp/shared/frontmatter';
 
 /**
- * Frontmatter widgets for `type: chalk` (doc-06 §2.6 / doc-05 §3.1).
+ * Shared frontmatter widgets for every Markdown entity (doc-20 §2).
  * Renders the choice / status / roll_dice trio below the chalk body:
  *   - status  → collapsible key-value table; EVERY key is shown (unknown keys
  *     are never dropped); hover peeks it open, click pins it open.
@@ -15,6 +17,7 @@ import { DiceRoller } from '../components/narrative/DiceRoller.js';
  * half-rendered widget.
  */
 export interface FrontmatterWidgetOptions {
+  reveal?: boolean;
   filePath?: string;
   onChoice?: (choice: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
@@ -26,30 +29,20 @@ export function renderFrontmatterWidgets(
 ): React.ReactElement | null {
   try {
     if (!frontmatter || typeof frontmatter !== 'object') return null;
-
-    // status.data (or the whole status map when data is absent) — show all keys.
-    const rawStatus =
-      frontmatter.status && typeof frontmatter.status === 'object' ? frontmatter.status : null;
-    const statusData =
-      rawStatus &&
-      rawStatus.data &&
-      typeof rawStatus.data === 'object' &&
-      !Array.isArray(rawStatus.data)
-        ? rawStatus.data
-        : rawStatus;
+    const interactive = buildInteractiveFields(frontmatter);
+    const statusData = interactive.status?.data ?? null;
     const statusKeys = statusData ? Object.keys(statusData).length : 0;
 
-    const choices = Array.isArray(frontmatter.choice) ? frontmatter.choice : [];
-    const dice =
-      frontmatter.roll_dice && typeof frontmatter.roll_dice === 'object'
-        ? frontmatter.roll_dice
-        : null;
+    const choices = interactive.choice ? visibleChoiceOptions(interactive.choice) : [];
+    const dice = interactive.roll_dice;
 
     if (statusKeys === 0 && choices.length === 0 && !dice) return null;
 
     return (
       <FrontmatterWidgets
         statusData={statusData}
+        statusLabel={interactive.status?.label}
+        reveal={opts.reveal}
         choices={choices}
         dice={dice}
         filePath={opts.filePath}
@@ -64,8 +57,10 @@ export function renderFrontmatterWidgets(
 }
 
 interface FrontmatterWidgetsProps {
+  reveal?: boolean;
   statusData: Record<string, unknown> | null;
-  choices: unknown[];
+  statusLabel?: string;
+  choices: NormalizedOption[];
   dice: Record<string, any> | null;
   filePath?: string;
   onChoice?: (choice: string) => void;
@@ -73,23 +68,34 @@ interface FrontmatterWidgetsProps {
 }
 
 const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
+  reveal = false,
   statusData,
+  statusLabel,
   choices,
   dice,
   filePath,
   onChoice,
   onDiceRolled,
 }) => {
+  const { t } = useLocale();
   // Status fold: hover peeks open, click pins, leaving collapses unless pinned.
   const [statusPinned, setStatusPinned] = useState(false);
   const [statusHover, setStatusHover] = useState(false);
   const statusOpen = statusPinned || statusHover;
 
   const [hoverChoice, setHoverChoice] = useState<number | null>(null);
+  const [pinned, setPinned] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const open = pinned || hovered || focused || reveal;
   const statusKeys = statusData ? Object.keys(statusData).length : 0;
 
   return (
-    <>
+    <div className="fm-block" onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)} onFocus={() => setFocused(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setFocused(false); }}>
+      <button type="button" className="fm-head" aria-expanded={open} aria-pressed={pinned} onClick={() => setPinned(value => !value)}>
+        {t(pinned ? '▾ Pinned' : '▸ Interact')}{choices.length > 0 ? ` · ${t('{count} choices', { count: choices.length })}` : ''}{dice ? ` · ${t('Dice')}` : ''}{statusKeys ? ` · ${t('Status')}` : ''}
+      </button>
+      <div className="fm-body" hidden={!open}>
       {statusKeys > 0 && (
         <div
           className="mt-4 pt-3 border-t border-ink/10"
@@ -102,8 +108,8 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
           >
             {statusOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             <Activity className="w-3.5 h-3.5" />
-            <span>World State Snapshot ({statusKeys})</span>
-            {statusOpen && statusPinned && <span className="text-ink/40">· pinned</span>}
+            <span>{statusLabel ?? t('Status')} ({statusKeys})</span>
+            {statusOpen && statusPinned && <span className="text-ink/40">{t("· pinned")}</span>}
           </button>
 
           {statusOpen && (
@@ -134,14 +140,15 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
       {choices.length > 0 && (
         <div className="mt-4 space-y-2">
           <div className="text-xs font-mono text-ink/40 uppercase tracking-wider mb-1">
-            Advance the Story
+            {t('Advance the Story')}
           </div>
           {choices.map((choice, idx) => {
             const hovered = hoverChoice === idx;
             return (
               <button
                 key={idx}
-                onClick={() => onChoice?.(String(choice))}
+                disabled={!onChoice}
+                onClick={() => onChoice?.(choice.id ?? choice.label)}
                 onPointerEnter={() => setHoverChoice(idx)}
                 onPointerLeave={() => setHoverChoice(null)}
                 // Ink-reverse hover: no `.ink-reverse` utility in CSS yet and the
@@ -150,7 +157,7 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
                 style={hovered ? { background: 'var(--ink)', color: '#fbf8f1' } : undefined}
                 className="w-full text-left px-4 py-2.5 rounded-2xl bg-paper-wall/70 border border-ink/10 text-sm font-sans text-ink transition-all flex items-center justify-between group hover:translate-x-1"
               >
-                <span>{String(choice)}</span>
+                <span>{choice.index}. {choice.label}{choice.hint && <small className="block opacity-60">{choice.hint}</small>}</span>
                 <CornerDownRight
                   className={`w-4 h-4 transition-colors ${
                     hovered ? 'text-[#fbf8f1]' : 'text-ink/30 group-hover:text-rust'
@@ -161,6 +168,7 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
           })}
         </div>
       )}
-    </>
+      </div>
+    </div>
   );
 };

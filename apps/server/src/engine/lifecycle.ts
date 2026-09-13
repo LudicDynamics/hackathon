@@ -4,6 +4,7 @@ import type { JsonAgentSessionEvent } from '../../../../vendor/pi-rp/packages/co
 import { CHARACTER_ROLE_PREFIX } from '@airp/shared';
 
 import { characterLaunch, hasExistingSession, writerLaunch } from './launch.js';
+import { readModelPreferences, writeModelPreferences, type ModelPreference } from './model-preferences.js';
 
 /** Raw WS frame produced by lifecycle itself (warmup replay), not by the engine event map. */
 export type FrameSink = (message: Record<string, any>) => void;
@@ -46,6 +47,7 @@ const RESTART_BACKOFF_MS = [1000, 2000, 4000, 8000, 16000];
 const MAX_RESTART_ATTEMPTS = 5;
 const LIVENESS_PROBE_MS = 5000;
 const DEFAULT_TURN_TIMEOUT_MS = 90000;
+const MAX_TURN_DURATION_MS = 300000;
 
 /**
  * Owns pi-rp agent processes: one writer per world (reused), one character per id,
@@ -67,6 +69,82 @@ export class AgentLifecycleManager {
   private writerRestarts = 0;
   private characterClients = new Map<string, RpcClient>();
   private turnTimeouts = new Map<string, NodeJS.Timeout>();
+  private turnStartedAt = new Map<string, number>();
+  private writerQueue: Promise<void> = Promise.resolve();
+  private queuedBeats = 0;
+  private switchingModels = false;
+  private progress = new Map<string, { stage: string; startedAt: number; updatedAt: number }>();
+
+  isModelSwitching() { return this.switchingModels; }
+
+  async modelStatus(worldRoot: string, includeModels = true) {
+    const writer = await this.startWriter(worldRoot);
+    const [state, models] = await Promise.all([writer.getState(), includeModels ? writer.getAvailableModels() : Promise.resolve([])]);
+    const characters = await Promise.all([...this.characterClients].map(async ([id, client]) => {
+      const s = await client.getState();
+      return { id, model: s.model ? { provider: s.model.provider, id: s.model.id } : null, thinking: s.thinkingLevel };
+    }));
+    return { world: worldRoot, preferences: readModelPreferences(worldRoot),
+      writer: { model: state.model ? { provider: state.model.provider, id: state.model.id } : null, thinking: state.thinkingLevel },
+      characters, models: models.map(m => ({ provider: m.provider, id: m.id })),
+      busy: this.switchingModels || this.queuedBeats > 0 || this.turnStartedAt.size > 0 || state.isStreaming,
+      progress: Object.fromEntries(this.progress), active: [...this.turnStartedAt.keys()], queued: this.queuedBeats };
+  }
+
+  async changeModel(worldRoot: string, role: 'writer' | 'character', preference: ModelPreference) {
+    if (this.switchingModels || this.queuedBeats || this.turnStartedAt.size) throw new Error('Wait for the current turn to finish before changing models.');
+    this.switchingModels = true;
+    const previous = readModelPreferences(worldRoot);
+    try {
+      const writer = await this.startWriter(worldRoot);
+      const models = await writer.getAvailableModels();
+      if (!models.some(m => m.provider === preference.provider && m.id === preference.model)) throw new Error('This model is not available in the engine.');
+      writeModelPreferences(worldRoot, { ...previous, [role]: preference });
+      if (role === 'writer') {
+        await this.stopWriter();
+        const next = await this.startWriter(worldRoot);
+        const state = await next.getState();
+        if (state.model?.id !== preference.model || state.model?.provider !== preference.provider) throw new Error('The engine did not activate the selected model.');
+      } else {
+        for (const id of [...this.characterClients.keys()]) {
+          const next = await this.startCharacter(id, worldRoot);
+          const state = await next.getState();
+          if (state.model?.id !== preference.model || state.model?.provider !== preference.provider) throw new Error('The character did not activate the selected model.');
+        }
+      }
+    } catch (error) {
+      writeModelPreferences(worldRoot, previous);
+      if (role === 'writer') await this.stopWriter();
+      else await this.stopCharacters();
+      throw error;
+    } finally { this.switchingModels = false; }
+    return this.modelStatus(worldRoot);
+  }
+  private writerStarting: { world: string; promise: Promise<RpcClient> } | null = null;
+
+  /** Resolve player beats in order, including their file updates. */
+  submitWriter(worldRoot: string, message: string): Promise<void> {
+    if (this.switchingModels) return Promise.reject(new Error('Models are switching. Please try again shortly.'));
+    this.queuedBeats++;
+    const queuedWorld = this.writerStarting?.world ?? this.writerWorld;
+    const pending = this.writerQueue.catch(() => {}).then(async () => {
+      if (queuedWorld && (this.writerStarting?.world ?? this.writerWorld) !== queuedWorld) throw new Error('The active world changed.');
+      const client = await this.startWriter(worldRoot);
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => { off(); void client.abort().catch(() => {}); reject(new Error('Writer response timed out. Please try again.')); }, MAX_TURN_DURATION_MS);
+        const off = client.onEvent(event => {
+          if (event.type !== 'agent_settled') return;
+          clearTimeout(timer);
+          off();
+          resolve();
+        });
+        client.prompt(message).catch(error => { clearTimeout(timer); off(); reject(error); });
+      });
+    });
+    const tracked = pending.finally(() => { this.queuedBeats--; });
+    this.writerQueue = tracked;
+    return tracked;
+  }
 
   constructor(options: AgentLifecycleManagerOptions) {
     this.repoRoot = options.repoRoot;
@@ -83,6 +161,17 @@ export class AgentLifecycleManager {
    * world retires the old process first.
    */
   async startWriter(worldRoot: string): Promise<RpcClient> {
+    if (this.writerStarting) {
+      if (this.writerStarting.world === worldRoot) return this.writerStarting.promise;
+      await this.writerStarting.promise.catch(() => {});
+    }
+    const promise = this.startWriterProcess(worldRoot);
+    this.writerStarting = { world: worldRoot, promise };
+    try { return await promise; }
+    finally { if (this.writerStarting?.promise === promise) this.writerStarting = null; }
+  }
+
+  private async startWriterProcess(worldRoot: string): Promise<RpcClient> {
     if (this.writer && this.writerWorld === worldRoot) return this.writer;
     if (this.writer) await this.stopWriter();
 
@@ -136,6 +225,7 @@ export class AgentLifecycleManager {
 
   async stopCharacter(characterId: string): Promise<void> {
     this.clearTurnTimeout(`character:${characterId}`);
+    this.turnStartedAt.delete(`character:${characterId}`);
     const client = this.characterClients.get(characterId);
     if (!client) return;
     this.characterClients.delete(characterId);
@@ -149,7 +239,9 @@ export class AgentLifecycleManager {
   }
 
   async stopWriter(): Promise<void> {
+    this.progress.delete('writer');
     this.clearTurnTimeout('writer');
+    this.turnStartedAt.delete('writer');
     if (this.writerPing) {
       clearInterval(this.writerPing);
       this.writerPing = null;
@@ -170,28 +262,55 @@ export class AgentLifecycleManager {
     clientKey: string,
     client: RpcClient
   ): void {
+    const stages: Record<string, string> = { agent_start: 'Reading the scene', message_update: 'Writing the response', tool_execution_start: 'Updating the world', agent_settled: 'Ready for your next action' };
+    let stage = stages[event.type];
+    if (event.type === 'tool_execution_start') stage = event.toolName === 'chalk' ? 'Writing Chalk' : ['look_at', 'read', 'view_canvas'].includes(event.toolName) ? 'Reading the scene' : 'Updating the world';
+    if (event.type === 'tool_execution_end' && event.toolName === 'chalk' && !event.isError) stage = 'Chalk is ready · finishing world updates';
+    if (stage) {
+      const now = Date.now();
+      const previous = this.progress.get(clientKey);
+      // Keep the landed indication during the final model response.
+      if (event.type !== 'message_update' || !previous?.stage.startsWith('Chalk is ready')) {
+        this.progress.set(clientKey, { stage, startedAt: event.type === 'agent_start' ? now : previous?.startedAt ?? now, updatedAt: now });
+        if (event.type !== 'message_update' || stage !== previous?.stage) {
+          this.frameSink?.({ type: 'agent_progress', source, ...(source === 'character' ? { characterId: clientKey.slice(10) } : {}), ...this.progress.get(clientKey), busy: event.type !== 'agent_settled' });
+        }
+      } else if (previous) {
+        this.progress.set(clientKey, { ...previous, updatedAt: now });
+      }
+    }
     if (event.type === 'agent_start') {
+      this.turnStartedAt.set(clientKey, Date.now());
       this.armTurnTimeout(clientKey, client, source);
     } else if (event.type === 'agent_settled') {
       this.clearTurnTimeout(clientKey);
+      this.turnStartedAt.delete(clientKey);
+    } else if (this.turnStartedAt.has(clientKey) && ['message_update', 'tool_execution_start', 'tool_execution_update', 'tool_execution_end'].includes(event.type)) {
+      this.armTurnTimeout(clientKey, client, source);
     }
     this.eventSink?.(source, event, characterIdFromClientKey(clientKey));
   }
 
   private armTurnTimeout(clientKey: string, client: RpcClient, source: 'writer' | 'character'): void {
     this.clearTurnTimeout(clientKey);
+    const idleBudget = Number(process.env.AIRP_TURN_TIMEOUT_MS) > 0 ? Number(process.env.AIRP_TURN_TIMEOUT_MS) : DEFAULT_TURN_TIMEOUT_MS;
+    const remaining = MAX_TURN_DURATION_MS - (Date.now() - (this.turnStartedAt.get(clientKey) ?? Date.now()));
+    const delay = Math.max(0, Math.min(idleBudget, remaining));
     const timer = setTimeout(() => {
       console.warn(
-        `[AIRP Lifecycle] ${clientKey} turn exceeded ${DEFAULT_TURN_TIMEOUT_MS}ms; aborting runaway turn`
+        `[AIRP Lifecycle] ${clientKey} exceeded ${remaining <= idleBudget ? 'total turn' : 'inactivity'} budget; aborting turn`
       );
+      this.turnStartedAt.delete(clientKey);
       client.abort().catch(() => {});
       this.frameSink?.({
         type: 'turn_aborted',
         source,
+        ...(source === 'character' ? { characterId: clientKey.slice('character:'.length) } : {}),
         reason: 'timeout',
+        message: 'The writer took too long to respond. You can try again; completed world changes are kept.',
         timestamp: new Date().toISOString(),
       });
-    }, DEFAULT_TURN_TIMEOUT_MS);
+    }, delay);
     timer.unref?.();
     this.turnTimeouts.set(clientKey, timer);
   }

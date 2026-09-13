@@ -1,14 +1,15 @@
 ---
-name: 第47回 · 生放送中
+name: Episode 47 · On Air
 type: readme
 bg: assets/backgrounds/intro.webm
 bgm: firstsnow
 choice:
-  - 七海に一言返す
-  - 放送が終わるまで待つ
+  - Say something to Nanami
+  - Wait until the broadcast ends
+bgVideo: "assets/motion/seedance/backgrounds/intro.webm"
 ---
-ON AIR の赤いランプが灯っている。あなたは深夜ラジオ『初雪時間』の**学生ディレクター**。
+The red ON AIR lamp glows. You are the **student director** of the late-night radio show First Snow Hour.
 
-ガラスの向こうで、七海が右のイヤホンを外し、あなたの名前を呼ぶ。放送後、彼女との十年前からの約束と、新人歌手・澄との駅までの約束が、同じ夜に待っている。
+Beyond the glass, Nanami takes out her right earbud and calls your name. After the broadcast, two promises await: one you made to her ten years ago, and one to walk the newly debuted singer Sumi to the station.
 
-この Chalk をたたみ、調音卓のリクエスト票を手に取ると、今夜の関係図へ進める。
+Fold this narration and take the request slip from the mixing desk to explore tonight's relationships.

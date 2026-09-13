@@ -30,6 +30,8 @@
 
 **核心结论**：`note` 是原型里真正的"物件卡"（铜钥匙用它），`letter` 是唯一从纸片弹出"第二层阅读"（title→preview→body→sign）的组件。**官方组件清单的 MVP 种子 = 铜钥匙式 `note.md` + 搜救通报式 `letter.md`**（doc-10 标记里早就写了这俩，证据吻合）。`buddy/bg/roads/compass/sprite` 全部不在组件体系里（见 E0），**不占名额**。
 
+**与 doc-20 的 Chalk 对齐**：导言里的入口是 Chalk，不增加 Chunk 这个新文件类型或 component kind。委托信可以是信件形态的 Chalk；若需要独立展开长文、拿取信物、进入地点，分别复用 `letter`、`note` / item 与 `gate`。只有确实需要自定义交互逻辑的对象才使用 `component`。
+
 ### E2. 组件的"三段体"落盘形态（v2 letter 实证）
 
 ```
@@ -47,7 +49,7 @@ title（卡面标题） → preview（卡面摘要，画布上可见）
 ### E4. 点击语义（v1 clickum 实证）
 
 - `gate` 点击 = 进门；`buddy` 点击 = 进遮罩对话；`letter` 点击 = 弹阅读 modal；
-- `chalk`/`note` **在原型里没有点击动作**（note 的阅读器见 doc-06 §5.2 背包详情，场景内 note 点击=阅读器是待定）；
+- `chalk`/`note` **在当前原型里没有点击动作**；AIRP 的目标体验已扩展为：入口 `chalk` 可被点开、展开或回应，并由 frontmatter 给出 RP / Choice / Dice 或移动机会；它不直接代替拿取与切层协议。`note` 作为信物或道具时必须提供明确的查看 / 拿取动作，真正进门仍由 `gate` 执行（具体点击与拖拽优先级待实现时定）；
 - 上帝模式点击一律 = 选中（不进门不开信）；`ghost` 壳点不开。
 
 ### E5. 可收藏性（v1 `BAG_TYPES` 实证）

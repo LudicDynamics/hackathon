@@ -235,7 +235,8 @@ export function parseFrontmatter(rawContent: string): ParsedFrontmatter {
   };
 }
 
-export { entityName };
+export { entityName, buildInteractiveFields };
+export { visibleChoiceOptions, type NormalizedOption } from '../rules/interactive.js';
 
 /**
  * Re-serialize a frontmatter mapping and body into a whole file. Peer-requested
@@ -284,3 +285,6 @@ export function stringifyChalk(frontmatter: Record<string, any>, body: string): 
   lines.push(body);
   return lines.join('\n');
 }
+
+/** Compatibility spelling used by the canvas widgets. */
+export const InteractionFieldsSchema = InteractiveFieldsSchema;

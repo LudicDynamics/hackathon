@@ -1,6 +1,5 @@
 import React from 'react';
 import { chalkStyleOf } from '@airp/shared/forms';
-import { renderFrontmatterWidgets } from '../../lib/fm.js';
 import { MarkdownText } from '../../lib/md.js';
 
 interface ChalkCardProps {
@@ -22,20 +21,9 @@ interface ChalkCardProps {
  */
 export const ChalkCard: React.FC<ChalkCardProps> = ({
   item,
-  onSelectChoice,
-  onDiceRolled,
 }) => {
-  const { frontmatter, body, path } = item;
+  const { frontmatter, body } = item;
   const style = chalkStyleOf(frontmatter);
-
-  // status (hover-to-peek / click-to-pin fold) + choice group + dice card —
-  // all widget rendering lives in lib/fm.ts; any broken frontmatter shape
-  // degrades there to null, leaving this card as plain narration text.
-  const widgets = renderFrontmatterWidgets(frontmatter, {
-    filePath: path,
-    onChoice: onSelectChoice,
-    onDiceRolled,
-  });
 
   const classes = ['chalk', 'chalk--bare'];
   if (style.hand) classes.push('chalk--hand');
@@ -46,16 +34,13 @@ export const ChalkCard: React.FC<ChalkCardProps> = ({
   if (style.aged) classes.push('chalk--aged');
 
   const size = Number(frontmatter?.size);
-  const sizeStyle = Number.isFinite(size)
-    ? ({ '--chalk-size': `${size}px` } as React.CSSProperties)
-    : undefined;
+  const sizeStyle = { '--chalk-size': `${Number.isFinite(size) && size > 0 ? size : style.big ? 29 : 26}px` } as React.CSSProperties;
 
   return (
     <div className={classes.join(' ')} style={sizeStyle}>
       {/* Chalk narration body — transparent ink, pre-wrap preserved. */}
-      <MarkdownText text={body} className="whitespace-pre-wrap" />
+      <MarkdownText text={body} className="chalk__body" />
 
-      {widgets}
     </div>
   );
 };

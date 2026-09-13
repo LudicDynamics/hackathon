@@ -40,11 +40,13 @@ const CAM_MEMORY: Record<string, Cam> = {};
 /** Shared camera state across hook instances. */
 let sharedTarget: Cam = { ...DEFAULT_VIEW };
 let sharedCurrent: Cam = { ...DEFAULT_VIEW };
+let wakeDriver: (() => void) | null = null;
 
 function applyTarget(t: Cam): void {
   sharedTarget.x = t.x;
   sharedTarget.y = t.y;
   sharedTarget.z = t.z;
+  wakeDriver?.();
 }
 
 export interface CameraApi {
@@ -105,6 +107,7 @@ export function useCamera(): CameraApi {
     const update = () => {
       sharedSize = { w: el.clientWidth, h: el.clientHeight };
       publishView();
+      wakeDriver?.();
     };
     update();
     const ro = new ResizeObserver(update);
@@ -118,8 +121,8 @@ export function useCamera(): CameraApi {
     if (!world) return; // App-level instance: nothing to drive
     let raf = 0;
     let tick = 0;
-    let wasRest = true;
     const loop = () => {
+      raf = 0;
       const c = sharedCurrent;
       lerpCam(c, sharedTarget);
       world.style.transform = worldTransform(sharedSize.w, sharedSize.h, c);
@@ -130,12 +133,18 @@ export function useCamera(): CameraApi {
       // rect must follow a pan/zoom smoothly — plus one final tick when the
       // camera settles, so the rect lands exactly on the resting view. Idle
       // frames publish nothing.
-      if (atRest ? !wasRest : tick % 3 === 0) publishView();
-      wasRest = atRest;
-      raf = requestAnimationFrame(loop);
+      if (atRest || tick % 3 === 0) publishView();
+      if (!atRest) raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    const wake = () => {
+      if (raf === 0) raf = requestAnimationFrame(loop);
+    };
+    wakeDriver = wake;
+    wake();
+    return () => {
+      if (wakeDriver === wake) wakeDriver = null;
+      if (raf !== 0) cancelAnimationFrame(raf);
+    };
   }, []);
 
   /* ---------- command API ---------- */

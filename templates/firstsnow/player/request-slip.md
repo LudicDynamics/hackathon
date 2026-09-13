@@ -1,8 +1,8 @@
 ---
 type: note
-title: 第47回リクエスト票
+title: Episode 47 Request Slip
 portable: true
-take_label: 手に取る
+take_label: Take along
 tags: [key, promise, song]
 ---
-匿名リクエスト第一位は、澄の新曲『白いアルバム』。余白に七海の鉛筆書き——「最後に流す。それとも、しまっておく？」
+The most requested song is Sumi's new single, White Album. In the margin, Nanami has penciled a question: "Play it last? Or keep it for another time?"

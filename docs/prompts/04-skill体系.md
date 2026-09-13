@@ -696,4 +696,3 @@ description: "‹什么时候读——例如「决定这一场往哪去」，或
    - 互动字段（`choice`/`roll_dice`/`status`）写在 `tool-craft`，但它们是**组件与 chalk 共用的 frontmatter**，天然与 `component-narration` 相关。
    - **待定**：试玩后若作家总在"选载体"时忘了 attach 互动字段，考虑把"互动字段清单"提到 `component-narration` 的判据里，或在两份各留一句指路（当前是单向指路：`component-narration` → `tool-craft`）。
 6. ~~**世界级 skill 的 `name` 前缀长度。**~~ **✅ 已裁决（`Main`，2026-09-12）：统一用世界目录名**，即 `holmes-world-style` 这类略啰嗦的形式也照用（`00 §4.3:182-184`）。理由：与 `AGENTS.md:38`「目录名即 id」一致，且切换 `world.json.id` 会引入一个与世界目录名不同的、需要额外查表的前缀。**此项关闭。**
-

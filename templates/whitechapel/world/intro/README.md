@@ -7,6 +7,7 @@ font: hand
 choice:
   - Break Watson's seal
   - Accept the case before noon
+bgVideo: "assets/motion/seedance/backgrounds/intro.webm"
 ---
 You are **Sherlock Holmes**. Rain threads the window; your avatar is already reflected in the dark glass.
 

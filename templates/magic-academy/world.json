@@ -13,7 +13,9 @@
     "daily-life"
   ],
   "material": "parchment",
-  "audio": { "theme": "emberglass" },
+  "audio": {
+    "theme": "emberglass"
+  },
   "extensions": [
     {
       "id": "airp:letter",
@@ -30,7 +32,9 @@
     {
       "id": "seraphina",
       "home": "world/arcane-library",
-      "role": "companion"
+      "role": "companion",
+      "avatarVideo": "assets/motion/seedance/characters/seraphina-transparent.webm",
+      "avatar": "assets/motion/seedance/characters/seraphina-transparent.webp"
     },
     {
       "id": "archivist",

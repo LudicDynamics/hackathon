@@ -297,7 +297,11 @@ export class LocalWorldStore implements WorldStore {
     const sites = await scanRefs(this, from, to);
 
     await fs.mkdir(path.dirname(absTo), { recursive: true });
-    await fs.rename(absFrom, absTo);
+    // Link creation is exclusive: never overwrite another carried item's file.
+    // Both paths belong to the same world filesystem; directory moves are not
+    // part of this item API. Unlink only after the destination exists safely.
+    await fs.link(absFrom, absTo);
+    await fs.unlink(absFrom);
 
     const { rewrote, dangling } = await rewriteRefs(this, from, to, sites);
 

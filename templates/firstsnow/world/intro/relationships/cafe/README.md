@@ -1,10 +1,11 @@
 ---
-name: 第二幕 · 琥珀喫茶店
+name: Act Two · Amber Cafe
 type: readme
 bg: assets/backgrounds/cafe.webp
 bgm: firstsnow
 choice:
-  - 最初の三十九分は仕事の話をしない
-  - 巡演の初日について尋ねる
+  - Keep work out of the first thirty-nine minutes
+  - Ask about the first day of the tour
+bgVideo: "assets/motion/seedance/backgrounds/cafe.webm"
 ---
-澄が帽子とマスクを外すと、ようやく同じ大学の学生に戻る。マネージャーから与えられた自由時間は四十分。
+Sumi takes off her cap and mask and finally looks like a student at your university again. Her manager has given her forty minutes to herself.

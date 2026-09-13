@@ -1,0 +1,49 @@
+{
+  "id": "first-snow-jp",
+  "audio": {
+    "theme": "canvas-firstsnow"
+  },
+  "locale": "ja",
+  "entry": "map",
+  "name": "初雪ラジオ",
+  "version": "1.0.0",
+  "schema": 1,
+  "description": "放送が終わるまで、あと九十秒。十年越しの約束と、今夜だけの誘い。あなたが向かった場所と、行かなかった場所に、この冬の答えが残る。",
+  "author": "Worldlines / AIRP",
+  "genre": "冬の恋愛劇",
+  "tags": [
+    "初雪",
+    "ラジオ",
+    "約束",
+    "短編"
+  ],
+  "material": "warm",
+  "cover": "assets/scenes/intro.webp",
+  "extensions": [],
+  "player": {
+    "id": "radio-director",
+    "name": "あなた · 学生ディレクター",
+    "avatar": "assets/characters/radio-director.webp"
+  },
+  "characters": [
+    {
+      "id": "nanami",
+      "name": "七海",
+      "home": "world/tonight/radio-studio",
+      "role": "companion",
+      "avatar": "assets/motion/seedance/characters/nanami-transparent.webp",
+      "description": "七海。十年来の友人で、番組「初雪アワー」のパーソナリティ。",
+      "avatarVideo": "assets/motion/seedance/characters/nanami-transparent.webm"
+    },
+    {
+      "id": "sumi-yukimura",
+      "name": "雪村澄",
+      "home": "world/tonight/amber-cafe",
+      "role": "npc",
+      "avatar": "assets/characters/sumi-yukimura.webp",
+      "description": "雪村澄。デビューしたばかりの歌手。今夜だけは、仕事ではない話をしたい。"
+    }
+  ],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z"
+}

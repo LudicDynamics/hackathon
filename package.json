@@ -15,6 +15,7 @@
     "gen:video": "node tools/flow-gen.mjs video",
     "test": "node --test packages/shared/test/ apps/server/test/ apps/web/test/ tools/*.test.mjs",
     "probe": "node tools/probe-writer.mjs",
+    "probe:image": "node tools/probe-image.mjs",
     "probe:tools": "node tools/probe-tools.mjs && node tools/probe-tools-engine.mjs",
     "probe:inject": "node tools/probe-inject.mjs",
     "probe:init": "node tools/probe-init.mjs",

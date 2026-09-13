@@ -45,7 +45,13 @@ const EMITTERS = [
 ];
 
 /** Files that react to a frame. Same explicit-list discipline as EMITTERS. */
-const CONSUMERS = ['apps/web/src/state/useWorld.ts'];
+const CONSUMERS = [
+  'apps/web/src/state/useWorld.ts',
+  // App is the second real consumer: it reads `agent_progress` off the raw
+  // `airp:agent-frame` relay (writer busy state) and `dice_result` off
+  // `airp:dice-frame`. Scanning only useWorld would call those dark.
+  'apps/web/src/App.tsx',
+];
 
 /**
  * Frames that are deliberately NOT consumed by the browser today, with the
@@ -120,13 +126,15 @@ function emittedFrom(text) {
   return out;
 }
 
-/** Every `case 'x'` / `msg.type === 'x'` literal — a frame the browser reacts to. */
+/** Every `case 'x'` / `<expr>.type === 'x'` literal — a frame the browser reacts to.
+ *  The identifier before `.type` is deliberately not pinned to `msg`: a consumer may
+ *  read the frame through a relay (`frame.type` off `airp:agent-frame`). */
 function consumedFrom(text) {
   const out = new Map();
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    for (const m of line.matchAll(/(?:case\s+|msg\.type\s*===\s*)'([a-z][a-z_0-9]*)'/g)) {
+    for (const m of line.matchAll(/(?:case\s+|[A-Za-z_$][\w$]*\.type\s*===\s*)'([a-z][a-z_0-9]*)'/g)) {
       if (!out.has(m[1])) out.set(m[1], i + 1);
     }
   }

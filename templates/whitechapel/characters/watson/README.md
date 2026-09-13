@@ -1,6 +1,11 @@
 ---
-name: Dr. John Watson
-avatar: /api/asset?path=assets/characters/watson.webp
+type: "readme"
+name: "Dr. John Watson"
+avatar: "assets/motion/seedance/characters/watson-transparent.webp"
+avatarVideo: "assets/motion/seedance/characters/watson-transparent.webm"
 voice: wise-elder
 ---
-Holmes's companion and moral witness. Watson remembers what Holmes has chosen, not merely what he has discovered.
+
+# Dr. John Watson
+
+Holmes’s physician, chronicler, and humane counterweight.

@@ -1,7 +1,7 @@
 ---
 type: note
-title: 消しゴムで消した一行
-preview: 一度書いて、すぐ消した。紙はまだ少し凹んでいる。
+title: The Erased Line
+preview: Written once, then quickly erased. The paper still holds the impression.
 ---
-放送が終わってから、誰にも言っていないことを一つだけ書いた。
-消しゴムの粉が、机の端にまだ残っている。
+After the broadcast, she wrote down one thing she had never told anyone.
+Eraser dust still rests at the edge of the desk.

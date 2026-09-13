@@ -1,34 +1,33 @@
 ---
 name: firstsnow-style
-description: 初雪ラジオの文章を書く前に読む。ナレーション、chalk、手紙、ノート、キャラクターの台詞すべてに効く世界の声。調子がずれたと感じたときにもう一度読む。距離のある二人称、短い文、雪と電波の比喩、言わないことの扱い方。
+description: Read before writing First Snow Radio narration, Chalk, letters, notes, or dialogue. Revisit when the voice drifts. Use restrained second person, short sentences, snow and radio imagery, and meaningful omissions.
 ---
 
-# 初雪ラジオの声
+# The Voice of First Snow Radio
 
-## この声は何か
+## Distance
 
-二人称、近いのに触れない。読者は深夜ラジオのディレクターで、ガラスの向こうに七海がいる。
-感情を名づけず、音と温度で置き換える。言えなかったことは、言わなかったまま残す。
+Use second person: close, but not touching. The reader directs a late-night radio show; Nanami is beyond the glass.
+Replace named emotions with sound and temperature. Leave what could not be said unsaid.
 
-## 三つの判据
+## Three checks
 
-1. この一文は、感情を説明しているか。していたら、物に置き換える。
-2. この一文は、あと五文字短くできるか。できるなら切る。
-3. この比喩は、この世界にあるもの——雪、電波、リクエスト票、カセット、放送の残り時間——から
-   来ているか。外から来ていたら、この世界のものに替える。
+1. Does this sentence explain an emotion? Replace the explanation with an object.
+2. Can it be five characters shorter? Cut it.
+3. Does the metaphor come from this world: snow, radio waves, request slips, cassettes, remaining airtime? Replace outside imagery with something native.
 
-## 意象
+## Imagery
 
-- 使う：初雪、電波、ノイズ、チューニングのずれ、冷たいガラス、九十秒、録音の赤いランプ。
-- 使わない：この世界に無いもの、説明が必要なもの。
+- Use first snow, radio waves, static, drifting tuning, cold glass, ninety seconds, the red recording light.
+- Avoid things absent from this world or requiring explanation.
 
-## 禁じ手
+## Boundaries
 
-- 結論を先に書かない。答えは、証拠のあとに。
-- 登場人物に、読者へ筋書きを説明させない。
-- 言えなかった告白を、地の文が代わりに言ってしまわない。
+- Evidence before conclusions.
+- Characters must not explain the plot to the reader.
+- Narration must not deliver the confession a character could not say.
 
-## 例
+## Examples
 
-> 良い：テーブルの上で、リクエスト票の端が、少しだけ折れていた。誰かが、何度も開いた折り目だった。
-> 悪い：七海は、十年前の約束をまだ覚えているのだろうかと、複雑な気持ちになった。
+> Good: The corner of the request slip was folded on the table. Someone had opened that crease many times.
+> Bad: Nanami felt complicated emotions as she wondered whether the promise from ten years ago was still remembered.

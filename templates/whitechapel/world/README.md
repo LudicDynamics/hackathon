@@ -1,8 +1,14 @@
 ---
-name: Letters from Whitechapel
-material: parchment
-bgStyle:
-  tone: cold
-  grain: parchment
+type: "readme"
+name: "221B Baker Street · Morning"
+title: "221B Baker Street · Morning"
+material: "kraft"
+tone: "sepia"
+grain: "parchment"
+bg: "assets/scenes/intro.webp"
+bgVideo: "assets/motion/seedance/backgrounds/intro.webm"
 ---
-This file is the world root. The playable entry is the morning at 221B.
+
+# 221B Baker Street · Morning
+
+The fog is thicker than the case. Watson holds three letters; only the third matters.

@@ -119,6 +119,11 @@ export function mapEngineEvent(
     }
     case 'message_end': {
       if (event.message?.role === 'assistant') {
+        const result = event.message as { stopReason?: string; errorMessage?: string };
+        if (result.stopReason === 'error' || result.stopReason === 'aborted') {
+          push({ type: 'error', source, message: result.errorMessage || 'The agent could not finish this turn.' });
+          break;
+        }
         const text = messageText(event.message);
         if (text) {
           push({ type: source === 'writer' ? 'writer_message' : 'character_message', source, text });

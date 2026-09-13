@@ -1,8 +1,14 @@
 ---
-name: 初雪ラジオ
-material: paper
-bgStyle:
-  tone: cold
-  grain: paper
+type: "readme"
+name: "Episode 47 · Live"
+title: "Episode 47 · Live"
+material: "warm"
+tone: "rose"
+grain: "parchment"
+bg: "assets/scenes/intro.webp"
+bgVideo: "assets/motion/seedance/backgrounds/intro.webm"
 ---
-プレイ開始地点は、第47回の生放送中。
+
+# Episode 47 · Live
+
+The red ON AIR light glows. There are ninety seconds before the next song.

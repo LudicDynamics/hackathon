@@ -29,7 +29,7 @@ export interface NookViewProps {
   characterId: string;
   /** Close the nook, returning to the layer that was showing. App owns it. */
   onClose: () => void;
-  locale: Locale;
+  locale: Exclude<Locale, 'zh-CN'>;
   // Forwarded layer callbacks (02 §⑫-2): the nook MUST NOT build its own
   onMoveCard?: (path: string, x: number, y: number) => Promise<void> | void;
   onSelectChoice?: (path: string, choice: string) => void;

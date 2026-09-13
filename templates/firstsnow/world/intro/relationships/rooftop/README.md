@@ -1,10 +1,11 @@
 ---
-name: 第三幕 · 屋上の約束
+name: Act Three · The Rooftop Promise
 type: readme
 bg: assets/backgrounds/rooftop.webp
 bgm: firstsnow
 choice:
-  - 七海に片方のイヤホンを渡す
-  - 誰を待たせているか正直に話す
+  - Offer Nanami one earbud
+  - Be honest about who is waiting for you
+bgVideo: "assets/motion/seedance/backgrounds/rooftop.webm"
 ---
-十年前、あなたと七海はここで一組のイヤホンを分けた。街の灯りが逆さの星空に見える夜だった。
+Ten years ago, you and Nanami shared a pair of earbuds here. That night, the city lights looked like a sky full of upside-down stars.

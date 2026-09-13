@@ -55,12 +55,21 @@
       "id": "profile",
       "slot": "file",
       "options": {
-        "path": ["README.md"],
+        "path": [
+          "README.md",
+          "identity.md",
+          "personality.md",
+          "memory.md"
+        ],
         "baseDir": "characters/watson",
         "stripFrontmatter": true,
         "onMissing": "skip"
       }
     },
-    { "kind": "slot", "id": "chat-history", "slot": "chat-history" }
+    {
+      "kind": "slot",
+      "id": "chat-history",
+      "slot": "chat-history"
+    }
   ]
 }

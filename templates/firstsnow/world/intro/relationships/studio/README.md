@@ -1,11 +1,12 @@
 ---
-name: 第一幕 · 録音室の九十秒
+name: Act One · Ninety Seconds in the Studio
 type: readme
 bg: assets/backgrounds/studio.webp
 bgm: firstsnow
 roll_dice:
   type: 1d6
-  desc: マイクを開き、自分の言葉を一行だけ届ける
+  desc: Open the microphone and say one line in your own words
   expect: ">3"
+bgVideo: "assets/motion/seedance/backgrounds/studio.webm"
 ---
-赤いランプの向こうで、七海はいつものように右のイヤホンだけを外す。十年間変わらない癖が、今夜は質問に見える。
+Beyond the red lamp, Nanami removes only her right earbud, as she always does. A habit unchanged for ten years feels like a question tonight.

@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { ChalkCard } from '../narrative/ChalkCard.js';
 import { MarkdownText, plainExcerpt, stripLeadingTitle, leadingTitleOf } from '../../lib/md.js';
 import { playFoley } from '../../lib/audio.js';
+import { DoorOpen } from 'lucide-react';
+import { useLocale } from '../../lib/i18n.js';
+import { PropCard } from './PropCard.js';
 
 interface CardRendererProps {
   item: {
@@ -19,29 +22,6 @@ interface CardRendererProps {
   onItemDropOnTarget?: (draggedItemPath: string, targetPath: string) => void;
   onTakeItem?: (path: string) => void;
 }
-
-/**
- * Hand-drawn scene icon (prototype `ICONS.inn`, canvas-stack-mingyue.html L681).
- * Inline SVG, ink stroke, deliberately uneven paths.
- */
-const GateIcon: React.FC = () => (
-  <svg
-    viewBox="0 0 72 72"
-    width={72}
-    height={72}
-    fill="none"
-    stroke="#2B2117"
-    strokeWidth={2}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M14 58 L58 58" />
-    <path d="M20 58 L20 34 Q36 20 52 34 L52 58" />
-    <path d="M28 58 L28 42 h16 v16" />
-    <path d="M36 6 l0 8 M32 10 h8" />
-    <circle cx="36" cy="14" r="2.4" />
-  </svg>
-);
 
 /** Hand-drawn ordinal seal (prototype `numCircle`, L692-695). */
 const GateNum: React.FC<{ n: number | string }> = ({ n }) => (
@@ -90,6 +70,8 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
   onTakeItem,
 }) => {
   const { frontmatter, body, filename, path } = item;
+  const { locale } = useLocale();
+  const ja = locale === 'ja';
   const [letterOpen, setLetterOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isItemDragging, setIsItemDragging] = useState(false);
@@ -124,6 +106,12 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
   const puzzleClasses = `${isItemDragging ? 'puzzle-target-ready' : ''} ${isDragOver ? 'puzzle-target-hover' : ''} ${isUnlockedEffect ? 'puzzle-unlock-burst' : ''}`.trim();
 
   // 1. Chalk Card — ink on the canvas (bare by default).
+  if (frontmatter?.visual === 'envelope' || frontmatter?.visual === 'phone' || frontmatter?.visual === 'door') {
+    return <PropCard visual={frontmatter.visual} title={frontmatter.title || filename} body={body}
+      image={typeof frontmatter.image === 'string' ? frontmatter.image : undefined}
+      onEnter={frontmatter.type === 'gate' ? () => onEnterGate?.(frontmatter.target) : undefined} />;
+  }
+
   if (frontmatter?.type === 'chalk') {
     return (
       <ChalkCard
@@ -155,7 +143,9 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
     const order = /^\d+$/.test(String(orderNum))
       ? String(orderNum).padStart(2, '0')
       : orderNum;
-    const meta = isStub ? 'UNWRITTEN · walk in, and it will be written →' : 'SCENE · ENTRANCE';
+    const meta = isStub
+      ? (ja ? 'まだ白紙 · 一歩先から物語が生まれる →' : 'UNWRITTEN · walk in, and it will be written →')
+      : (ja ? '場面 · 入口' : 'SCENE · ENTRANCE');
     // The card face shows a clean one-line excerpt; the raw README markdown
     // (# heading, line breaks) stays in the hover sheet. Never spill source.
     const excerpt = plainExcerpt(body);
@@ -176,7 +166,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
         <GateNum n={order} />
         <GatePin />
         <div className="gate__cover">
-          <GateIcon />
+          <DoorOpen size={36} strokeWidth={1.2} aria-hidden="true" />
         </div>
         {/* The card face keeps a two-line teaser; the full README detail lives
             in a floating sheet on hover (never spills past the card). */}
@@ -210,7 +200,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
         >
           <div className="letter__head">
             <span className="letter__seal" />
-            {frontmatter.title || 'Letter'}
+            {frontmatter.title || (ja ? '手紙' : 'Letter')}
           </div>
           <div className="letter__preview">
             {/* frontmatter.preview is authored copy; the body fallback is raw
@@ -218,7 +208,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
             {frontmatter.preview || plainExcerpt(body)}
           </div>
           <div className="letter__meta">
-            <span>{frontmatter.sign || 'Click to open and read'}</span>
+            <span>{frontmatter.sign || (ja ? '開いて読む' : 'Click to open and read')}</span>
           </div>
         </div>
 
@@ -251,7 +241,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
                   onClick={() => setLetterOpen(false)}
                   className="px-6 py-2 text-xs font-mono transition-all border border-ink/20 hover:bg-ink hover:text-cream"
                 >
-                  Fold &amp; Put Away (Esc)
+                  {ja ? 'たたんでしまう' : 'Fold & Put Away'}
                 </button>
               </div>
             </div>
@@ -277,7 +267,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
       <span className="note__clip" />
       <div className="note__title">{noteTitle}</div>
       <MarkdownText text={stripLeadingTitle(body)} className="note__body" />
-      {frontmatter?.portable === true && (
+      {frontmatter?.portable === true && onTakeItem && (
         <button
           type="button"
           data-no-drag

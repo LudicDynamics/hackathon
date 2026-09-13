@@ -1,8 +1,13 @@
 import React from 'react';
+import { BagItemDialog } from '../BagItemDialog.js';
 import { CardRenderer } from './CardRenderer.js';
 import { highlightLinks } from './LinkLayer.js';
 import { chalkStyleOf } from '@airp/shared/forms';
 import type { LayerItem } from '../../state/useWorld.js';
+import { UserRound } from 'lucide-react';
+import { EntityInteractions } from '../narrative/EntityInteractions.js';
+import { highlightChalkAnchor } from '../../lib/chalk-anchor.js';
+import { airpGateway } from '../../lib/airp-gateway.js';
 
 /**
  * Absolute-positioned card shell inside the world transform layer (v2 `.object`
@@ -44,27 +49,14 @@ export function pruneLifts(paths: Set<string>): void {
 }
 
 /** Presence figure — the world's people. Ink sketch + a name strip (proto `.sprite`). */
-const SpriteFig: React.FC = () => (
-  <div className="sprite__halo">
-    <svg
-      viewBox="0 0 72 64"
-      width={72}
-      height={64}
-      fill="none"
-      stroke="#2B2117"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="36" cy="16" r="11" fill="#FFFEF6" />
-      <path d="M22 60 Q22 30 36 30 Q50 30 50 60 Z" fill="#FFFEF6" />
-      <path d="M28 44 L44 44" strokeDasharray="3 3" />
-      <circle cx="31" cy="15" r="1.2" fill="#2B2117" />
-      <circle cx="41" cy="15" r="1.2" fill="#2B2117" />
-      <path d="M33 20 q3 2.4 6 0" />
-    </svg>
-  </div>
-);
+const SpriteFig: React.FC<{ avatar?: string; name: string }> = ({ avatar, name }) => {
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => setFailed(false), [avatar]);
+  const src = avatar && (/^(?:https?:|data:|blob:|\/)/.test(avatar) ? avatar : airpGateway.assetUrl(avatar));
+  return <div className="presence-orb" role="img" aria-label={name}>
+    {src && !failed ? <img src={src} alt="" onError={() => setFailed(true)} /> : <UserRound size={30} strokeWidth={1.3} aria-hidden="true" />}
+  </div>;
+};
 
 /** World-root-relative asset path → URL (contract §5.4, same as SceneBackdrop). */
 const assetUrl = (p: string): string => `/api/asset?path=${encodeURIComponent(p)}`;
@@ -148,6 +140,7 @@ export interface CanvasObjectProps {
   still?: boolean;
   index?: number;
   onSelectChoice?: (path: string, choice: string) => void;
+  onEntityAction?: (prompt: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
   onEnterGate?: (targetLayer: string) => void;
   onOpenCharacterModal?: (charId: string) => void;
@@ -160,6 +153,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   still = false,
   index,
   onSelectChoice,
+  onEntityAction,
   onDiceRolled,
   onEnterGate,
   onOpenCharacterModal,
@@ -167,9 +161,24 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   onTakeItem,
 }) => {
   const kind = item.kind;
+  const [reading, setReading] = React.useState(false);
+  const pointerStart = React.useRef({ x: 0, y: 0 });
+  const readable = kind !== 'sprite' && kind !== 'gate';
   const [isDragOver, setIsDragOver] = React.useState(false);
   const [isItemDragging, setIsItemDragging] = React.useState(false);
   const [isUnlockedEffect, setIsUnlockedEffect] = React.useState(false);
+  const anchorCleanup = React.useRef<(() => void) | undefined>(undefined);
+  const [hovered, setHovered] = React.useState(false);
+  const [focused, setFocused] = React.useState(false);
+  React.useEffect(() => () => anchorCleanup.current?.(), [item.path, item.frontmatter?.anchor]);
+  const highlight = (element: HTMLElement, active: boolean) => {
+    highlightLinks(item.path, active);
+    anchorCleanup.current?.();
+    anchorCleanup.current = undefined;
+    if (active && item.frontmatter?.type === 'chalk') {
+      anchorCleanup.current = highlightChalkAnchor(element, item.path, item.frontmatter.anchor);
+    }
+  };
 
   React.useEffect(() => {
     const onDragStart = () => setIsItemDragging(true);
@@ -201,25 +210,35 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   return (
     <div
       data-path={item.path}
-      onPointerEnter={() => highlightLinks(item.path, true)}
-      onPointerLeave={() => highlightLinks(item.path, false)}
-      className="object ink-form"
+      tabIndex={0}
+      onPointerDownCapture={event => { pointerStart.current = { x: event.clientX, y: event.clientY }; }}
+      onClick={event => {
+        if (!readable || (event.target as HTMLElement).closest('button,a,input,textarea,select,.entity-interactions,.cabin-prop,[role="dialog"]')) return;
+        if (Math.hypot(event.clientX - pointerStart.current.x, event.clientY - pointerStart.current.y) > 6) return;
+        setReading(value => !value);
+      }}
+      onKeyDown={event => { if (readable && event.target === event.currentTarget && event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); setReading(value => !value); } }}
+      onPointerEnter={event => { setHovered(true); highlight(event.currentTarget, true); }}
+      onPointerLeave={event => { setHovered(false); highlight(event.currentTarget, false); }}
+      onFocus={event => { setFocused(true); highlight(event.currentTarget, true); }}
+      onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) { setFocused(false); highlight(event.currentTarget, false); } }}
+      className={`object ink-form${reading ? ' object--reading' : ''}`}
       style={
         {
           left: item.x,
           top: item.y,
-          width: item.w,
+          width: reading ? Math.max(item.w, 500) : item.w,
           // No height: the shell hugs its card, so the painted box IS the real
           // box (chalk runs far past form.h and used to overflow the shell).
-          zIndex: liftFor(item.path, item.z),
+          zIndex: reading ? 100 : liftFor(item.path, item.z),
           // Rotation belongs to the shell alone. Narration (chalk) and the
           // presence figure stay level; every paper form keeps its hand tilt.
           ['--target-rot' as any]:
-            kind === 'chalk' || kind === 'sprite' ? '0deg' : `${item.rot}deg`,
+            kind === 'sprite' ? '0deg' : `${item.rot}deg`,
         } as React.CSSProperties
       }
     >
-        {kind === 'portrait' ? (
+        {reading ? <BagItemDialog inline item={item} onClose={() => setReading(false)} /> : kind === 'portrait' ? (
           <PortraitFig
             video={item.frontmatter?.video}
             poster={item.frontmatter?.poster}
@@ -230,7 +249,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
         ) : kind === 'sprite' ? (
           <div
             onClick={() => {
-              const charId = item.frontmatter?.id || item.frontmatter?.title || item.filename.replace('.md', '');
+              const charId = item.frontmatter?.characterId || item.frontmatter?.id || item.filename.replace('.md', '');
               onOpenCharacterModal?.(charId);
             }}
             onDragOver={(e) => {
@@ -241,7 +260,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             onDrop={handleSpriteDrop}
             className={`sprite cursor-pointer transition-transform duration-200 ${chalkStyleOf(item.frontmatter).aged ? ' chalk--aged' : ''} ${spritePuzzleClasses}`}
           >
-            <SpriteFig />
+            <SpriteFig avatar={item.frontmatter?.avatar} name={item.frontmatter?.title || item.filename.replace('.md', '')} />
             <div className="sprite__name">
               {item.frontmatter?.title || item.filename.replace('.md', '')}
             </div>
@@ -258,6 +277,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             onTakeItem={onTakeItem}
           />
         )}
+        {!reading && <EntityInteractions item={item} active={hovered || focused} onChoice={onEntityAction} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate} onOpenCharacter={onOpenCharacterModal} />}
     </div>
   );
 };

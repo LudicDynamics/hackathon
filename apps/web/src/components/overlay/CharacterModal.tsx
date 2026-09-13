@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { MotionPortrait } from './MotionPortrait.js';
+import { useLocale } from '../../lib/i18n.js';
 import { playStinger, playVoice, stopVoice, unlock, type Emotion } from '../../lib/audio.js';
 import {
   clampPageIndex,
@@ -31,9 +33,13 @@ import {
 
 interface CharacterModalProps {
   characterId: string;
+  displayName?: string;
+  avatarVideo?: string;
+  effectsEnabled?: boolean;
   avatar?: string;
   bio?: string;
   onClose: () => void;
+  onOpenNook?: () => void;
   /** character_prompt protocol — the app wraps this in the message type; unchanged. */
   onSendMessage?: (msg: string) => void;
   locale?: 'en' | 'ja';
@@ -85,16 +91,34 @@ const STINGER_VOICE_GRACE_MS = 1200;
 
 export const CharacterModal: React.FC<CharacterModalProps> = ({
   characterId,
-  avatar = '/assets/characters/portraits/lady_1.png',
+  displayName,
+  avatarVideo,
+  effectsEnabled = false,
+  avatar,
   bio,
   onClose,
+  onOpenNook,
   onSendMessage,
   locale = 'en',
-  incoming = null,
+  incoming: suppliedFrame = null,
   worldId,
   voice,
   language = 'en',
 }) => {
+  const { locale: uiLocale } = useLocale();
+  locale = uiLocale === 'ja' ? 'ja' : locale;
+  const [receivedFrame, setReceivedFrame] = useState<CharacterFrame | null>(null);
+  const incoming = suppliedFrame ?? receivedFrame;
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const frame = (event as CustomEvent).detail;
+      if (frame.characterId !== characterId) return;
+      if (['character_delta', 'character_message', 'character_idle'].includes(frame.type)) setReceivedFrame(frame);
+      if (['error', 'turn_aborted'].includes(frame.type)) setReceivedFrame({ ...frame, type: 'error' });
+    };
+    window.addEventListener('airp:agent-frame', receive);
+    return () => window.removeEventListener('airp:agent-frame', receive);
+  }, [characterId]);
   const [phase, setPhase] = useState<Phase>('idle');
   const [emo, setEmo] = useState<Emotion>('normal');
   const [pages, setPages] = useState<DialoguePage[]>([]); // read-only projection of pagesRef
@@ -690,7 +714,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
           <div className="portrait-breathe">
             <div className={`portrait-emo emo-${emo}${emo === 'shock' ? ' emo-shock-shake' : ''}`}>
               {showAvatar ? (
-                <img src={avatar} alt={characterId} onError={() => setAvatarError(true)} />
+                <MotionPortrait video={avatarVideo} poster={avatar} enabled={effectsEnabled} name={displayName || characterId} onPosterError={() => setAvatarError(true)} />
               ) : (
                 <div className="portrait-fallback" role="img" aria-label={`${characterId} portrait`}>
                   {monogram}
@@ -703,7 +727,8 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 
       {/* Bottom tilted paper dialog: name plate, narration, the current page, input. */}
       <div className={`speech-paper${closing ? ' speech-paper-closing' : ''}`}>
-        <div className="name-plate">{characterId}</div>
+        <div className="name-plate">{displayName || characterId}</div>
+        {onOpenNook && <button type="button" onClick={onOpenNook}>Visit private space</button>}
         <p className="narr-line">{bio ? bio : '(necessary description)'}</p>
 
         <div

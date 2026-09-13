@@ -1,0 +1,15 @@
+---
+type: "gate"
+name: "This Winter · Scene List"
+title: "This Winter · Scene List"
+material: "warm"
+tone: "rose"
+grain: "parchment"
+order: 1
+bg: "assets/scenes/winter-schedule.webp"
+bgVideo: "assets/motion/seedance/backgrounds/map.webm"
+---
+
+# This Winter · Scene List
+
+The forecast says first snow this week. Some words, left unsaid, must wait another year.

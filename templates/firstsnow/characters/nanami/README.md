@@ -1,6 +1,11 @@
 ---
-name: 七海
-avatar: /api/asset?path=assets/characters/nanami.webp
+type: "readme"
+name: "Nanami"
+avatar: "assets/motion/seedance/characters/nanami-transparent.webp"
+avatarVideo: "assets/motion/seedance/characters/nanami-transparent.webm"
 voice: gentle-calm
 ---
-十年来の友人で、『初雪時間』のパーソナリティ。プレイヤーの赴いた約束と、残した不在を具体的に覚える。
+
+# Nanami
+
+The host of First Snow Hour and your friend of ten years.

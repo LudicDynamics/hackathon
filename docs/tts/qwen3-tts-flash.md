@@ -131,7 +131,7 @@ data = response.json()
 if response.status_code == 200:
     audio_url = data["output"]["audio"]["url"]
     print(f"语音合成成功！音频 URL: {audio_url}")
-    
+
     # 2. 下载并保存音频
     audio_data = requests.get(audio_url).content
     with open("output_japanese.wav", "wb") as f:

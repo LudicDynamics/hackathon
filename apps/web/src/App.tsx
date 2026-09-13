@@ -1,22 +1,10 @@
-import React, { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
-import { Compass, Clock, Layers, ArrowLeft } from 'lucide-react';
-import { Canvas } from './components/canvas/Canvas.js';
-import { RightSidebar } from './components/sidebar/RightSidebar.js';
-import { CharacterModal, type CharacterFrame } from './components/overlay/CharacterModal.js';
-import { GodModeToolbar } from './components/god/GodModeToolbar.js';
-import { MuteButton } from './components/chrome/MuteButton.js';
-import { Minimap } from './components/chrome/Minimap.js';
-import { WriterBar } from './components/chrome/WriterBar.js';
-import { HintBar } from './components/chrome/HintBar.js';
-import { LayerBadge } from './components/chrome/LayerBadge.js';
-import { RadialMenu, RadialItemType } from './components/god/RadialMenu.js';
-import { useAudio } from './state/useAudio.js';
-import { useCamera } from './state/useCamera.js';
-import { useWorld } from './state/useWorld.js';
-import { preloadAudio } from './lib/audio.js';
-import { UI_COPY, type Locale } from './lib/i18n.js';
-import { useViewpointReport } from './hooks/useViewpointReport.js';
+import { useLocale } from './lib/i18n.js';
+import { AgentSettings } from './components/AgentSettings.js';
 import { NookView } from './components/nook/NookView.js';
+import { useViewpointReport } from './hooks/useViewpointReport.js';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Canvas } from './components/canvas/Canvas.js';
+import { CharacterModal, type CharacterFrame } from './components/overlay/CharacterModal.js';
 import { DiceCeremony } from './components/performance/DiceCeremony.js';
 import { PerformanceLayer } from './components/performance/PerformanceLayer.js';
 import {
@@ -28,42 +16,136 @@ import {
   subscribeCeremony,
   getCeremonySnapshot,
 } from './lib/dice-ceremony.js';
+import { GodModeToolbar } from './components/god/GodModeToolbar.js';
+import { RadialMenu, type RadialItemType } from './components/god/RadialMenu.js';
+import { MuteButton } from './components/chrome/MuteButton.js';
+import { useAudio } from './state/useAudio.js';
+import { useCamera } from './state/useCamera.js';
+import { useWorld } from './state/useWorld.js';
+import { airpGateway, type WorldShelf } from './lib/airp-gateway.js';
+import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
+import { BagItemDialog } from './components/BagItemDialog.js';
+import { initialShell, transitionShell, splitCharacters } from './lib/ui-shell.mjs';
+import { MarkdownText } from './lib/md.js';
+import { BookOpen, ChevronDown, ChevronUp, Maximize, Minimize, UserRound, Backpack, Sparkles } from 'lucide-react';
+import { preloadAudio } from './lib/audio.js';
 
 interface WorldManifest {
   id: string;
+  locale?: 'en' | 'ja' | 'zh-CN';
   name: string;
+  description: string;
   genre: string;
   material: string;
-  layers: Record<string, any>;
-  characters: any[];
   audio?: { theme: string | null };
-  entry: string;
-  locale?: Locale;
-  player?: { id?: string; name?: string; avatar?: string };
+  cover?: string;
+  player?: { id: string; name: string; avatar?: string };
+  layers: Record<string, { name?: string; parent?: string | null; material?: string }>;
+  characters: CharacterView[];
+}
+
+interface BackpackItem {
+  path: string;
+  filename: string;
+  frontmatter: Record<string, any> | null;
+  body: string;
+}
+
+interface CharacterView {
+  avatarVideo?: string;
+  id: string;
+  name?: string;
+  home?: string;
+  role?: string;
+  avatar?: string;
+  bio?: string;
+  description?: string;
+  /** README frontmatter `voice` alias, via /api/characters. undefined → server default. */
+  voice?: string;
+}
+
+type Attention = 'ambient' | 'authoring';
+
+function labelOf(value: string): string {
+  if (value === 'first-snow-jp') return '初雪ラジオ · 日本語';
+  if (value.startsWith('first-snow-jp-')) return `初雪ラジオ · ${value.slice('first-snow-jp-'.length)}`;
+  const tail = value.split('/').filter(Boolean).at(-1) || value;
+  return tail
+    .split('-')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function assetUrl(path?: string): string | undefined {
+  if (!path) return undefined;
+  if (/^(?:https?:|data:|blob:|\/)/.test(path)) return path;
+  return airpGateway.assetUrl(path);
+}
+
+function sceneName(manifest: WorldManifest | null, layer: string): string {
+  return manifest?.layers?.[layer]?.name || labelOf(layer === 'map' ? manifest?.name || 'World Map' : layer);
 }
 
 export function App() {
+  const { locale, setLocale, t } = useLocale();
   const [manifest, setManifest] = useState<WorldManifest | null>(null);
-  const [backpackItems, setBackpackItems] = useState<any[]>([]);
-  const [characters, setCharacters] = useState<any[]>([]);
-  const [followingCharacters, setFollowingCharacters] = useState<Record<string, boolean>>({});
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [locale, setLocale] = useState<Locale>(() =>
-    navigator.language.toLowerCase().startsWith('ja') ? 'ja' : 'en'
-  );
-  const [worldTemplates, setWorldTemplates] = useState<string[]>([]);
-  const [activeTemplate, setActiveTemplate] = useState('whitechapel');
-  const copy = UI_COPY[locale];
-
-  // Active Character Modal (Galgame Overlay)
-  const [activeModalCharId, setActiveModalCharId] = useState<string | null>(null);
-
-  // Character nook (private space). Non-null = the workspace shows NookView.
-  // Kept OUT of useWorld: `layer` is the WS/footprint cursor and must not
-  // carry nook semantics (docs/nook/00 §3.4).
+  useEffect(() => {
+    if (manifest?.locale === 'ja') setLocale('ja');
+  }, [manifest?.id, manifest?.locale, setLocale]);
+  const [backpack, setBackpack] = useState<BackpackItem[]>([]);
+  const [characters, setCharacters] = useState<CharacterView[]>([]);
+  const [shelf, setShelf] = useState<WorldShelf>({ templates: [], worlds: [] });
+  const [attention, setAttention] = useState<Attention>('ambient');
+  const [shell, setShell] = useState(initialShell);
+  const [encounters, setEncounters] = useState<Record<string, string[]>>({});
+  const [bagOpen, setBagOpen] = useState(false);
+  const [selectedBagPath, setSelectedBagPath] = useState<string | null>(null);
+  const selectedBagItem = backpack.find(item => item.path === selectedBagPath);
+  const [effectsEnabled, setEffectsEnabled] = useState(() => {
+    try { return localStorage.getItem('airp:effects') === 'on'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('airp:effects', effectsEnabled ? 'on' : 'off'); } catch { /* Storage is optional. */ }
+  }, [effectsEnabled]);
+  const [radialState, setRadialState] = useState<{ x: number; y: number; worldX: number; worldY: number } | null>(null);
+  const toggleShell = (action: 'header' | 'journal' | 'immersion') => setShell(current => transitionShell(current, action));
+  const [worldPickerOpen, setWorldPickerOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [activeCharacter, setActiveCharacter] = useState<CharacterView | null>(null);
   const [nookChar, setNookChar] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [loadingWorld, setLoadingWorld] = useState<string | null>(null);
+  const [backdropReady, setBackdropReady] = useState(false);
+  const [writerWorking, setWriterWorking] = useState(false);
+  const [writerStage, setWriterStage] = useState('The writer is working…');
+  const [writerStarted, setWriterStarted] = useState(0);
+  const [writerElapsed, setWriterElapsed] = useState(0);
+  useEffect(() => {
+    if (!writerWorking || !writerStarted) return;
+    const timer = window.setInterval(() => setWriterElapsed(Math.floor((Date.now() - writerStarted) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [writerWorking, writerStarted]);
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const frame = (event as CustomEvent).detail;
+      if (frame.source !== 'writer') return;
+      if (frame.type === 'agent_progress') {
+        setWriterStage(frame.stage);
+        setWriterStarted(frame.startedAt);
+        setWriterElapsed(Math.floor((Date.now() - frame.startedAt) / 1000));
+        setWriterWorking(frame.busy);
+      }
+      if (['writer_delta', 'tool_start', 'chalk_writing'].includes(frame.type)) setWriterWorking(true);
+      if (['writer_idle', 'error', 'turn_aborted'].includes(frame.type)) setWriterWorking(false);
+    };
+    window.addEventListener('airp:agent-frame', receive);
+    return () => window.removeEventListener('airp:agent-frame', receive);
+  }, []);
+  const writerRef = useRef<HTMLInputElement>(null);
+  const toastTimer = useRef<number | null>(null);
 
-  // 角色演出帧（A3）：useWorld 转发的原始帧；按 activeModalCharId 路由后再下推给遮罩。
+  // 角色演出帧（A3）：useWorld 转发给遮罩；本组件按 activeCharacter.id 路由后下推。
   const [activeModalFrame, setActiveModalFrame] = useState<CharacterFrame | null>(null);
 
   // Dice ceremony (presentation channel, docs/perform/02): the fullscreen roll
@@ -72,142 +154,70 @@ export function App() {
   // only the mount point.
   const ceremony = useSyncExternalStore(subscribeCeremony, getCeremonySnapshot);
 
-  // World Studio Creator Radial Menu
-  const [radialState, setRadialState] = useState<{
-    x: number;
-    y: number;
-    worldX: number;
-    worldY: number;
-  } | null>(null);
   const camera = useCamera();
   const { setAmbient, setBGM, setTheme } = useAudio();
 
   // Canvas world state (layer payload, WS events, card persistence).
   const world = useWorld();
-  const { state: worldState, layer: currentLayer, enterLayer, refresh, moveCard, sendToWriter, sendMessage } = world;
-  const worldFrozen = worldState?.worldFrozen === true;
+  const { state, layer, enterLayer, refresh, moveCard, sendToWriter, sendMessage } = world;
+  const chromeVisible = !shell.immersive;
+  const isDusk = backdropReady;
 
-  // Player viewpoint report (05 §5). Mounted ONCE at the top: `useCamera()` is
-  // a module-level shared camera, while `layer` / `backpackItems` live here, so
-  // Canvas (which owns the viewport div) is the wrong place for this.
-  //
-  // `?eye=1` is the agent's own view page: reporting from it would overwrite the
-  // player's viewpoint with where the AGENT is looking — a symptom far from its
-  // cause, hence this comment (05 §5.4). There is no eye-mode consumer yet, so
-  // the flag is a frozen contract kept ready for the eye-mode batch.
-  // TODO(eye-mode): stamp `data-eye-ready` in this same spot when that batch lands.
-  const isEyeMode = new URLSearchParams(location.search).get('eye') === '1';
-  useViewpointReport({
-    camera,
-    layer: currentLayer,
-    bagCount: backpackItems.length,
-    enabled: !isEyeMode,
-  });
-
-  // Audio beds follow server-resolved URLs from /api/layer (00 §4.2). `tone` is a
-  // material CSS hook only — it is NOT an audio selector anymore.
-  //
-  // `worldState.audio` is REQUIRED (00 §5.4): "url" → play, null → declared silence.
-  // No fallback default (00 §5.4 #3): silence is a declaration, never replaced.
-  const themeUrl = manifest?.audio?.theme ?? null;
-  useEffect(() => {
-    if (!worldState) return; // first-frame window: leave every main track untouched
-    const audio = worldState.audio;
-    setAmbient(audio.ambient ?? null);
-    setBGM(audio.bgm ?? null);
-    const urls = [audio.ambient, audio.bgm, themeUrl].filter(
-      (u): u is string => typeof u === 'string' && u.length > 0
-    );
-    if (urls.length > 0) void preloadAudio(urls);
-  }, [worldState?.audio?.ambient, worldState?.audio?.bgm, themeUrl]);
-
-  // World theme: set on world load, persists across layers (00 §5.3).
-  useEffect(() => {
-    setTheme(themeUrl);
-  }, [themeUrl]);
-
-  // Camera memory around the modal mask (P0: save before opening, restore after).
-  //
-  // The two WS frames below are the B3 front-end senders (docs/hooks/06 §4.5,
-  // frame semantics frozen by docs/hooks/03 §4.3). Without them the character
-  // cursor never advances and neither the first-open injection nor the cold-start
-  // window can run. Server side (owned by the events lane):
-  //   - `character_start`: records the open-time high-water `getMaxSeq()` and
-  //     spawns the character process. It must NOT advance the cursor — advancing
-  //     on open would permanently swallow everything a crash or a misclick skips.
-  //     `worldPath` is omitted on purpose: the server falls back to the active
-  //     store's root (`apps/server/src/index.ts:121-125`), which is authoritative;
-  //     the client only knows the template name, so sending one would risk
-  //     pointing the agent at the wrong world.
-  //   - `character_stop`: settles the character cursor at the open-time
-  //     high-water, then stops the process. `turns` is omitted too — no front-end
-  //     counter exists, and the server marks the count as estimated rather than
-  //     passing a guess off as measured (M-8).
-  const openCharacterModal = (charId: string) => {
-    camera.save('modal');
-    setActiveModalFrame(null); // 清掉上一轮的残留，避免新遮罩先演旧台词
-    sendMessage({ type: 'character_start', characterId: charId });
-    setActiveModalCharId(charId);
+  const notify = (message: string) => {
+    setToast(message);
+    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 3000);
   };
-  const closeCharacterModal = () => {
-    if (activeModalCharId) {
-      sendMessage({ type: 'character_stop', characterId: activeModalCharId });
+
+  const loadChromeData = async () => {
+    try {
+      const [nextManifest, nextBackpack, nextCharacters, nextShelf] = await Promise.all([
+        airpGateway.manifest<WorldManifest>(),
+        airpGateway.backpack<BackpackItem[]>(),
+        airpGateway.characters<CharacterView[]>(),
+        airpGateway.worlds(),
+      ]);
+      setManifest(nextManifest);
+      setBackpack(nextBackpack.items);
+      setCharacters(nextCharacters.characters);
+      setShelf(nextShelf);
+    } catch (error) {
+      console.warn('Could not load AIRP chrome data:', error);
     }
-    setActiveModalCharId(null);
-    camera.restore('modal');
   };
 
-  // Toast helper
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
-
-  // Initial Data Fetch (layer itself is fetched by useWorld)
   useEffect(() => {
-    fetchManifest();
-    fetchWorlds();
-    fetchBackpack();
-    fetchCharacters();
+    const onNotice = (event: Event) => notify(String((event as CustomEvent).detail));
+    window.addEventListener('airp:notice', onNotice);
+    return () => window.removeEventListener('airp:notice', onNotice);
   }, []);
 
-  // World events (WS lives in useWorld) can add/move backpack files.
+  // 角色演出帧（A3）：useWorld 转发的原始帧；按当前打开的角色过滤后下推给遮罩。
+  // 归属过滤放在这里而不是 useWorld：遮罩是唯一消费者，且须随开关重绑。
   useEffect(() => {
-    const onWorldEvent = () => fetchBackpack();
-    window.addEventListener('airp:world-event', onWorldEvent);
-    return () => window.removeEventListener('airp:world-event', onWorldEvent);
-  }, []);
-
-  // Character performance frames (A3): route by the open modal's character id.
-  // Frames without `characterId` (pre-A1 senders) fall back to the open modal;
-  // with no modal open there is nothing to attribute them to, so they are dropped.
-  useEffect(() => {
-    const onCharacterFrame = (e: Event) => {
-      const msg = (e as CustomEvent).detail as CharacterFrame | undefined;
-      if (!msg || typeof msg.type !== 'string') return;
+    const onCharacterFrame = (event: Event) => {
+      const msg = (event as CustomEvent).detail as CharacterFrame | undefined;
+      if (!msg) return;
+      const activeId = activeCharacter?.id;
       if (msg.characterId !== undefined) {
-        if (msg.characterId !== activeModalCharId) return;
-      } else if (activeModalCharId === null) {
+        if (msg.characterId !== activeId) return;
+      } else if (activeId === null) {
         return;
       }
-      // Fresh object identity per frame so the modal's [incoming] effect always fires.
-      setActiveModalFrame({
-        ...msg,
-        characterId: msg.characterId ?? activeModalCharId ?? undefined,
-      });
+      setActiveModalFrame(msg);
     };
     window.addEventListener('airp:character-frame', onCharacterFrame);
     return () => window.removeEventListener('airp:character-frame', onCharacterFrame);
-  }, [activeModalCharId]);
+  }, [activeCharacter]);
 
   // Dice ceremony: forwarded raw frame → boundary guard → layer filter / dedup
-  // → ceremony layer. Rebinds on currentLayer so the filter reads the current
+  // → ceremony layer. Rebinds on the current layer so the filter reads the live
   // value; the cleanup ends an in-flight ceremony when the player switches
   // layers (docs/perform/02 §7.2).
   useEffect(() => {
-    const onDiceFrame = (e: Event) => {
-      const v = parseDiceFrame((e as CustomEvent).detail);
-      if (!v || !shouldPlayFrame(v, currentLayer)) return;
+    const onDiceFrame = (event: Event) => {
+      const v = parseDiceFrame((event as CustomEvent).detail);
+      if (!v || !shouldPlayFrame(v, layer)) return;
       markPlayed(v.path);
       playCeremony(v);
     };
@@ -216,515 +226,441 @@ export function App() {
       window.removeEventListener('airp:dice-frame', onDiceFrame);
       clearCeremony();
     };
-  }, [currentLayer]);
+  }, [layer]);
 
-  const fetchManifest = async () => {
-    try {
-      const res = await fetch('/api/manifest');
-      if (res.ok) {
-        const data = await res.json();
-        setManifest(data);
-        if (data.locale === 'en' || data.locale === 'ja') setLocale(data.locale);
-        if (typeof data.entry === 'string' && data.entry !== '') enterLayer(data.entry);
-      }
-    } catch (err) {
-      console.warn('Could not fetch manifest:', err);
-    }
-  };
+  useEffect(() => {
+    void loadChromeData();
+    const onWorldEvent = () => void loadChromeData();
+    window.addEventListener('airp:world-event', onWorldEvent);
+    return () => {
+      window.removeEventListener('airp:world-event', onWorldEvent);
+      if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
+    };
+  }, []);
 
-  const fetchWorlds = async () => {
-    try {
-      const res = await fetch('/api/worlds');
-      if (!res.ok) return;
-      const data = await res.json();
-      const playable = new Set(['whitechapel', 'firstsnow']);
-      setWorldTemplates(
-        Array.isArray(data.templates) ? data.templates.filter((name: string) => playable.has(name)) : []
-      );
-    } catch (err) {
-      console.warn('Could not fetch worlds:', err);
-    }
-  };
+  const themeUrl = manifest?.audio?.theme ?? null;
+  useEffect(() => {
+    if (!state) return;
+    setAmbient(state.audio.ambient ?? null);
+    setBGM(state.audio.bgm ?? null);
+    const urls = [state.audio.ambient, state.audio.bgm, themeUrl].filter(
+      (url): url is string => typeof url === 'string' && url.length > 0
+    );
+    if (urls.length) void preloadAudio(urls);
+  }, [state?.audio?.ambient, state?.audio?.bgm, themeUrl, setAmbient, setBGM]);
+  useEffect(() => { setTheme(themeUrl); }, [themeUrl, setTheme]);
 
-  const handleWorldChange = async (template: string) => {
-    try {
-      const res = await fetch('/api/worlds/load', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ worldPath: `templates/${template}` }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not load world');
-      setActiveTemplate(template);
-      if (data.manifest?.locale === 'en' || data.manifest?.locale === 'ja') {
-        setLocale(data.manifest.locale);
-      }
-      enterLayer(data.manifest?.entry || 'map');
-      await Promise.all([fetchManifest(), fetchBackpack(), fetchCharacters()]);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : String(err));
-    }
-  };
+  useEffect(() => {
+    const src = state?.bg?.src;
+    setBackdropReady(false);
+    if (!src || loadingWorld) return;
+    const probe = new Image();
+    probe.onload = () => setBackdropReady(true);
+    probe.onerror = () => setBackdropReady(false);
+    probe.src = airpGateway.assetUrl(src);
+    return () => {
+      probe.onload = null;
+      probe.onerror = null;
+    };
+  }, [state?.bg?.src, manifest?.id, loadingWorld]);
 
-  const fetchBackpack = async () => {
-    try {
-      const res = await fetch('/api/backpack');
-      if (res.ok) {
-        const data = await res.json();
-        setBackpackItems(data.items || []);
-      }
-    } catch (err) {
-      console.warn('Could not fetch backpack:', err);
-    }
-  };
-
-  const fetchCharacters = async () => {
-    try {
-      const res = await fetch('/api/characters');
-      if (res.ok) {
-        const data = await res.json();
-        setCharacters(data.characters || []);
-      }
-    } catch (err) {
-      console.warn('Could not fetch characters:', err);
-    }
-  };
-
-  // Switch Layer / Gate
-  const handleEnterGate = async (target: string) => {
-    try {
-      const res = await fetch('/api/enter-layer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ layer: target }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        showToast(data.error || 'This scene is still locked.');
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing = target?.closest('input, textarea, select, button, a, [role="switch"], [contenteditable="true"]');
+      if (event.key === 'Escape') {
+        setWorldPickerOpen(false);
+        setProfileOpen(false);
+        setBagOpen(false);
+        setAttention('ambient');
+        setShell(initialShell);
         return;
       }
-      enterLayer(target);
-      // `first` is true ⟺ the layer had no README ⟺ it is a stub (same predicate
-      // as `isLayerEmpty`, docs/doc-11 §3.1). Walking into a stub asks the engine
-      // to initialize it: the server hands `/airp-init` to the writer and the
-      // outcome arrives later as a `layer_initialized` world event (docs/init/03).
-      // Fire-and-forget — initialization runs 45–60s, far past any HTTP/WS reply.
-      if (data.first === true) {
-        sendMessage({ type: 'airp_init', kind: 'scene', target, by: 'player' });
+      if (typing || activeCharacter) return;
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        toggleShell('immersion');
       }
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  // Enter a character's private nook. Saves the layer camera so leaving the
-  // nook puts the player back where they were (useCamera CAM_MEMORY).
-  const handleOpenNook = (charId: string) => {
-    camera.save(currentLayer);
-    setNookChar(charId);
-  };
-
-  // Leave the nook: drop back to the layer, restore its camera BEFORE the
-  // layer refetch paints (optimistic, same convention as enterLayer), then
-  // refetch as a safety net (useWorld keeps the layer warm in the meantime).
-  const handleCloseNook = useCallback(() => {
-    setNookChar(null);
-    camera.restore(currentLayer);
-    void refresh();
-  }, [camera, currentLayer, refresh]);
-
-  // Back one level: follow the DERIVED parent (manifest layer graph), never
-  // string surgery on the id. Slicing `world/crime-scene` to `world` landed on
-  // a non-existent pseudo-layer whose page held no children — the map's doors
-  // vanished, leaving only the world README. `map` is the root (parent null).
-  const handleReturnToParent = useCallback(() => {
-    if (currentLayer === (manifest?.entry || 'map')) return;
-    const parent = manifest?.layers?.[currentLayer]?.parent;
-    enterLayer(typeof parent === 'string' && parent ? parent : 'map');
-  }, [currentLayer, manifest, enterLayer]);
-
-  // Esc / Alt+← return to the parent layer (the hint bar promises both).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' || (e.altKey && e.key === 'ArrowLeft')) {
-        // Inside a nook, Esc closes it and must NOT also walk the layer tree.
-        if (nookChar !== null) {
-          handleCloseNook();
-          return;
-        }
-        handleReturnToParent();
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        setAttention('authoring');
+        setShell(current => ({ ...current, immersive: false }));
+        window.setTimeout(() => writerRef.current?.focus(), 0);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleReturnToParent, nookChar, handleCloseNook]);
+  }, [activeCharacter]);
 
-  // Choice Selection
-  const handleSelectChoice = async (choicePath: string, choice: string) => {
-    showToast(`You chose: "${choice}"`);
-    const res = await fetch('/api/choice', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: choicePath, choice }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      showToast(data.error || 'The choice could not be recorded.');
-      return;
+  const chalks = useMemo(
+    () => (state?.items || []).filter((item) => item.frontmatter?.type === 'chalk'),
+    [state?.items],
+  );
+  const readme = useMemo(() => {
+    const expected = layer === 'map' ? 'world/README.md' : `${layer}/README.md`;
+    return state?.items.find((item) => item.path === expected);
+  }, [layer, state?.items]);
+  const encounteredIds = [...(encounters[manifest?.id || ''] || []), ...(state?.presence || []).map(person => person.characterId)];
+  const { resident, encountered } = splitCharacters(characters, encounteredIds);
+  const handItems = backpack.filter((item) => item.filename.toLowerCase() !== 'readme.md');
+  useViewpointReport({ camera, layer, bagCount: handItems.length, enabled: nookChar === null });
+  const canvasItems = (state?.items || []).filter((item) => item.path !== readme?.path);
+  const currentName = readme?.frontmatter?.title || sceneName(manifest, layer);
+  const playerRole = manifest?.player?.name || (manifest?.id === 'wuwu' ? 'Harbor Investigator' : 'Traveler');
+  const playerAvatar = assetUrl(manifest?.player?.avatar);
+  const sceneStatus = chalks.flatMap(chalk => Object.entries(chalk.frontmatter?.status?.data || {})).slice(0, 3);
+  const breadcrumbs: string[] = [];
+  let crumb: string | null = layer;
+  while (crumb && !breadcrumbs.includes(crumb)) {
+    breadcrumbs.unshift(crumb);
+    crumb = manifest?.layers?.[crumb]?.parent || (crumb === 'map' ? null : 'map');
+  }
+
+  useEffect(() => {
+    const onBack = (event: KeyboardEvent) => {
+      if (event.altKey && event.key === 'ArrowLeft' && !activeCharacter) {
+        event.preventDefault();
+        enterLayer(manifest?.layers?.[layer]?.parent || 'map');
+      }
+    };
+    window.addEventListener('keydown', onBack);
+    return () => window.removeEventListener('keydown', onBack);
+  }, [layer, manifest, activeCharacter, enterLayer]);
+
+  const loadWorld = async (worldPath: string) => {
+    setLoadingWorld(worldPath);
+    setWorldPickerOpen(false);
+    setSelectedBagPath(null);
+    setActiveCharacter(null);
+    setNookChar(null);
+    setWriterWorking(false);
+    try {
+      const result = await airpGateway.loadWorld<WorldManifest>(worldPath);
+      setManifest(result.manifest);
+      await enterLayer('map');
+      await loadChromeData();
+      setWorldPickerOpen(false);
+      setAttention('ambient');
+      setShell(initialShell);
+      setProfileOpen(false);
+      setBagOpen(false);
+      notify(`Entered ${result.manifest.name}`);
+    } catch (error) {
+      setWorldPickerOpen(true);
+      notify(error instanceof Error ? error.message : 'Could not load that world');
+    } finally {
+      setLoadingWorld(null);
     }
-    sendToWriter(
-      `The player, in scene "${currentLayer}", chose "${choice}" on ${choicePath}. Continue from that concrete action and materialise any resulting change in the world files.`
-    );
+  };
+
+  const submitWriter = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const input = writerRef.current;
+    const text = input?.value.trim() || '';
+    if (!text) return;
+    setWriterWorking(true);
+    sendToWriter(text);
+    input!.value = '';
+    notify('The writer is listening…');
+  };
+
+  const handleItemDrop = async (itemPath: string, targetPath: string) => {
+    try {
+      await airpGateway.useItem(itemPath, targetPath);
+      await refresh();
+      notify('The world noticed what you used.');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'The item could not be used');
+    }
+  };
+
+  const handleReturnItem = async (itemPath: string) => {
+    const filename = itemPath.split('/').pop() || 'item.md';
+    const destination = layer === 'map' ? `world/${filename}` : `${layer}/${filename}`;
+    try {
+      await airpGateway.move(itemPath, destination);
+      await refresh();
+      await loadChromeData();
+      return true;
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'The item could not be placed');
+      return false;
+    }
   };
 
   const handleTakeItem = async (itemPath: string) => {
-    const filename = itemPath.split('/').pop();
-    if (!filename) return;
-    try {
-      const res = await fetch('/api/move', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: itemPath, to: `player/${filename}` }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not take item');
-      showToast(`${copy.taken}: ${filename.replace('.md', '')}`);
-      await Promise.all([refresh(), fetchBackpack()]);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : String(err));
-    }
+    try { await airpGateway.move(itemPath, `player/${itemPath.split('/').pop()}`); await loadChromeData(); }
+    catch (error) { notify(String(error)); }
   };
 
-  // Point-and-Click item drop puzzle: use_item_on
-  const handleItemDropOnTarget = async (draggedItemPath: string, targetPath: string) => {
-    const itemName = draggedItemPath.split('/').pop()?.replace('.md', '') || 'item';
-    const targetName = targetPath.split('/').pop()?.replace('.md', '') || 'target';
-    try {
-      const res = await fetch('/api/use-item', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          item: draggedItemPath,
-          target: targetPath,
-        }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        showToast(`✨ Interaction: Used [${itemName}] on [${targetName}]`);
-        refresh();
-      }
-    } catch (err) {
-      console.error('Use item failed:', err);
-    }
-  };
-
-  // Drop item to scene from backpack
-  const handleDropItemToScene = async (itemPath: string) => {
-    const filename = itemPath.split('/').pop();
-    const dest = currentLayer === 'map' ? `world/${filename}` : `${currentLayer}/${filename}`;
-    try {
-      await fetch('/api/move', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: itemPath, to: dest }),
-      });
-      showToast(`Returned "${filename}" to the scene`);
-      refresh();
-      fetchBackpack();
-    } catch (err) {
-      console.error('Move item failed:', err);
-    }
-  };
-
-  // God Mode Toggle Freeze (flag flips via the world_frozen/thawed broadcast)
   const handleToggleFreeze = async () => {
     try {
-      await fetch('/api/freeze', { method: 'POST' });
-    } catch (err) {
-      console.error('Toggle freeze failed:', err);
+      await airpGateway.toggleFreeze();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not change world time');
     }
   };
 
-  // World Studio Radial Creator — instantiate at exact clicked world coordinate
-  const handleCreateEntityAt = async (
-    type: RadialItemType,
-    title: string,
-    content: string,
-    wx: number,
-    wy: number
-  ) => {
-    const cleanSlug =
-      title
-        .toLowerCase()
-        .trim()
-        .replace(/[\s\t\r\n]+/g, '-')
-        .replace(/[/\\?%*:|"<>]/g, '')
-        .slice(0, 32) || `creation-${Date.now().toString(36)}`;
+  const openCharacter = (character: CharacterView) => {
+    const worldId = manifest?.id || '';
+    setEncounters(current => ({ ...current, [worldId]: [...new Set([...(current[worldId] || []), character.id])] }));
+    camera.save('dialogue');
+    setActiveModalFrame(null); // 清上一轮残留，避免新遮罩先演旧台词
+    setActiveCharacter(character);
+    sendMessage({
+      type: 'character_start',
+      characterId: character.id,
+      recentContext: chalks.slice(-3).map((chalk) => chalk.body).join('\n\n'),
+    });
+  };
 
-    const parentDir = currentLayer === 'map' ? 'world' : currentLayer;
-    let filePath = '';
-    let fileContent = '';
-
-    if (type === 'gate') {
-      filePath = `${parentDir}/${cleanSlug}/README.md`;
-      fileContent = `---\ntype: gate\ntitle: "${title}"\n---\n${content}`;
-    } else if (type === 'character') {
-      filePath = `${parentDir}/${cleanSlug}.md`;
-      fileContent = `---\ntype: sprite\ntitle: "${title}"\n---\n${content}`;
-    } else if (type === 'chalk') {
-      filePath = `${parentDir}/chalk-${cleanSlug}.md`;
-      fileContent = `---\ntype: chalk\n---\n${content}`;
-    } else {
-      filePath = `${parentDir}/${cleanSlug}.md`;
-      fileContent = `---\ntitle: "${title}"\n---\n${content}`;
-    }
-
+  const createAt = async (type: RadialItemType, title: string, content: string, x: number, y: number) => {
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `creation-${Date.now()}`;
+    const base = layer === 'map' ? 'world' : layer;
+    const filePath = type === 'gate' ? `${base}/${slug}/README.md` : `${base}/${slug}.md`;
+    const form = type === 'character' ? 'sprite' : type;
     try {
-      const res = await fetch('/api/god-action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'create',
-          path: filePath,
-          content: fileContent,
-        }),
-      });
-      if (res.ok) {
-        // Persist clicked position immediately so card forms right where right-clicked
-        await fetch('/api/card/position', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            path: filePath,
-            x: wx,
-            y: wy,
-          }),
-        });
-        showToast(`✨ World Studio: "${title}" formed on canvas!`);
-        refresh();
-      }
-    } catch (err) {
-      console.error('World studio creation failed:', err);
-    }
+      await airpGateway.godAction('create', filePath, `---\ntype: ${form}\ntitle: ${JSON.stringify(title)}\n---\n${content}`);
+      await moveCard(filePath, x, y);
+      await refresh();
+      setRadialState(null);
+      notify(`Created “${title}”`);
+    } catch (error) { notify(error instanceof Error ? error.message : 'Could not create the object'); }
   };
 
-  const activeChar = characters.find((c) => c.id === activeModalCharId);
+  const closeCharacter = () => {
+    if (activeCharacter) sendMessage({ type: 'character_stop', characterId: activeCharacter.id });
+    setActiveCharacter(null);
+    camera.restore('dialogue');
+  };
 
   return (
-    <div className="flex flex-col w-screen h-screen overflow-hidden bg-paper-bg text-ink">
-      {/* Toast Alert Banner */}
-      {toastMessage && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-2.5 rounded-full bg-ink text-white font-sans text-xs font-semibold shadow-deep border border-white/20">
-          {toastMessage}
-        </div>
-      )}
-
-      {/* Top Navigation Bar */}
-      <header className="h-16 px-6 bg-paper-card/90 border-b border-ink/10 shadow-sm backdrop-blur-md flex items-center justify-between z-30 shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            {manifest?.player?.avatar && (
-              <img
-                src={manifest.player.avatar}
-                alt={manifest.player.name || 'Player'}
-                className="w-9 h-9 rounded-full object-cover border border-rust/30 shadow-sm"
-              />
-            )}
-            <Compass className="w-5 h-5 text-rust" />
-            <h1 className="font-serif text-lg font-bold tracking-wide text-ink">
-              {manifest?.name || 'AIRP · Infinite Canvas World'}
-            </h1>
+    <div className={`airp-prototype${isDusk ? ' is-dusk' : ''}${shell.immersive ? ' is-immersive' : ''}${shell.journal ? ' is-reading' : ''}${shell.header ? ' has-header' : ''}${attention === 'authoring' ? ' is-authoring' : ''}`}>
+      <main className="prototype-workspace">
+        <aside className={`prototype-narrative${shell.journal ? ' is-open' : ''}`} aria-label={t("Story journal")} aria-hidden={!shell.journal} inert={!shell.journal}>
+          <div className="prototype-narrhead">
+            <span className="prototype-eyebrow">{t("THE STORY SO FAR")}</span>
+            <button className="prototype-quiet" onClick={() => toggleShell('journal')} aria-label={t("Close story page")}>‹</button>
           </div>
-
-          <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-paper-wall text-ink/70">
-            {manifest?.genre || 'narrative'}
-          </span>
-
-          <label className="flex items-center gap-1.5 font-mono text-[10px] text-ink/50">
-            <span>{copy.world}</span>
-            <select
-              value={activeTemplate}
-              onChange={(e) => void handleWorldChange(e.target.value)}
-              className="bg-paper-wall border border-ink/10 rounded-lg px-2 py-1 text-ink"
-            >
-              {worldTemplates.map((template) => (
-                <option key={template} value={template}>{template}</option>
-              ))}
-            </select>
-          </label>
-
-          {/* Layer Breadcrumb Navigation */}
-          <div className="flex items-center gap-2 pl-4 border-l border-ink/10">
-            {currentLayer !== (manifest?.entry || 'map') && (
-              <button
-                onClick={handleReturnToParent}
-                className="p-1 rounded-lg bg-paper-wall hover:bg-ink hover:text-white transition-all text-xs"
-                title={copy.back}
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-              </button>
+          <div className="prototype-journal">
+            <div className="prototype-small">{t('OPENING')} / {manifest?.genre || t('A LIVING WORLD')}</div>
+            <h2 className="prototype-chapter">{manifest?.name || t('A world is waiting.')}</h2>
+            <div className="prototype-time-label">{layer === 'map' ? t('THE FIRST MOMENT') : t('THE STORY CONTINUES')}</div>
+            <p className="prototype-narrline">{manifest?.description || t('Choose a world to begin.')}</p>
+            {readme?.body && <div className="prototype-narrline"><MarkdownText text={readme.body} /></div>}
+            {chalks.slice(-4).map((chalk) => (
+              <blockquote key={chalk.path} className="prototype-quote">{chalk.body}</blockquote>
+            ))}
+            {chalks.length === 0 && (
+              <p className="prototype-small">{t("The writer has not left a mark in this scene yet.")}</p>
             )}
-            <div className="flex items-center gap-1 text-xs font-mono text-ink/60">
-              <Layers className="w-3.5 h-3.5 text-sage" />
-              <span className="font-semibold text-ink">{currentLayer}</span>
-            </div>
           </div>
-        </div>
+          <div className="prototype-narrfoot">
+            {t('You are the player inside {world}', { world: manifest?.name || t('this world') })}
+            <span>{t('Current place: {place}', { place: currentName })}</span>
+          </div>
+        </aside>
 
-        {/* Center Minimalist World Timestamp Seal */}
-        <div className="flex items-center gap-2 px-3.5 py-1 rounded-full bg-paper-wall/60 border border-ink/5 font-mono text-xs text-ink/70">
-          <Clock className="w-3.5 h-3.5 text-rust" />
-          <span>{copy.timestamp}</span>
-        </div>
-
-        {/* Right God Mode + Mute */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setLocale((value) => (value === 'en' ? 'ja' : 'en'))}
-            className="px-3 py-1.5 rounded-full bg-paper-wall border border-ink/10 text-xs font-mono hover:bg-ink hover:text-white transition-colors"
-          >
-            {copy.language}
-          </button>
-          <MuteButton muteLabel={copy.mute} unmuteLabel={copy.unmute} />
-          <GodModeToolbar
-            frozen={worldFrozen}
-            onToggleFreeze={handleToggleFreeze}
-            labels={{
-              active: copy.godHand,
-              frozen: copy.worldFrozen,
-              pauseTitle: copy.pauseWorld,
-              thawTitle: copy.thawWorld,
+        <section className="prototype-world" aria-label={t("Spatial story canvas")}>
+          <Canvas
+            key={manifest?.id || 'opening'}
+            openingComposition={manifest?.locale === 'ja' || ['wuwu', 'whitechapel', 'divergence', 'firstsnow', 'unwritten-door'].some(id => manifest?.id === id || manifest?.id?.startsWith(`${id}-`))}
+            effectsEnabled={effectsEnabled}
+            currentLayer={layer}
+            scene={null}
+            sceneCopy={{ label: t('Scene Chalk'), collapse: t('Fold scene introduction'), expand: t('Read scene introduction') }}
+            ghostCopy={{
+              reused: t('Already had this image'),
+              failed: t('The picture could not be drawn.'),
+              unreachable: t('The picture could not be shown.'),
             }}
+            items={canvasItems}
+            links={state?.links || []}
+            bg={(!loadingWorld && state?.bg) || { src: null, tone: 'warm', grain: 'parchment' }}
+            onMoveCard={moveCard}
+            onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }}
+            onEntityAction={(choice) => {
+              setWriterWorking(true);
+              sendToWriter(choice);
+              notify('The writer is listening…');
+            }}
+            onDiceRolled={(result, passed) => notify(`Roll ${result} · ${passed ? 'passed' : 'failed'}`)}
+            onEnterGate={enterLayer}
+            onOpenCharacterModal={(id) => {
+              const character = characters.find((item) => item.id === id);
+              if (character) openCharacter(character);
+            }}
+            onItemDropOnTarget={handleItemDrop}
+            onDropItemToScene={handleReturnItem}
+            onOpenRadialMenu={(x, y, worldX, worldY) => { if (attention === 'authoring') setRadialState({ x, y, worldX, worldY }); }}
           />
-        </div>
-      </header>
 
-      {/* Main Workspace Area: Infinite Canvas + Right Sidebar */}
-      <div className="flex-1 flex overflow-hidden relative">
-        <div className="flex-1 h-full relative">
-          {nookChar !== null ? (
-            <NookView
-              characterId={nookChar}
-              onClose={handleCloseNook}
-              locale={locale}
-              onMoveCard={moveCard}
-              onSelectChoice={handleSelectChoice}
-              onDiceRolled={(res, pass) => showToast(`Dice: ${res} (${pass ? 'Pass' : 'Fail'})`)}
-              onTakeItem={handleTakeItem}
-            />
-          ) : (
-            <>
-              <Canvas
-                currentLayer={currentLayer}
-                items={worldState?.items ?? []}
-                links={worldState?.links ?? []}
-                bg={worldState?.bg ?? { src: null, tone: 'warm', grain: 'parchment' }}
-                scene={worldState?.scene ?? null}
-                sceneCopy={{
-                  label: copy.sceneChalk,
-                  collapse: copy.collapseScene,
-                  expand: copy.expandScene,
-                }}
-                ghostCopy={{
-                  reused: copy.ghostReused,
-                  failed: copy.ghostFailed,
-                  unreachable: copy.ghostUnreachable,
-                }}
-                onMoveCard={moveCard}
-                onSelectChoice={handleSelectChoice}
-                onDiceRolled={(res, pass) => showToast(`Dice: ${res} (${pass ? 'Pass' : 'Fail'})`)}
-                onEnterGate={handleEnterGate}
-                onOpenCharacterModal={openCharacterModal}
-                onItemDropOnTarget={handleItemDropOnTarget}
-                onDropItemToScene={handleDropItemToScene}
-                onTakeItem={handleTakeItem}
-                onOpenRadialMenu={(x, y, wx, wy) => setRadialState({ x, y, worldX: wx, worldY: wy })}
-              />
+          {/* Performance shows (docs/perform/05) — z-20, below the dice ceremony
+              (z-50). Cancels its own shows on layer change / freeze. */}
+          <PerformanceLayer layer={layer} frozen={state?.worldFrozen === true} />
 
-              {/* Canvas chrome — the prototype's navigation + writing affordances */}
-              <LayerBadge
-                name={manifest?.layers?.[currentLayer]?.name || currentLayer}
-                material={worldState?.bg?.grain ?? 'parchment'}
-                materialLabel={copy.material}
-              />
-              <HintBar text={copy.controls} showLabel={copy.showControls} hideLabel={copy.hideControls} />
-              <WriterBar
-                disabled={worldFrozen}
-                writingPlaceholder={copy.writerWriting}
-                placeholder={copy.writerPlaceholder}
-                sendLabel={locale === 'ja' ? '送信' : 'Send'}
-                onSend={(text) => {
-                  sendToWriter(text);
-                  showToast(copy.sentToWriter);
-                }}
-              />
-              <Minimap items={worldState?.items ?? []} camera={camera} label={copy.minimap} />
-              {/* Performance shows (docs/perform/05) — z-20, below the dice
-                  ceremony (z-50). Cancels its own shows on layer change / freeze. */}
-              <PerformanceLayer layer={currentLayer} frozen={worldFrozen} />
-            </>
+          <div className="prototype-vignette" aria-hidden="true" />
+
+          <header className="prototype-worldtop prototype-chrome" aria-label={t("World header")} inert={!shell.header || shell.immersive}>
+            <span className="prototype-brand">World<span>lines</span></span>
+            <nav className="prototype-crumbs" aria-label={t("Scene path")}>
+              {breadcrumbs.map((part) => {
+                return <button key={part} onClick={() => enterLayer(part)}>{part === 'map' ? t('Map') : sceneName(manifest, part)}</button>;
+              })}
+            </nav>
+            <div className="prototype-spacer" />
+            <span className="prototype-freeze">{state?.worldFrozen ? t('WORLD PAUSED') : t('WORLD AWAKE')}</span>
+            <span className="prototype-status">{t('{items} ITEMS · {people} PEOPLE', { items: handItems.length, people: characters.length })}</span>
+            <button className="prototype-pill" onClick={() => setWorldPickerOpen(true)}>{t("Worlds")}</button>
+            <label className="prototype-language"><span className="sr-only">{t('Language')}</span><select aria-label={t('Language')} value={locale} onChange={event => setLocale(event.target.value as 'en' | 'zh-CN' | 'ja')}><option value="en">English</option><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
+            <AgentSettings />
+            <MuteButton />
+            <button className="prototype-effects-toggle" role="switch" aria-label={t("Visual effects")} aria-checked={effectsEnabled} onClick={() => setEffectsEnabled(value => !value)} title={t("Particles, parallax and animated backgrounds")}><span aria-hidden="true" />{t(effectsEnabled ? 'Effects on' : 'Effects off')}</button>
+            <button className="prototype-quiet" onClick={() => toggleShell('header')} aria-label={t("Close header")}><ChevronUp size={16} /></button>
+          </header>
+
+          <div className="prototype-edge-controls prototype-chrome">
+            <button onClick={() => toggleShell('journal')} aria-label={t("Toggle story journal")} aria-expanded={shell.journal}><BookOpen size={17} /></button>
+            <button onClick={() => toggleShell('header')} aria-label={t("Toggle header")} aria-expanded={shell.header}><ChevronDown size={17} /></button>
+          </div>
+
+          <button className="prototype-immersion-toggle" onClick={() => toggleShell('immersion')} aria-label={shell.immersive ? t('Show interface') : t('Hide interface')} title={t("Toggle immersion · Tab")}>{shell.immersive ? <Minimize size={17} /> : <Maximize size={17} />}</button>
+
+          <div className="prototype-world-meta prototype-chrome">
+            <div className="prototype-eyebrow">{manifest?.name}</div>
+            <h1>{currentName}</h1>
+            <p>{layer === 'map' ? t('The first moment') : t('The story continues')} · {state?.worldFrozen ? t('Time stands still') : t('Time flows')}</p>
+            {sceneStatus.map(([key, value]) => <span className="prototype-stat" key={key}>{labelOf(key)} · {String(value)}</span>)}
+          </div>
+
+          <div className="prototype-tools prototype-chrome" aria-label={t("Canvas tools")}>
+            <button className="active" title={t("Explore")}>↖</button>
+            <button onClick={() => setAttention('authoring')} title={t("God Hand")}>◯</button>
+            <button onClick={() => camera.restore(layer)} title={t("Return to scene")}>⌖</button>
+          </div>
+
+          <div className="prototype-hand-tray prototype-chrome" aria-label={t("Encountered characters")}>
+            <span className="prototype-tray-label">{t("PEOPLE YOU KNOW")}</span>
+            {encountered.length === 0 && <span className="prototype-tray-empty">{t("Every stranger has a story.")}</span>}
+            {encountered.map((character) => (
+              <button
+                key={character.id}
+                className="prototype-hand-orb"
+                onClick={() => openCharacter(character)}
+                title={t('Talk to {name}', { name: character.name || character.id })}
+                style={assetUrl(character.avatar) ? { backgroundImage: `url("${assetUrl(character.avatar)}")` } : undefined}
+              >
+                {!assetUrl(character.avatar) && <span>{character.id.charAt(0).toUpperCase()}</span>}
+                <small>{character.name || labelOf(character.id)}</small>
+              </button>
+            ))}
+          </div>
+          <div className="prototype-belongings prototype-chrome" aria-label={t("Belongings")}>
+            <button className="prototype-bag-toggle" onClick={() => setBagOpen(open => !open)} aria-label={t("Open belongings")} aria-expanded={bagOpen}><Backpack size={19} /><span>{handItems.length}</span></button>
+            {bagOpen && <div className="prototype-bag-content"><span className="prototype-eyebrow">{t("BELONGINGS")}</span>{handItems.length === 0 && <p>{t("Nothing carried yet.")}</p>}{handItems.map((item) => {
+              const image = assetUrl(item.frontmatter?.image || item.frontmatter?.cover);
+              return (
+                <button
+                  key={item.path}
+                  className="prototype-hand-chip"
+                  draggable
+                  onClick={() => setSelectedBagPath(item.path)}
+                  onDragStart={(event) => event.dataTransfer.setData('text/plain', item.path)}
+                  title={item.body}
+                  style={image ? { backgroundImage: `url("${image}")` } : undefined}
+                >
+                  <span>{item.frontmatter?.icon || '◇'}</span>
+                  <small>{item.frontmatter?.title || labelOf(item.filename.replace(/\.md$/, ''))}</small>
+                </button>
+              );
+            })}</div>}
+          </div>
+
+          <button className="prototype-player-orb prototype-chrome" style={playerAvatar ? { backgroundImage: `url("${playerAvatar}")`, backgroundSize: 'cover', backgroundPosition: 'center 25%' } : undefined} onClick={() => setProfileOpen((open) => !open)} aria-label={t("Open player profile")} aria-expanded={profileOpen}>{!playerAvatar && <UserRound size={25} />}<span className="prototype-player-label"><small>{t("YOU")}</small>{playerRole}</span></button>
+          {profileOpen && chromeVisible && (
+            <div className="prototype-profile">
+              <b>{playerRole}</b>
+              <div className="prototype-small">{t("PLAYER CHARACTER")}</div>
+              <p>{manifest?.id === 'wuwu' ? 'Newly posted to Fogwharf. Three commissions, one unfinished case. Your story begins here.' : `Your story unfolds in ${manifest?.name || 'this world'}.`}</p>
+              <div>{currentName} · {t('{count} carried items', { count: handItems.length })}</div>
+            </div>
           )}
-        </div>
 
+          <div className="prototype-residents prototype-chrome" aria-label={t("Resident companions")}>
+          {resident.map(companion => (
+            <button
+              key={companion.id}
+              className="prototype-companion-orb"
+              onClick={() => openCharacter(companion)}
+              aria-label={t('Talk to {name}', { name: companion.name || companion.id })}
+              style={assetUrl(companion.avatar) ? { backgroundImage: `url("${assetUrl(companion.avatar)}")` } : undefined}
+            >
+              {!assetUrl(companion.avatar) && companion.id.charAt(0).toUpperCase()}<i /><small>{companion.name || labelOf(companion.id)}</small>
+            </button>
+          ))}
+          </div>
+          <button className="prototype-action-toggle prototype-chrome" onClick={() => { setAttention(current => current === 'authoring' ? 'ambient' : 'authoring'); window.setTimeout(() => writerRef.current?.focus(), 0); }} aria-label={t("Write an action")}><Sparkles size={17} /><span aria-live="polite">{writerWorking ? `${t(writerStage)} · ${writerElapsed}s` : t('What do you do?')}</span></button>
 
-        {/* Right Sidebar (Backpack & Characters) */}
-        <RightSidebar
-          backpackItems={backpackItems}
-          characters={characters}
-          followingCharacters={followingCharacters}
-          copy={copy}
-          onNavigateToCharacter={(home) => void handleEnterGate(home)}
-          onChatWithCharacter={openCharacterModal}
-          onToggleFollow={(charId) => {
-            setFollowingCharacters((prev) => ({
-              ...prev,
-              [charId]: !prev[charId],
-            }));
-            showToast(`${charId} follow status toggled`);
-          }}
-          onOpenNook={handleOpenNook}
-        />
-      </div>
+          <form className="prototype-dock prototype-chrome" onSubmit={submitWriter}>
+            <div className="prototype-docktop">
+              <b>{t("✧ SPEAK TO THE WRITER")}</b>
+              <span>{state?.worldFrozen ? t('The world is paused') : t('Your action moves the world forward')}</span>
+              <div className="prototype-spacer" />
+              <span>↵</span>
+            </div>
+            <div className="prototype-dockrow">
+              {writerWorking && <span role="status">{t(writerStage)} · {writerElapsed}s <button type="button" onClick={() => { sendMessage({ type: 'writer_abort' }); }}>{t('Stop writing')}</button></span>}
+              <input ref={writerRef} aria-label={t("Action")} placeholder={t("What do you do? You can also address someone by name…")} autoComplete="off" />
+              <button className="prototype-primary" aria-label={t("Send action")}>↑</button>
+            </div>
+          </form>
 
-      {/* Galgame Split-Screen Character Dialogue Overlay Modal */}
-      {activeModalCharId && activeChar && (
+          {attention === 'authoring' && (
+            <div className="prototype-authoring">
+              <GodModeToolbar frozen={state?.worldFrozen === true} onToggleFreeze={handleToggleFreeze} />
+              <button className="prototype-quiet" onClick={() => setAttention('ambient')}>{t("Close")}</button>
+            </div>
+          )}
+
+        </section>
+      </main>
+
+      {loadingWorld && <div role="status" className="prototype-world-loading">{t(' · opening…')}</div>}
+      {worldPickerOpen && (
+        <WorldShelfDialog shelf={shelf} loading={loadingWorld} onLoad={path => void loadWorld(path)} onClose={() => setWorldPickerOpen(false)} onRefresh={async () => { setShelf(await airpGateway.worlds()); }} />
+      )}
+
+      {selectedBagItem && <BagItemDialog item={selectedBagItem} onClose={() => setSelectedBagPath(null)} onPlace={handleReturnItem} />}
+
+      {radialState && <RadialMenu {...radialState} onClose={() => setRadialState(null)} onCreate={createAt} />}
+
+      {activeCharacter && (
         <CharacterModal
-          characterId={activeChar.id}
-          avatar={activeChar.avatar}
-          bio={activeChar.bio}
+          key={activeCharacter.id}
+          characterId={activeCharacter.id}
+          displayName={activeCharacter.name}
+          avatar={assetUrl(activeCharacter.avatar)}
+          avatarVideo={assetUrl(activeCharacter.avatarVideo)}
+          effectsEnabled={effectsEnabled}
+          bio={activeCharacter.bio || activeCharacter.description}
           incoming={activeModalFrame}
-          locale={locale}
           worldId={manifest?.id}
-          voice={activeChar.voice}
+          voice={activeCharacter.voice}
           language={manifest?.locale === 'ja' || manifest?.locale === 'en' ? manifest.locale : 'en'}
-          onClose={closeCharacterModal}
-          onSendMessage={(msg) => {
-            sendMessage({
-              type: 'character_prompt',
-              characterId: activeChar.id,
-              message: msg,
-            });
-          }}
+          onClose={closeCharacter}
+          onOpenNook={() => { const id = activeCharacter.id; closeCharacter(); camera.save(layer); setNookChar(id); }}
+          onSendMessage={(message) => sendMessage({ type: 'character_prompt', characterId: activeCharacter.id, message })}
         />
       )}
 
-      {/* World Studio Radial Creation Menu */}
-      {radialState && (
-        <RadialMenu
-          x={radialState.x}
-          y={radialState.y}
-          worldX={radialState.worldX}
-          worldY={radialState.worldY}
-          onClose={() => setRadialState(null)}
-          onCreate={handleCreateEntityAt}
-        />
-      )}
+      {nookChar && <div className="prototype-nook"><NookView characterId={nookChar} locale={locale === 'ja' ? 'ja' : 'en'} onClose={() => { setNookChar(null); camera.restore(layer); void refresh(); }} onMoveCard={moveCard} onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }} onTakeItem={path => { void handleTakeItem(path); }} /></div>}
 
       {/* Dice ceremony overlay (screen-fixed layer, same visual language as the player path) */}
       {ceremony && (
         <DiceCeremony key={ceremony.key} verdict={ceremony.verdict} onDone={clearCeremony} />
       )}
+
+      {toast && <div className="prototype-toast" role="status">{toast}</div>}
     </div>
   );
 }

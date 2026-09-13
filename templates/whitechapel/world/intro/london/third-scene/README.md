@@ -7,6 +7,7 @@ roll_dice:
   type: 1d6
   desc: Read the scene before Lestrade clears it
   expect: ">3"
+bgVideo: "assets/motion/seedance/backgrounds/scene3.webm"
 ---
 The alley matches the third illustration point for point—even the angle of the gaslight and the half-dry stones.
 

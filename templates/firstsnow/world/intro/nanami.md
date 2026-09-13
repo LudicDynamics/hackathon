@@ -1,6 +1,8 @@
 ---
 type: sprite
 id: nanami
-title: 七海
+title: Nanami
+avatarVideo: "assets/motion/seedance/characters/nanami-transparent.webm"
+avatar: "assets/motion/seedance/characters/nanami-transparent.webp"
 ---
-「次の曲まで九十秒。ねえ、今夜の一位、誰の曲だと思う？」
+"Ninety seconds until the next song. Whose song do you think came first tonight?"

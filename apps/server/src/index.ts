@@ -4,6 +4,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import cors from 'cors';
+import { existsSync } from 'node:fs';
 import { WebSocketServer, WebSocket } from 'ws';
 import { LocalWorldStore, createActionService, settleTurnCursor } from '@airp/shared';
 import { AgentLifecycleManager } from './engine/lifecycle.js';
@@ -16,6 +17,8 @@ const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const VENDOR_CLI = path.join(REPO_ROOT, 'vendor/pi-rp/packages/coding-agent/dist/cli.js');
 const WEB_DIST = path.join(REPO_ROOT, 'apps/web/dist');
+const localEnv = path.join(REPO_ROOT, '.env.local');
+if (existsSync(localEnv)) process.loadEnvFile(localEnv);
 
 // Load .env before ANY AIRP_* / DASHSCOPE_* read. Node native, no dotenv
 // dependency (docs/tts/00 §3.3). A missing file is normal (CI / first checkout),
@@ -60,8 +63,8 @@ const lifecycle = new AgentLifecycleManager({
   frameSink: (message) => eventBridge.broadcast(message),
 });
 
-// Auto-load the English playable slice; the launcher can switch worlds later.
-const DEFAULT_WORLD = path.join(REPO_ROOT, 'templates/whitechapel');
+// Open the first curated world and start its writer.
+const DEFAULT_WORLD = path.resolve(REPO_ROOT, process.env.AIRP_WORLD ?? 'templates/wuwu');
 try {
   activeStore = new LocalWorldStore(DEFAULT_WORLD);
   // Align the tail cursor BEFORE watching — the watcher kicks `drain()`, and
@@ -116,6 +119,10 @@ wss.on('connection', (ws: WebSocket) => {
   ws.on('message', async (raw: string) => {
     try {
       const data = JSON.parse(raw.toString());
+      if (lifecycle.isModelSwitching() && ['writer_prompt', 'character_start', 'character_prompt'].includes(data.type)) {
+        ws.send(JSON.stringify({ type: 'error', source: data.type.startsWith('character') ? 'character' : 'writer', characterId: data.characterId, message: 'Models are switching. Please try again shortly.' }));
+        return;
+      }
 
       if (data.type === 'writer_prompt') {
         const writer = lifecycle.getWriter();
@@ -129,7 +136,10 @@ wss.on('connection', (ws: WebSocket) => {
           } else if (data.mode === 'followUp') {
             await writer.followUp(data.message);
           } else {
-            await writer.prompt(data.message);
+            if (!activeStore) throw new Error('No active world');
+            void lifecycle.submitWriter(activeStore.worldRoot,
+              `[Current Layer] ${typeof data.layer === 'string' ? data.layer : 'map'}\n[Player Request] ${data.message}`
+            ).catch(err => ws.send(JSON.stringify({ type: 'error', source: 'writer', message: err.message })));
           }
         } catch (err: unknown) {
           console.error('[AIRP WS] Writer prompt failed:', err);
@@ -168,10 +178,7 @@ wss.on('connection', (ws: WebSocket) => {
         }
       } else if (data.type === 'character_start') {
         try {
-          const worldPath =
-            typeof data.worldPath === 'string' && data.worldPath !== ''
-              ? data.worldPath
-              : activeStore?.worldRoot;
+          const worldPath = activeStore?.worldRoot;
           if (!worldPath) throw new Error('No active world for the character agent');
           // Pin the open-time high-water BEFORE spawning (03 §4.3): the close
           // path settles the cursor to this seq, so "world changed while the

@@ -10,6 +10,9 @@ dist/
 .env.*.local
 .artifacts/
 worlds/
+# Reproducible six-world playtest packages, compiled from tools/experiences.
+templates/*-playtest/
+templates/*-playtest-*/
 
 # --- assets/ : worldlines-assets 素材车间 ---
 # AI 生图候选（PNG/JPG）合计约 587MB，作为生产参考太占库，整树不追踪。
@@ -23,6 +26,10 @@ assets/**
 # 车间入口说明（纯文本；AGENTS.md §7.8 引用它作为 assets/ 的入库口径真相源）
 !assets/README.md
 **/.airpworld/prompt-presets/
+**/.airpworld/model-preferences.json
+**/.airpworld/model-preferences.json.tmp
+# pi-rp session memory is runtime state, never template content truth
+**/.pi/*.db*
 
 # TTS audio cache lives at <worldRoot>/.airpworld/tts-cache/ (docs/tts/00 §2.3).
 # A per-world runtime product — never committed. NOT `**/.airpworld/`, which

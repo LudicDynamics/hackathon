@@ -16,7 +16,7 @@ import { EventBridge } from '../dist/engine/event-bridge.js';
 const LAYER = (fields) => `---\nname: Baker Street\ntype: readme\n${fields}---\n\n# Baker Street\n`;
 
 /** Temp repo root carrying a platform `assets/audio/**` pool + a temp world. */
-async function harness({ readme, mapReadme, manifest } = {}) {
+async function harness({ readme, mapReadme, manifest, loadable = false } = {}) {
   const repo = await fs.mkdtemp(path.join(os.tmpdir(), 'airp-audio-repo-'));
   const world = path.join(repo, 'world-root');
   // Includes ambient/rain.mp3: the I-group inherits `ambient: rain` from the map
@@ -37,10 +37,12 @@ async function harness({ readme, mapReadme, manifest } = {}) {
   await store.writeFile('world/README.md', mapReadme ?? '---\nname: Map\ntype: readme\n---\n\n# Map\n');
   if (readme) await store.writeFile('world/baker-street/README.md', readme);
 
-  const lifecycle = { stopCharacters: async () => {}, startWriter: async () => {}, stopAll: async () => {} };
+  const lifecycle = { isModelSwitching: () => false, stopCharacters: async () => {}, startWriter: async () => {}, stopAll: async () => {} };
   const app = express();
   app.use(express.json());
-  app.use('/api', createWorldRouter(repo, lifecycle, new EventBridge(), () => store, () => {}));
+  let active = store;
+  const bridge = loadable ? { startTailReader() {}, watchWorld() {} } : new EventBridge();
+  app.use('/api', createWorldRouter(repo, lifecycle, bridge, () => active, next => { active = next; }));
   const server = http.createServer(app);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}/api`;
@@ -48,13 +50,28 @@ async function harness({ readme, mapReadme, manifest } = {}) {
     base, repo, world, store,
     close: async () => {
       server.close();
-      try { store.close(); } catch {}
+      try { active.close(); } catch {}
       await fs.rm(repo, { recursive: true, force: true });
     },
   };
 }
 
 // ── A 组：裸名 / assets/ 解析与覆盖链 ──
+test('world load and manifest both return the resolved theme URL', async () => {
+  const h = await harness({ loadable: true, manifest: {
+    id: 'theme-save', name: 'Theme Save', description: '', author: '', genre: 'test',
+    createdAt: '', updatedAt: '', audio: { theme: 'whitechapel' },
+  } });
+  try {
+    const response = await fetch(`${h.base}/worlds/load`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ worldPath: h.world }) });
+    assert.equal(response.status, 200);
+    const loaded = await response.json();
+    const manifest = await (await fetch(`${h.base}/manifest`)).json();
+    assert.equal(loaded.manifest.audio.theme, '/api/audio?path=themes%2Fwhitechapel.mp3');
+    assert.deepEqual(loaded.manifest.audio, manifest.audio);
+  } finally { await h.close(); }
+});
+
 test('A1 裸名常驻床 → /api/audio', async () => {
   const h = await harness({ readme: LAYER('ambient: fireplace\n') });
   const l = await (await fetch(`${h.base}/layer?layer=world/baker-street`)).json();

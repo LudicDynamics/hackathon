@@ -16,9 +16,11 @@ export const LayerConfigSchema = z.object({
 
 export const CharacterConfigSchema = z.object({
   id: z.string(),
+  name: z.string().optional(),
   home: z.string(),
   role: z.enum(['companion', 'npc']).or(z.string()).optional(),
   avatar: z.string().optional(),
+  avatarVideo: z.string().optional(),
   description: z.string().optional(),
 });
 
@@ -30,6 +32,11 @@ export const WorldManifestSchema = z.object({
   description: z.string(),
   author: z.string(),
   cover: z.string().optional(),
+  player: z.object({
+    id: z.string(),
+    name: z.string(),
+    avatar: z.string().optional(),
+  }).optional(),
   tags: z.array(z.string()).default([]),
   genre: z.string(),
   material: z.string().default('parchment'),

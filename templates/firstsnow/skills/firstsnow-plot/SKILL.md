@@ -1,32 +1,32 @@
 ---
 name: firstsnow-plot
-description: この場面がどこへ向かうかを決めるとき、あるいはプレイヤーが世界そのものについて尋ねたときに読む。毎ターンではない。
+description: Read when deciding where a scene is heading or when the player asks about the world itself. Not every turn.
 ---
 
-# 初雪ラジオが本当に描いているもの
+# What First Snow Radio Is About
 
-## ひとこと
+## In one sentence
 
-十年越しに言えなかった約束と、今夜はじめて交わす約束——この二つが、同じ夜のうちに答えを求めてくる。番組は、その答えを急かさない。
+A promise left unspoken for ten years and a promise made for the first time tonight both ask for an answer on the same night. The broadcast does not rush that answer.
 
-## いま宙に浮いているもの
+## Unresolved threads
 
-- **七海の「最後に流す。それとも、しまっておく？」の返事。** 答える手がかりは、台本の余白と、消しゴムで消された一行だけ。次の一手は、プレイヤーがその余白をどう読むかであって、地の文が答えを代弁することではない。
-- **澄との「最初の三十九分」を、仕事の時間に戻すのか、戻さないのか。** 琥珀喫茶店の四十分が、そのまま答えになる。ここで決めるのはプレイヤーで、ナレーションは時計を進めるだけ。
-- **十年前に屋上で分けたイヤホンの片方。** 誰が先に手を出したのか、まだ誰も言っていない。回想として振り返るのはよいが、結末を先に決めてしまわない。
+- Nanami asks, "Play it last, or keep it?" The clues are the script margin and the erased line. The player's reading of that margin determines the next move; narration must not answer for them.
+- Will the first thirty-nine minutes with Sumi become work time again? Forty minutes at Amber Cafe will answer. The player decides; narration only advances the clock.
+- One shared earphone on the rooftop ten years ago. Nobody has said who reached out first. Revisit it in memory without deciding the ending.
 
-## まだ言ってはいけないこと
+## Do not reveal yet
 
-- **七海が十年前から何を言えずにいたか。** 台本の余白と消された一行が、それを担っている。地の文が代わりに言ってしまえば、余白はただの空白に戻り、プレイヤーが読む理由が消える。
-- **今夜、誰の隣にいることになるか。** 終幕の三つの選択肢は、どれも同じ重さで開いている。ここまでの場面で一方に寄せてしまうと、選ばなかった人が「いない人」として残る設計が働かなくなる。
-- **初雪が何の比喩なのか。** 説明した瞬間、それはただの天気になる。
+- What Nanami has been unable to say for ten years. The margin and erased line carry it. Explaining it in narration would turn meaningful space into empty paper and remove the player's reason to read.
+- Who will stand beside the player tonight. All three ending choices remain equally open. Preselecting one erases the intended presence of the person who was not chosen.
+- What first snow symbolizes. Explaining it turns it into mere weather.
 
-## 扉と鍵
+## Doors and keys
 
-- 終幕「初雪」は `requires.items: [player/request-slip.md]` で閉じている。**第47回リクエスト票**（`world/intro/request-slip.md`）を手に取っていなければ、雪はまだ結末を選べない——この鍵を先回りして開けないこと。
-- 第一幕の九十秒は `1d6 > 3` のダイスで、マイクを開くかどうかを委ねる。結果はエンジンが決める。地の文で先に書かない。
-- 第一幕以外の幕は `choice` で次へ進み、第一幕だけは `roll_dice` で委ねる——どちらも「結果」を先取りしないこと。幕の扉が開いた後に何が起きるかは、プレイヤーの言葉から始まる。
+- The First Snow finale is gated by `requires.items: [player/request-slip.md]`. Until the player takes Request Slip No. 47 at `world/intro/request-slip.md`, do not open this gate early.
+- The opening ninety seconds uses `1d6 > 3` to decide whether the microphone opens. The engine decides the outcome; do not narrate it in advance.
+- Later acts advance through `choice`; the opening delegates to `roll_dice`. Neither mechanism permits prewritten results. What happens after a door opens begins with the player's words.
 
-## 結末の形
+## Shape of the ending
 
-「初雪が降る前に答える」——それがこの Demo の形。最後の場面は、誰が隣にいるかだけでなく、**いない人が今どこで何をしているか**まで、一つの短い情景として決着させる。台詞で締めるのではなく、雪の降り方で締める。
+Answer before first snow falls. Close on a brief scene showing both the person beside the player and where the absent person is now. End on the way snow falls, not an explanatory speech.

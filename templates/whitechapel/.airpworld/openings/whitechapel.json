@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "id": "whitechapel",
+  "title": "Letters from Whitechapel",
+  "messages": [
+    {
+      "role": "user",
+      "text": "You are Sherlock Holmes, the world’s only consulting detective. Three crimes have reproduced illustrations from the serialized novel Letters from Whitechapel. The fourth chapter goes to press in two days. Watson stands beside the breakfast table with Lestrade’s sealed letter.\n\nChoose how to begin:\n1. Open Lestrade’s letter\n2. Pocket the brass portfolio cap\n3. Move to the case board"
+    }
+  ],
+  "settings": {
+    "skipIfSeeded": true,
+    "playerName": "Player",
+    "worldName": "Letters from Whitechapel"
+  }
+}

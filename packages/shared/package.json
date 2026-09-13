@@ -9,6 +9,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./frontmatter": {
+      "types": "./dist/schemas/frontmatter.d.ts",
+      "import": "./dist/schemas/frontmatter.js"
+    },
     "./forms": {
       "types": "./dist/schemas/forms.d.ts",
       "import": "./dist/schemas/forms.js"

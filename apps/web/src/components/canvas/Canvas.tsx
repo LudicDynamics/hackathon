@@ -11,23 +11,27 @@ import { useCamera } from '../../state/useCamera.js';
 import { clampZ, zoomAt, screenToWorld } from '../../lib/camera.js';
 import { makeBox, pushFrom, relaxAll } from '../../lib/collide.js';
 import { unlock, playFoley } from '../../lib/audio.js';
+import { separateBounds } from '../../lib/ui-shell.mjs';
 import { elementBox, invalidateMeasures } from '../../lib/measure.js';
 import { setParallax } from '../../lib/parallax.js';
 import { portraitPlayStateOf } from '../../lib/motion.js';
 import type { LayerItem, LayerLink } from '../../state/useWorld.js';
 
 interface CanvasProps {
+  openingComposition?: boolean;
+  effectsEnabled?: boolean;
   currentLayer: string;
   items: LayerItem[];
   /** true = no portrait on this canvas may play (global motion preference, nook 03 §③-6). */
   stillPortraits?: boolean;
   links: LayerLink[];
-  bg: { src: string | null; tone: string; grain: string };
+  bg: { src: string | null; video?: string; tone: string; grain: string };
   scene: LayerItem | null;
   sceneCopy: { label: string; collapse: string; expand: string };
   ghostCopy: GhostCopy;
   onMoveCard?: (path: string, x: number, y: number) => Promise<void> | void;
   onSelectChoice?: (path: string, choice: string) => void;
+  onEntityAction?: (prompt: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
   onEnterGate?: (targetLayer: string) => void;
   onOpenCharacterModal?: (charId: string) => void;
@@ -80,6 +84,8 @@ function readTop(el: HTMLElement): number {
 
 
 export const Canvas: React.FC<CanvasProps> = ({
+  openingComposition = false,
+  effectsEnabled = false,
   currentLayer,
   items,
   stillPortraits = false,
@@ -90,6 +96,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   ghostCopy,
   onMoveCard,
   onSelectChoice,
+  onEntityAction,
   onDiceRolled,
   onEnterGate,
   onOpenCharacterModal,
@@ -101,6 +108,8 @@ export const Canvas: React.FC<CanvasProps> = ({
   const camera = useCamera();
 
 
+  useEffect(() => { if (!effectsEnabled) setParallax(0, 0); }, [effectsEnabled]);
+
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const pinchRef = useRef<{ d: number; z: number } | null>(null);
   const dragRef = useRef<PanDragState | null>(null);
@@ -110,6 +119,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   // resize). See handlePointerMove.
   const viewportRectRef = useRef<{ vp: HTMLElement; r: DOMRect } | null>(null);
   const prevLayerRef = useRef<string | null>(null);
+  const framedLayers = useRef(new Set<string>());
   const itemsByPath = useMemo(() => new Map(items.map((it) => [it.path, it])), [items]);
   // Ordinal seal number per gate (01, 02, …) — the scene's position among the
   // gates of THIS layer, derived from server order so it is stable across
@@ -138,6 +148,58 @@ export const Canvas: React.FC<CanvasProps> = ({
       camera.restore(currentLayer);
     }
   }, [currentLayer, camera]);
+
+  // Frame real rendered bounds once per scene, preserving subsequent pan/zoom.
+  useEffect(() => {
+    if (!items.length || framedLayers.current.has(currentLayer)) return;
+    let cancelled = false;
+    const frame = () => {
+      if (cancelled) return;
+      const viewport = camera.viewportRef.current;
+      const objects = [...(viewport?.querySelectorAll<HTMLElement>('.object') || [])];
+      if (!viewport || !objects.length) return;
+      const measured = objects.map(el => ({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: Math.max(el.offsetHeight, el.scrollHeight) }));
+      if (openingComposition && currentLayer === 'map') {
+        const narration = objects.findIndex(el => el.querySelector('.chalk'));
+        if (narration >= 0) {
+          const main = measured[narration];
+          main.x = 580;
+          main.y = 350;
+          let rowY = 350;
+          let rowHeight = 0;
+          let column = 0;
+          measured.forEach((box, index) => {
+            if (index === narration) return;
+            box.x = main.x + main.w + 80 + column * 260;
+            box.y = rowY;
+            rowHeight = Math.max(rowHeight, box.h);
+            if (++column === 2) { column = 0; rowY += rowHeight + 40; rowHeight = 0; }
+          });
+        }
+      }
+      const separated = separateBounds(measured);
+      framedLayers.current.add(currentLayer);
+      separated.forEach((box, index) => {
+        const el = objects[index];
+        if (box.y === el.offsetTop && box.x === el.offsetLeft) return;
+        el.style.left = `${box.x}px`;
+        el.style.top = `${box.y}px`;
+        if (el.dataset.path) void onMoveCard?.(el.dataset.path, box.x, box.y);
+      });
+      const left = Math.min(...objects.map(el => el.offsetLeft));
+      const top = Math.min(...objects.map(el => el.offsetTop));
+      const right = Math.max(...objects.map(el => el.offsetLeft + el.offsetWidth));
+      const bottom = Math.max(...objects.map(el => el.offsetTop + Math.max(el.offsetHeight, el.scrollHeight)));
+      const width = viewport.clientWidth;
+      const height = viewport.clientHeight;
+      const topSpace = width < 700 ? 175 : 110;
+      const bottomSpace = width < 700 ? 170 : 130;
+      const z = Math.min(.95, (width - (width < 700 ? 95 : 220)) / Math.max(1, right - left), (height - topSpace - bottomSpace) / Math.max(1, bottom - top));
+      camera.flyTo((left + right) / 2, (top + bottom) / 2 + (bottomSpace - topSpace) / (2 * z), z);
+    };
+    void document.fonts.ready.then(() => requestAnimationFrame(frame));
+    return () => { cancelled = true; };
+  }, [currentLayer, items, camera, openingComposition]);
 
   // Session z-lifts die with the payload that carries the server order: the
   // `links` array reference only changes on fetchLayer-driven refreshes and on
@@ -185,6 +247,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     const el = camera.viewportRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      if ((e.target as HTMLElement).closest('[data-reading]')) return;
       e.preventDefault();
       const rect = el.getBoundingClientRect();
       const sx = e.clientX - rect.left;
@@ -267,7 +330,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     // it only changes on resize, and reading it here forced a layout on every
     // move (profile: getBoundingClientRect 120× per 120 moves).
     const vp = camera.viewportRef.current;
-    if (vp) {
+    if (vp && effectsEnabled) {
       let rect = viewportRectRef.current;
       if (!rect || rect.vp !== vp) {
         rect = { vp, r: vp.getBoundingClientRect() };
@@ -481,7 +544,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       style={{ perspective: '1200px' }}
     >
       {/* 2.5D Background sheet with 0.25x parallax drift & video support */}
-      <SceneBackdrop bg={bg} />
+      <SceneBackdrop bg={bg} effectsEnabled={effectsEnabled} />
 
       {/* World Transform Layer — single transform layer, rAF writes transform.
           Must pin transform-origin to top-left: default is center, which would
@@ -499,6 +562,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             item={item}
             index={gateOrdinal.get(item.path)}
             onSelectChoice={onSelectChoice}
+            onEntityAction={onEntityAction}
             onDiceRolled={onDiceRolled}
             onEnterGate={onEnterGate}
             onOpenCharacterModal={onOpenCharacterModal}
@@ -520,7 +584,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       />
 
       {/* Atmospheric 1.35x foreground particle system: floating dust & rain overlay */}
-      <ParticleLayer tone={bg.tone} />
+      {effectsEnabled && <ParticleLayer key={bg.tone} tone={bg.tone} />}
     </div>
   );
 };

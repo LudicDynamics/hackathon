@@ -1,5 +1,7 @@
 # AGENTS.md — AIRP
 
+模型与执行进度：`apps/server/src/engine/model-preferences.ts` 管理世界存档内的运行偏好，`GET/POST /api/agent-settings` 与 `agent_progress` 接前端 Agents 面板和行动状态。协议及验证见 `docs/Agent模型选择与进度.md`。这不是独立叙事状态文件；正文仍是世界真相源。
+
 > 在这个仓库里干活的人与 agent 的入口手册。
 > **本文与 `docs/` 都是设计真相源：架构一变，本文同步改。**
 > 设计文档 2026-09-11 从 `infini-canvas` 项目迁入本仓库；`infini-canvas` 已退休，只留前端原型（见 §4）。
@@ -22,20 +24,22 @@
 
 ### 1.1 语言规范（硬要求）
 
-**产品一律英文，沟通与文档一律中文。**
+**世界语言贯穿提示词、内容与内容路径；沟通与内部设计文档一律中文。** 2026-09-13 用户确认：日语世界的提示词、正文、内容文件和目录使用日语；英语世界对应使用英文，不再统一要求内容路径为英文 / 罗马字。此前五个样板世界日语化先迁 `first-snow-jp` 的安排保留；未迁旧文件不代表已完成。协议保留名与迁移清单见 `docs/世界日语化迁移.md`。
 
 | 范围 | 语言 | 理由 |
 |---|---|---|
-| 前端 UI 文案、演示内容、世界素材 | **英文** | 玩家与评委看到的一切 |
-| `presets/**` 提示词、`templates/**` 世界内容 | **英文** | 喂给 AI 的 prompt 与世界内容，**连目录名与文件名一起** |
-| 立绘 / 资源 / 图标等资产的文件名与说明 | **英文** | 资产清单 |
+| 样板世界 UI 默认语言、演示内容、世界文本 | **日语** | 日语版世界载入时切到日语；通用 UI 保留语言切换 |
+| 世界提示词、人物与世界内容、内容目录和文件名 | **随世界语言：日语 / 英文** | 不仅翻译显示名；包括生成的新地点、物件、线索与结果文件 |
+| 世界内资产文件名与说明 | **随世界语言** | 图形字节可复用，世界内资源引用随迁移更新；共享技术资产不擅自重命名 |
 | 代码注释、报错文案、日志 | **英文** | 仓库是公开的黑客松产物，评审会直接读代码 |
 | commit message、与队友/用户沟通 | **中文** | 开发者都是中国人 |
 | `docs/**`、本文件、根 `README.md` | **中文** | 内部设计文档 |
 
-黑客松官方语言是 **英文 / 日语**。判断标准：**任何可能被评委或海外玩家看到的东西 → 英文**。日语只用于日式世界的专有名词，且用罗马字（`nanami`、`sakura-academy`）。
+黑客松官方语言是 **英文 / 日语**。日语世界使用正常日文，包括内容路径；英语世界的对应内容与路径用英文。世界运行时的人类可读指令也应随语言，平台共用规则按语言复用，不按世界复制；现有英文共享提示词尚需单独迁移验收，不能只加一句“用日语回答”就算完成。
 
-命名一律 ASCII 小写 kebab-case（`baker-street`、`arcane-library`）；专有名词用标准英文或罗马字（`watson`、`baker-street`）。改世界内容时**目录名即 id**——**层不是声明出来的，是扫描出来的**：`world/**/` 下每个目录就是一个层，目录里的 `README.md` 是它的场景配置（有 README = 已写层；没有 = stub 懒加载层，见 doc-11 §3）。改层就是改目录名，`world.json` 里**没有** `layers`。`characters[].home`、preset 的 `options.baseDir` 同样随目录名走。
+**固定引擎的保留名边界**：`README.md`、`world.json`、`SKILL.md`、协议键 / 枚举 / 工具名，以及引擎硬编码的系统目录（如 `world/`、`player/`、`characters/`、`.airpworld/`）保留，不当成普通内容翻译；这项技术边界不等于已完成全部路径本地化。普通场景、物件、世界说明与可配置的人物文档名不因历史上使用英文就永久豁免。日语内容示例 `world/港町/灯台/航海日誌.md`；英语使用 `world/harbor/lighthouse/logbook.md`。
+
+改世界内容时**目录名即层 id**——**层不是声明出来的，是扫描出来的**：`world/**/` 下每个目录就是一个层，目录里的 `README.md` 是它的场景配置。改名必须同步所有引用、`characters[].home`、preset 文件槽、Gate target、物件门槛、图片路径、存档定位与测试；`world.json` 里**没有** `layers`。本轮独立试玩包已迁移普通内容路径；旧模板和运行存档不自动改名。不能只改目录不改引用。
 
 ---
 
@@ -47,6 +51,8 @@ apps/
     index.ts            # Express + WS 入口（/api、静态托管 apps/web/dist、端口 3001）；入站 WS 分流（writer_prompt / airp_init）
     routes/world.ts     # 玩家 UI 路由 → 动作服务（/move, /dice, /use-item, /choice, /enter-layer, /layer, /nook, /card/*, /god-action, /audio, …）
     routes/tts.ts       # POST /api/tts 合成 + GET /api/tts/audio/:file 回放；唯一合成点，无模块级状态（docs/tts/01）
+    world-shelf.ts      # 世界/存档书架投影与可恢复删除；见 docs/世界与存档.md
+                        # Agent 帧到前端的身份与状态接线见 docs/Agent前端接线.md
     engine/
       launch.ts         # spawn 参数单一来源（preset / --session-dir / --continue / env / AIRP_AGENT_ROLE / --no-* 资源隔离），服务端与探针共用
       lifecycle.ts      # Agent 生命周期编排（单例复用 / spawn / warmup / 崩溃退避重启 / stopAll）
@@ -56,7 +62,10 @@ apps/
   web/src/
     lib/                   # 纯前端库：camera（插值相机）/ collide（软碰撞）/ seat（排座镜像）/ measure（卡片盒尺寸缓存）/ parallax（指针视差模块态，走 DOM 不触发 React 渲染）/ footprint（实测盒回写）/ audio（采样优先声场，synth 兜底）
                            #   phantom + phantom-seat + ghost（生成中占位与座位过户，docs/perform/03）/ canvas-patch（增量合并）/ writer-state（笔尖状态机）/ chalk-reveal / dice-ceremony / motion / i18n / md / fm
+                           #   ui-shell.mjs（Header / journal 独立显隐、人物分区与测量后排版）/ effects-clock.mjs（视差逐帧合并与粒子限帧调度）
     state/                 # useCamera（相机与层级记忆）/ useWorld（层数据 + WS + 落库；唯一 WebSocket）/ useAudio（声场主轨）
+    prototype.css          # 沉浸式原型外壳样式（niko 界面批次）
+    scene-shell.css        # 素材版世界 UI：暖纸栏、玩家身份与人物圆牌
     components/canvas/     # 无限画布（相机 / 卡片渲染 / 关系线 / CanvasGrid 视口网格 / ParticleLayer 粒子）
     components/narrative/  # chalk 叙事卡、骰子
     components/overlay/    # 角色特写遮罩
@@ -79,10 +88,12 @@ extensions/
   instructions.ts       # 平台提示词正文（slot writer-char / system-char / scene-init-instruction / nook-init-instruction）
   tools.ts              # 唯一 registerTool 入口：注册 AIRP 动作工具（extensions/toolkit/ 是 jiti 直跑的薄壳）
   context.ts            # 每轮注入（状态块 + 事件段 + "下一步"），挂 `context` 钩子（临时不落盘）；按 AIRP_AGENT_ROLE 分节（writer 6 节 / character 4 节）
+  world-context.ts      # 仅原生 write/edit 落账，排除 AIRP 工具；每轮注入统一复用 context.ts
   toolkit/              # 工具壳 + 共享 helper（deps/actor/turn/result）；init-command.ts = `airp-init` 初始化执行内核（R2 直唤：扩展命令 → ctx.spawnAgent）——子目录，不会被当扩展加载
 skills/                 # 项目级 skills：跨世界通用手艺（生图 / 组件叙事 / 音色选角 / 节奏 / 玩法咬合）
                         #   component-narration / tool-craft / voice-casting（音色选角，docs/tts/08）
-templates/              # 开箱世界模板；whitechapel（英文）/ firstsnow（日文）为首条可玩竖切
+templates/              # 开箱世界模板；whitechapel（英文）/ firstsnow（日文）/ wuwu / divergence / first-snow-jp 等素材版世界
+  unwritten-door/       # 第六个体验 Demo：信封、手机与空白门外，见 doc-25
   <world>/skills/       # 世界级 skills：该世界自己的文风与剧情，与 world/ 同级、随包分发
 worlds/                 # 脚手架产出的玩家世界（.gitignore）
 vendor/pi-rp/           # 叙事引擎 submodule
@@ -140,12 +151,20 @@ graph LR
 
 ### 3.1 单轮管线（作家）
 
+未写之门 Demo 的 choice、自由输入与 stub 首次进入，经 `lifecycle.submitWriter` 串行派发作家；新场景当前走亲写 W1，未启用 scene-init 委托。根 `.env.local` 指定模型/图像网关/超时；图像经 pi-ai 调用。从模板加载先复制到 worlds 再游玩。范围见 `docs/doc-25-未写之门Demo.md`。
+
 Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → write/edit 演化场景物件 → 轻量收敛。
 **chat history 不进画布，只有 chalk 落板。**
 
 **注入挂 `context` 钩子（不是 `before_agent_start` 的 `message`——那个会被持久化并逐轮累积），只在本次 LLM 请求里存在、不落会话条目。** 每轮注入 = **一个自足的状态块**（当前值，全量）+ **一个事件段**（变化，游标增量）+ **一句"下一步"**（祈使，由事实推出）；三者拼成一条自定义消息追加到消息尾部。重活（扫目录 / 读库 / 渲染）只在**轮边界**（`agent_start`）算一次并缓存，`context` handler 只做字符串拼接与缓存读取。作家 6 节 / 角色 4 节，按 `AIRP_AGENT_ROLE` 选表。协议见 `docs/hooks/00…06`。
 
 ### 3.2 文件即真相
+
+前端 Markdown 类型渲染与互动分离：`CanvasObject` 统一挂载 `EntityInteractions`，共享 `buildInteractiveFields` 归一化 `choice / status / roll_dice`，`actions` 保留为带源文件上下文的文字请求。Chalk 锚点为临时呈现态。玩家 `/api/choice` 与 Agent choose 共用 `createActionService().chooseOption` 校验并落账，通过 `world_event` 广播；详 `docs/doc-09`。
+
+模板玩家身份可用 `world.json.player`（id / name / avatar）声明；角色列表仍只承载 NPC。图片随世界放在该世界的 `assets/` 下，同步来源与 SHA-256 见各世界的 `templates/<world>/assets/source-manifest.json`（由 `tools/sync-template-assets.mjs` 生成）。同步范围与未决剧情见 `docs/模板资源对齐清单.md`。
+
+默认服务入口载入 `templates/wuwu`（Fogwharf）。前端世界外 Header 与 journal 默认收起；场景画布首次显示测量实际内容边界，修正遮挡后通过原坐标 API 保存，初始镜头按窗口适配。素材版根场景采用叙事与证物分区；当前实现每次重新载入页面会重新整理根场景，保留手动排版是后续验收项。
 
 世界目录本身就是真相源，**没有独立状态文件**。`status.data` / `choice` / `roll_dice` 是实体通用 frontmatter，不局限于 chalk；玩家 UI、作家与角色通过同一个引擎动作层触发互动。**`status` 不是状态系统，它只是某个实体（含 chalk）的一份快照**——读它 = 读那个文件。
 分层存储：**内容走文件系统，架构状态与历史走 SQLite**（`canvas.db` / `history.db`）。

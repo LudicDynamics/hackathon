@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { readWorldShelf, trashWorldSave, ShelfError } from '../world-shelf.js';
 import type { Response } from 'express';
 import fs from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
@@ -6,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import {
   ActionError,
+  AgentModelSelectionSchema,
   LocalWorldStore,
   SEAT_ANCHOR,
   boxSizeOf,
@@ -190,13 +192,15 @@ function storedSizeOf(
  * regex on the raw text also matched prose lines (docs/audio/01 §8.1), so tone/grain
  * now come from the structured frontmatter. `bg.src` cleaning is unchanged.
  */
-function readLayerBg(raw: string): { src: string | null; tone: string; grain: string } {
+function readLayerBg(raw: string): { src: string | null; video?: string; tone: string; grain: string } {
   let src: string | null = null;
+  let video: string | undefined;
   let tone = 'warm';
   let grain = 'parchment';
   try {
     const fm = parseFrontmatter(raw).frontmatter;
     const bgValue = fm?.bg;
+    if (typeof fm?.bgVideo === 'string' && /\.(mp4|webm)$/i.test(fm.bgVideo)) video = fm.bgVideo;
     if (typeof bgValue === 'string' && bgValue.trim() !== '') {
       // Strip trailing inline comments and quotes (parser keeps them verbatim).
       const cleaned = bgValue.replace(/\s+#.*$/, '').trim().replace(/^["']|["']$/g, '').trim();
@@ -207,7 +211,7 @@ function readLayerBg(raw: string): { src: string | null; tone: string; grain: st
   } catch {
     src = null;
   }
-  return { src, tone, grain };
+  return { src, ...(video ? { video } : {}), tone, grain };
 }
 
 /**
@@ -312,24 +316,45 @@ export function createWorldRouter(
   setActiveStore: (store: LocalWorldStore | null) => void
 ): Router {
   const router = Router();
+  router.get('/agent-settings', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) { res.status(409).json({ error: 'Load a world first.' }); return; }
+    try { res.json(await lifecycle.modelStatus(store.worldRoot, req.query.brief !== 'true')); }
+    catch (error) { res.status(503).json({ error: error instanceof Error ? error.message : 'Agent unavailable.' }); }
+  });
+  router.post('/agent-settings', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) { res.status(409).json({ error: 'Load a world first.' }); return; }
+    const parsed = AgentModelSelectionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid model settings.' }); return;
+    }
+    const { role, provider, model, thinking, world } = parsed.data;
+    if (world !== store.worldRoot) { res.status(409).json({ error: 'The active world changed. Reopen model settings.' }); return; }
+    try { res.json(await lifecycle.changeModel(store.worldRoot, role, { provider, model, thinking })); }
+    catch (error) { res.status(409).json({ error: error instanceof Error ? error.message : 'Could not change models.' }); }
+  });
+  const dispatch = (store: LocalWorldStore, prompt: string) => {
+    void lifecycle.submitWriter(store.worldRoot, prompt).catch(error => {
+      eventBridge.broadcast({ type: 'error', source: 'writer', message: error instanceof Error ? error.message : String(error) });
+    });
+  };
   let worldFrozen = false;
   // Platform audio root: <REPO_ROOT>/assets/audio. `repoRoot` (index.ts:15) is the
   // repo root in both dev and prod, so this always points at the 31 produced clips.
   const AUDIO_ROOT = path.resolve(repoRoot, 'assets/audio');
+  const clientManifest = async (store: LocalWorldStore) => {
+    const manifest = await store.getManifest();
+    const key = manifest.audio?.theme;
+    const theme = typeof key === 'string' && key.trim() ? resolveAudioRef(key, 'bgm', store, AUDIO_ROOT) : null;
+    return { ...manifest, audio: { theme } };
+  };
 
+  let shelfBusy = false;
   // List available templates and worlds
   router.get('/worlds', async (_req, res) => {
     try {
-      const templatesDir = path.join(repoRoot, 'templates');
-      const templates = await fs.readdir(templatesDir);
-
-      const worldsDir = path.join(repoRoot, 'worlds');
-      let worlds: string[] = [];
-      try {
-        worlds = await fs.readdir(worldsDir);
-      } catch {}
-
-      res.json({ templates, worlds });
+      res.json(await readWorldShelf(repoRoot, getActiveStore()?.worldRoot));
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -337,9 +362,18 @@ export function createWorldRouter(
 
   // Load a world
   router.post('/worlds/load', async (req, res) => {
+    if (lifecycle.isModelSwitching()) return res.status(409).json({ error: 'Wait for model settings to finish applying.' });
+    if (shelfBusy) return res.status(409).json({ error: 'A world operation is in progress.' });
+    shelfBusy = true;
     try {
       const { worldPath } = req.body;
-      const resolvedPath = path.isAbsolute(worldPath) ? worldPath : path.join(repoRoot, worldPath);
+      let resolvedPath = path.isAbsolute(worldPath) ? worldPath : path.join(repoRoot, worldPath);
+      const templatesRoot = path.join(repoRoot, 'templates') + path.sep;
+      if (resolvedPath.startsWith(templatesRoot)) {
+        const playPath = path.join(repoRoot, 'worlds', `${path.basename(resolvedPath)}-${randomUUID().slice(0, 8)}`);
+        await fs.cp(resolvedPath, playPath, { recursive: true });
+        resolvedPath = playPath;
+      }
 
       worldFrozen = false;
       await lifecycle.stopCharacters();
@@ -350,7 +384,7 @@ export function createWorldRouter(
       const store = new LocalWorldStore(resolvedPath);
       setActiveStore(store);
 
-      const manifest = await store.getManifest();
+      const manifest = await clientManifest(store);
       // Re-align lastSeq against the NEW history.db before watching: the old
       // cursor belongs to another sequence and could permanently skip events
       // (docs/tools/12 §8.6 / §8 "index.ts 的接线").
@@ -365,7 +399,19 @@ export function createWorldRouter(
       res.json({ ok: true, manifest, path: resolvedPath });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      shelfBusy = false;
     }
+  });
+
+  router.delete('/worlds/save', async (req, res) => {
+    if (shelfBusy) return res.status(409).json({ error: 'A world operation is in progress.' });
+    shelfBusy = true;
+    try {
+      res.json(await trashWorldSave(repoRoot, req.body?.worldPath, getActiveStore()?.worldRoot));
+    } catch (err) {
+      res.status(err instanceof ShelfError ? err.status : 500).json({ error: err instanceof Error ? err.message : String(err) });
+    } finally { shelfBusy = false; }
   });
 
   // Get active world manifest
@@ -374,16 +420,7 @@ export function createWorldRouter(
     if (!store) return res.status(400).json({ error: 'No active world' });
 
     try {
-      const manifest = await store.getManifest();
-      // Resolve the world theme key to a URL here — the frontend never resolves
-      // README/manifest audio values (docs/audio/00 §4.1/§9.2). `themes` lives in
-      // the `bgm` pool table (00 §2.3).
-      const themeKey = manifest.audio?.theme;
-      const theme =
-        typeof themeKey === 'string' && themeKey.trim() !== ''
-          ? resolveAudioRef(themeKey, 'bgm', store, AUDIO_ROOT)
-          : null;
-      res.json({ ...manifest, audio: { theme } });
+      res.json(await clientManifest(store));
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -503,7 +540,7 @@ export function createWorldRouter(
       const { cards: cardFiles, doorIds } = await store.pageOfLayer(layer);
       // Each door = the child layer's README if it exists (a written scene), or
       // a synthesised stub door when the child has no README yet (doc-11 §3).
-      const items: LayerItem[] = await Promise.all([
+      const allItems: LayerItem[] = await Promise.all([
         ...cardFiles.map(async (file): Promise<LayerItem> => {
           const raw = await store.readFile(file);
           const { frontmatter, body } = parseFrontmatter(raw);
@@ -524,6 +561,9 @@ export function createWorldRouter(
           }
         }),
       ]);
+      // An authored gate replaces the automatic child directory sign.
+      const targets = new Set(allItems.filter(it => it.frontmatter?.type === 'gate').map(it => it.frontmatter?.target));
+      const items = allItems.filter(it => it.filename !== 'README.md' || !targets.has(it.path.replace(/\/README\.md$/, '')));
       const mdFiles = items.map((it) => it.path);
 
       // Card rows keyed by path (never by layer column - a nested layer README
@@ -576,7 +616,7 @@ export function createWorldRouter(
       let scene: SceneReadme | null = null;
 
       // bg + audio from the layer README frontmatter (doc-10 E0; docs/audio/00 §3).
-      let bg: { src: string | null; tone: string; grain: string } = { src: null, tone: 'warm', grain: 'parchment' };
+      let bg: { src: string | null; video?: string; tone: string; grain: string } = { src: null, tone: 'warm', grain: 'parchment' };
       let audio: { ambient: string | null; bgm: string | null } = { ambient: null, bgm: null };
       try {
         const readmePath = layer === 'map' ? 'world/README.md' : `${layer}/README.md`;
@@ -590,6 +630,10 @@ export function createWorldRouter(
           kind: 'scene',
         };
         bg = readLayerBg(raw);
+        if (bg.video && !bg.video.includes('-transparent')) {
+          const lightweight = bg.video.replace(/\.(webm|mp4)$/i, '-lite.mp4');
+          if (await store.statKind(lightweight) === 'file') bg.video = lightweight;
+        }
         const ownFm = parsedReadme.frontmatter;
         const own = readLayerAudio(ownFm, store, AUDIO_ROOT);
         audio = own;
@@ -665,12 +709,14 @@ export function createWorldRouter(
       const chars = await Promise.all(
         (manifest.characters || []).map(async (c) => {
           let avatar = c.avatar;
+          let avatarVideo = c.avatarVideo;
           let bio = c.description;
           let voice: string | undefined;
           try {
             const raw = await store.readFile(`characters/${c.id}/README.md`);
             const { frontmatter, body } = parseFrontmatter(raw);
             if (frontmatter?.avatar) avatar = frontmatter.avatar;
+            if (typeof frontmatter?.avatarVideo === 'string') avatarVideo = frontmatter.avatarVideo;
             if (!bio) bio = body.slice(0, 100);
             // `voice` is a character property declared in the README frontmatter
             // (docs/tts/00 §3.1) — passed through VERBATIM, alias or raw id, and
@@ -684,6 +730,7 @@ export function createWorldRouter(
           return {
             ...c,
             avatar: avatar || '/assets/characters/portraits/fella_1.png',
+            avatarVideo,
             bio,
             ...(voice ? { voice } : {}),
           };
@@ -879,7 +926,11 @@ export function createWorldRouter(
     if (!((typeof choice === 'string' && choice !== '') || (typeof choice === 'number' && Number.isFinite(choice)))) {
       return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'choice must be a string label or a 1-based number' });
     }
-    await reply(res, () => serviceFor(store, { type: 'player' }).chooseOption({ path: choicePath, choice }));
+    await reply(res, async () => {
+      const result = await serviceFor(store, { type: 'player' }).chooseOption({ path: choicePath, choice });
+      dispatch(store, `[Player Event] ${JSON.stringify(result.details.event)}\nRead ${JSON.stringify(choicePath)} and the world skill. Resolve this choice, update the source file, and write a chalk response. Do not record the choice a second time.`);
+      return result;
+    });
   });
 
   // Player walks through a door into another layer (05 §3.6.2 / 12 §2.4).
@@ -936,7 +987,15 @@ export function createWorldRouter(
     }
     // A stub has no README yet; entering it is what asks the world to
     // materialise one, so absence must not become an artificial lock.
-    await reply(res, () => serviceFor(store, { type: 'player' }).enterLayer({ layer }));
+    await reply(res, async () => {
+      const layers = (await store.getManifest()).layers;
+      if (!layers[layer]) throw new ActionError({ code: 'not_found', message: 'Scene does not exist.' });
+      const result = await serviceFor(store, { type: 'player' }).enterLayer({ layer });
+      if (result.details.first) {
+        dispatch(store, `[Player Event] ${JSON.stringify(result.details.event)}\n[Target Path] ${layer === 'map' ? 'world' : layer}\nThe player opens a door into an unwritten scene. Read world.json, the world skill, the parent README and its props before writing. Preserve all revealed context. If the target README now exists, continue it without regenerating. Otherwise write its README, two objects, and opening chalk. Then generate and attach one background image if available. Use the world skill's door procedure when present.`);
+      }
+      return result;
+    });
   });
 
   // The player's viewpoint (00 §5). No event, no WS frame: this is a

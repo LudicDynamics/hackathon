@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "id": "wuwu",
+  "title": "Fogwharf",
+  "messages": [
+    {
+      "role": "user",
+      "text": "You are Fogwharf Guild Investigator No. 77. On your first morning, three clients ring the bell and each tells only part of the truth. Vera leaves half of a speaking bell on your desk.\n\nChoose how to begin:\n1. Pocket the investigator badge\n2. Ask Vera about the missing rudder pin\n3. Step out toward the harbor chart"
+    }
+  ],
+  "settings": {
+    "skipIfSeeded": true,
+    "playerName": "Player",
+    "worldName": "Fogwharf"
+  }
+}

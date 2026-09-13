@@ -1,17 +1,34 @@
 # doc-09 通用互动 frontmatter 完整 schema（待完善）
 
+模型设置与执行状态是独立运行协议，不属于实体互动字段。shared 的 `AgentModelSelectionSchema` 校验 `/api/agent-settings` 写入，WebSocket `agent_progress` 传递公开阶段与时间戳；完整字段见《Agent模型选择与进度》。
+
+场景媒体补充：README 可声明 `bgVideo: assets/scenes/intro.webm`（mp4/webm 世界相对路径），`bg` 继续指静态兜底图。`GET /api/layer` 返回 `bg.video?`；角色 Markdown 和 world.json 的 characters 配置可声明 `avatarVideo`，原 `avatar` 为静态兜底，`GET /api/characters` 返回二者。特效关闭时使用静态图。不是互动字段，不参与 choice/status 归一化。详《动态素材接线》。
+
 > 状态：**归属与工具协议已定案，字段细节待设计**。doc-20 §2 是互动字段的上位协议。
 > 关联：doc-05 §3.1（frontmatter + 骰子协议）、doc-06 §2.6（渲染原则）、doc-10（组件 schema）、doc-20（Agent 工具与 `look_at`）。
 
 ## 背景与现状（已定案，不重谈）
 
+日语世界迁移补充：manifest 的 `characters[].name?: string` 作为人物显示名，省略时 UI 回退到 `id`；`id` 仍是角色路由、preset 与文件目录的关联键，不拿翻译后的名字当路径。新增日语模板使用 `locale: "ja"` 指定载入时的 UI 默认语言；语言文档和具体样例见《世界日语化迁移》。
+
 - 三者（choice / status / roll_dice）是**所有落盘实体通用的互动字段**，不局限于 chalk；类 md 表格渲染、可折叠、随所属实体走；
 - **无独立状态文件、无状态栏、无 state 工具**（doc-00 变更记录 #4）：`status` 只是**该实体（含 chalk）的一份快照**，读它 = 读那个文件。`get_state / set_state / state_update / watch_state` **绝对不做**（doc-20 §2.3）；
 - roll_dice **骰子协议已定稿**（doc-05 §3.1）：作者写 `type`/`desc`/`expect`（不写 `result`）；玩家点击或 Agent 调用 `roll_dice` → 引擎真随机掷出并按 expect 判定 → 回写 result/passed → 落定显示 + `roll_resolved` 事件；
 - 前端渲染管线（解析 frontmatter → 渲染 → 交互回写）在 doc-06 §2.6 给出了原则，缺完整协议。
+- 导言中的第一个可操作入口就是 Chalk，不新增 `type: chunk`；Chalk frontmatter 承载 RP / Choice / Dice 与移动机会，具体拿物 / 使用 / 切层继续走 note/item、component、gate 协议。
 - Agent 的 `look_at` 剥离原始 frontmatter，但必须把三种互动字段格式化成可读、可继续调用的文本块（doc-20 §3）。
 
 ## 待设计清单
+
+### 当前前端接线（2026-09-12）
+
+所有画布 Markdown 形态由 `CanvasObject → EntityInteractions` 接一次通用互动区；类型渲染器只负责外观。整块实体 hover / 键盘聚焦显露行动，字段可钉住；容器透明、优先在右侧浮出，按视口与其他实体占用比较左侧/下方，不占正文高度。普通文档提供查看/收取，门提供进入，人物提供交谈；`portable: false` 禁止默认收取。收取走 `/api/move`，同名目标拒绝覆盖。没有字段也可提供类型默认行动。
+
+`actions: string[]` 仍是带源文件路径的文字请求，走 writer_prompt，不解释成代码、移动或已安装技能。`choice` 走 `POST /api/choice { path, choice }`：玩家与 Agent 共用 `createActionService().chooseOption`，重读源文件、按 status 条件验证可见选项，落 `choice_selected` 并通过 `world_event` 广播；路由不强启 Writer。前端共享 `buildInteractiveFields` 归一化规则，显示 label/index/hint，优先提交稳定 id；骰子只提交 `{ path }`，裁决规则从文件读取。自由输入专用入口与 multi 的完整呈现仍待补齐。
+
+Chalk 的 `anchor` 仅控制临时高亮与虚线，可指向同层文件路径或文件名（省略 `.md` 兼容）；悬停离开与卸载清理。与持久关系线分开，不是正文阅读 tooltip。
+
+带 Prompt 的技能、RP、扩写已是产品方向，但结构化字段（技能 id、参数、适用角色、确认与权限、完成回执）仍需定案；本次只把已有文字动作带实体上下文交给作家，不新增伪协议。
 
 | # | 项 | 说明 |
 |---|---|---|
@@ -27,5 +44,6 @@
 - 不引入独立状态文件/状态栏，也不引入任何 state 读写工具（绝对不做，非暂缓；doc-20 §2.3）；
 - 骰子判定由引擎做（按 expect 比较）；前端与 Agent 工具只是两个触发入口；
 - 剧情判定不写骰子，直接写正文（doc-05 §3.1）。
+- `choice` 点击可以作为下一轮玩家行动输入，但不得隐式冒充空间移动；需要进入地点时，选择结果应显式解锁 / 指向一个 gate，再由玩家执行跨层动作（doc-20 §2.3）。
 
 > **标记：待办**。MVP 只实现最小集：choice 单选卡 + status 折叠表 + roll_dice 骰子卡（协议已就绪），chart 化与条件选项赛后再补。

@@ -103,4 +103,3 @@ export type ShowKind = (typeof SHOWS)[number]['id'];
 
 /** ids in registry order — used by the E5 error copy and `listPerformances`. */
 export const SHOW_IDS: string[] = SHOWS.map((s) => s.id);
-

@@ -1,5 +1,5 @@
 ---
 type: note
-title: 台本の余白
+title: The Script's Margin
 ---
-「放送が終わったら、もし終電を急がなくていいなら——」その先だけ、消しゴムで消されている。
+"After the broadcast, if you don't have to rush for the last train—" Everything after that has been erased.
