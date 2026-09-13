@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { modelPreferenceArgs } from './model-preferences.js';
 import path from 'node:path';
 import { airpEnv, extensionArgs, installPreset, skillArgs } from './presets.js';
-import { CHARACTER_ROLE_PREFIX } from '@airp/shared';
+import { CHARACTER_ROLE_PREFIX, isValidCharacterId } from '@airp/shared';
 
 /**
  * Spawn parameters for a pi-rp agent process — the **single source** of truth.
@@ -94,6 +94,28 @@ export function hasExistingSession(worldRoot: string): boolean {
   }
 }
 
+/** Reject unregistered or unsafe character ids before any path/session work. */
+export function assertCharacterLaunchable(worldRoot: string, characterId: string): void {
+  if (!isValidCharacterId(characterId)) {
+    throw new Error(`Invalid character id "${characterId}"`);
+  }
+  const manifestPath = path.join(worldRoot, 'world.json');
+  let manifest: { characters?: Array<{ id?: string }> };
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { characters?: Array<{ id?: string }> };
+  } catch {
+    throw new Error('World manifest is unavailable');
+  }
+  if (!manifest.characters?.some((character) => character.id === characterId)) {
+    throw new Error(`Character "${characterId}" is not registered in this world`);
+  }
+  const characterRoot = path.join(worldRoot, 'characters', characterId);
+  if (!fs.statSync(characterRoot, { throwIfNoEntry: false })?.isDirectory()) {
+    throw new Error(`Character "${characterId}" directory is unavailable`);
+  }
+}
+
+
 /**
  * Writer ("director") launch spec.
  *
@@ -134,6 +156,7 @@ export function writerLaunch(repoRoot: string, worldRoot: string, vendorCliPath:
     args,
     env: toEnv(airpEnv({ role: 'writer' }), agentDirEnv(repoRoot), {
       PI_CODING_AGENT_SESSION_DIR: sessionsDir,
+      AIRP_AGENT_SCOPE: 'writer-top-level',
     }),
   };
 }
@@ -155,6 +178,7 @@ export function characterLaunch(
   vendorCliPath: string,
   characterId: string
 ): LaunchSpec {
+  assertCharacterLaunchable(worldRoot, characterId);
   const characterPreset = path.join(worldRoot, 'characters', characterId, 'preset.json');
   const presetId = installPreset(
     worldRoot,
@@ -181,6 +205,7 @@ export function characterLaunch(
     ],
     env: toEnv(airpEnv({ role: `${CHARACTER_ROLE_PREFIX}${characterId}` }), agentDirEnv(repoRoot), {
       PI_CODING_AGENT_SESSION_DIR: sessionsDir,
+      AIRP_AGENT_SCOPE: 'character',
     }),
   };
 }

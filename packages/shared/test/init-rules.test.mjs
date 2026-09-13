@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   characterIdOfPath,
+  characterRootConfigOf,
   directChildrenOf,
   dirOf,
   hasInitProduct,
@@ -37,6 +38,15 @@ test('characterIdOfPath extracts the id, refusing traversal', () => {
   assert.equal(characterIdOfPath('characters/a/../..'), 'a', 'id segment has no slash; the rest is irrelevant');
   assert.equal(characterIdOfPath('characters/Bad/x.md'), null, 'illegal id');
   assert.equal(characterIdOfPath('characters'), null, 'no trailing slash');
+});
+
+test('characterRootConfigOf only identifies root configuration files', () => {
+  assert.equal(characterRootConfigOf('characters/watson/README.md'), 'README.md');
+  assert.equal(characterRootConfigOf('characters/watson/identity.md'), 'identity.md');
+  assert.equal(characterRootConfigOf('characters/watson/personality.md'), 'personality.md');
+  assert.equal(characterRootConfigOf('characters/watson/memory.md'), 'memory.md');
+  assert.equal(characterRootConfigOf('characters/watson/diary/memory.md'), null);
+  assert.equal(characterRootConfigOf('world/watson/memory.md'), null);
 });
 
 // --------------------------------------------------------------- dirOf export
@@ -113,10 +123,13 @@ test('directChildrenOf keeps only direct children (docs/init/00 §3.4)', () => {
   assert.deepEqual(directChildrenOf(files, 'nope'), []);
 });
 
-test('nookCardPaths: direct-child .md minus README (docs/nook/01 §2.4)', () => {
+test('nookCardPaths: direct-child .md minus all root configuration (docs/nook/01 §2.4)', () => {
   const dir = 'characters/ryo';
   const files = [
     `${dir}/README.md`,
+    `${dir}/identity.md`,
+    `${dir}/personality.md`,
+    `${dir}/memory.md`,
     `${dir}/preset.json`,
     `${dir}/diary.md`,
     `${dir}/letter.md`,

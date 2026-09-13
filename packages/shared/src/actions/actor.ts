@@ -1,3 +1,6 @@
+import { ActionError } from './errors.js';
+import { characterIdOfPath, characterRootConfigOf, isValidCharacterId } from '../rules/characters.js';
+
 /**
  * The five event originators. `god` is separate from `player` because doc-21
  * §3.2 renders god edits differently ("the world changed by itself") and the
@@ -70,4 +73,84 @@ export function actorRef(actor: Actor): string {
     return actor.id ? `${CHARACTER_ROLE_PREFIX}${actor.id}` : CHARACTER_ROLE_PREFIX;
   }
   return actor.type;
+}
+
+/**
+ * Scope is injected by the server/agent launcher and is not model-controlled.
+ * `engine` is reserved for trusted internal callers; it is included here so a
+ * native tool hook can distinguish initialization from ordinary writer turns.
+ */
+export type AgentScope = 'writer-top-level' | 'character' | 'initializer' | 'player' | 'engine';
+export type NookMutationOperation = 'write' | 'edit' | 'move' | 'delete';
+
+function isLifeTraceMutation(
+  actor: Actor,
+  agentScope: AgentScope,
+  characterId: string,
+  operation: NookMutationOperation,
+  registeredCharacterIds?: readonly string[],
+): boolean {
+  if (!isValidCharacterId(characterId)) return false;
+  if (registeredCharacterIds && !registeredCharacterIds.includes(characterId)) return false;
+  if (operation === 'move' || operation === 'delete') {
+    if (agentScope === 'initializer') return false;
+    if (actor.type === 'character') return actor.id === characterId;
+    if (actor.type === 'writer') return agentScope === 'writer-top-level' || agentScope === 'engine';
+    return actor.type === 'god' && agentScope !== 'player';
+  }
+  if (actor.type === 'character') return agentScope === 'character' && actor.id === characterId;
+  if (actor.type === 'writer') {
+    return agentScope === 'writer-top-level' || agentScope === 'initializer' || agentScope === 'engine';
+  }
+  return actor.type === 'god' && agentScope !== 'player';
+}
+
+/**
+ * Pure permission check for character-nook content. Configuration files are
+ * intentionally handled separately below: generic write/edit never reaches
+ * them, and move/delete are permanently forbidden for all actors.
+ */
+export function canMutateCharacterNook(
+  actor: Actor,
+  agentScope: AgentScope,
+  characterId: string,
+  operation: NookMutationOperation,
+  registeredCharacterIds?: readonly string[],
+): boolean {
+  return isLifeTraceMutation(actor, agentScope, characterId, operation, registeredCharacterIds);
+}
+
+/**
+ * Enforce the shared four-action nook boundary before any file mutation.
+ * The optional manifest list is supplied by action callers so Writer access is
+ * limited to characters actually registered in `world.json`.
+ */
+export function assertNookMutationAllowed(
+  actor: Actor,
+  agentScope: AgentScope,
+  path: string,
+  operation: NookMutationOperation,
+  registeredCharacterIds?: readonly string[],
+): void {
+  const characterId = characterIdOfPath(path);
+  if (characterId === null) return;
+  const config = characterRootConfigOf(path);
+  if (config !== null) {
+    if (operation === 'move' || operation === 'delete') {
+      throw new ActionError({
+        code: 'not_movable',
+        message: `${config} is a character configuration file and cannot be moved or deleted: "${path}"`,
+      });
+    }
+    throw new ActionError({
+      code: 'unsupported',
+      message: `${config} can only be changed through edit_character_config: "${path}"`,
+    });
+  }
+  if (!isLifeTraceMutation(actor, agentScope, characterId, operation, registeredCharacterIds)) {
+    throw new ActionError({
+      code: 'unsupported',
+      message: `${actorLabel(actor)} is not allowed to ${operation} character nook content at "${path}"`,
+    });
+  }
 }

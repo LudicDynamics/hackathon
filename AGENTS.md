@@ -118,6 +118,7 @@ AIRP（AI Role-Playing Narrative Canvas）是一款 AI 互动叙事游戏：玩�
 
 - 把工作区中别人未提交的修改视为在途工作；不要 `stash`、`checkout`、`restore`、格式化或覆盖它们。
 - 提交前先看 `git status`，只暂存自己改动的文件或 hunk；禁止 `git add .` 和 `git add -A`。
+- **提交时必须只暂存自己的改动**：按文件或 hunk 使用 `git add <自己修改的路径>` / `git add -p`，不得因为文件里混有自己的改动就整文件暂存；提交前用 `git diff --cached --name-only` 和 staged diff 核对，确认没有带入其他 Agent 或用户的未提交内容。**不得以工作区还存在其他暂存或大批改动为借口不提交自己的改动**；必须拆分并及时提交属于自己的文件或 hunk。绝不使用 `git add .`、`git add -A` 或等价的全量暂存命令。
 - 同一文件有重叠修改时先协调归属；不要把别人的改动顺手带进提交。
 - 不要假设只有一个分支或一个 Agent 在推送；修改别人分支前先沟通。
 

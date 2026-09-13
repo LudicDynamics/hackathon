@@ -5,6 +5,7 @@ import { renderFrontmatterWidgets } from '../lib/fm.js';
 import { airpGateway } from '../lib/airp-gateway.js';
 import { playFoley } from '../lib/audio.js';
 import { ItemArtwork } from './ItemArtwork.js';
+import { PhotoMedia } from './photo/PhotoMedia.js';
 import {
   actionKey,
   ActionFeedbackStore,
@@ -55,17 +56,33 @@ export function BagItemDialog({ item, onClose, onPlace, inline = false, appearan
     setBusy(true); setError('');
     try { await action(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
-  const image = item.frontmatter?.image || item.frontmatter?.cover;
-  // Reading layer reuses the same resolution (04 §:86): attrs go on the dialog, and the
-  // token vars are read by the `.paper-reading` CSS with its own legacy fallbacks.
+  const isPhoto = item.frontmatter?.component === 'photo';
+  const image = typeof item.frontmatter?.image === 'string' ? item.frontmatter.image : item.frontmatter?.cover;
+  // Carried photos use the same explicit missing/error states as canvas photos;
+  // ordinary carried items retain ItemArtwork and inline legacy image behavior.
   return <section ref={paper} data-reading data-no-drag {...appearance?.attrs} style={appearance?.style} className={`paper-reading${inline ? ' paper-reading--inline' : ' paper-reading--carried'}`} role="region" aria-label={String(item.frontmatter?.title || item.filename)} onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
     <header>
       <h2><button onClick={onClose} title={t('Close')}>{item.frontmatter?.title || item.filename}</button></h2>
       <button autoFocus className="paper-reading__fold" aria-label={t('Close')} onClick={onClose}>↙</button>
     </header>
     <div className="paper-reading__content">
-      {!inline && <div className="carried-item-artwork"><ItemArtwork item={item} /></div>}
-      {inline && typeof image === 'string' && <img src={airpGateway.assetUrl(image)} alt="" style={{ maxHeight: 200, maxWidth: '100%', objectFit: 'contain' }} />}
+      {isPhoto ? (
+        <>
+          <PhotoMedia
+            image={typeof item.frontmatter?.image === 'string' ? item.frontmatter.image : undefined}
+            alt={String(item.frontmatter?.title || item.filename)}
+            variant="carried"
+          />
+          {typeof item.frontmatter?.caption === 'string' && item.frontmatter.caption.trim() && (
+            <p className="photo-detail__caption">{item.frontmatter.caption}</p>
+          )}
+        </>
+      ) : (
+        <>
+          {!inline && <div className="carried-item-artwork"><ItemArtwork item={item} /></div>}
+          {inline && typeof image === 'string' && <img src={airpGateway.assetUrl(image, undefined, 'image')} alt="" style={{ maxHeight: 200, maxWidth: '100%', objectFit: 'contain' }} />}
+        </>
+      )}
       <MarkdownText text={item.body} />
       <fieldset disabled={busy} aria-busy={busy}>
         {renderFrontmatterWidgets(item.frontmatter, { filePath: item.path, reveal: true, onChoice: choose })}

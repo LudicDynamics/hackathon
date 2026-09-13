@@ -7,6 +7,7 @@ import { ghostItemFor } from '../../lib/init-ghost.js';
 import type { LayerState } from '../../state/useWorld.js';
 import { NookNoteComposer } from './NookNoteComposer.js';
 import { UI_COPY, type Locale } from '../../lib/i18n.js';
+import { airpGateway, type AssetMediaKind } from '../../lib/airp-gateway.js';
 import { useStill } from '../../lib/motion.js';
 import { whenFontsSettled } from '../../lib/fonts.js';
 import { invalidateMeasures } from '../../lib/measure.js';
@@ -65,14 +66,17 @@ interface NookError {
 type FetchResult = { ok: true; data: LayerState } | { ok: false; error: NookError };
 
 /**
- * `/api/asset?path=` is the ONE frozen avatar URL shape (00 §5.4). A raw
- * `/assets/...` value (the old RightSidebar fallback) is normalised rather
- * than passed through, so the nook never reproduces 02 §⑪-2.
+ * Nook avatars are image-lane media. Legacy `/api/asset?path=` values are
+ * normalised in place so every request still declares `kind=image`.
  */
-export function assetUrl(value: unknown): string | null {
+export function assetUrl(value: unknown, mediaKind: AssetMediaKind = 'image'): string | null {
   if (typeof value !== 'string' || value.trim() === '') return null;
-  if (value.startsWith('/api/asset')) return value;
-  return `/api/asset?path=${encodeURIComponent(value.replace(/^\/+/, ''))}`;
+  if (value.startsWith('/api/asset')) {
+    const url = new URL(value, 'http://airp.local');
+    const assetPath = url.searchParams.get('path');
+    return assetPath ? airpGateway.assetUrl(assetPath, undefined, mediaKind) : null;
+  }
+  return airpGateway.assetUrl(value.replace(/^\/+/, ''), undefined, mediaKind);
 }
 
 /**
@@ -354,7 +358,7 @@ export const NookView: React.FC<NookViewProps> = ({
   }, [state?.items]);
 
   const sceneFrontmatter: Record<string, any> | null = state?.scene?.frontmatter ?? null;
-  const avatar = assetUrl(sceneFrontmatter?.avatar);
+  const avatar = assetUrl(sceneFrontmatter?.avatar, 'image');
   const displayName =
     typeof sceneFrontmatter?.name === 'string' && sceneFrontmatter.name.trim() !== ''
       ? sceneFrontmatter.name

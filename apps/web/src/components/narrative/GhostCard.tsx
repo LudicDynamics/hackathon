@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { evict } from '../../lib/phantom.js';
 import type { PhantomEntry } from '../../lib/phantom.js';
+import { airpGateway } from '../../lib/airp-gateway.js';
 import { stageText } from '../../lib/ghost.js';
 
 /**
@@ -32,7 +33,7 @@ export const GhostCard: React.FC<{ entry: PhantomEntry; copy: GhostCopy }> = ({ 
   const pending = phase === 'pending' || phase === 'writing';
   const landed = phase === 'landed';
   const evicted = phase === 'evicted';
-  const imgSrc = entry.asset ? `/api/asset?path=${encodeURIComponent(entry.asset)}` : null;
+  const imgSrc = entry.asset ? airpGateway.assetUrl(entry.asset, undefined, 'image') : null;
 
   // `useWorld` stores the already-formatted stage line in `label` (it calls
   // stageText when registering the progress frame). Re-running stageText over

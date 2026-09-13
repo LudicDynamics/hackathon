@@ -15,8 +15,9 @@ import type { WorldEvent } from '../schemas/events.js';
 import { parseFrontmatter, stringifyFrontmatter } from '../schemas/frontmatter.js';
 import { validateAppearanceInput } from '../schemas/appearance.js';
 import { ActionError } from './errors.js';
-import { eventKindOf } from './delete.js';
+import { assertImageAsset } from '../rules/media.js';
 import { resolveComponentKind } from '../components/registry.js';
+import { eventKindOf } from './delete.js';
 import { registerAction } from './service.js';
 import { actorLabel } from './actor.js';
 import type { ActionContext, ActionResult } from './types.js';
@@ -108,6 +109,9 @@ export async function createEntity(
     input.content !== undefined ? parseFrontmatter(input.content).frontmatter ?? {} : input.frontmatter ?? {};
   const filename = path.split('/').pop() ?? path;
   const semanticKind = resolveComponentKind(frontmatter, filename);
+  if (frontmatter.component === 'photo' && Object.prototype.hasOwnProperty.call(frontmatter, 'image')) {
+    await assertImageAsset(ctx.store.worldRoot, frontmatter.image as string);
+  }
   if (Object.prototype.hasOwnProperty.call(frontmatter, 'appearance')) {
     const appearance = validateAppearanceInput(frontmatter.appearance, semanticKind);
     if (!appearance.ok) {

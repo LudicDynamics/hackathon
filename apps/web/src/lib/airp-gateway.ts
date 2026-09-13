@@ -1,4 +1,5 @@
 import type { WorldSettings } from '@airp/shared/world-settings';
+export type AssetMediaKind = 'image' | 'video' | 'audio';
 
 export interface WorldShelf {
   templates: string[];
@@ -91,7 +92,12 @@ export const airpGateway = {
   // Server reads `path` (docs/tools/12:1403).
   godAction: (action: 'create' | 'update' | 'delete', path: string, content?: string) =>
     request('/api/god-action', json('POST', { action, path, content })),
-  assetUrl: (path: string) => `/api/asset?path=${encodeURIComponent(path)}&session=${assetSession}`,
+  assetUrl: (
+    path: string,
+    session: string | undefined,
+    mediaKind: AssetMediaKind,
+  ) =>
+    `/api/asset?path=${encodeURIComponent(path)}&kind=${mediaKind}&session=${encodeURIComponent(session ?? assetSession)}`,
 };
 
 export function openAirpSocket(onMessage: (message: Record<string, unknown>) => void): WebSocket {

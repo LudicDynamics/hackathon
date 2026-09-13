@@ -24,7 +24,7 @@ export function PropCard({ visual, title, body, image, onEnter, appearance }: Pr
   return <>
     <button className={`cabin-prop cabin-prop--${visual}`} aria-label={title}
       onClick={() => { if (onEnter) onEnter(); else setOpen(value => !value); }}>
-      {image ? <img src={airpGateway.assetUrl(image)} alt="" /> : <span className="cabin-prop__shape" aria-hidden="true"><i /><b /></span>}
+      {image ? <img src={airpGateway.assetUrl(image, undefined, 'image')} alt="" /> : <span className="cabin-prop__shape" aria-hidden="true"><i /><b /></span>}
       <span className="cabin-prop__label">{title}</span>
       <span className="cabin-prop__hint">{onEnter ? 'TURN THE HANDLE' : 'INSPECT'}</span>
     </button>

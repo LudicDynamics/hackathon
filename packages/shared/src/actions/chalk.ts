@@ -20,8 +20,10 @@ import {
   type RollDice,
   type Status,
 } from '../schemas/frontmatter.js';
-import { validateAppearanceInput } from '../schemas/appearance.js';
 import { ActionError, fail } from './errors.js';
+import { validateAppearanceInput } from '../schemas/appearance.js';
+import { assertNookMutationAllowed } from './actor.js';
+import type { AgentScope } from './actor.js';
 import { dirname } from './refs.js';
 import { registerAction } from './service.js';
 import type { LinkStyle } from '../schemas/canvas.js';
@@ -259,6 +261,9 @@ export function buildFrontmatter(
   if ('type' in extra || 'title' in extra) {
     fail('invalid_argument', "frontmatter.extra must not override 'type' or 'title'");
   }
+  if (extra.component === 'photo' || Object.prototype.hasOwnProperty.call(extra, 'image')) {
+    fail('invalid_argument', "writeChalk cannot create component: photo entities or photo image fields");
+  }
   // `linkStyle` is a LINE parameter wearing an `extra` hat (§2.6): the action
   // consumes it to style the link and drops it, so the chalk file never grows a
   // key that is not in the §4.2 field set.
@@ -479,6 +484,19 @@ export async function writeChalk(
   // The layer directory must exist for an explicit path too.
   if (shape.kind === 'create' && (await store.statKind(shape.layerDir)) !== 'dir') {
     fail('not_found', `layer directory '${shape.layerDir}' does not exist`);
+  }
+  if (!(actor.type === 'player' && ctx.nookNote === true)) {
+    const agentScope: AgentScope =
+      ctx.agentScope ??
+      (actor.type === 'character' ? 'character' : actor.type === 'player' ? 'player' : 'writer-top-level');
+    const manifest = await store.getManifest();
+    assertNookMutationAllowed(
+      actor,
+      agentScope,
+      targetPath,
+      'write',
+      manifest.characters.map((character) => character.id),
+    );
   }
   const fm = buildFrontmatter(input, parsed?.frontmatter ?? null);
   const body = shape.kind === 'append' ? renderAppend(parsed!.body, rawBody) : rawBody.trim();

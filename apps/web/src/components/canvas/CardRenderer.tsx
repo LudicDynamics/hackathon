@@ -5,6 +5,7 @@ import { playFoley } from '../../lib/audio.js';
 import { DoorOpen } from 'lucide-react';
 import { useLocale } from '../../lib/i18n.js';
 import { PropCard } from './PropCard.js';
+import { PhotoCard } from './PhotoCard.js';
 import type { AppearanceView } from '../../lib/appearance-view.js';
 
 interface CardRendererProps {
@@ -260,6 +261,25 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
           </div>
         )}
       </>
+    );
+  }
+  // 4. Photo component — the image is the card's visual focus. Reading is
+  //    owned by CanvasObject so this branch only paints and wires existing
+  //    drop/Take callbacks.
+  if (frontmatter?.type === 'component' && frontmatter?.component === 'photo') {
+    return (
+      <PhotoCard
+        item={item}
+        appearance={appearance}
+        puzzleClasses={puzzleClasses}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragOver(true);
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={handleTargetDrop}
+        onTakeItem={onTakeItem}
+      />
     );
   }
   const noteTitle =

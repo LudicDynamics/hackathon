@@ -31,6 +31,7 @@ import {
   componentDefOf,
   resolveAppearance,
   sanitiseForBlock,
+  assertAssetReference,
   type Actor,
   type CardRecord,
   type SeatFile,
@@ -282,7 +283,7 @@ const AUDIO_POOL: Record<'ambient' | 'bgm', readonly string[]> = {
 
 /**
  * One audio value → URL. Three shapes (docs/audio/00 §1/§3.1):
- *   - `assets/…` → direct world-relative file → `/api/asset?path=<enc>` (missing → null)
+ *   - `assets/…` → direct world-relative file → `/api/asset?path=<enc>&kind=audio` (missing → null)
  *   - a value containing `/` that is NOT `assets/`-prefixed → contract violation:
  *     warn + null (fail-loud, response shape unchanged)
  *   - a bare name → the 5-step override chain: world-level (all candidates, override)
@@ -306,7 +307,7 @@ function resolveAudioRef(
     // A declared-but-absent world path folds to null (declared silence), NOT a
     // frontend fetch failure (which would fall back to synthesis, 00 §7).
     if (!existsSync(abs)) return null;
-    return `/api/asset?path=${encodeURIComponent(val)}`;
+    return `/api/asset?path=${encodeURIComponent(val)}&kind=audio`;
   }
 
   if (val.includes('/')) {
@@ -319,7 +320,7 @@ function resolveAudioRef(
       const cand = tpl.replace('{n}', val);
       if (level === 'world') {
         if (existsSync(path.resolve(store.worldRoot, 'assets/audio', cand))) {
-          return `/api/asset?path=${encodeURIComponent(`assets/audio/${cand}`)}`;
+          return `/api/asset?path=${encodeURIComponent(`assets/audio/${cand}`)}&kind=audio`;
         }
       } else if (existsSync(path.join(audioRoot, cand))) {
         return `/api/audio?path=${encodeURIComponent(cand)}`;
@@ -1309,25 +1310,44 @@ export function createWorldRouter(
   });
 
   /**
-   * Serve a world asset (scene backdrop, portrait, …) from the active world root.
-   * The frontend requests `/api/asset?path=<world-relative>`; the store path
-   * resolver strips any `../` traversal, and we refuse anything outside the
-   * world root as a second belt. Assets are frequently absent in templates, so
-   * a miss is a plain 404 — the client degrades to the material skin.
+   * Serve a world asset through an explicit media lane. The endpoint is shared
+   * by scene images, portrait video and world audio; `kind` is required so a
+   * caller cannot widen an image reference into another media type.
    */
   router.get('/asset', async (req, res) => {
     const store = getActiveStore();
     if (!store) return res.status(400).json({ error: 'No active world' });
-    const rel = String(req.query.path || '').replace(/^\/+/, '');
+    const rel = typeof req.query.path === 'string' ? req.query.path : '';
     if (!rel) return res.status(400).json({ error: 'path required' });
+    const kind = typeof req.query.kind === 'string' ? req.query.kind : '';
+    if (kind !== 'image' && kind !== 'video' && kind !== 'audio') {
+      return res.status(400).json({
+        ok: false,
+        code: 'invalid_argument',
+        error: 'kind must be one of: image, video, audio',
+      });
+    }
     try {
-      const abs = path.resolve(store.worldRoot, rel);
-      if (!abs.startsWith(store.worldRoot + path.sep)) {
-        return res.status(403).json({ error: 'path escapes world root' });
-      }
-      res.sendFile(abs);
+      const { absolutePath, mimeType } = await assertAssetReference(
+        store.worldRoot,
+        rel,
+        kind,
+      );
+      res.type(mimeType);
+      res.sendFile(absolutePath, (err) => {
+        if (err && !res.headersSent) {
+          res.status(404).json({ ok: false, code: 'not_found', error: err.message });
+        }
+      });
     } catch (err) {
-      res.status(404).json({ error: err instanceof Error ? err.message : String(err) });
+      if (err instanceof ActionError) {
+        const body = err.toHttp().body;
+        const status = err.code === 'invalid_asset_ref'
+          ? (err.details.reason === 'not_found' ? 404 : 403)
+          : err.httpStatus;
+        return res.status(status).json(body);
+      }
+      return res.status(404).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 

@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { WorldStore } from '../store/world-store.js';
 import type { ActionContext, ActionDetails, ActionResult } from './types.js';
-import type { Actor } from './actor.js';
+import type { Actor, AgentScope } from './actor.js';
 import { fail } from './errors.js';
+import type { CreateCharInvocation } from './create-char.js';
 
 /**
  * `createActionService` is the single action entry point shared by the server
@@ -67,7 +68,10 @@ export interface ActionService {
   recordLayerInitFailed(input: ActionInput): Promise<ActionResult>;
   // — doc-12 (god create branch) —
   createEntity(input: ActionInput): Promise<ActionResult>;
-  // — doc-16 (signature frozen; implementation post-hackathon) —
+  // — Writer/Character configuration maintenance —
+  editCharacterConfig(input: ActionInput): Promise<ActionResult>;
+  // — Writer-only character assembly —
+  createChar(invocation: CreateCharInvocation): Promise<ActionResult>;
   snapshotWorld(input: ActionInput): Promise<ActionResult>;
   rollbackWorld(input: ActionInput): Promise<ActionResult>;
 }
@@ -80,6 +84,7 @@ export const ACTION_METHODS = [
   'moveEntity',
   'removeEntity',
   'editEntity',
+  'editCharacterConfig',
   'moveCharacter',
   'setFollowing',
   'carryFollowers',
@@ -94,6 +99,7 @@ export const ACTION_METHODS = [
   'enterLayer',
   'noteCharacterTalked',
   'recordLayerInitialized',
+  'createChar',
   'recordLayerInitFailed',
   'createEntity',
   'snapshotWorld',
@@ -129,11 +135,12 @@ async function invoke(name: ActionMethodName, ctx: ActionContext, input: ActionI
 export function createActionService(
   store: WorldStore,
   actor: Actor,
-  opts?: { turn?: string; now?: () => string; rng?: () => number }
+  opts?: { turn?: string; now?: () => string; rng?: () => number; agentScope?: AgentScope }
 ): ActionService {
   const ctx: ActionContext = {
     store,
     actor,
+    agentScope: opts?.agentScope ?? (process.env.AIRP_AGENT_SCOPE as AgentScope | undefined),
     // One service instance = one batch anchor (01 §2.6): the C entry passes a
     // `req:<uuid>`; the A entry passes the agent's `turn:<session>:<n>`.
     turn: opts?.turn ?? `svc:${randomUUID()}`,

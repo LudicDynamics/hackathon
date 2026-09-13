@@ -37,7 +37,7 @@ import { MuteButton } from './components/chrome/MuteButton.js';
 import { useAudio } from './state/useAudio.js';
 import { useCamera } from './state/useCamera.js';
 import { useWorld } from './state/useWorld.js';
-import { airpGateway, type WorldShelf } from './lib/airp-gateway.js';
+import { airpGateway, type AssetMediaKind, type WorldShelf } from './lib/airp-gateway.js';
 import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
 import { BagItemDialog } from './components/BagItemDialog.js';
 import { initialShell, transitionShell, splitCharacters } from './lib/ui-shell.mjs';
@@ -98,10 +98,15 @@ function labelOf(value: string): string {
     .join(' ');
 }
 
-function assetUrl(path?: string): string | undefined {
+function assetUrl(path?: string, mediaKind: AssetMediaKind = 'image'): string | undefined {
   if (!path) return undefined;
-  if (/^(?:https?:|data:|blob:|\/)/.test(path)) return path;
-  return airpGateway.assetUrl(path);
+  if (path.startsWith('/api/asset')) {
+    const url = new URL(path, window.location.origin);
+    const assetPath = url.searchParams.get('path');
+    return assetPath ? airpGateway.assetUrl(assetPath, undefined, mediaKind) : undefined;
+  }
+  if (/^(?:https?:|data:|blob:)/.test(path)) return path;
+  return airpGateway.assetUrl(path.replace(/^\/+/, ''), undefined, mediaKind);
 }
 
 function sceneName(manifest: WorldManifest | null, layer: string): string {
@@ -344,12 +349,11 @@ export function App() {
 
   useEffect(() => {
     const src = state?.bg?.src;
-    setBackdropReady(false);
     if (!src || loadingWorld) return;
     const probe = new Image();
     probe.onload = () => setBackdropReady(true);
     probe.onerror = () => setBackdropReady(false);
-    probe.src = airpGateway.assetUrl(src);
+    probe.src = airpGateway.assetUrl(src, undefined, 'image');
     return () => {
       probe.onload = null;
       probe.onerror = null;
@@ -417,7 +421,7 @@ export function App() {
   );
   const currentName = readme?.frontmatter?.title || sceneName(manifest, layer);
   const playerRole = manifest?.player?.name || (manifest?.id === 'wuwu' ? 'Harbor Investigator' : 'Traveler');
-  const playerAvatar = assetUrl(manifest?.player?.avatar);
+  const playerAvatar = assetUrl(manifest?.player?.avatar, 'image');
   const sceneStatus = chalks.flatMap(chalk => Object.entries(chalk.frontmatter?.status?.data || {})).slice(0, 3);
   const breadcrumbs: string[] = [];
   let crumb: string | null = layer;
@@ -735,9 +739,9 @@ export function App() {
                 className="prototype-hand-orb"
                 onClick={() => openCharacter(character)}
                 title={t('Talk to {name}', { name: character.name || character.id })}
-                style={assetUrl(character.avatar) ? { backgroundImage: `url("${assetUrl(character.avatar)}")` } : undefined}
+                style={assetUrl(character.avatar, 'image') ? { backgroundImage: `url("${assetUrl(character.avatar, 'image')}")` } : undefined}
               >
-                {!assetUrl(character.avatar) && <span>{character.id.charAt(0).toUpperCase()}</span>}
+                {!assetUrl(character.avatar, 'image') && <span>{character.id.charAt(0).toUpperCase()}</span>}
                 <small>{character.name || labelOf(character.id)}</small>
               </button>
             ))}
@@ -778,9 +782,9 @@ export function App() {
               className="prototype-companion-orb"
               onClick={() => openCharacter(companion)}
               aria-label={t('Talk to {name}', { name: companion.name || companion.id })}
-              style={assetUrl(companion.avatar) ? { backgroundImage: `url("${assetUrl(companion.avatar)}")` } : undefined}
+              style={assetUrl(companion.avatar, 'image') ? { backgroundImage: `url("${assetUrl(companion.avatar, 'image')}")` } : undefined}
             >
-              {!assetUrl(companion.avatar) && companion.id.charAt(0).toUpperCase()}<i /><small>{companion.name || labelOf(companion.id)}</small>
+              {!assetUrl(companion.avatar, 'image') && companion.id.charAt(0).toUpperCase()}<i /><small>{companion.name || labelOf(companion.id)}</small>
             </button>
           ))}
           </div>
@@ -844,12 +848,12 @@ export function App() {
           key={activeCharacter.id}
           characterId={activeCharacter.id}
           displayName={activeCharacter.name}
-          avatar={assetUrl(activeCharacter.avatar)}
-          avatarVideo={assetUrl(activeCharacter.avatarVideo)}
+          avatar={assetUrl(activeCharacter.avatar, 'image')}
+          avatarVideo={assetUrl(activeCharacter.avatarVideo, 'video')}
           emotions={
             activeCharacter.emotions
               ? Object.fromEntries(
-                  Object.entries(activeCharacter.emotions).map(([emo, path]) => [emo, assetUrl(path) ?? ''])
+                Object.entries(activeCharacter.emotions).map(([emo, path]) => [emo, assetUrl(path, 'image') ?? ''])
                 )
               : undefined
           }

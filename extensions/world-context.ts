@@ -1,12 +1,52 @@
 import path from 'node:path';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { parseFrontmatter } from '../packages/shared/dist/index.js';
+import { assertNookMutationAllowed, parseFrontmatter, type Actor, type AgentScope } from '../packages/shared/dist/index.js';
 import { agentActor, worldStore } from './toolkit/deps.js';
 import { currentTurnAnchor } from './toolkit/turn.js';
 
+type TrackedWrite = { file: string; existed: boolean };
+
+function scopeFromEnvironment(actor: Actor): AgentScope {
+  const raw = process.env.AIRP_AGENT_SCOPE;
+  if (raw === 'character' || raw === 'initializer' || raw === 'player' || raw === 'engine') return raw;
+  if (raw === 'writer-top-level') return raw;
+  return actor.type === 'character' ? 'character' : actor.type === 'player' ? 'player' : 'writer-top-level';
+}
+
+function inputText(input: Record<string, unknown>): string | undefined {
+  if (typeof input.content === 'string') return input.content;
+  if (typeof input.newText === 'string') return input.newText;
+  if (typeof input.text === 'string') return input.text;
+  return undefined;
+}
+
+function mergedEditText(previous: string, input: Record<string, unknown>): string | undefined {
+  const direct = inputText(input);
+  if (direct !== undefined) return direct;
+  if (typeof input.oldText === 'string' && typeof input.newText === 'string') {
+    return previous.replace(input.oldText, input.newText);
+  }
+  if (Array.isArray(input.edits)) {
+    let result = previous;
+    for (const edit of input.edits) {
+      if (!edit || typeof edit !== 'object') return undefined;
+      const item = edit as Record<string, unknown>;
+      if (typeof item.oldText !== 'string' || typeof item.newText !== 'string') return undefined;
+      result = result.replace(item.oldText, item.newText);
+    }
+    return result;
+  }
+  return undefined;
+}
+
+function isPhotoContent(raw: string): boolean {
+  const { frontmatter } = parseFrontmatter(raw);
+  return frontmatter?.component === 'photo';
+}
+
 /** Native file tools need their own receipt; AIRP tools already append theirs. */
 export default function registerWorldContext(pi: ExtensionAPI): void {
-  const writes = new Map<string, { file: string; existed: boolean }>();
+  const writes = new Map<string, TrackedWrite>();
   pi.on('tool_call', async (event, ctx) => {
     if (event.toolName !== 'write' && event.toolName !== 'edit') return;
     if (typeof event.input.path !== 'string') return;
@@ -14,7 +54,27 @@ export default function registerWorldContext(pi: ExtensionAPI): void {
     if (!(file.startsWith('world/') || file.startsWith('player/') || file.startsWith('characters/')) || !file.endsWith('.md')) {
       return { block: true, reason: 'Write scene, prop, or character Markdown under world/, player/, or characters/.' };
     }
-    const existed = await worldStore(ctx).statKind(file) !== 'missing';
+    const store = worldStore(ctx);
+    const actor = agentActor();
+    const agentScope = scopeFromEnvironment(actor);
+    const registered = (await store.getManifest()).characters.map((character) => character.id);
+    try {
+      assertNookMutationAllowed(actor, agentScope, file, event.toolName === 'write' ? 'write' : 'edit', registered);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      return { block: true, reason };
+    }
+    const existed = await store.statKind(file) !== 'missing';
+    const previous = existed ? await store.readFile(file) : '';
+    const proposed = event.toolName === 'write'
+      ? inputText(event.input as Record<string, unknown>)
+      : mergedEditText(previous, event.input as Record<string, unknown>);
+    if (
+      (proposed !== undefined && isPhotoContent(proposed)) ||
+      (event.toolName === 'edit' && proposed === undefined && isPhotoContent(previous))
+    ) {
+      return { block: true, reason: 'invalid_argument: native write/edit cannot create or edit component: photo; use a supported photo action.' };
+    }
     writes.set(event.toolCallId, { file, existed });
   });
   pi.on('tool_result', async (event, ctx) => {

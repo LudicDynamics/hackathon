@@ -4,7 +4,7 @@ import type { JsonAgentSessionEvent } from '../../../../vendor/pi-rp/packages/co
 
 import { CHARACTER_ROLE_PREFIX } from '@airp/shared';
 
-import { characterLaunch, hasExistingSession, writerLaunch } from './launch.js';
+import { assertCharacterLaunchable, characterLaunch, hasExistingSession, writerLaunch } from './launch.js';
 import { readModelPreferences, writeModelPreferences, type ModelPreference } from './model-preferences.js';
 /** Raw WS frame produced by lifecycle itself (warmup replay), not by the engine event map. */
 export type FrameSink = (message: Record<string, any>) => void;
@@ -212,6 +212,7 @@ export class AgentLifecycleManager {
 
   /** Starts a character agent. No context injection (removed in B0 — B3 rebuilds it via `appendMessage`). */
   async startCharacter(characterId: string, worldRoot: string): Promise<RpcClient> {
+    assertCharacterLaunchable(worldRoot, characterId);
     await this.stopCharacter(characterId);
 
     const spec = characterLaunch(this.repoRoot, worldRoot, this.vendorCliPath, characterId);

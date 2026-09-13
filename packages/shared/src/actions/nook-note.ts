@@ -101,7 +101,7 @@ export async function writeNookNote(
     const ordinal = nextOrdinal(files.map((file) => file.slice(file.lastIndexOf('/') + 1)));
     const targetPath = `${nookId}/${ordinal}-${slugify(title)}.md`;
 
-    const result = await writeChalk(ctx, {
+    const result = await writeChalk({ ...ctx, nookNote: true }, {
       body,
       title,
       path: targetPath,

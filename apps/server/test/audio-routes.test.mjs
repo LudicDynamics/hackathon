@@ -56,6 +56,28 @@ async function harness({ readme, mapReadme, manifest, loadable = false } = {}) {
   };
 }
 
+test('/asset requires an explicit media kind and keeps image/video/audio lanes distinct', async () => {
+  const h = await harness();
+  try {
+    await fs.mkdir(path.join(h.world, 'assets/media'), { recursive: true });
+    await fs.writeFile(path.join(h.world, 'assets/media/photo.png'), Buffer.from('89504e470d0a1a0a', 'hex'));
+    await fs.writeFile(path.join(h.world, 'assets/media/clip.webm'), 'WEBM');
+    await fs.writeFile(path.join(h.world, 'assets/media/clip.mp3'), 'ID3');
+
+    assert.equal((await fetch(`${h.base}/asset?path=assets%2Fmedia%2Fphoto.png`)).status, 400);
+    const image = await fetch(`${h.base}/asset?path=assets%2Fmedia%2Fphoto.png&kind=image`);
+    assert.equal(image.status, 200);
+    assert.match(image.headers.get('content-type') ?? '', /^image\/png/);
+    const video = await fetch(`${h.base}/asset?path=assets%2Fmedia%2Fclip.webm&kind=video`);
+    assert.equal(video.status, 200);
+    assert.match(video.headers.get('content-type') ?? '', /^video\/webm/);
+    assert.equal((await fetch(`${h.base}/asset?path=assets%2Fmedia%2Fclip.mp3&kind=image`)).status, 403);
+    assert.equal((await fetch(`${h.base}/asset?path=assets%2Fmedia%2Fmissing.png&kind=image`)).status, 404);
+  } finally {
+    await h.close();
+  }
+});
+
 // ── A 组：裸名 / assets/ 解析与覆盖链 ──
 test('world load and manifest both return the resolved theme URL', async () => {
   const h = await harness({ loadable: true, manifest: {
@@ -113,7 +135,7 @@ test('A5b assets/ 直取 + 世界文件存在 → /api/asset', async () => {
   await fs.mkdir(path.dirname(abs), { recursive: true });
   await fs.writeFile(abs, 'ID3');
   const l = await (await fetch(`${h.base}/layer?layer=world/baker-street`)).json();
-  assert.equal(l.audio.ambient, `/api/asset?path=${encodeURIComponent('assets/audio/rain.mp3')}`);
+  assert.equal(l.audio.ambient, `/api/asset?path=${encodeURIComponent('assets/audio/rain.mp3')}&kind=audio`);
   await h.close();
 });
 
@@ -131,7 +153,7 @@ test('A7 世界同名覆盖 → /api/asset；删后 → 平台 /api/audio', asyn
   await fs.mkdir(path.dirname(worldFile), { recursive: true });
   await fs.writeFile(worldFile, 'ID3');
   let l = await (await fetch(`${h.base}/layer?layer=world/baker-street`)).json();
-  assert.equal(l.audio.ambient, `/api/asset?path=${encodeURIComponent('assets/audio/ambient/fireplace.mp3')}`, '世界级覆盖平台');
+  assert.equal(l.audio.ambient, `/api/asset?path=${encodeURIComponent('assets/audio/ambient/fireplace.mp3')}&kind=audio`, '世界级覆盖平台');
   await fs.rm(worldFile);
   l = await (await fetch(`${h.base}/layer?layer=world/baker-street`)).json();
   assert.equal(l.audio.ambient, '/api/audio?path=ambient%2Ffireplace.mp3', '平台级兜底');
@@ -144,7 +166,7 @@ test('A8 层级序：世界第二候选胜平台第一候选（level-major）', 
   await fs.mkdir(path.dirname(worldPool), { recursive: true });
   await fs.writeFile(worldPool, 'ID3');
   const l = await (await fetch(`${h.base}/layer?layer=world/baker-street`)).json();
-  assert.equal(l.audio.ambient, `/api/asset?path=${encodeURIComponent('assets/audio/ambient/pool/storm.mp3')}`);
+  assert.equal(l.audio.ambient, `/api/asset?path=${encodeURIComponent('assets/audio/ambient/pool/storm.mp3')}&kind=audio`);
   await h.close();
 });
 

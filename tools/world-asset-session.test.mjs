@@ -7,19 +7,20 @@ test('world asset URLs stay stable until a successful load, even for identical f
   const originalFetch = globalThis.fetch;
   try {
     const path = 'assets/scenes/intro.webp';
-    const before = airpGateway.assetUrl(path);
-    assert.equal(airpGateway.assetUrl(path), before);
+    const before = airpGateway.assetUrl(path, undefined, 'image');
+    assert.equal(airpGateway.assetUrl(path, undefined, 'image'), before);
     globalThis.fetch = async () => new Response(JSON.stringify({ ok: true, manifest: {}, path: 'templates/firstsnow' }));
     await airpGateway.loadWorld('templates/firstsnow');
-    const after = airpGateway.assetUrl(path);
+    const after = airpGateway.assetUrl(path, undefined, 'image');
     assert.notEqual(after, before);
     assert.equal(new URL(after, 'http://localhost').searchParams.get('path'), path);
-    assert.equal(airpGateway.assetUrl(path), after);
+    assert.equal(new URL(after, 'http://localhost').searchParams.get('kind'), 'image');
+    assert.equal(airpGateway.assetUrl(path, undefined, 'image'), after);
     await airpGateway.loadWorld('templates/firstsnow');
-    assert.notEqual(airpGateway.assetUrl(path), after);
-    const stable = airpGateway.assetUrl(path);
+    assert.notEqual(airpGateway.assetUrl(path, undefined, 'image'), after);
+    const stable = airpGateway.assetUrl(path, undefined, 'image');
     globalThis.fetch = async () => new Response('Failed', { status: 500 });
     await assert.rejects(airpGateway.loadWorld('missing'));
-    assert.equal(airpGateway.assetUrl(path), stable);
+    assert.equal(airpGateway.assetUrl(path, undefined, 'image'), stable);
   } finally { globalThis.fetch = originalFetch; }
 });

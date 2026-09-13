@@ -16,6 +16,8 @@ import type { WorldManifest } from '../schemas/world.js';
 export interface SceneInitContext {
   /** World-root-relative directory, e.g. `world/baker-street/crime-scene`. */
   targetPath: string;
+  /** Layer identity; `map` is virtual and maps to targetPath `world`. */
+  layerId: string;
   manifest: WorldManifest;
   /** Parent layer's display name (`map` has none). */
   parentLayerName?: string;
@@ -30,6 +32,7 @@ export interface SceneInitContext {
 export function buildSceneInitBrief(ctx: SceneInitContext): string {
   const lines = [
     `[Task] Instantiate a scene layer`,
+    `[Layer ID] ${ctx.layerId}`,
     `[Target Path] ${ctx.targetPath}`,
     `[World] ${ctx.manifest.name} (genre: ${ctx.manifest.genre}; description: ${ctx.manifest.description}; default material: ${ctx.manifest.material})`,
   ];
@@ -56,8 +59,8 @@ export function buildSceneInitBrief(ctx: SceneInitContext): string {
     `- Give only the "first sight", leaving blank space for the player to explore and interact with`,
     `[Deliverables]`,
     `1. README.md: scene title, furnishing overview, and background material declaration`,
-    `2. 2–4 object markdown files (props or letters the player can pick up or investigate)`,
-    `3. 1 opening narration (a md file with type: chalk, <=200 words, including status/choice/roll_dice)`,
+    `2. 1–3 object markdown files (props or letters the player can pick up or investigate)`,
+    `3. 1–2 opening narrations (new authored files use NN-opening.md: 01-opening.md, optionally 02-opening.md; opening.md is only the old W2 fallback and evening.md is legacy; each has type: chalk and <=200 words)`,
     `[Report]`,
     `Report in exactly the three lines the system prompt defines`
   );

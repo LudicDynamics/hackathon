@@ -33,10 +33,10 @@ export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg, effectsEnabled
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const motionUrl = bg.video ? airpGateway.assetUrl(bg.video) : null;
+  const motionUrl = bg.video ? airpGateway.assetUrl(bg.video, undefined, 'video') : null;
   const [failedVideo, setFailedVideo] = useState<string | null>(null);
   const useMotion = effectsEnabled && !!motionUrl && failedVideo !== motionUrl;
-  const src = useMotion ? motionUrl : bg.src ? airpGateway.assetUrl(bg.src) : null;
+  const src = useMotion ? motionUrl : bg.src ? airpGateway.assetUrl(bg.src, undefined, 'image') : null;
   const isAvailable = !!src && failedSrc !== src;
   const isVideo = useMotion || (!!bg.src && /\.(mp4|webm)$/i.test(bg.src));
 
@@ -83,7 +83,7 @@ export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg, effectsEnabled
             muted
             playsInline
             preload="metadata"
-            poster={bg.video && bg.src ? airpGateway.assetUrl(bg.src) : undefined}
+            poster={bg.video && bg.src ? airpGateway.assetUrl(bg.src, undefined, 'image') : undefined}
             src={src}
             onError={() => useMotion ? setFailedVideo(src) : setFailedSrc(src)}
           />

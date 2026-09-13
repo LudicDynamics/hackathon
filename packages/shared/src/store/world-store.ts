@@ -102,6 +102,13 @@ export interface SeatPresenceResult {
   seat: { gx: number; gy: number; tries: number; exhausted: boolean };
 }
 
+export interface CharacterCreationTransaction {
+  stageBundle(files: ReadonlyMap<string, string>): Promise<void>;
+  commitBundleAndManifest(updates: Partial<WorldManifest>): Promise<void>;
+  appendSuccessEventOnce(args: AppendEventArgs, key: string): Promise<WorldEvent>;
+}
+
+
 export interface WorldStore {
   worldRoot: string;
   readFile(relPath: string): Promise<string>;
@@ -124,6 +131,10 @@ export interface WorldStore {
   writeCursor(reader: string, seq: number): Promise<void>;
   /** Newest-first, history panel only (doc-21 §3.1: seq is the cursor, never created_at). */
   getEvents(limit?: number, opts?: { layer?: string }): Promise<WorldEvent[]>;
+  withCharacterCreationWriteLock<T>(
+    characterId: string,
+    work: (tx: CharacterCreationTransaction) => Promise<T>,
+  ): Promise<T>;
 
   // === Path / file helpers (01 §2.7) ===
   /**

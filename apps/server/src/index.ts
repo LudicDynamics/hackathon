@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs';
 import { WebSocketServer, WebSocket } from 'ws';
 import { LocalWorldStore, createActionService, settleTurnCursor } from '@airp/shared';
 import { AgentLifecycleManager } from './engine/lifecycle.js';
+import { assertCharacterLaunchable } from './engine/launch.js';
 import { EventBridge } from './engine/event-bridge.js';
 import { createWorldRouter } from './routes/world.js';
 import { createTtsRouter } from './routes/tts.js';
@@ -185,6 +186,7 @@ wss.on('connection', (ws: WebSocket) => {
           const worldPath = activeStore?.worldRoot;
           if (!worldPath) throw new Error('No active world for the character agent');
           // Pin the open-time high-water BEFORE spawning (03 §4.3): the close
+          assertCharacterLaunchable(worldPath, String(data.characterId));
           // path settles the cursor to this seq, so "world changed while the
           // overlay was open" is reported on the NEXT open instead of being
           // swallowed. A failed read must not block opening (doc 00 §11).

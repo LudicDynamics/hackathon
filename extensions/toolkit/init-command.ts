@@ -287,6 +287,7 @@ export function registerInitCommand(pi: ExtensionAPI): void {
         const manifest = await store.getManifest();
         const brief = isScene
           ? buildSceneInitBrief({
+              layerId: layer,
               targetPath: dir,
               manifest,
               ...(parentLayerOf(manifest, layer) ?? {}),
@@ -301,12 +302,14 @@ export function registerInitCommand(pi: ExtensionAPI): void {
         // `extensions/world-context.ts` turns into a `layer_initialized`
         // fallback — but this command OWNS that event and records it below.
         let result: { status: string; text?: string; error?: string };
+        const previousScope = process.env.AIRP_AGENT_SCOPE;
         try {
+          process.env.AIRP_AGENT_SCOPE = 'initializer';
           process.env.AIRP_INIT_IN_FLIGHT = '1';
           result = await ctx.spawnAgent({
             profileId: isScene ? 'scene-init' : 'nook-init',
             task: brief,
-            customTools: AIRP_TOOLS.map((t) => t.tool),
+            customTools: AIRP_TOOLS.filter((t) => t.name !== 'create_char').map((t) => t.tool),
             timeoutMs: TIMEOUT_MS[args.kind],
             onSessionCreated: (child) => {
               unsubscribeChild?.();
@@ -317,6 +320,8 @@ export function registerInitCommand(pi: ExtensionAPI): void {
           result = { status: 'failed', error: msg(err) };
         } finally {
           delete process.env.AIRP_INIT_IN_FLIGHT;
+          if (previousScope === undefined) delete process.env.AIRP_AGENT_SCOPE;
+          else process.env.AIRP_AGENT_SCOPE = previousScope;
         }
 
         // (6) Split: success needs BOTH 'completed' AND a product on disk.

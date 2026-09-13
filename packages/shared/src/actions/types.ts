@@ -1,6 +1,6 @@
 import type { WorldEvent } from '../schemas/events.js';
 import type { WorldStore } from '../store/world-store.js';
-import type { Actor } from './actor.js';
+import type { AgentScope, Actor } from './actor.js';
 
 /**
  * Everything an action needs, and nothing else.
@@ -11,6 +11,10 @@ export interface ActionContext {
   store: WorldStore;
   /** Who is acting (00 §3). */
   actor: Actor;
+  /** Launcher-injected, model-inaccessible process scope. */
+  agentScope?: AgentScope;
+  /** Internal capability used only by the validated /api/nook-note adapter. */
+  nookNote?: boolean;
   /**
    * Merge anchor (doc-21 §3.4). One agent turn, or one HTTP request.
    * Opaque string; the action layer never parses it, only forwards it.
@@ -21,7 +25,6 @@ export interface ActionContext {
   /** Injectable uniform [0,1) source for `rollDice`; defaults to Math.random. */
   rng?: () => number;
 }
-
 export type ActionDetails = Record<string, any>;
 
 /**

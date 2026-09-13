@@ -6,7 +6,7 @@ import { airpGateway } from '../lib/airp-gateway.js';
 export function ItemArtwork({ item }: { item: { filename: string; frontmatter: Record<string, any> | null } }) {
   const fm = item.frontmatter ?? {};
   const reference = fm.image || fm.cover;
-  const src = typeof reference === 'string' && reference ? airpGateway.assetUrl(reference) : null;
+  const src = typeof reference === 'string' && reference ? airpGateway.assetUrl(reference, undefined, 'image') : null;
   const [failed, setFailed] = useState<string | null>(null);
   const kind = `${fm.visual?.kind ?? fm.visual ?? ''} ${fm.type ?? ''} ${item.filename}`.toLowerCase();
   const Icon = /letter|envelope|mail/.test(kind) ? Mail

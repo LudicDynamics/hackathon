@@ -1,5 +1,6 @@
 import React from 'react';
 import { BagItemDialog } from '../BagItemDialog.js';
+import { PhotoDetailDialog } from '../photo/PhotoDetailDialog.js';
 import { CardRenderer } from './CardRenderer.js';
 import { highlightLinks } from './LinkLayer.js';
 import { chalkStyleOf } from '@airp/shared/forms';
@@ -8,7 +9,7 @@ import type { LayerItem } from '../../state/useWorld.js';
 import { UserRound } from 'lucide-react';
 import { EntityInteractions } from '../narrative/EntityInteractions.js';
 import { highlightChalkAnchor } from '../../lib/chalk-anchor.js';
-import { airpGateway } from '../../lib/airp-gateway.js';
+import { airpGateway, type AssetMediaKind } from '../../lib/airp-gateway.js';
 
 /**
  * Absolute-positioned card shell inside the world transform layer (v2 `.object`
@@ -53,14 +54,21 @@ export function pruneLifts(paths: Set<string>): void {
 const SpriteFig: React.FC<{ avatar?: string; name: string }> = ({ avatar, name }) => {
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => setFailed(false), [avatar]);
-  const src = avatar && (/^(?:https?:|data:|blob:|\/)/.test(avatar) ? avatar : airpGateway.assetUrl(avatar));
+  const src = avatar && (/^(?:https?:|data:|blob:)/.test(avatar) ? avatar : assetUrl(avatar, 'image'));
   return <div className="presence-orb" role="img" aria-label={name}>
     {src && !failed ? <img src={src} alt="" onError={() => setFailed(true)} /> : <UserRound size={30} strokeWidth={1.3} aria-hidden="true" />}
   </div>;
 };
 
 /** World-root-relative asset path → URL (contract §5.4, same as SceneBackdrop). */
-const assetUrl = (p: string): string => `/api/asset?path=${encodeURIComponent(p)}`;
+const assetUrl = (p: string, mediaKind: AssetMediaKind): string => {
+  if (p.startsWith('/api/asset')) {
+    const url = new URL(p, 'http://airp.local');
+    const assetPath = url.searchParams.get('path');
+    return assetPath ? airpGateway.assetUrl(assetPath, undefined, mediaKind) : '';
+  }
+  return airpGateway.assetUrl(p.replace(/^\/+/, ''), undefined, mediaKind);
+};
 
 interface PortraitProps {
   video?: string;
@@ -105,14 +113,14 @@ const PortraitFig: React.FC<PortraitProps> = ({ video, poster, caption, title, s
               muted
               playsInline
               preload="metadata"
-              poster={posterOk ? assetUrl(poster!) : undefined}
-              src={assetUrl(video!)}
+              poster={posterOk ? assetUrl(poster!, 'image') : undefined}
+              src={assetUrl(video!, 'video')}
               onError={() => setFailedSrc(video!)}
             />
           ) : posterOk ? (
             <img
               className="portrait__still"
-              src={assetUrl(poster!)}
+              src={assetUrl(poster!, 'image')}
               alt=""
               onError={() => setFailedSrc(poster!)}
             />
@@ -120,7 +128,7 @@ const PortraitFig: React.FC<PortraitProps> = ({ video, poster, caption, title, s
         ) : posterOk ? (
           <img
             className="portrait__still"
-            src={assetUrl(poster!)}
+            src={assetUrl(poster!, 'image')}
             alt=""
             onError={() => setFailedSrc(poster!)}
           />
@@ -185,10 +193,13 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   const kind = item.kind;
   const [reading, setReading] = React.useState(false);
   const pointerStart = React.useRef({ x: 0, y: 0 });
+  const objectRef = React.useRef<HTMLDivElement>(null);
   // Verified resolution → trusted attrs/vars (docs/components/04 §:79). Memoised in the
   // adapter, so re-renders cost nothing; a missing resolution simply means legacy defaults.
   const appearance = item.appearance ? appearanceViewOf(item.appearance) : null;
   const readable = kind !== 'sprite' && kind !== 'gate';
+  const isPhoto = kind === 'photo' && item.frontmatter?.component === 'photo';
+  const photoDialogId = `photo-detail-${item.path.replace(/[^A-Za-z0-9_-]/g, '-')}`;
   const [isDragOver, setIsDragOver] = React.useState(false);
   const [isItemDragging, setIsItemDragging] = React.useState(false);
   const [isUnlockedEffect, setIsUnlockedEffect] = React.useState(false);
@@ -234,8 +245,12 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
 
   return (
     <div
+      ref={objectRef}
       data-path={item.path}
       tabIndex={0}
+      aria-label={isPhoto ? String(item.frontmatter?.title || item.filename) : undefined}
+      aria-expanded={isPhoto ? reading : undefined}
+      aria-controls={isPhoto && reading ? photoDialogId : undefined}
       onPointerDownCapture={event => { pointerStart.current = { x: event.clientX, y: event.clientY }; }}
       onClick={event => {
         if (!readable || (event.target as HTMLElement).closest('button,a,input,textarea,select,.entity-interactions,.cabin-prop,[role="dialog"]')) return;
@@ -254,7 +269,17 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
       {...appearance?.attrs}
       style={{ ...appearance?.style, ...shellStyle(item, kind, reading) }}
     >
-        {reading ? <BagItemDialog inline item={item} appearance={appearance} onClose={() => setReading(false)} /> : kind === 'portrait' ? (
+        {reading && isPhoto ? (
+          <PhotoDetailDialog
+            item={item}
+            appearance={appearance}
+            dialogId={photoDialogId}
+            onClose={() => setReading(false)}
+            returnFocusRef={objectRef}
+          />
+        ) : reading ? (
+          <BagItemDialog inline item={item} appearance={appearance} onClose={() => setReading(false)} />
+        ) : kind === 'portrait' ? (
           <PortraitFig
             video={item.frontmatter?.video}
             poster={item.frontmatter?.poster}

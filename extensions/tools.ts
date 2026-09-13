@@ -32,6 +32,8 @@ import { arrangeTool } from './toolkit/arrange.js';                // doc-tools/
 import { getComponentTool } from './toolkit/component.js';         // doc-tools/10
 import { showTool } from './toolkit/show.js';                      // doc-tools/10
 import { generateImageTool } from './toolkit/generate-image.js';   // doc-tools/11
+import { createCharTool } from './toolkit/create-char.js';      // create-char
+import { editCharacterConfigTool } from './toolkit/edit-character-config.js'; // nook configuration gate
 import { registerTurnTracking } from './toolkit/turn.js';          // doc-tools/12
 import { registerInitCommand } from './toolkit/init-command.js';   // docs/init/00
 
@@ -61,6 +63,8 @@ export const AIRP_TOOLS: ReadonlyArray<{ name: string; tool: ToolDefinition }> =
   { name: 'delete', tool: deleteTool },
   { name: 'get_component', tool: getComponentTool },
   { name: 'show', tool: showTool },
+  { name: 'create_char', tool: createCharTool },
+  { name: 'edit_character_config', tool: editCharacterConfigTool },
   { name: 'generate_image', tool: generateImageTool },
 ];
 

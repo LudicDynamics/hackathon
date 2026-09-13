@@ -4,10 +4,17 @@ import type { Dirent } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import type { CardRecord, LinkRecord, SeatFile, WorldStore } from './world-store.js';
+import type {
+  CardRecord,
+  CharacterCreationTransaction,
+  LinkRecord,
+  SeatFile,
+  WorldStore,
+} from './world-store.js';
 import { deriveLayers, layerOfPath, layerOfDir, cardsOfLayer, childLayers, WORLD_DIR } from './layers.js';
 import { linkIdOf } from '../schemas/canvas.js';
 import { type WorldManifest, type LayerConfig, validateWorldManifest } from '../schemas/world.js';
+import { isValidCharacterId } from '../rules/characters.js';
 import { entityName, parseFrontmatter } from '../schemas/frontmatter.js';
 import type { ActorValue, AppendEventArgs, DanglingRef, MoveResult, WorldEvent } from '../schemas/events.js';
 import { EventDetailSchemas } from '../schemas/events.js';
@@ -23,6 +30,16 @@ import type { AutoLayoutRect } from '../layout/flow-columns.js';
 export const SEAT_ANCHOR = { x: 960, y: 540 };
 /** Spiral step between candidate cells, in world px. */
 export const SEAT_STEP = 96;
+type CharacterCreationJournal = {
+  characterId: string;
+  stageDir: string;
+  targets: string[];
+  status: 'staged' | 'manifest_committed' | 'event_committed';
+  manifestBefore?: string;
+  manifestAfter?: string;
+  eventKey?: string;
+  eventArgs?: AppendEventArgs;
+};
 /** Collision padding around card bounds when judging seat overlap. */
 export const SEAT_PAD = 22;
 /** Max candidate cells tried before falling back to the anchor itself. */
@@ -107,6 +124,7 @@ export class LocalWorldStore implements WorldStore {
 
     initCanvasDatabase(this.canvasDb);
     initHistoryDatabase(this.historyDb);
+    void this.reconcileCharacterCreationJournals();
   }
 
   /**
@@ -405,6 +423,229 @@ export class LocalWorldStore implements WorldStore {
     return this.getLayerCards([...ids])
       .filter((row) => !excluded.has(row.id) && row.w > 0 && row.h > 0)
       .map((row) => ({ id: row.id, x: row.x, y: row.y, w: row.w, h: row.h }));
+  }
+
+  private characterJournalRoot(): string {
+    return path.join(this.worldRoot, '.airpworld', 'create-char-journal');
+  }
+  private async writeCharacterJournal(file: string, journal: CharacterCreationJournal): Promise<void> {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    const tmp = `${file}.tmp-${process.pid}-${randomUUID().slice(0, 6)}`;
+    try {
+      await fs.writeFile(tmp, JSON.stringify(journal, null, 2));
+      await fs.rename(tmp, file);
+    } catch (err) {
+      await fs.rm(tmp, { force: true }).catch(() => {});
+      throw new ActionError({ code: 'write_failed', message: `Character creation journal failed: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  }
+
+  private async readCharacterJournal(file: string): Promise<CharacterCreationJournal> {
+    return JSON.parse(await fs.readFile(file, 'utf8')) as CharacterCreationJournal;
+  }
+
+  private async appendEventLocked(args: AppendEventArgs): Promise<WorldEvent> {
+    const projectId = await this.projectId();
+    if (process.env.NODE_ENV !== 'production') {
+      const schema = EventDetailSchemas[args.type];
+      const parsed = schema.safeParse(args.detail);
+      if (!parsed.success) {
+        throw new ActionError({
+          code: 'invalid_argument',
+          message: `Event '${args.type}' detail does not match its schema: ${parsed.error.message}`,
+        });
+      }
+    }
+    const now = new Date().toISOString();
+    const info = this.historyDb
+      .prepare(
+        `INSERT INTO events (id, project_id, type, actor_type, actor_id, layer, subject, turn, detail, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        '',
+        projectId,
+        args.type,
+        args.actor.type,
+        args.actor.id ?? null,
+        args.layer ?? null,
+        args.subject ?? null,
+        args.turn ?? null,
+        JSON.stringify(args.detail),
+        now
+      );
+    const seq = Number(info.lastInsertRowid);
+    this.historyDb.prepare('UPDATE events SET id = ? WHERE seq = ?').run(`evt-${seq}`, seq);
+    return {
+      seq,
+      id: `evt-${seq}`,
+      projectId,
+      type: args.type,
+      actor: args.actor,
+      layer: args.layer ?? null,
+      subject: args.subject ?? null,
+      turn: args.turn ?? null,
+      detail: args.detail,
+      createdAt: now,
+    };
+  }
+
+  async withCharacterCreationWriteLock<T>(
+    characterId: string,
+    work: (tx: CharacterCreationTransaction) => Promise<T>,
+  ): Promise<T> {
+    if (!isValidCharacterId(characterId)) {
+      throw new ActionError({ code: 'invalid_argument', message: `Invalid character id "${characterId}"` });
+    }
+    const journalDir = this.characterJournalRoot();
+    await fs.mkdir(journalDir, { recursive: true });
+    let journalFile: string | null = null;
+    let journal: CharacterCreationJournal | null = null;
+    try {
+      this.historyDb.exec('BEGIN IMMEDIATE');
+    } catch (err) {
+      throw new ActionError({ code: 'write_failed', message: `Character creation lock unavailable: ${err instanceof Error ? err.message : String(err)}` });
+    }
+    try {
+      const tx: CharacterCreationTransaction = {
+        stageBundle: async (files) => {
+          if (journalFile) throw new ActionError({ code: 'write_failed', message: 'Character bundle already staged' });
+          const stageDir = path.join(this.worldRoot, '.airpworld', 'create-char-staging', `${characterId}-${randomUUID()}`);
+          const targets = [...files.keys()];
+          if (targets.length === 0) throw new ActionError({ code: 'write_failed', message: 'Character bundle is empty' });
+          try {
+            for (const target of targets) {
+              this.resolvePath(target);
+              const staged = path.join(stageDir, target);
+              await fs.mkdir(path.dirname(staged), { recursive: true });
+              await fs.writeFile(staged, files.get(target)!);
+            }
+          } catch (err) {
+            await fs.rm(stageDir, { force: true, recursive: true }).catch(() => {});
+            if (err instanceof ActionError) throw err;
+            throw new ActionError({ code: 'write_failed', message: `Character staging failed: ${err instanceof Error ? err.message : String(err)}` });
+          }
+          let current: WorldManifest;
+          try {
+            current = await this.getManifest();
+          } catch (err) {
+            await fs.rm(stageDir, { force: true, recursive: true }).catch(() => {});
+            throw err;
+          }
+          const { layers: _beforeLayers, ...persistedBefore } = current;
+          const file = path.join(journalDir, `${characterId}-${randomUUID()}.json`);
+          journalFile = file;
+          journal = {
+            characterId,
+            stageDir,
+            targets,
+            status: 'staged',
+            manifestBefore: JSON.stringify(persistedBefore),
+          };
+          await this.writeCharacterJournal(file, journal);
+        },
+        commitBundleAndManifest: async (updates) => {
+          if (!journalFile || !journal) throw new ActionError({ code: 'write_failed', message: 'Character bundle was not staged' });
+          const current = await this.getManifest();
+          const merged = validateWorldManifest({
+            ...current,
+            ...updates,
+            updatedAt: new Date().toISOString(),
+          });
+          const { layers: _derived, ...persisted } = merged;
+          journal.manifestAfter = JSON.stringify(merged);
+          await this.writeCharacterJournal(journalFile, journal);
+          const moved: string[] = [];
+          try {
+            for (const target of journal.targets) {
+              const destination = this.resolvePath(target);
+              if ((await this.statKind(target)) !== 'missing') {
+                throw new ActionError({ code: 'already_exists', message: `Character target already exists: "${target}"` });
+              }
+              await fs.mkdir(path.dirname(destination), { recursive: true });
+              await fs.rename(path.join(journal.stageDir, target), destination);
+              moved.push(target);
+            }
+            await this.writeFileAtomic('world.json', JSON.stringify(persisted, null, 2));
+            this.manifestCache = merged;
+            journal.status = 'manifest_committed';
+            await this.writeCharacterJournal(journalFile, journal);
+          } catch (err) {
+            for (const target of moved) await fs.rm(this.resolvePath(target), { force: true, recursive: true }).catch(() => {});
+            if (journal.manifestBefore) {
+              await this.writeFileAtomic('world.json', JSON.stringify(JSON.parse(journal.manifestBefore), null, 2)).catch(() => {});
+            }
+            if (err instanceof ActionError) throw err;
+            throw new ActionError({ code: 'write_failed', message: `Character bundle commit failed: ${err instanceof Error ? err.message : String(err)}` });
+          }
+        },
+        appendSuccessEventOnce: async (args, key) => {
+          if (!journalFile || !journal || journal.status !== 'manifest_committed') {
+            throw new ActionError({ code: 'event_failed', message: 'Character manifest is not committed' });
+          }
+          journal.eventArgs = args;
+          journal.eventKey = key;
+          await this.writeCharacterJournal(journalFile, journal);
+          const projectId = await this.projectId();
+          const detail = JSON.stringify(args.detail);
+          const existing = this.historyDb.prepare(
+            `SELECT * FROM events WHERE project_id = ? AND type = ? AND subject IS ? AND turn IS ? AND detail = ? ORDER BY seq LIMIT 1`
+          ).get(projectId, args.type, args.subject ?? null, args.turn ?? null, detail) as Record<string, unknown> | undefined;
+          const event = existing ? this.rowToEvent(existing as never) : await this.appendEventLocked(args);
+          journal.status = 'event_committed';
+          await this.writeCharacterJournal(journalFile, journal);
+          return event;
+        },
+      };
+      const result = await work(tx);
+      this.historyDb.exec('COMMIT');
+      const completedJournal = journal as CharacterCreationJournal | null;
+      if (journalFile && completedJournal) {
+        await fs.rm(completedJournal.stageDir, { force: true, recursive: true }).catch(() => {});
+        await fs.rm(journalFile, { force: true }).catch(() => {});
+      }
+      return result;
+    } catch (err) {
+      const failedJournal = journal as CharacterCreationJournal | null;
+      if (journalFile && failedJournal?.status === 'manifest_committed') {
+        // Manifest is durable but event append failed: reconciliation must finish it.
+      } else if (journalFile && failedJournal) {
+        await fs.rm(failedJournal.stageDir, { force: true, recursive: true }).catch(() => {});
+        await fs.rm(journalFile, { force: true }).catch(() => {});
+      }
+      throw err;
+    }
+  }
+
+  async reconcileCharacterCreationJournals(): Promise<void> {
+    const root = this.characterJournalRoot();
+    let names: string[] = [];
+    try { names = (await fs.readdir(root)).filter((name) => name.endsWith('.json')); } catch { return; }
+    for (const name of names) {
+      const file = path.join(root, name);
+      let journal: CharacterCreationJournal;
+      try { journal = await this.readCharacterJournal(file); } catch { continue; }
+      if (journal.status === 'staged') {
+        await fs.rm(journal.stageDir, { force: true, recursive: true }).catch(() => {});
+        await fs.rm(file, { force: true }).catch(() => {});
+        continue;
+      }
+      if (!journal.eventArgs) continue;
+      try {
+        this.historyDb.exec('BEGIN IMMEDIATE');
+        const projectId = await this.projectId();
+        const detail = JSON.stringify(journal.eventArgs.detail);
+        const existing = this.historyDb.prepare(
+          `SELECT seq FROM events WHERE project_id = ? AND type = ? AND subject IS ? AND turn IS ? AND detail = ? LIMIT 1`
+        ).get(projectId, journal.eventArgs.type, journal.eventArgs.subject ?? null, journal.eventArgs.turn ?? null, detail);
+        if (!existing) await this.appendEventLocked(journal.eventArgs);
+        this.historyDb.exec('COMMIT');
+        await fs.rm(journal.stageDir, { force: true, recursive: true }).catch(() => {});
+        await fs.rm(file, { force: true }).catch(() => {});
+      } catch {
+        try { this.historyDb.exec('ROLLBACK'); } catch {}
+      }
+    }
   }
 
   async appendHistoryEntry(sessionId: string, type: string, content: string): Promise<void> {
