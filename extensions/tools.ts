@@ -36,7 +36,7 @@ import { createCharTool } from './toolkit/create-char.js';      // create-char
 import { editCharacterConfigTool } from './toolkit/edit-character-config.js'; // nook configuration gate
 import { registerTurnTracking } from './toolkit/turn.js';          // doc-tools/12
 import { registerInitCommand } from './toolkit/init-command.js';   // docs/init/00
-
+import { registerWriterToolCallGuard } from './toolkit/writer-beat-guard.js'; // docs/ux/14
 /**
  * The complete AIRP tool face, in registration order.
  *
@@ -71,6 +71,10 @@ export const AIRP_TOOLS: ReadonlyArray<{ name: string; tool: ToolDefinition }> =
 /** The names alone, in registration order — what the model sees and what `tools.allow` filters on. */
 export const AIRP_TOOL_NAMES: readonly string[] = AIRP_TOOLS.map((entry) => entry.name);
 export default function registerAirpTools(pi: ExtensionAPI): void {
+  // Runtime total-call safety for only the top-level Writer (docs/ux/14).
+  // This remains outside AIRP_TOOLS so it never changes the model tool face.
+  registerWriterToolCallGuard(pi);
+
   // Turn anchor for the A entry (docs/tools/01 §3.7). Registered BEFORE the tools
   // so the very first tool call of the first turn already has an anchor.
   registerTurnTracking(pi);

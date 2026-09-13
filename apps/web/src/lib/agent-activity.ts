@@ -21,6 +21,8 @@ export const ACTIVITY_FAILED_TTL_MS = 4500;
 export const ACTIVITY_STALE_TTL_MS = 90000;
 /** Simultaneous visible chips per surface (terminal chips hold a slot too). */
 export const MAX_VISIBLE_ACTIVITIES = 3;
+/** Bounded in-memory history retained after a rail chip expires. */
+export const ACTIVITY_LOG_MAX_ENTRIES = 200;
 
 // ---- Types ----
 
@@ -82,6 +84,29 @@ export interface AgentActivity {
 
 /** Translation function shape (`useLocale().t`). */
 export type TFn = (key: string, values?: Record<string, string | number>) => string;
+export type ActivityLogScope = 'rail' | 'character-modal';
+
+export interface ActivityLogQuery {
+  surface: ActivityLogScope;
+  /** Character logs must provide the stable `character:<id>` agent id. */
+  agentId?: string;
+  /** Optionally limit the projection to one engine turn. */
+  turnId?: string;
+  /** Exclude records from an earlier character-modal session. */
+  since?: number;
+  /** Defaults to true; false keeps only activities still running. */
+  includeTerminal?: boolean;
+}
+
+export interface AgentActivityLogTurn {
+  source: ActivitySource;
+  agentId: string;
+  turnId: string;
+  state: ActivityState;
+  entries: readonly AgentActivity[];
+  startedAt: number;
+  endedAt?: number;
+}
 
 // ---- Boundary guard ----
 
@@ -286,6 +311,83 @@ export function visibleActivities(
         byIdOrder(a, b),
     )
     .slice(0, limit);
+}
+
+/**
+ * Return the bounded, safe activity records visible on one log surface.
+ *
+ * This is deliberately a projection over normalized records. It never reads
+ * wire frames and never uses `toolName`, `errorKind`, or any other internal
+ * detail to create copy.
+ */
+export function selectAgentActivityLogEntries(
+  records: readonly AgentActivity[],
+  query: ActivityLogQuery,
+): readonly AgentActivity[] {
+  if (
+    query.surface === 'character-modal' &&
+    (!query.agentId || !query.agentId.startsWith('character:') || query.agentId.length <= 'character:'.length)
+  ) {
+    return [];
+  }
+  let seen: readonly AgentActivity[] = [];
+  for (const record of records) {
+    if (surfaceForSource(record.source) !== query.surface) continue;
+    if (query.surface === 'character-modal' && record.agentId !== query.agentId) continue;
+    if (query.surface === 'rail' && query.agentId !== undefined && record.agentId !== query.agentId) continue;
+    if (query.turnId !== undefined && record.turnId !== query.turnId) continue;
+    if (query.since !== undefined && record.startedAt < query.since) continue;
+    if (query.includeTerminal === false && record.state !== 'running') continue;
+    seen = upsertActivity(seen, record);
+  }
+
+  return [...seen].sort((a, b) => a.startedAt - b.startedAt || byIdOrder(a, b));
+}
+
+/**
+ * Group safe activity records by source, agent and engine turn. The key is
+ * intentionally never exposed by the UI; it only preserves turn boundaries.
+ */
+export function selectAgentActivityLog(
+  records: readonly AgentActivity[],
+  query: ActivityLogQuery,
+): readonly AgentActivityLogTurn[] {
+  const entries = selectAgentActivityLogEntries(records, query);
+  const groups = new Map<string, AgentActivity[]>();
+  for (const entry of entries) {
+    const key = JSON.stringify([entry.source, entry.agentId, entry.turnId]);
+    const group = groups.get(key);
+    if (group) group.push(entry);
+    else groups.set(key, [entry]);
+  }
+
+  const turns: AgentActivityLogTurn[] = [];
+  for (const group of groups.values()) {
+    group.sort((a, b) => a.startedAt - b.startedAt || byIdOrder(a, b));
+    const running = group.some((entry) => entry.state === 'running');
+    const hasError = group.some((entry) => entry.state === 'error');
+    const lastEndedAt = group.reduce<number | undefined>(
+      (latest, entry) => entry.endedAt === undefined ? latest : Math.max(latest ?? entry.endedAt, entry.endedAt),
+      undefined,
+    );
+    turns.push({
+      source: group[0].source,
+      agentId: group[0].agentId,
+      turnId: group[0].turnId,
+      state: running ? 'running' : hasError ? 'error' : 'ok',
+      entries: group,
+      startedAt: group[0].startedAt,
+      endedAt: running ? undefined : lastEndedAt,
+    });
+  }
+
+  return turns.sort((a, b) =>
+    b.startedAt - a.startedAt ||
+    a.entries[0].activityId.localeCompare(b.entries[0].activityId) ||
+    a.source.localeCompare(b.source) ||
+    a.agentId.localeCompare(b.agentId) ||
+    a.turnId.localeCompare(b.turnId),
+  );
 }
 
 // ---- Chips copy (docs/agent-awareness/03 §8.2) ----

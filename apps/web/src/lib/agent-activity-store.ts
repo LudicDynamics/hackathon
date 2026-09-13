@@ -12,6 +12,8 @@
  */
 
 import {
+  ACTIVITY_LOG_MAX_ENTRIES,
+  ACTIVITY_STALE_TTL_MS,
   MAX_VISIBLE_ACTIVITIES,
   normalizeAgentActivityFrame,
   promoteActivities,
@@ -26,6 +28,8 @@ export interface AgentActivityStore {
   subscribe(cb: () => void): () => void;
   /** Reference-stable snapshot: a new array only when the content changed. */
   getSnapshot(): readonly AgentActivity[];
+  /** Bounded terminal-inclusive projection for the complete activity log. */
+  getLogSnapshot(): readonly AgentActivity[];
   /** Only entry point: normalize + upsert + prune. True when anything changed. */
   ingest(raw: unknown, now?: number): boolean;
   /** running → error('cancelled'); used when the character / nook closes. */
@@ -40,6 +44,7 @@ const TICK_MS = 250;
 
 export function createAgentActivityStore(): AgentActivityStore {
   let list: readonly AgentActivity[] = [];
+  let logList: readonly AgentActivity[] = [];
   const listeners = new Set<() => void>();
   let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -47,8 +52,12 @@ export function createAgentActivityStore(): AgentActivityStore {
     for (const cb of listeners) cb();
   }
 
+  function hasClockWork(): boolean {
+    return list.length > 0 || logList.some((activity) => activity.state === 'running');
+  }
+
   function armTimer(): void {
-    if (timer !== null || list.length === 0) return;
+    if (timer !== null || !hasClockWork()) return;
     timer = setInterval(() => tick(), TICK_MS);
   }
 
@@ -58,37 +67,65 @@ export function createAgentActivityStore(): AgentActivityStore {
     timer = null;
   }
 
-  /** Promote queued chips for both surfaces after any change to the list. */
   function withPromotions(next: readonly AgentActivity[], now: number): readonly AgentActivity[] {
     let out = promoteActivities(next, 'rail', now, MAX_VISIBLE_ACTIVITIES);
     out = promoteActivities(out, 'character-modal', now, MAX_VISIBLE_ACTIVITIES);
     return out;
   }
 
+  function pruneLogRunning(next: readonly AgentActivity[], now: number): readonly AgentActivity[] {
+    let changed = false;
+    const out = next.map((activity) => {
+      if (activity.state !== 'running' || now - activity.startedAt < ACTIVITY_STALE_TTL_MS) return activity;
+      changed = true;
+      return { ...activity, state: 'error' as const, errorKind: 'timeout', endedAt: now };
+    });
+    return changed ? out : next;
+  }
+
+  function boundLog(next: readonly AgentActivity[]): readonly AgentActivity[] {
+    if (next.length <= ACTIVITY_LOG_MAX_ENTRIES) return next;
+    const terminals = next
+      .filter((activity) => activity.state !== 'running')
+      .sort((a, b) =>
+        (a.endedAt ?? a.startedAt) - (b.endedAt ?? b.startedAt) ||
+        a.activityId.localeCompare(b.activityId),
+      );
+    const removeCount = Math.min(terminals.length, next.length - ACTIVITY_LOG_MAX_ENTRIES);
+    if (removeCount === 0) return next;
+    const removed = new Set(terminals.slice(0, removeCount).map((activity) => activity.activityId));
+    return next.filter((activity) => !removed.has(activity.activityId));
+  }
+
   function tick(now: number = Date.now()): void {
-    const next = withPromotions(pruneActivities(list, now), now);
-    // A tick with nothing to do must not swap in a new array: that would make
-    // every consumer re-render every 250ms for the life of the process.
-    if (next !== list) {
-      list = next;
-      notify();
-    }
-    if (list.length === 0) disarmTimer();
+    const nextList = withPromotions(pruneActivities(list, now), now);
+    const nextLog = boundLog(pruneLogRunning(logList, now));
+    const listChanged = nextList !== list;
+    const logChanged = nextLog !== logList;
+    if (listChanged) list = nextList;
+    if (logChanged) logList = nextLog;
+    if (listChanged || logChanged) notify();
+    if (!hasClockWork()) disarmTimer();
   }
 
   function ingest(raw: unknown, now: number = Date.now()): boolean {
     const act = normalizeAgentActivityFrame(raw, now);
     if (act === null) return false;
 
-    // Advance the clock to the frame's own time first, so a stale chip that a
-    // late frame might otherwise resurrect is retired before the merge.
     const at = act.state === 'running' ? act.startedAt : (act.endedAt ?? act.startedAt);
-    const pruned = pruneActivities(list, at);
-    const merged = upsertActivity(pruned, act);
-    const next = withPromotions(merged, at);
-    // Absorbed frame and no promotion → nothing observable changed.
-    if (next === list) return false;
-    list = next;
+    const prunedList = pruneActivities(list, at);
+    const prunedLog = boundLog(pruneLogRunning(logList, at));
+    const existingLog = prunedLog.find((entry) => entry.activityId === act.activityId);
+    const nextLog = boundLog(upsertActivity(prunedLog, act));
+
+    const nextList = existingLog === undefined || existingLog.state === 'running'
+      ? withPromotions(upsertActivity(prunedList, act), at)
+      : withPromotions(prunedList, at);
+    const listChanged = nextList !== list;
+    const logChanged = nextLog !== logList;
+    if (!listChanged && !logChanged) return false;
+    list = nextList;
+    logList = nextLog;
     armTimer();
     notify();
     return true;
@@ -96,43 +133,51 @@ export function createAgentActivityStore(): AgentActivityStore {
 
   function clearSurface(surface: ActivitySurface, now: number = Date.now()): void {
     let changed = false;
-    const next = list.map((a) => {
-      if (a.state !== 'running' || surfaceForSource(a.source) !== surface) return a;
+    const cancel = (activity: AgentActivity): AgentActivity => {
       changed = true;
       return {
-        ...a,
-        state: 'error' as const,
+        ...activity,
+        state: 'error',
         errorKind: 'cancelled',
         endedAt: now,
-        visibleAt: a.visibleAt ?? now,
+        visibleAt: activity.visibleAt ?? now,
       };
-    });
+    };
+    const nextList = list.map((activity) =>
+      activity.state === 'running' && surfaceForSource(activity.source) === surface
+        ? cancel(activity)
+        : activity,
+    );
+    const nextLog = logList.map((activity) =>
+      activity.state === 'running' && surfaceForSource(activity.source) === surface
+        ? cancel(activity)
+        : activity,
+    );
     if (!changed) return;
-    list = next;
+    list = nextList;
+    logList = nextLog;
     armTimer();
     notify();
   }
 
   function clearAll(): void {
     disarmTimer();
-    if (list.length === 0) return;
+    if (list.length === 0 && logList.length === 0) return;
     list = [];
+    logList = [];
     notify();
   }
 
   function subscribe(cb: () => void): () => void {
     listeners.add(cb);
-    // First listener while chips already exist: start the clock even if the
-    // store was populated before React mounted.
-    if (list.length > 0) armTimer();
-    return () => {
-      listeners.delete(cb);
-    };
+    if (hasClockWork()) armTimer();
+    return () => listeners.delete(cb);
   }
 
   return {
     subscribe,
     getSnapshot: () => list,
+    getLogSnapshot: () => logList,
     ingest,
     clearSurface,
     clearAll,

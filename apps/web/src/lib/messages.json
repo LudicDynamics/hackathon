@@ -1,4 +1,208 @@
 {
+  "Use this item": {
+    "zh-CN": "使用这个物品",
+    "ja": "このアイテムを使う"
+  },
+  "Voice playback is off; text dialogue remains available.": {
+    "zh-CN": "语音播放已关闭；文字对话仍然可用。",
+    "ja": "音声再生はオフです。テキスト会話は引き続き使えます。"
+  },
+  "TTS is not configured. Text dialogue remains available.": {
+    "zh-CN": "TTS 尚未配置。文字对话仍然可用。",
+    "ja": "TTS が設定されていません。テキスト会話は引き続き使えます。"
+  },
+  "Use {item}.": {
+    "zh-CN": "使用{item}。",
+    "ja": "{item}を使う。"
+  },
+  "Please enter an action before sending.": {
+    "zh-CN": "发送前请先输入行动。",
+    "ja": "送信する前に行動を入力してください。"
+  },
+  "The writer is listening…": {
+    "zh-CN": "作家正在倾听……",
+    "ja": "作家が聞いています……"
+  },
+  "The writer is already working.": {
+    "zh-CN": "作家已经在工作。",
+    "ja": "作家はすでに執筆中です。"
+  },
+  "Load a world and wait for the scene to appear before asking for a hint.": {
+    "zh-CN": "请先载入世界，等场景出现后再请求提示。",
+    "ja": "世界を読み込み、場面が表示されてからヒントを求めてください。"
+  },
+  "Next-step hint draft ready. Review it, then press Send.": {
+    "zh-CN": "下一步提示草稿已准备好。请确认后点击发送。",
+    "ja": "次の一歩のヒント草稿を用意しました。確認してから送信してください。"
+  },
+  "Item selected. Review it, then press Send.": {
+    "zh-CN": "物品已选中。请确认后点击发送。",
+    "ja": "アイテムを選びました。確認してから送信してください。"
+  },
+  "This item is no longer available. Please refresh.": {
+    "zh-CN": "这个物品已经不可用，请刷新。",
+    "ja": "このアイテムはもう使えません。更新してください。"
+  },
+  "Continue · next-step hint": {
+    "zh-CN": "Continue · 下一步提示",
+    "ja": "Continue · 次の一歩のヒント"
+  },
+  "Continue · next-step hint →": {
+    "zh-CN": "Continue · 下一步提示 →",
+    "ja": "Continue · 次の一歩のヒント →"
+  },
+  "Your action has been processed.": {
+    "zh-CN": "你的行动已处理。",
+    "ja": "あなたの行動を処理しました。"
+  },
+  "Audio levels": {
+    "zh-CN": "音量",
+    "ja": "音量"
+  },
+  "Music volume": {
+    "zh-CN": "音乐音量",
+    "ja": "音楽音量"
+  },
+  "Voice volume": {
+    "zh-CN": "语音音量",
+    "ja": "音声音量"
+  },
+  "{value}%": {
+    "zh-CN": "{value}%",
+    "ja": "{value}%"
+  },
+  "Voice playback is off; text dialogue still works.": {
+    "zh-CN": "语音播放已关闭；文字对话仍然可用。",
+    "ja": "音声再生はオフです。テキスト会話は引き続き使えます。"
+  },
+  "TTS is not configured. Text dialogue still works.": {
+    "zh-CN": "TTS 尚未配置。文字对话仍然可用。",
+    "ja": "TTS が設定されていません。テキスト会話は引き続き使えます。"
+  },
+  "World changes": {
+    "zh-CN": "世界变化",
+    "ja": "世界の変化"
+  },
+  "Show event details": {
+    "zh-CN": "显示事件详情",
+    "ja": "イベントの詳細を表示"
+  },
+  "Hide event details": {
+    "zh-CN": "隐藏事件详情",
+    "ja": "イベントの詳細を隠す"
+  },
+  "Dismiss world change": {
+    "zh-CN": "关闭世界变化提示",
+    "ja": "世界の変化を閉じる"
+  },
+  "Activity details": {
+    "zh-CN": "活动详情",
+    "ja": "活動の詳細"
+  },
+  "Close activity details": {
+    "zh-CN": "关闭活动详情",
+    "ja": "活動の詳細を閉じる"
+  },
+  "Expand all activity turns": {
+    "zh-CN": "展开全部活动轮次",
+    "ja": "すべての活動ターンを展開"
+  },
+  "Collapse all activity turns": {
+    "zh-CN": "折叠全部活动轮次",
+    "ja": "すべての活動ターンを折りたたむ"
+  },
+  "Activity details for {name}": {
+    "zh-CN": "{name}的活动详情",
+    "ja": "{name}の活動の詳細"
+  },
+  "Activity log for {agents}: {count} activities, {running} in progress, {completed} completed, {failed} failed": {
+    "zh-CN": "{agents}活动记录：{count}项，进行中{running}项，完成{completed}项，失败{failed}项",
+    "ja": "{agents}の活動記録：{count}件、進行中 {running}件、完了 {completed}件、失敗 {failed}件"
+  },
+  "In progress": {
+    "zh-CN": "进行中",
+    "ja": "進行中"
+  },
+  "Not completed": {
+    "zh-CN": "未完成",
+    "ja": "未完了"
+  },
+  "Completed": {
+    "zh-CN": "已完成",
+    "ja": "完了"
+  },
+  "Stopped": {
+    "zh-CN": "已停止",
+    "ja": "停止済み"
+  },
+  "Took too long": {
+    "zh-CN": "处理时间过长",
+    "ja": "時間切れ"
+  },
+  "{name} · {count} activities · {status}": {
+    "zh-CN": "{name} · {count}项活动 · {status}",
+    "ja": "{name} · 活动 {count}件 · {status}"
+  },
+  "Created \"{name}\". The object is now in {layer}. Next step: open it to view its contents.": {
+    "zh-CN": "已创建“{name}”。物件现在位于{layer}。下一步：打开它查看内容。",
+    "ja": "「{name}」を作成しました。物件は{layer}にあります。次に開いて内容を確認してください。"
+  },
+  "\"{name}\" moved to {to}. Its position is updated. Next step: view it in its new location.": {
+    "zh-CN": "“{name}”已移动到{to}，位置已更新。下一步：前往新位置查看。",
+    "ja": "「{name}」を{to}へ移動しました。位置を更新しました。次に新しい場所で確認してください。"
+  },
+  "\"{name}\" moved to {to}. Its position is updated; {dangling} references need checking. Next step: view it in its new location.": {
+    "zh-CN": "“{name}”已移动到{to}，位置已更新；有{dangling}条引用需要检查。下一步：前往新位置查看。",
+    "ja": "「{name}」を{to}へ移動しました。位置を更新しました。{dangling}件の参照を確認してください。次に新しい場所で確認してください。"
+  },
+  "Deleted \"{name}\". The object is no longer at its original location. Next step: review the current scene.": {
+    "zh-CN": "已删除“{name}”。物件不再位于原位置。下一步：查看当前场景。",
+    "ja": "「{name}」を削除しました。物件は元の場所にありません。次に現在の場面を確認してください。"
+  },
+  "\"{name}\" updated. The object change is recorded. Next step: open it again to review.": {
+    "zh-CN": "“{name}”已更新，物件变化已记录。下一步：重新打开查看。",
+    "ja": "「{name}」を更新しました。物件の変化を記録しました。次にもう一度開いて確認してください。"
+  },
+  "Choice \"{choice}\" recorded for {name}. Next step: review the scene or wait for a response.": {
+    "zh-CN": "已为{name}记录选择“{choice}”。下一步：查看场景或等待回应。",
+    "ja": "{name}的选择「{choice}」を記録しました。次に場面を確認するか、返答を待ってください。"
+  },
+  "The roll for \"{name}\" is settled: {result}, passed. Next step: review the scene according to the result.": {
+    "zh-CN": "“{name}”的掷骰结果已确定：{result}，通过。下一步：根据结果查看场景。",
+    "ja": "「{name}」のダイス結果が確定しました：{result}、成功。次に結果に沿って場面を確認してください。"
+  },
+  "The roll for \"{name}\" is settled: {result}, not passed. Next step: review the scene according to the result.": {
+    "zh-CN": "“{name}”的掷骰结果已确定：{result}，未通过。下一步：根据结果查看场景。",
+    "ja": "「{name}」のダイス結果が確定しました：{result}、失敗。次に結果に沿って場面を確認してください。"
+  },
+  "Recorded using \"{itemName}\" on \"{targetName}\". Next step: check whether the target shows a clear change.": {
+    "zh-CN": "已记录使用“{itemName}”作用于“{targetName}”。下一步：检查目标是否出现明确变化。",
+    "ja": "「{itemName}」を「{targetName}」に使った記録です。次に対象に明確な変化があるか確認してください。"
+  },
+  "Entered \"{name}\". The current scene has changed. Next step: review this layer for clues.": {
+    "zh-CN": "已进入“{name}”。当前场景已改变。下一步：查看这一层寻找线索。",
+    "ja": "「{name}」に入りました。現在の場面が変わりました。次にこの層の手掛かりを確認してください。"
+  },
+  "\"{name}\" finished initializing. Scene content is in place. Next step: open the scene to review it.": {
+    "zh-CN": "“{name}”已完成初始化，场景内容已经就位。下一步：打开场景查看。",
+    "ja": "「{name}」の初期化が完了しました。場面の内容が配置されています。次に開いて確認してください。"
+  },
+  "\"{layerName}\" is not initialized yet. Reason: {reason}. Next step: view the template and retry.": {
+    "zh-CN": "“{layerName}”尚未初始化。原因：{reason}。下一步：查看模板后重试。",
+    "ja": "「{layerName}」はまだ初期化されていません。理由：{reason}。次にテンプレートを確認して再試行してください。"
+  },
+  "\"{layerName}\" is not initialized yet. Reason: {reason}. Next step: return to the previous layer or retry later.": {
+    "zh-CN": "“{layerName}”尚未初始化。原因：{reason}。下一步：返回上一层或稍后重试。",
+    "ja": "「{layerName}」はまだ初期化されていません。理由：{reason}。次に前の層へ戻るか、後で再試行してください。"
+  },
+  "{count} {verb} objects. Objects: {objects}. Next step: open the scene to review them.": {
+    "zh-CN": "{count}个物件已{verb}。物件：{objects}。下一步：打开场景查看。",
+    "ja": "{count}件の物件を{verb}しました。物件：{objects}。次に場面を開いて確認してください。"
+  },
+  "Scene updated {count} items. Objects: {objects}. Next step: review the current layer.": {
+    "zh-CN": "场景更新了{count}项。物件：{objects}。下一步：查看当前层。",
+    "ja": "場面を{count}件更新しました。物件：{objects}。次に現在の層を確認してください。"
+  },
   "Place in current scene": {
     "zh-CN": "放回当前场景",
     "ja": "今のシーンに置く"

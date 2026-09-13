@@ -2,7 +2,7 @@
 
 > 状态：**清单 + 首批产出完成（2026-09-12）**；**接线已启动（批次 A1，见 `docs/audio/`）**。✅ = 已下载到 `assets/audio/`，❌/⚠️ = 待办。
 > 依据：`doc-19 §2`（三层声场，权威）、`doc-06 §1/§2`、`doc-04 §10.4`、
-> `docs/前端改造计划.md §5 T2.1 / §8 T5 / §12`、`docs/tools/08 §6`、
+> `docs/ui/前端改造计划.md §5 T2.1 / §8 T5 / §12`、`docs/tools/08 §6`、
 > `apps/web/src/lib/audio.ts`（当前实现真相）。
 > **逐世界部分**不只抄 doc 点名，而是**按各世界实际场景文本 + 视觉 manifest 推导**
 > （来源：`templates/**`、`~projects/infini-canvas/worldlines-canvas/stack/worlds/*.json`、

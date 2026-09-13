@@ -75,3 +75,25 @@ test('channel preference APIs remain safe without Web Audio', async () => {
   assert.doesNotThrow(() => audio.setChannelVolume('voice', 0.75));
   assert.equal(audio.getChannelVolume('voice'), 0.75);
 });
+test('TtsSettings exposes independent accessible channel sliders backed by the real API', () => {
+  const source = fs.readFileSync(new URL('../src/components/TtsSettings.tsx', import.meta.url), 'utf8');
+  assert.match(source, /getChannelVolume, setChannelVolume/);
+  assert.match(source, /id="music-volume" type="range" role="slider" min="0" max="100" step="1"/);
+  assert.match(source, /id="voice-volume" type="range" role="slider" min="0" max="100" step="1"/);
+  assert.match(source, /aria-valuenow=\{volumes\.music\}/);
+  assert.match(source, /aria-valuenow=\{volumes\.voice\}/);
+  assert.match(source, /t\('\{value\}%', \{ value: volumes\.music \}\)/);
+  assert.match(source, /t\('\{value\}%', \{ value: volumes\.voice \}\)/);
+});
+
+test('TtsSettings clamps slider boundaries before converting to channel values', () => {
+  const source = fs.readFileSync(new URL('../src/components/TtsSettings.tsx', import.meta.url), 'utf8');
+  assert.match(source, /Math\.min\(100, Math\.max\(0, Math\.round\(value\)\)\)/);
+  assert.match(source, /percent \/ 100/);
+  assert.match(source, /Math\.min\(1, Math\.max\(0, value\)\) \* 100/);
+});
+
+test('TtsSettings volume changes do not own or alter master mute', () => {
+  const source = fs.readFileSync(new URL('../src/components/TtsSettings.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /setMuted|toggleMuted/);
+});

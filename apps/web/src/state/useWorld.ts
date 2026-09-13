@@ -10,12 +10,13 @@ import {
 } from '../lib/footprint.js';
 import { CARD_FORMS } from '@airp/shared/forms';
 import { isValidCharacterId } from '@airp/shared/characters';
-import type { AppearanceResolution } from '@airp/shared';
+import type { AppearanceResolution, WorldEvent } from '@airp/shared';
 import { register as registerPhantom, land as landPhantom, appendInk, setInk, evict as evictPhantom, reconcileLanded, getPhantomsSnapshot } from '../lib/phantom.js';
 import { phantomSeatFor, publishSeatItems } from '../lib/phantom-seat.js';
 import { mergeItemPatch, mergeLinkPatch } from '../lib/canvas-patch.js';
 import { acceptWriterFrame, beginWriterPrompt, getWriterState, resetForReconnect as resetWriter, type WriterPromptAcceptance } from '../lib/writer-state.js';
 import { agentActivityStore } from '../lib/agent-activity-store.js';
+import { worldEventToastStore } from '../lib/world-event-toast.js';
 import { playFoley, playCharge, endCharge, setAmbient } from '../lib/audio.js';
 import { ghostSizeFor, stageText, GHOST_WAIT_AMBIENT } from '../lib/ghost.js';
 import {
@@ -146,6 +147,8 @@ export function useWorld(): UseWorldApi {
       resetWriter('world_change');
       stateRef.current = null;
       seenEventIdsRef.current.clear();
+      worldEventToastStore.reset('world-switch');
+      worldEventToastStore.setProjectId(null);
       seenEventOrderRef.current = [];
       setState(null);
       setLoading(false);
@@ -432,7 +435,7 @@ export function useWorld(): UseWorldApi {
               | undefined;
             if (!ev || typeof ev.id !== 'string') break; // 畸形帧不污染去重集合
             if (!noteWorldEvent(ev.id)) break; // 同一行的重复副本到此为止
-            forwardWorldEvent(msg as unknown as WorldEventFrame);
+            worldEventToastStore.ingest(ev as WorldEvent);
             // The I1 initialiser's outcome (docs/init/03 §3.6): clear the ghost.
             // `layer_initialized` -> the refetched product replaces it (handover);
             // `layer_init_failed` must ALSO be visible (contract §8 anti-pattern 8),

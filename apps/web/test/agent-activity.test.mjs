@@ -30,6 +30,8 @@ const {
   promoteActivities,
   pruneActivities,
   visibleActivities,
+  selectAgentActivityLog,
+  selectAgentActivityLogEntries,
   surfaceForSource,
   activityLabel,
   activityAriaText,
@@ -329,4 +331,86 @@ test('summariseActivities reports running count, then finished count', { skip },
   const done = upsertActivity([], normalizeAgentActivityFrame(frame({ phase: 'completed' }), 0));
   assert.equal(summariseActivities(done, t), '1 action finished');
   assert.equal(summariseActivities([...done, ...done.map((x) => ({ ...x, activityId: 'z' }))], t), '2 actions finished');
+});
+
+test('complete log keeps four actions after the three-chip rail cap', { skip }, () => {
+  const records = [1, 2, 3, 4].map((index) =>
+    normalizeAgentActivityFrame(frame({ activityId: `t1:c${index}`, phase: 'completed' }), index),
+  );
+  const visible = promoteActivities(records, 'rail', 100);
+  assert.equal(visibleActivities(visible, 'rail').length, 3);
+  const turns = selectAgentActivityLog(records, { surface: 'rail' });
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].entries.length, 4);
+});
+
+test('store retains terminal records after the rail TTL', { skip }, () => {
+  const store = storeMod.createAgentActivityStore();
+  store.ingest(frame({ phase: 'completed' }), 10);
+  store.tick(10 + ACTIVITY_COMPLETE_TTL_MS);
+  assert.equal(store.getSnapshot().length, 0);
+  assert.equal(store.getLogSnapshot().length, 1);
+  assert.equal(store.getLogSnapshot()[0].state, 'ok');
+});
+
+test('log selector de-duplicates activity ids and preserves turn boundaries', { skip }, () => {
+  const start = normalizeAgentActivityFrame(frame({ activityId: 'a', turnId: 'turn-a' }), 10);
+  const done = normalizeAgentActivityFrame(frame({ activityId: 'a', turnId: 'turn-a', phase: 'completed' }), 20);
+  const otherTurn = normalizeAgentActivityFrame(frame({ activityId: 'b', turnId: 'turn-b' }), 30);
+  const turns = selectAgentActivityLog([start, done, start, otherTurn], { surface: 'rail' });
+  assert.deepEqual(turns.map((turn) => turn.turnId), ['turn-b', 'turn-a']);
+  assert.equal(turns[1].entries.length, 1);
+  assert.equal(turns[1].entries[0].state, 'ok');
+  assert.equal(turns[1].entries[0].startedAt, 10);
+});
+
+test('global and character log projections stay isolated by surface and session', { skip }, () => {
+  const writer = normalizeAgentActivityFrame(frame({ activityId: 'writer-1' }), 10);
+  const functional = normalizeAgentActivityFrame(frame({
+    activityId: 'functional-1',
+    source: 'functional',
+    agentId: 'scene-init',
+  }), 20);
+  const oldCharacter = normalizeAgentActivityFrame(frame({
+    activityId: 'character-old',
+    source: 'character',
+    agentId: 'character:a',
+  }), 30);
+  const newCharacter = normalizeAgentActivityFrame(frame({
+    activityId: 'character-new',
+    source: 'character',
+    agentId: 'character:a',
+  }), 60);
+  const records = [writer, functional, oldCharacter, newCharacter];
+  assert.deepEqual(
+    selectAgentActivityLogEntries(records, { surface: 'rail' }).map((entry) => entry.activityId),
+    ['writer-1', 'functional-1'],
+  );
+  assert.deepEqual(
+    selectAgentActivityLogEntries(records, {
+      surface: 'character-modal',
+      agentId: 'character:a',
+      since: 50,
+    }).map((entry) => entry.activityId),
+    ['character-new'],
+  );
+  assert.equal(selectAgentActivityLogEntries(records, { surface: 'character-modal' }).length, 0);
+});
+
+test('safe activity copy omits raw errors and internal identifiers', { skip }, () => {
+  const act = normalizeAgentActivityFrame(frame({
+    activityId: 'private-id',
+    toolName: 'read_file',
+    phase: 'failed',
+    error: 'ENOENT /home/user/.ssh/id_rsa',
+  }), 0);
+  const turns = selectAgentActivityLog([act], { surface: 'rail' });
+  const text = [
+    activityLabel(turns[0].entries[0], t),
+    activityAriaText(turns[0].entries[0], t),
+  ].join(' ');
+  assert.equal(text.includes('ENOENT'), false);
+  assert.equal(text.includes('/home/user'), false);
+  assert.equal(text.includes('private-id'), false);
+  assert.equal(text.includes('read_file'), false);
 });

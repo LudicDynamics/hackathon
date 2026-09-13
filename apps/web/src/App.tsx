@@ -3,6 +3,8 @@ import { AgentSettings } from './components/AgentSettings.js';
 import { TtsSettings } from './components/TtsSettings.js';
 import { WriterResult } from './components/WriterResult.js';
 import { ActivityRail } from './components/chrome/ActivityRail.js';
+import { AgentActivityLog } from './components/chrome/AgentActivityLog.js';
+import { ConnectedWorldToastRegion } from './components/chrome/WorldToast.js';
 import { ItemArtwork } from './components/ItemArtwork.js';
 import { NookView } from './components/nook/NookView.js';
 import { ghostItemFor } from './lib/init-ghost.js';
@@ -30,7 +32,10 @@ import {
   type ProjectionTarget,
 } from './lib/camera.js';
 import { useWriterState, requestWriterStop, resetForReconnect, retryWriterPrompt } from './lib/writer-state.js';
+import { buildItemActionPrompt, appendItemAction } from './lib/item-action-draft.js';
+import { PLAY_HINT_REQUEST } from './lib/play-hints.js';
 import { agentActivityStore } from './lib/agent-activity-store.js';
+import { worldEventToastStore } from './lib/world-event-toast.js';
 import { GodModeToolbar } from './components/god/GodModeToolbar.js';
 import { RadialMenu, type RadialItemType } from './components/god/RadialMenu.js';
 import { MuteButton } from './components/chrome/MuteButton.js';
@@ -151,7 +156,8 @@ export function App() {
   const writerRef = useRef<HTMLInputElement>(null);
   const writerHistory = useRef<string[]>([]);
   const writerHistoryCursor = useRef(0);
-  const writerDraft = useRef('');
+  const [writerDraft, setWriterDraft] = useState('');
+  const historyDraft = useRef('');
   const toastTimer = useRef<number | null>(null);
   const writerPendingRef = useRef(false);
 
@@ -170,6 +176,9 @@ export function App() {
   // Canvas world state (layer payload, WS events, card persistence).
   const world = useWorld();
   const { state, layer, enterLayer, refresh, moveCard, sendToWriter, sendMessage } = world;
+  useEffect(() => {
+    worldEventToastStore.setProjectId(manifest?.id ?? null);
+  }, [manifest?.id]);
   const cameraStackRef = useRef<CameraMemoryStack | null>(null);
   if (cameraStackRef.current === null) {
     cameraStackRef.current = createCameraMemoryStack(camera, projectionTarget('layer', layer));
@@ -405,6 +414,7 @@ export function App() {
     const expected = layer === 'map' ? 'world/README.md' : `${layer}/README.md`;
     return state?.items.find((item) => item.path === expected);
   }, [layer, state?.items]);
+  const worldReady = Boolean(manifest && state && readme);
   const encounteredIds = [...(encounters[manifest?.id || ''] || []), ...(state?.presence || []).map(person => person.characterId)];
   const { resident, encountered } = splitCharacters(characters, encounteredIds);
   const handItems = backpack.filter((item) => item.filename.toLowerCase() !== 'readme.md');
@@ -445,6 +455,7 @@ export function App() {
     setLoadingWorld(worldPath);
     setWorldPickerOpen(false);
     setSelectedBagPath(null);
+    setWriterDraft('');
     resetForReconnect('world_change');
     writerPendingRef.current = false;
     setWriterSubmitPending(false);
@@ -475,15 +486,18 @@ export function App() {
       setLoadingWorld(null);
     }
   };
-
-  const submitWriterText = useCallback((rawText: string, layerOverride?: string): boolean => {
+  const submitWriterText = useCallback((rawText: string, layerOverride?: string, prepared = false): boolean => {
     if (writerLocked || writerPendingRef.current) return false;
     const text = rawText.trim();
-    if (!text) return false;
+    if (!text) {
+      notify(t('Please enter an action before sending.'));
+      return false;
+    }
+    const prompt = prepared ? text : buildItemActionPrompt(text, backpack);
 
     writerPendingRef.current = true;
     setWriterSubmitPending(true);
-    const result = sendToWriter(text, layerOverride);
+    const result = sendToWriter(prompt, layerOverride);
     if (!result.accepted) {
       writerPendingRef.current = false;
       setWriterSubmitPending(false);
@@ -493,15 +507,43 @@ export function App() {
     if (writerHistory.current.at(-1) !== text) writerHistory.current.push(text);
     if (writerHistory.current.length > 50) writerHistory.current.shift();
     writerHistoryCursor.current = writerHistory.current.length;
-    writerDraft.current = '';
-    writerRef.current!.value = '';
-    notify('The writer is listening…');
+    setWriterDraft('');
+    notify(t('The writer is listening…'));
     return true;
-  }, [notify, sendToWriter, writerLocked]);
+  }, [backpack, notify, sendToWriter, t, writerLocked]);
+
+  const prepareWriterHint = useCallback((): boolean => {
+    if (writerLocked || !worldReady) {
+      notify(!worldReady ? t('Load a world and wait for the scene to appear before asking for a hint.') : t('The writer is already working.'));
+      return false;
+    }
+    setAttention('authoring');
+    setWriterDraft(t(PLAY_HINT_REQUEST));
+    writerHistoryCursor.current = writerHistory.current.length;
+    notify(t('Next-step hint draft ready. Review it, then press Send.'));
+    window.requestAnimationFrame(() => writerRef.current?.focus());
+    return true;
+  }, [notify, t, worldReady, writerLocked]);
+  const prepareItemUse = useCallback((itemPath: string): void => {
+    if (writerLocked) {
+      notify(t('The writer is already working.'));
+      return;
+    }
+    const item = backpack.find((candidate) => candidate.path === itemPath);
+    if (!item) {
+      notify(t('This item is no longer available. Please refresh.'));
+      return;
+    }
+    setWriterDraft((current) => appendItemAction(current, item, t));
+    setSelectedBagPath(null);
+    setAttention('authoring');
+    notify(t('Item selected. Review it, then press Send.'));
+    window.requestAnimationFrame(() => writerRef.current?.focus());
+  }, [backpack, notify, t, writerLocked]);
 
   const submitWriter = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    submitWriterText(writerRef.current?.value || '');
+    submitWriterText(writerDraft);
   };
   const handleItemDrop = async (itemPath: string, targetPath: string) => {
     try {
@@ -716,13 +758,21 @@ export function App() {
             <h1>{currentName}</h1>
             <p>{layer === 'map' ? t('The first moment') : t('The story continues')} · {state?.worldFrozen ? t('Time stands still') : t('Time flows')}</p>
             {sceneStatus.map(([key, value]) => <span className="prototype-stat" key={key}>{labelOf(key)} · {String(value)}</span>)}
-            <WriterResult worldKey={`${manifest?.id}:${layer}`} />
+            <WriterResult
+              worldKey={`${manifest?.id}:${layer}`}
+              worldReady={worldReady}
+              worldFrozen={state?.worldFrozen === true}
+              submitPending={writerSubmitPending}
+              onContinue={prepareWriterHint}
+            />
           </div>
 
           {/* 全局 activity rail（契约 §7.1）：writer/functional 在角色或小天地
               打开时也必须可见；character 只进入 CharacterModal 自己的 surface，
               避免串台。始终挂在这里，不作为 modal 的后代。 */}
           <ActivityRail surface="rail" className="prototype-chrome" />
+          <ConnectedWorldToastRegion className="prototype-chrome" />
+          <AgentActivityLog query={{ surface: 'rail' }} className="prototype-chrome" />
 
           <div className="prototype-tools prototype-chrome" aria-label={t("Canvas tools")}>
             <button className="active" title={t("Explore")}>↖</button>
@@ -797,7 +847,7 @@ export function App() {
           {writerState.error?.retryable && retryWriterPrompt() && (
             <button type="button" className="writer-retry-control" data-writer-retry onClick={() => {
               const prompt = retryWriterPrompt();
-              if (prompt) void submitWriterText(prompt);
+              if (prompt) void submitWriterText(prompt, undefined, true);
             }}>
               Retry writing
             </button>
@@ -811,16 +861,34 @@ export function App() {
             </div>
             <div className="prototype-dockrow">
               {writerWorking && <span role="status">{t(writerState.stopRequested ? 'Stop requested' : 'The writer is working…')}</span>}
-              <input ref={writerRef} aria-label={t("Action")} placeholder={writerLocked ? t('The writer is writing…') : t("What do you do? You can also address someone by name…")} disabled={writerLocked} autoComplete="off" onKeyDown={event => {
-                if (event.nativeEvent.isComposing || !['ArrowUp', 'ArrowDown'].includes(event.key) || !writerHistory.current.length) return;
-                event.preventDefault(); event.stopPropagation();
-                const history = writerHistory.current;
-                if (writerHistoryCursor.current === history.length) writerDraft.current = event.currentTarget.value;
-                writerHistoryCursor.current = Math.max(0, Math.min(history.length, writerHistoryCursor.current + (event.key === 'ArrowUp' ? -1 : 1)));
-                event.currentTarget.value = writerHistoryCursor.current === history.length ? writerDraft.current : history[writerHistoryCursor.current];
-                event.currentTarget.setSelectionRange(event.currentTarget.value.length, event.currentTarget.value.length);
-              }} />
-              <button className="prototype-primary" aria-label={t("Send action")}>↑</button>
+              <input
+                ref={writerRef}
+                value={writerDraft}
+                aria-label={t("Action")}
+                placeholder={writerLocked ? t('The writer is writing…') : t("What do you do? You can also address someone by name…")}
+                disabled={writerLocked}
+                autoComplete="off"
+                onChange={event => setWriterDraft(event.currentTarget.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' && event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    return;
+                  }
+                  if (!['ArrowUp', 'ArrowDown'].includes(event.key) || !writerHistory.current.length) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const history = writerHistory.current;
+                  if (writerHistoryCursor.current === history.length) historyDraft.current = writerDraft;
+                  writerHistoryCursor.current = Math.max(0, Math.min(history.length, writerHistoryCursor.current + (event.key === 'ArrowUp' ? -1 : 1)));
+                  const next = writerHistoryCursor.current === history.length ? historyDraft.current : history[writerHistoryCursor.current];
+                  setWriterDraft(next);
+                  window.requestAnimationFrame(() => {
+                    const input = writerRef.current;
+                    if (input) input.setSelectionRange(input.value.length, input.value.length);
+                  });
+                }}
+              />
+              <button type="submit" className="prototype-primary" aria-label={t("Send action")}>↑</button>
             </div>
           </form>
 
@@ -839,7 +907,15 @@ export function App() {
         <WorldShelfDialog shelf={shelf} loading={loadingWorld} onLoad={path => void loadWorld(path)} onClose={() => setWorldPickerOpen(false)} onRefresh={async () => { setShelf(await airpGateway.worlds()); }} />
       )}
 
-      {selectedBagItem && <BagItemDialog item={selectedBagItem} onClose={() => setSelectedBagPath(null)} onPlace={handleReturnItem} />}
+      {selectedBagItem && (
+        <BagItemDialog
+          item={selectedBagItem}
+          onClose={() => setSelectedBagPath(null)}
+          onPlace={handleReturnItem}
+          onUse={prepareItemUse}
+          useDisabled={writerLocked}
+        />
+      )}
 
       {radialState && <RadialMenu {...radialState} onClose={() => setRadialState(null)} onCreate={createAt} />}
 

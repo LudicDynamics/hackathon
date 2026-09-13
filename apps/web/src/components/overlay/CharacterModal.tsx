@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MotionPortrait } from './MotionPortrait.js';
 import { ActivityRail } from '../chrome/ActivityRail.js';
+import { AgentActivityLog } from '../chrome/AgentActivityLog.js';
 import { canRequestTts, invalidateTts, ttsEnabled } from '../../lib/tts-readiness.js';
 import { useLocale } from '../../lib/i18n.js';
 import { playStinger, playVoice, stopVoice, unlock, type Emotion } from '../../lib/audio.js';
@@ -128,6 +129,10 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const [inputText, setInputText] = useState('');
   const [avatarError, setAvatarError] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [activitySessionStartedAt, setActivitySessionStartedAt] = useState(() => Date.now());
+  useEffect(() => {
+    setActivitySessionStartedAt(Date.now());
+  }, [characterId]);
 
   const streamTimer = useRef<number | null>(null);
   const closeTimer = useRef<number | null>(null);
@@ -767,6 +772,10 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
             子节点、absolute 定位（bottom:100%）故不进纸的文档流、不改纸高。按
             agentId 过滤，只显示本角色的动作。 */}
         <ActivityRail surface="character-modal" agentId={`character:${characterId}`} />
+        <AgentActivityLog
+          query={{ surface: 'character-modal', agentId: `character:${characterId}`, since: activitySessionStartedAt }}
+          className="character-activity-log"
+        />
         <div className="name-plate">{displayName || characterId}</div>
         {onOpenNook && <button type="button" onClick={onOpenNook}>Visit private space</button>}
         <p className="narr-line">{bio ? bio : '(necessary description)'}</p>

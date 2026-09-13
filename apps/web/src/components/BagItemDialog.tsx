@@ -15,10 +15,13 @@ import {
 } from '../lib/action-feedback.js';
 import type { AppearanceView } from '../lib/appearance-view.js';
 
-export function BagItemDialog({ item, onClose, onPlace, inline = false, appearance }: {
+export function BagItemDialog({ item, onClose, onPlace, onUse, useDisabled = false, inline = false, appearance }: {
   item: { path: string; filename: string; body: string; frontmatter: Record<string, any> | null };
   onClose: () => void;
   onPlace?: (path: string) => Promise<boolean>;
+  /** Add this item to the local Writer draft; this callback must not execute an action. */
+  onUse?: (path: string) => void;
+  useDisabled?: boolean;
   inline?: boolean;
   /** The verified view inherited from `.object` (04 §:86): the reading layer consumes the
    * same resolution and never re-resolves. Optional so an old/absent resolution keeps the
@@ -81,13 +84,14 @@ export function BagItemDialog({ item, onClose, onPlace, inline = false, appearan
         <>
           {!inline && <div className="carried-item-artwork"><ItemArtwork item={item} /></div>}
           {inline && typeof image === 'string' && <img src={airpGateway.assetUrl(image, undefined, 'image')} alt="" style={{ maxHeight: 200, maxWidth: '100%', objectFit: 'contain' }} />}
+          <MarkdownText text={item.body} />
+          <fieldset disabled={busy} aria-busy={busy}>
+            {renderFrontmatterWidgets(item.frontmatter, { filePath: item.path, reveal: true, onChoice: choose })}
+            {onUse && <button type="button" disabled={useDisabled} onClick={() => onUse(item.path)}>{t('Use this item')}</button>}
+            {onPlace && <button type="button" onClick={() => void run(async () => { if (await onPlace(item.path)) onClose(); else setError(t('Could not move item')); })}>{t('Place in current scene')}</button>}
+          </fieldset>
         </>
       )}
-      <MarkdownText text={item.body} />
-      <fieldset disabled={busy} aria-busy={busy}>
-        {renderFrontmatterWidgets(item.frontmatter, { filePath: item.path, reveal: true, onChoice: choose })}
-        {onPlace && <button type="button" onClick={() => void run(async () => { if (await onPlace(item.path)) onClose(); else setError(t('Could not move item')); })}>{t('Place in current scene')}</button>}
-      </fieldset>
       {busy && <small role="status">{t('Working…')}</small>}
       {actionFeedback && actionFeedback.outcome === 'conflict' && <p role="status" data-action-status="conflict">{actionFeedback.message}</p>}
       {actionFeedback && actionFeedback.outcome === 'accepted' && <p role="status" data-action-status="accepted">{actionFeedback.message}</p>}

@@ -210,3 +210,50 @@
 @media (prefers-reduced-motion: reduce) {
   .activity-rail__item[data-state='running'] .activity-rail__dot { animation: none; opacity: .9; }
 }
+
+/* Complete activity projection. This is a control adjacent to the
+   pointer-transparent rail, never a child of it. */
+.agent-activity-log { position: fixed; z-index: var(--depth-chrome-hint); right: 24px; bottom: 24px;
+  width: min(390px, calc(100vw - 48px)); color: #eee2d1; font: 12px/1.45 var(--sans, Arial, sans-serif);
+  pointer-events: auto; }
+.agent-activity-log__toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 34px;
+  padding: 7px 12px; border: 1px solid #d8c4a655; border-radius: 999px; color: #eee2d1;
+  background: #241f30e8; box-shadow: 0 6px 24px #120f1840; cursor: pointer; }
+.agent-activity-log__toggle-mark { font-size: 17px; line-height: 1; }
+.agent-activity-log__count { min-width: 1.35em; padding: 1px 5px; border-radius: 999px;
+  color: #241f30; background: #d9c7ed; text-align: center; }
+.agent-activity-log__panel { position: absolute; right: 0; bottom: calc(100% + 8px);
+  width: 100%; max-height: min(62vh, 500px); overflow: auto; padding: 12px;
+  border: 1px solid #d8c4a655; border-radius: 14px; background: #241f30f5;
+  box-shadow: 0 12px 40px #120f1866; overscroll-behavior: contain; }
+.agent-activity-log__header { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 0 2px 9px; border-bottom: 1px solid #d8c4a633; }
+.agent-activity-log__actions { display: flex; align-items: center; gap: 6px; }
+.agent-activity-log__actions button { padding: 3px 5px; border: 0; color: #d9c7ed;
+  background: transparent; font-size: 11px; cursor: pointer; }
+.agent-activity-log__actions button:last-child { padding: 0 3px; color: #eee2d1; font-size: 19px; line-height: 1; }
+.agent-activity-log__turns, .agent-activity-log__entries { margin: 0; padding: 0; list-style: none; }
+.agent-activity-log__turn { border-bottom: 1px solid #d8c4a61f; }
+.agent-activity-log__turn-toggle { display: flex; align-items: flex-start; gap: 7px; width: 100%;
+  padding: 9px 2px; border: 0; color: #eee2d1; background: transparent; text-align: left; cursor: pointer; }
+.agent-activity-log__chevron { width: 10px; color: #c5a1e3; }
+.agent-activity-log__turn[data-state='error'] .agent-activity-log__chevron { color: #e0a18d; }
+.agent-activity-log__entry { display: flex; align-items: flex-start; gap: 8px; padding: 5px 8px 7px 19px;
+  color: #d9cfc3; }
+.agent-activity-log__entry[data-state='ok'] { color: #aebaa8; }
+.agent-activity-log__entry[data-state='error'] { color: #e8bdb0; }
+.agent-activity-log__entry-dot { width: 5px; height: 5px; margin-top: .48em; border-radius: 50%;
+  flex: none; background: #c5a1e3; }
+.agent-activity-log__entry[data-state='ok'] .agent-activity-log__entry-dot { background: #899b87; }
+.agent-activity-log__entry[data-state='error'] .agent-activity-log__entry-dot { background: #c96f4c; }
+.agent-activity-log button:focus-visible { outline: 2px solid #c5a1e3; outline-offset: 2px; }
+.speech-paper .agent-activity-log { position: absolute; right: 0; bottom: 100%; width: min(360px, calc(100vw - 32px));
+  margin-bottom: .55rem; }
+@media (max-width: 700px) {
+  .agent-activity-log { right: 16px; bottom: 16px; width: calc(100vw - 32px); }
+  .agent-activity-log__panel { max-height: min(65vh, 520px); }
+  .agent-activity-log__actions button:not(:last-child) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-activity-log__panel, .agent-activity-log__toggle { transition: none; }
+}
