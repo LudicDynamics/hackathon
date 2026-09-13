@@ -22,6 +22,15 @@ assets/**
 # 素材生产的手艺包（文本，无大二进制）——工具见 tools/motion-clip.mjs
 !assets/skills/
 !assets/skills/**
+# Approved Noctiluca D10 deliverables; local MCP setup and logs stay ignored.
+!assets/models/
+!assets/models/arcane-d10/
+!assets/models/arcane-d10/*.blend
+!assets/models/arcane-d10/*.glb
+!assets/models/arcane-d10/*.png
+!assets/models/arcane-d10/*.py
+!assets/models/arcane-d10/README.md
+!assets/models/arcane-d10/validation.json
 # 车间入口说明（纯文本；AGENTS.md §7.8 引用它作为 assets/ 的入库口径真相源）
 !assets/README.md
 **/.airpworld/prompt-presets/

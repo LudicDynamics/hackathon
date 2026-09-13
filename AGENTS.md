@@ -132,7 +132,7 @@ tools/                  # 单一职责脚本：探针（probe-*）/ 门禁（che
   check-i18n.mjs        # i18n 键门禁（pnpm check:i18n）：`t('…')` 字面量必须解析到 messages.json 且 zh-CN/ja 翻译齐全（缺键会静默回落成英文）
   check-merge-log.mjs   # 合并登记门禁（pnpm check:merge）：first-parent merge 必须有 docs/merge/<title>-<7hex>-<作者>.md；单测 tools/check-merge-log.test.mjs（§6.6）
 
-assets/                 # worldlines-assets 素材车间；整树 .gitignore，**只白名单 audio/ 与 skills/**（见 §7.8）
+assets/                 # worldlines-assets 素材车间；整树 .gitignore，**白名单 audio/、skills/ 与已批准的 D10 模型**（见 §7.8）
   audio/                # 平台级音频池（已入库）：bgm（3 情绪主线）/ themes（逐世界主题曲）/ ambient（基础三轨 + pool/ 声场族）/ foley（拟音）+ PLAN.md 需求清单 + CREDITS.md
   skills/               # 素材生产手艺包（文本，无大二进制）：character-asset-batch（6 情绪+微动立绘整链）/ motion-portrait / flow-media
   worlds/ _inbox/       # AI 生图原始产出与筛选（约 587MB，不入库）——发布位是平台 IP 包，不是这里
@@ -535,12 +535,13 @@ pnpm pi commit "fix(...): …" [--no-build]   # build 红线 → 子模块 commi
 
 ### 7.8 素材车间 `assets/` 的入库口径（2026-09-13 核实）
 
-`assets/` 是 **worldlines-assets 素材车间**（`assets/README.md`），**整树被 `.gitignore` 排除**，只白名单两项：
+`assets/` 是 **worldlines-assets 素材车间**（`assets/README.md`），**整树被 `.gitignore` 排除**，白名单音频、手艺包与用户批准的 D10 模型：
 
 | 子目录 | 入库 | 说明 |
 |---|---|---|
 | `assets/audio/**` | ✅ | 我们自己产出的音乐（Pixabay 免版税 BGM / 环境声 / 拟音）。**平台级音频池的真相源**就是这里——`routes/world.ts` 的 `AUDIO_ROOT` 指 `assets/audio`，`/api/audio?path=…` 从这里伺服。需求清单/缺口登记在 `assets/audio/PLAN.md`，授权信息在 `CREDITS.md` |
 | `assets/skills/**` | ✅ | 素材生产手艺包（纯文本，无大二进制）：`character-asset-batch`（6 情绪差分 + 透明微动立绘整链）、`motion-portrait`（抠像/循环）、`flow-media`（生图/生视频） |
+| `assets/models/arcane-d10/` | ✅ | 用户批准入库的夜辉 D10：Blender 工程、GLB、纹理、预览、重建脚本与验证数据；本机 MCP 配置及日志不入库。见该目录 `README.md` |
 | `assets/worlds/**`、`assets/_inbox/**` | ❌ | AI 生图原始产出与筛选（**合计约 587MB**），只作生产参考。**发布位不是这里**——定稿后经平台上传端点落入 IP 包，runtime 读 IP 包 |
 
 **坑（2026-09-13 实际踩到）**：`assets/README.md` 写的是"本目录不进 git"，**这句已过期**——`audio/` 与 `skills/` 现在是入库的。找音频资产时**不要只查 `apps/web/public/` 或 `templates/**/`**，平台池在仓库根 `assets/audio/`；世界级样本则走 `templates/<world>/assets/`（`/api/asset` 伺服）。判据：平台池 = `/api/audio?path=…`，世界级 = `/api/asset?…`。
