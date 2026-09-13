@@ -84,7 +84,8 @@ pnpm gen credits     # 剩余额度
 ## 二、生图
 
 ```bash
-pnpm gen image --prompt "描述" [--model M] [--aspect R] [--resolution 2k] [-o 路径]
+pnpm gen image --prompt "描述" [--model M] [--aspect R] [--resolution 2k] \
+               [--ref-image 参考图,参考图] [-o 路径]
 ```
 
 | 参数 | 取值 |
@@ -92,6 +93,7 @@ pnpm gen image --prompt "描述" [--model M] [--aspect R] [--resolution 2k] [-o 
 | `--model` | `nano-banana-2-lite`（默认）/ `nano-banana-2` / `gemini-3.0-pro-image` |
 | `--aspect` | `landscape`（默认）/ `portrait` / `square` / `four-three` / `three-four` |
 | `--resolution` | `2k`（走生成后放大；4K 需更高订阅档，不支持） |
+| `--ref-image` | 参考图，逗号分隔（最多 4 张），走**图生图 / 多图融合** |
 
 - 实测耗时 **~19s**，返回**真实的 1024×1024 级 JPEG**（签名 CDN 直链可直接下载）。
 - 三个模型实测都可用。**`nano-banana-pro` 与 `imagen-4.0-generate-preview` 已从中游 404**，
@@ -100,6 +102,25 @@ pnpm gen image --prompt "描述" [--model M] [--aspect R] [--resolution 2k] [-o 
 - `--json` 追加一份机器可读结果（`files[]` / `elapsed_s`），适合脚本消费。
 
 **竖版封面**（9:16 移动优先）用 `--aspect portrait`。
+
+### 2.1 图生图（参考图）
+
+给 `--ref-image` 就是图生图——文字提示与参考图**同时生效**：
+
+```bash
+# 单图：换风格 / 保构图
+pnpm gen image --prompt "把这张图的风格转成水彩画，保持构图" --ref-image base.png -o out.jpg
+
+# 多图：融合两个来源（最多 4 张）
+pnpm gen image --prompt "把第二张的角色放进第一张的场景" --ref-image scene.png,char.png -o merged.jpg
+```
+
+实测：以一张三人港口插画为参考，输出**保留了人物与构图**、风格转为水彩
+（28.7s / 1376×768）。这是**改风格、保角色、合场景**最省事的办法——
+比反复调 prompt 可靠得多。
+
+> 上游字段是 `imageInputs`（与视频侧的 `referenceImages` 不同名）。
+> 代理由此自动上传换 `mediaId`，你只管给本地路径。
 
 ---
 
@@ -284,6 +305,7 @@ pnpm gen --help
 pnpm gen models                                   # 列可用模型
 pnpm gen credits                                  # 查额度
 pnpm gen image  --prompt "..." --aspect portrait -o assets/_inbox/
+pnpm gen image  --prompt "转成水彩风格，保持构图" --ref-image base.png -o out.jpg
 pnpm gen video  --prompt "..." --seconds 8 -o out.mp4
 pnpm gen video  --prompt "..." --image base.png -o i2v.mp4
 pnpm gen music  --prompt "..." -o song.m4a        # 完整歌曲（Lyria，1–3 分钟）

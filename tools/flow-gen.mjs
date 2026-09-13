@@ -185,6 +185,20 @@ async function download(url, dest) {
   return { bytes: buf.length, type: (res.headers.get('content-type') || '').split(';')[0] };
 }
 
+/**
+ * Parse a comma-separated list of image paths/URLs into data URLs.
+ * `--ref-image a.png,b.png` — used for the multi-reference (r2v) video path and
+ * for image-to-image reference inputs. Order matters: the first entry is the
+ * primary reference upstream.
+ */
+function imageListToDataUrls(raw) {
+  return String(raw)
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => (/^https?:|^data:/.test(x) ? x : fileToDataUrl(x)));
+}
+
 /** Local file -> data URL, so `--image` accepts a path on disk. */
 function fileToDataUrl(p) {
   const abs = path.resolve(p);
@@ -221,7 +235,7 @@ function parseUpstreamKey(key) {
   const abra = s.match(/^abra_(t2v|i2v|fl|r2v)_(\d+)s(?:_(\d{3,4})p)?$/);
   if (abra) return { family: 'abra', kind: abra[1], seconds: Number(abra[2]), res: abra[3] ? Number(abra[3]) : null };
   // veo_3_1_t2v_lite / veo_3_1_t2v_fast_8s / veo_3_1_i2v_s_fast_fl
-  const veo = s.match(/^veo_3_1_(t2v|i2v)_(.+)$/);
+  const veo = s.match(/^veo_3_1_(t2v|i2v|r2v)_(.+)$/);
   if (veo) {
     const t = veo[2].match(/_(\d+)s$/);
     return { family: 'veo', kind: veo[1], seconds: t ? Number(t[1]) : null, res: null };
@@ -262,9 +276,14 @@ async function cmdImage(opts) {
   if (opts.aspect) body.aspect_ratio = opts.aspect;
   // 2K 是生成后的二次放大（4K 需更高订阅档，不支持），返回 base64 而非 URL。
   if (String(opts.resolution || '').toLowerCase() === '2k') body.resolution = '2k';
+  // 参考图（图生图 / 多图融合）。走 Gemini 系图片模型的 imageInputs。
+  if (opts.refImage || opts['ref-image']) {
+    body.reference_images = imageListToDataUrls(opts.refImage || opts['ref-image']);
+  }
 
   const out = resolveOut(opts, 'image', prompt);
   console.log(`生图  model=${body.model} aspect=${body.aspect || '(默认 landscape)'}${body.resolution ? ` resolution=${body.resolution}` : ''}`);
+  if (body.reference_images) console.log(`        参考图 ${body.reference_images.length} 张（图生图）`);
 
   const t0 = Date.now();
   const json = await api('/v1/images/generations', { method: 'POST', body, timeoutMs: 300_000 });
@@ -396,11 +415,23 @@ async function cmdVideo(opts) {
   if (opts.resolution) body.resolution = String(opts.resolution).replace(/p$/i, '');
   if (opts.aspect) body.aspect_ratio = opts.aspect;
   if (opts.image) body.image = /^https?:|^data:/.test(opts.image) ? opts.image : fileToDataUrl(opts.image);
+  // 尾帧：与首帧合用即走首尾帧过渡（fl）。只给尾帧无效，后端会明确报错。
+  if (opts.lastImage || opts['last-image']) {
+    const v = opts.lastImage || opts['last-image'];
+    body.last_image = /^https?:|^data:/.test(v) ? v : fileToDataUrl(v);
+  }
+  // 多参考图（r2v）：用于风格/角色一致性，上游最多取 3 张。
+  if (opts.refImage || opts['ref-image']) {
+    body.reference_images = imageListToDataUrls(opts.refImage || opts['ref-image']);
+  }
 
   const out = resolveOut(opts, 'video', prompt);
   console.log(`生视频  model=${body.model}${body.seconds ? ` seconds=${body.seconds}` : ''}${body.resolution ? ` resolution=${body.resolution}p` : ''}`);
   console.log(`        prompt="${String(prompt).slice(0, 70)}${String(prompt).length > 70 ? '…' : ''}"`);
   if (opts.image) console.log(`        首帧图片：${opts.image.startsWith('data:') ? '(本地文件已内联)' : opts.image}`);
+  if (body.last_image) console.log(`        尾帧图片：${body.last_image.startsWith('data:') ? '(本地文件已内联)' : body.last_image}`);
+  if (body.reference_images) console.log(`        参考图 ${body.reference_images.length} 张（多参考图 r2v）`);
+  if (body.last_image && !opts.image) die('只给 --last-image 无法确定视频类型：请同时提供 --image（首帧）以走首尾帧过渡。');
 
   const t0 = Date.now();
   const job = await api('/v1/videos/generations', { method: 'POST', body, timeoutMs: 180_000 });
@@ -522,13 +553,16 @@ image 选项:
       --model <名>     默认 nano-banana-2-lite
       --aspect <比例>  landscape | portrait | square | four-three | three-four
       --resolution 2k  走生成后的二次放大（4K 需更高订阅档，不支持）
+      --ref-image <路径,路径> 参考图（逗号分隔，最多 4 张），走图生图 / 多图融合
 
 video 选项:
       --model <名>     默认 veo-3.1-lite（720p）
       --seconds <4|6|8>      时长（默认 4）
       --resolution <360|720|1080>  360/720 为生成档位(仅 omni 可调，默认 720)；1080 走生成后的升采样(4K 需更高订阅档)
       --aspect <比例>  landscape | portrait
-      --image <路径|URL>     首帧图片（本地路径会内联为 data URL），走图生视频
+      --image <路径|URL>     首帧图片（本地路径会内联为 data URL），走图生视频 i2v
+      --last-image <路径|URL> 尾帧图片，配合 --image 走首尾帧过渡 fl
+      --ref-image <路径,路径> 多参考图（逗号分隔，最多 3 张），走多参考图 r2v
 
 music 选项（独立链路，需先用扩展推送 Flow Music 凭据）:
       --model <名>     默认 lyria（Lyria 3.5）；lyria-pro 为旧版 Lyria 3 Pro
@@ -546,6 +580,9 @@ music 选项（独立链路，需先用扩展推送 Flow Music 凭据）:
   node tools/flow-gen.mjs video --prompt "烛光摇曳" --resolution 1080p -o out.mp4   # 生成后自动升采样
   node tools/flow-gen.mjs image --prompt "海边灯塔" --resolution 2k -o out.jpg
   node tools/flow-gen.mjs video --prompt "让她微微转头" --image assets/_inbox/base.png -o ./  # 图生视频
+  node tools/flow-gen.mjs video --prompt "镜头推进" --image a.png --last-image b.png -o ./   # 首尾帧过渡
+  node tools/flow-gen.mjs video --prompt "保持角色形象" --ref-image c1.png,c2.png -o ./      # 多参考图
+  node tools/flow-gen.mjs image --prompt "换成立绘风" --ref-image base.png -o out.jpg        # 图生图
 `;
 
 async function main() {
