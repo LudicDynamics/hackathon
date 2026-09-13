@@ -58,6 +58,18 @@
 
 ## 🚀 快速启动
 
+### Windows 日常更新与启动
+
+已有本地模型配置时，双击根目录的 `Start-AIRP.cmd`，或在 PowerShell 执行 `./Start-AIRP.cmd`。
+需要更新时先运行 `git pull --ff-only --recurse-submodules`，再运行这个脚本。
+
+脚本自动安装工作区依赖、按源码时间检查并重建 pi-rp、编译项目，再重启本项目的后端。
+页面由后端直接提供，打开 **http://localhost:3001/**，无需另开 Vite。
+模型配置 `.env.local`、`.pi/agent/` 中的本地配置文件和 `worlds/` 存档沿用；启动不调用模型、不跑开发验收探针。
+端口被其他程序占用或 Agent 正在工作时会明确停止，构建失败时保留原服务。
+日志位于 `.artifacts/local-server/`；无须打开浏览器时使用 `./Start-AIRP.cmd -NoBrowser`。
+Git 提示本地修改冲突时先处理冲突，脚本不会替你覆盖修改或切换引擎版本。
+
 ### 1. 编译全仓库
 ```bash
 pnpm install

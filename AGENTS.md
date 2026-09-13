@@ -232,6 +232,8 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 
 ## 5. 常用命令
 
+Windows 日常运行用根目录 `Start-AIRP.cmd`（`tools/start-local.ps1`）：安装依赖、检查引擎构建新鲜度、编译并重启本项目后端，直接在 `http://localhost:3001/` 提供页面。更新先 `git pull --ff-only --recurse-submodules` 再启动。启动沿用本地模型配置与存档，不运行模型调用或整套开发探针；详细说明见 README 的 Windows 日常更新与启动。
+
 ```bash
 pnpm install                                    # 装依赖（含 submodule）
 pnpm build                                      # 编译全仓库
