@@ -7,6 +7,6 @@ intent: The letter and phone are the only investigative props. Furniture is atmo
 bgVideo: assets/motion/seedance/backgrounds/intro.webm
 ---
 
-You wake at a wooden table. Rain touches the roof. A sealed envelope, a dark phone, one unlocked door. Your head aches; how you arrived is not yet a fact.
+You wake at a wooden table in a cabin. Rain taps on the roof. You do not remember how you got here.
 
-You can learn something before leaving—or turn the handle without knowing.
+There is a sealed letter, a phone with a dark screen, and an unlocked door. Read the letter, try the phone, or step outside. What you do will shape what you find next.

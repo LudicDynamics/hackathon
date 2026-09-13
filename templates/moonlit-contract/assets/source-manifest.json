@@ -1,0 +1,17 @@
+{
+  "opening": {
+    "file": "assets/backgrounds/opening.png",
+    "sha256": "e43569426a30639cde4c3e6d806e467c0b53e2b21d64e0692bc7643984eae409",
+    "generator": "built-in image_gen",
+    "role": "female protagonist left, original male knight right; contract invitation",
+    "note": "Earlier franchise-character CGs are excluded from this repository."
+  },
+  "bgm": {
+    "key": "emberglass",
+    "file": "assets/audio/themes/emberglass.mp3",
+    "title": "Mystical/fantasy loop",
+    "creator": "nicorico_120",
+    "license": "CC0 1.0",
+    "credits": "assets/audio/CREDITS.md"
+  }
+}

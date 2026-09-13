@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { MarkdownText } from '../lib/md.js';
 import { useLocale } from '../lib/i18n.js';
-import { renderFrontmatterWidgets } from '../lib/fm.js';
+import { EntityInteractions, type EntityInteractionProps } from './narrative/EntityInteractions.js';
 import { airpGateway } from '../lib/airp-gateway.js';
 import { playFoley } from '../lib/audio.js';
 import { ItemArtwork } from './ItemArtwork.js';
 
-export function BagItemDialog({ item, onClose, onPlace, onUse, useDisabled = false, inline = false }: {
+export function BagItemDialog({ item, onClose, onPlace, onUse, useDisabled = false, inline = false, interactions }: {
   item: { path: string; filename: string; body: string; frontmatter: Record<string, any> | null };
   onClose: () => void; onPlace?: (path: string) => Promise<boolean>;
   onUse?: (path: string) => void;
   useDisabled?: boolean;
   inline?: boolean;
+  interactions?: Omit<EntityInteractionProps, 'item' | 'inline' | 'active'>;
 }) {
   const { t } = useLocale();
   const [busy, setBusy] = useState(false);
@@ -19,9 +20,9 @@ export function BagItemDialog({ item, onClose, onPlace, onUse, useDisabled = fal
   const paper = useRef<HTMLElement>(null);
   useEffect(() => { playFoley('page-turn'); }, [item.path]);
   useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); onClose(); } };
+    const key = (e: KeyboardEvent) => { if (document.querySelector('.declared-action-backdrop')) return; if (e.key === 'Escape') { e.stopImmediatePropagation(); onClose(); } };
     window.addEventListener('keydown', key, true);
-    const outside = (e: PointerEvent) => { if (!paper.current?.contains(e.target as Node)) onClose(); };
+    const outside = (e: PointerEvent) => { if ((e.target as HTMLElement).closest('.declared-action-backdrop')) return; if (!paper.current?.contains(e.target as Node)) onClose(); };
     window.addEventListener('pointerdown', outside, true);
     return () => { window.removeEventListener('keydown', key, true); window.removeEventListener('pointerdown', outside, true); };
   }, [onClose]);
@@ -40,7 +41,7 @@ export function BagItemDialog({ item, onClose, onPlace, onUse, useDisabled = fal
       {inline && typeof image === 'string' && <img src={airpGateway.assetUrl(image)} alt="" style={{ maxHeight: 200, maxWidth: '100%', objectFit: 'contain' }} />}
       <MarkdownText text={item.body} />
       <fieldset disabled={busy}>
-        {renderFrontmatterWidgets(item.frontmatter, { filePath: item.path, reveal: true, onChoice: choice => void run(() => airpGateway.choose(item.path, choice)) })}
+        <EntityInteractions item={item} active inline {...interactions} />
       </fieldset>
       </div>
       <fieldset disabled={busy}>

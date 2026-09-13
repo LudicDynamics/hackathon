@@ -6,7 +6,7 @@
   "name": "分岐点 · 体験版",
   "version": "1.1.0",
   "schema": 1,
-  "description": "救えなかった人へ、一枚だけ届く。変わった現在には、救ったものと失ったものが並ぶ。",
+  "description": "直った蛙と、帰らなかった少女。同じ店の三つの時間を歩き、迎えに来るはずだった朝を変える。",
   "author": "Worldlines Canvas / AIRP",
   "genre": "物語体験",
   "tags": [
@@ -34,7 +34,7 @@
       "home": "world/time-map/1994/tokiwa-electronics",
       "role": "companion",
       "avatar": "assets/motion/seedance/characters/ryo-transparent.webp",
-      "description": "一九九四年には七歳。玩具と目の前の約束を大事にする。未来の死や改変を知らない。",
+      "description": "リョウ、七歳の少女。あなたは彼女が知っている修理見習い。明朝十時に蛙を取りに来る予定。川向こうの家から東橋を渡る。大人になったら修理の仕事がしたい。未来の事故は知らない。",
       "avatarVideo": "assets/motion/seedance/characters/ryo-transparent.webm",
       "name": "幼いリョウ"
     }

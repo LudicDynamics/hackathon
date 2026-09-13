@@ -37,7 +37,7 @@ const alias = {
 
 const jiti = createJiti(import.meta.url, { moduleCache: false, alias, tryNative: true });
 
-/** docs/doc-20 §1 / docs/tools/00 §6.3 — the frozen tool face. */
+/** docs/protocols/doc-20 §1 / docs/tools/00 §6.3 — the frozen tool face. */
 const EXPECTED_TOOLS = [
   'look_at',
   'view_canvas',

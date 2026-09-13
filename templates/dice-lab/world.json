@@ -1,0 +1,24 @@
+{
+  "id": "dice-lab",
+  "name": "Noctiluca Dice Lab",
+  "version": "1.1.0",
+  "schema": 1,
+  "description": "Try one D10 or a pair of percentile dice. Results remain on the Chalk.",
+  "author": "AIRP",
+  "genre": "dice test",
+  "tags": [
+    "test",
+    "dice"
+  ],
+  "material": "parchment",
+  "player": {
+    "id": "you",
+    "name": "You"
+  },
+  "characters": [],
+  "extensions": [],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "locale": "en",
+  "entry": "map"
+}

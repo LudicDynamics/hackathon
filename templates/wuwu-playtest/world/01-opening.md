@@ -1,12 +1,25 @@
 ---
 type: chalk
-title: 港務所 · 調査の朝
+title: 港務所 · 調査を始める
 choice:
-  - 依頼書と徽章を受け取る
-  - 依頼の条件を読む
+  options:
+    - id: action-1
+      label: 依頼書と徽章を受け取る
+    - id: action-2
+      label: 依頼の条件を読む
 intent: 受領なら world/commission-letter.md と world/investigator-badge.md の現物をそれぞれ同名で player/ へ move。片方が既にあれば不足分だけ。実際の所持を確認し、港の地図を案内する。
+choice_actions:
+  action-1:
+    kind: take
+    paths:
+      - world/commission-letter.md
+      - world/investigator-badge.md
+  action-2:
+    kind: read
+    paths:
+      - world/commission-letter.md
 ---
 
-あなたは港に着いたばかりの調査員。無人船の鐘が、風もないのに一度だけ鳴った。
+あなたは港に来た調査員です。誰も乗っていない船、人の失踪、灯台の明かりが消えた夜。この三つに関係があるのか、調べてほしいと頼まれました。
 
-机の依頼書と調査員の徽章を両方かばんに入れたら、港の地図へ出よう。読むだけでは受領にならない。
+まず「依頼書と徽章を受け取る」を選び、港の地図へ進みましょう。徽章は港を調べるための許可証です。

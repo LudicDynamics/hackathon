@@ -39,7 +39,12 @@ for (const pack of experiences) {
           assert.match(file, /^[a-zA-Z0-9/_.-]+$/, file);
           assert.match(parsed.body, /[\p{Script=Hiragana}\p{Script=Katakana}]/u, file);
         } else assert.doesNotMatch(parsed.body, /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u);
-        assert.equal(parsed.frontmatter?.roll_dice, undefined, 'No roll available before preparation and consent');
+        if (parsed.frontmatter?.roll_dice) {
+          assert.ok(file.endsWith('/04-investigation-dice.md'), 'Only authored investigation alternatives offer a prepared roll');
+          assert.equal(parsed.frontmatter.roll_dice.type, '2d10');
+          assert.equal(parsed.frontmatter.roll_dice.result, undefined, 'Consent is the player choosing to roll, never a pre-rolled result');
+          assert.equal(parsed.frontmatter.dice_outcomes.length, 4, 'Costs and rewards must be declared before consent');
+        }
         assert.notEqual(parsed.frontmatter?.choice?.mode, 'multi');
         for (const key of ['bg', 'image', 'avatar', 'bgVideo']) if (parsed.frontmatter?.[key]) await fs.access(path.join(result.path, parsed.frontmatter[key]));
       }

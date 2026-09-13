@@ -176,7 +176,7 @@ import type { Emotion } from '../../lib/audio.js';   // 取代 :27 的本地定�
 定性结论：**`letter` 第二层模态（`CardRenderer.tsx:196-259`）是单页阅读层，没有任何分页/翻页结构。**
 
 - 该模态是「点击信件 → 打开浮层 → 读全文 → 收起」：`onClick={() => setLetterOpen(true)}`（`:200`）；浮层内容一次性渲染 `frontmatter.body || body`（`:240`）；关闭为「Fold & Put Away」按钮（`:249`）与遮罩点按（`:227`）。
-- doc-10 E9 的**翻页语义属于 `book`（`secondLayer: 'pages'`）**，见 `docs/doc-10-组件协议与官方组件清单.md:766`（`book` 行：*"有页。允许：翻页（二级层分页）"*）与 `:914`。**`book` 组件在前端尚未实现**：`apps/web/src/components/` 下无 `DetailPanel.tsx`、无分页渲染器（`glob` 全目录仅 `ChalkCard/DiceRoller/RadialMenu/…`）。
+- doc-10 E9 的**翻页语义属于 `book`（`secondLayer: 'pages'`）**，见 `docs/protocols/doc-10-组件协议与官方组件清单.md:766`（`book` 行：*"有页。允许：翻页（二级层分页）"*）与 `:914`。**`book` 组件在前端尚未实现**：`apps/web/src/components/` 下无 `DetailPanel.tsx`、无分页渲染器（`glob` 全目录仅 `ChalkCard/DiceRoller/RadialMenu/…`）。
 - **所以 `page-turn` 没有精确落点。本文不编造。**
 
 **给评审的候选落点**（若坚持本批接线，二选一；均为语义近似，非真翻页）：

@@ -2,7 +2,7 @@
  * Writer busy state — module scope, React-visible via useSyncExternalStore.
  *
  * The writer is "writing" from the moment it starts a turn until `writer_idle`
- * arrives. `WriterBar` disables input while writing (docs/前端改造计划 T3.4:
+ * arrives. `WriterBar` disables input while writing (docs/ui/前端改造计划 T3.4:
  * "writing 中再按 Enter → placeholder 变『作家正在写……』，输入无效（诚实，不排队
  * 不打断）"). The state must also reset on WS reconnect, or a `writer_idle` lost
  * to a disconnect leaves the input permanently disabled (docs/perform/01 §6.4).

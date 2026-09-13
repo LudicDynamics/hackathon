@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { createCameraDrivers } from '../lib/camera-drivers.js';
 import {
   clampZ,
   lerpCam,
@@ -40,13 +41,13 @@ const CAM_MEMORY: Record<string, Cam> = {};
 /** Shared camera state across hook instances. */
 let sharedTarget: Cam = { ...DEFAULT_VIEW };
 let sharedCurrent: Cam = { ...DEFAULT_VIEW };
-let wakeDriver: (() => void) | null = null;
+const drivers = createCameraDrivers();
 
 function applyTarget(t: Cam): void {
   sharedTarget.x = t.x;
   sharedTarget.y = t.y;
   sharedTarget.z = t.z;
-  wakeDriver?.();
+  drivers.wake();
 }
 
 export interface CameraApi {
@@ -107,7 +108,7 @@ export function useCamera(): CameraApi {
     const update = () => {
       sharedSize = { w: el.clientWidth, h: el.clientHeight };
       publishView();
-      wakeDriver?.();
+      drivers.wake();
     };
     update();
     const ro = new ResizeObserver(update);
@@ -123,6 +124,7 @@ export function useCamera(): CameraApi {
     let tick = 0;
     const loop = () => {
       raf = 0;
+      if (!drivers.isActive(wake)) return;
       const c = sharedCurrent;
       lerpCam(c, sharedTarget);
       world.style.transform = worldTransform(sharedSize.w, sharedSize.h, c);
@@ -137,13 +139,14 @@ export function useCamera(): CameraApi {
       if (!atRest) raf = requestAnimationFrame(loop);
     };
     const wake = () => {
+      const viewport = viewportRef.current;
+      if (viewport) sharedSize = { w: viewport.clientWidth, h: viewport.clientHeight };
       if (raf === 0) raf = requestAnimationFrame(loop);
     };
-    wakeDriver = wake;
-    wake();
+    const unregister = drivers.register(wake);
     return () => {
-      if (wakeDriver === wake) wakeDriver = null;
       if (raf !== 0) cancelAnimationFrame(raf);
+      unregister();
     };
   }, []);
 

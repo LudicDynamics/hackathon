@@ -1,12 +1,32 @@
 ---
 type: gate
-name: 工房 · 空いた引き出し
-title: 工房 · 空いた引き出し
+name: 工房 · 船から外れた部品
+title: 工房 · 船から外れた部品
 bg: assets/scenes/workshop.webp
 choice:
-  - 留め具の紋章を調べる
-  - ヴェラに持ち主を尋ねる
+  options:
+    - id: investigate-with-dice
+      label: ダイスで手掛かりを見つける
+    - id: action-1
+      label: 船の部品を調べる
+    - id: action-2
+      label: ヴェラに持ち主を尋ねる
+  allow_free: true
 bgVideo: assets/motion/seedance/backgrounds/workshop.webm
+choice_actions:
+  action-1:
+    kind: read
+    paths:
+      - world/harbor-chart/workshop/crest-clasp.md
+  action-2:
+    kind: character
+    character: vera
+  investigate-with-dice:
+    kind: read
+    paths:
+      - world/harbor-chart/workshop/04-investigation-dice.md
 ---
 
-ヴェラの義手に紫の火が走る。「舵の留め具を探してる？　あれは船の名前より雄弁よ」。
+技師のヴェラが、船の舵から外れた部品を預かっています。部品には領主の家の印があります。
+
+この部品が、どの船と関係するのかが手掛かりです。まず部品の説明を読み、ヴェラに持ち主を聞いてみましょう。

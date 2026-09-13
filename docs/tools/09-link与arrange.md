@@ -6,15 +6,15 @@
 > 权威层级（00 §0）：00 契约 > doc-21/doc-22 > doc-20（工具语义） > doc-10（组件与演出型） > doc-19（玩法强度） > 本文。
 >
 > 关联：
-> - `docs/doc-10-组件协议与官方组件清单.md` **E13「线条统一管理」**（`doc-10:155`）——本文落实它：线条是 **canvas.db 画布状态、不从 md 派生**，作家用专用 `link` 工具管理；并落实"**画布布局工具**"（`arrange`）。
-> - `docs/doc-10` §E0 名词表（`doc-10:138`）——"线条 roads/link ≠ 演出型"、"bg/compass 不在组件体系里"。
-> - `docs/doc-05-AIRP产品构想.md` §3.2 物件表（`doc-05:126`：关系线 = canvas.db 画布状态，样式多样）与 §9.1 工具面（`doc-05:684`：地点道路 / 人物关系 / 物品来龙去脉 = 世界拓扑）。
-> - `docs/doc-04-视觉设计风格.md` §4（`doc-04:99`）——材质轴（墨线/手绘/丝线）+ 确定性伪随机抖动（以线 id 为种子）。
-> - `docs/doc-06-演出与交互设计.md` §2.5「空位排座」（`doc-06:94`）与 §5.1 双向拖拽（`doc-06:256`）。
-> - `docs/doc-21-事件表协议.md` §1「准入三问」/§1.1「四类像事件但不是的东西」/§4 十五个 type/§8「不把状态塞进事件」。
-> - `docs/doc-22-Hook注入协议.md` §1.1 表、§6「状态存哪」（`doc-22:147`：**当前层、卡片坐标、关系线**都进 canvas.db）。
+> - `docs/protocols/doc-10-组件协议与官方组件清单.md` **E13「线条统一管理」**（`doc-10:155`）——本文落实它：线条是 **canvas.db 画布状态、不从 md 派生**，作家用专用 `link` 工具管理；并落实"**画布布局工具**"（`arrange`）。
+> - `docs/protocols/doc-10` §E0 名词表（`doc-10:138`）——"线条 roads/link ≠ 演出型"、"bg/compass 不在组件体系里"。
+> - `docs/product/doc-05-AIRP产品构想.md` §3.2 物件表（`doc-05:126`：关系线 = canvas.db 画布状态，样式多样）与 §9.1 工具面（`doc-05:684`：地点道路 / 人物关系 / 物品来龙去脉 = 世界拓扑）。
+> - `docs/ui/doc-04-视觉设计风格.md` §4（`doc-04:99`）——材质轴（墨线/手绘/丝线）+ 确定性伪随机抖动（以线 id 为种子）。
+> - `docs/ui/doc-06-演出与交互设计.md` §2.5「空位排座」（`doc-06:94`）与 §5.1 双向拖拽（`doc-06:256`）。
+> - `docs/protocols/doc-21-事件表协议.md` §1「准入三问」/§1.1「四类像事件但不是的东西」/§4 十五个 type/§8「不把状态塞进事件」。
+> - `docs/agents/doc-22-Hook注入协议.md` §1.1 表、§6「状态存哪」（`doc-22:147`：**当前层、卡片坐标、关系线**都进 canvas.db）。
 > - `docs/tools/01-动作内核与事件落账.md` §2.2 `types.ts`、§2.4 `errors.ts`、§3.1 五步骨架、§4.1「不属于 A/B/C 名单的动作」、§5 方法清单（第 12/13 行）、§3.9 `resolveLayer`。
-> - `docs/后端实现计划.md` §4 工具表（`plan:270` `link` / `plan:271` `arrange`）与 T0.2 事件桥（`plan:213`：`canvas_patched`，**只刷线/位，不整层重取**）。
+> - `docs/development/后端实现计划.md` §4 工具表（`plan:270` `link` / `plan:271` `arrange`）与 T0.2 事件桥（`plan:213`：`canvas_patched`，**只刷线/位，不整层重取**）。
 > - `AGENTS.md` §7.5（画布卡片的尺寸与旋转契约）。
 > - 源码：`packages/shared/src/db/schema.ts:8-26`、`store/local-store.ts:276-470`、`store/layers.ts:126-135`、`routes/world.ts:184-217/311-341`、`apps/web/src/components/canvas/LinkLayer.tsx`、`apps/web/src/state/useWorld.ts`（`LayerLink` / `case 'card_position'`）、`apps/server/src/engine/event-bridge.ts:87-89`。
 

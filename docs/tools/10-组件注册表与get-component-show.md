@@ -8,12 +8,12 @@
 > 权威层级（00 §0）：00 契约 > doc-21/doc-22 > doc-20（工具语义） > doc-10（组件与演出型） > doc-19（玩法强度） > 本文。
 >
 > 关联：
-> - `docs/doc-10-组件协议与官方组件清单.md`——上位文档，本文落实其**待设计 #1（组件 schema）/ #2（官方清单）**；#3/#4/#5 只引用不重定；
-> - `docs/doc-19-多模态与游戏性交互升级.md` §3.1（以物解谜）/ §4.1（追光 · 线索风暴）——玩法强度要求；
-> - `docs/doc-20-agent工具与互动字段协议.md` §1.1 / §2.1（`choice` 是通用互动协议，piano 示例就在那儿）/ §8（`use_item_on`）；
-> - `docs/doc-21-事件表协议.md` §1.1 / §3.3（`detail` 自足）/ §4.1（`entity_created`）；`docs/doc-22-Hook注入协议.md` §3.1；
-> - `docs/doc-09-叙事frontmatter完整schema.md` §6（`look_at` 文本 formatter）；
-> - `docs/doc-04-视觉设计风格.md` §10（v2 视觉基准）与 §10.6（材质词汇表降级为题材概念）。
+> - `docs/protocols/doc-10-组件协议与官方组件清单.md`——上位文档，本文落实其**待设计 #1（组件 schema）/ #2（官方清单）**；#3/#4/#5 只引用不重定；
+> - `docs/gameplay/doc-19-多模态与游戏性交互升级.md` §3.1（以物解谜）/ §4.1（追光 · 线索风暴）——玩法强度要求；
+> - `docs/protocols/doc-20-agent工具与互动字段协议.md` §1.1 / §2.1（`choice` 是通用互动协议，piano 示例就在那儿）/ §8（`use_item_on`）；
+> - `docs/protocols/doc-21-事件表协议.md` §1.1 / §3.3（`detail` 自足）/ §4.1（`entity_created`）；`docs/agents/doc-22-Hook注入协议.md` §3.1；
+> - `docs/protocols/doc-09-叙事frontmatter完整schema.md` §6（`look_at` 文本 formatter）；
+> - `docs/ui/doc-04-视觉设计风格.md` §10（v2 视觉基准）与 §10.6（材质词汇表降级为题材概念）。
 
 ---
 
@@ -470,7 +470,7 @@ promptGuidelines: [
 | `extensions/tools.ts` | `pi.registerTool(getComponentTool)` + `pi.registerTool(showComponentTool)` | **12 文档**（本文只提契约，不抢它的活） |
 | `apps/server/src/engine/event-bridge.ts:71` (`tool_execution_end` 分支) | 加一支：`if (event.toolName === 'show' && !event.isError) { const f = event.result?.details?.frame; if (f) push(f); }` | **12 文档** |
 | `apps/server/src/routes/world.ts` | **无改动**。玩家不调这两个工具；玩家点组件走既有 `/choose` / `/use-item`（12 会改成复用动作服务）。 | 12 |
-| `apps/web/src/components/canvas/CardRenderer.tsx:196` | 现在只特判 `component === 'letter'`（`CardRenderer.tsx:196`），其余组件掉进 note 分支（`:261-279`）。改为：`const kind = resolveComponentKind(fm, filename)` → 查 `COMPONENT_REGISTRY[kind]` 的 `secondLayer` / `channels`，壳按 `CARD_FORMS[kind].chrome` 分派。**不新增 `renderer` 字段**（前端组件不能塞进 shared 的注册表，那是循环依赖）——注册表给**语义**（secondLayer/channels），材质壳由前端按 chrome 实现。 | 前端（`docs/前端改造计划.md`） |
+| `apps/web/src/components/canvas/CardRenderer.tsx:196` | 现在只特判 `component === 'letter'`（`CardRenderer.tsx:196`），其余组件掉进 note 分支（`:261-279`）。改为：`const kind = resolveComponentKind(fm, filename)` → 查 `COMPONENT_REGISTRY[kind]` 的 `secondLayer` / `channels`，壳按 `CARD_FORMS[kind].chrome` 分派。**不新增 `renderer` 字段**（前端组件不能塞进 shared 的注册表，那是循环依赖）——注册表给**语义**（secondLayer/channels），材质壳由前端按 chrome 实现。 | 前端（`docs/ui/前端改造计划.md`） |
 | `apps/web/src/lib/components.ts`（新建） | 轻量转发 `useItemTargetOf` / `cardFormOf` / `resolveComponentKind`（前端从 `@airp/shared` 引；勿抄第二份）。 | 前端 |
 | `apps/web/src/components/narrative/DetailPanel.tsx`（新建） | §16 的统一二级阅读面板（v3 E9 的 DetailPanel 协议）。 | 前端 |
 
@@ -485,11 +485,11 @@ promptGuidelines: [
 | D1 | `packages/shared/src/components.ts:3-35` | 4 个组件 schema（note/letter/gate/buddy），**没有注册、没有 kind 查询** | 保留为兼容 schema，新增 `packages/shared/src/components/`（注册表）与 `COMPONENT_SCHEMAS`（由 `KINDS` 数组派生） | 现有导入 `NoteComponentSchema` 等的调用点（无；grep 显示仅 `index.ts:3` re-export）无需改。 |
 | D2 | `packages/shared/src/schemas/forms.ts:44-55` | `cardKindOf` 硬编码 `if` 链，只认 6 种，`type: component` 一律掉到 `note`（`:54`） | 改为 delegate 到 `resolveComponentKind`；保留 `chalk/gate/sprite` 分支 | `apps/server/src/routes/world.ts:187`、`web/src/index.css:773` 的契约不变（返回仍是 kind 字符串），但 `type: component, component: lock` 的卡从此得到正确 form。**这是 00 §10 #6 的修复。** |
 | D3 | `packages/shared/src/schemas/forms.ts:28-36` | `CARD_FORMS` 6 项（5 真 kind + default） | 扩到 18 个组件 kind + 5 个既有 kind（附录 A） | 纯增量；`default` 保留为最后兜底（`:35`）。 |
-| D4 | `apps/web/src/components/canvas/CardRenderer.tsx:196` | 只特判 `component === 'letter'`，其余组件走 note 分支（`:261`） | 按注册表 kind/chrome 分派到壳组件 | 前端改造，归 `docs/前端改造计划.md`；本次只定义注册表提供什么。 |
+| D4 | `apps/web/src/components/canvas/CardRenderer.tsx:196` | 只特判 `component === 'letter'`，其余组件走 note 分支（`:261`） | 按注册表 kind/chrome 分派到壳组件 | 前端改造，归 `docs/ui/前端改造计划.md`；本次只定义注册表提供什么。 |
 | D5 | `packages/shared/src/schemas/forms.ts:18` | `CardChrome = 'bare' \| 'paper' \| 'cover' \| 'note'` | 加 `'slab' \| 'board' \| 'panel' \| 'scroll'`（§13.4） | 前端 `CardRenderer.tsx` 与 `index.css` 需为 4 个新 chrome 加壳（附录 A.3 给视觉规格）。 |
 | D6 | `packages/shared/src/schemas/frontmatter.ts:45-118` | YAML-lite 只特判 `status.data / choice / roll_dice`；**其它嵌套对象被整块静默丢弃**（顶层 `key:` 空值不赋值，缩进行无处可去——`bgStyle` 现状已丢） | 加**通用一层嵌套对象**解析（不引入 YAML 库，保持无依赖） | 现有可解析字段结果不变（纯增量）；顺带修好模板里已在用的 `bgStyle`（`templates/holmes-world/world/baker-street/README.md`）与本文新增的 `accepts`/`grid`/`lines`/`columns`/`rows`/`marks`。见 §11 冲突 #3。 |
 | D7 | `apps/server/src/engine/event-bridge.ts:34-100` | `tool_execution_end` 只映射 `chalk`/`write`/`link`/`arrange` | 加 `show` → `show_frame`（§6.2） | 归 12；纯新增分支，不碰既有映射。 |
-| D8 | `docs/后端实现计划.md:273` | *"MVP：`get_component` 返回 note/letter 两个 schema；`show` 只广播不落盘"* | **升级**：18 个落盘 kind + 7 个演出 + 双模式（索引/详单） | 计划书的 MVP 口径被本文取代；§11 冲突 #1 登记了这处需要同步修订的文档。 |
+| D8 | `docs/development/后端实现计划.md:273` | *"MVP：`get_component` 返回 note/letter 两个 schema；`show` 只广播不落盘"* | **升级**：18 个落盘 kind + 7 个演出 + 双模式（索引/详单） | 计划书的 MVP 口径被本文取代；§11 冲突 #1 登记了这处需要同步修订的文档。 |
 | D9 | 无（新） | 组件注册表不存在 | `packages/shared/src/components/`（§8.1） | 新目录，无迁移。 |
 | D10 | 无（新） | `use_item_on` 的确定性 handler 无处安放 | 注册表条目的可选 `handler`（§15.3） | 与 08 文档的 handler 契约逐字一致（已 IRC 对齐）。 |
 
@@ -550,12 +550,12 @@ promptGuidelines: [
 
 | # | 哪两份 / 哪一句 | 矛盾 | 建议改法 |
 |---|---|---|---|
-| 1 | `docs/后端实现计划.md:273` 的 *"MVP：`get_component` 返回 note/letter 两个 schema"* vs 本文 §14（18 个 kind） | 计划书把组件库压到 2 个，但 00 §11 评审门第 4 条明写"`get_component` 的组件数量是否够演示"（`00:410`），doc-10 §背景也写"10-20 个"（`doc-10:3`）。**两者对"够演示"的判据不同。** | 把计划书那一行改成：`get_component` 返回**完整注册表**（索引模式 + 详单模式）；`show` 只广播不落盘。实现顺序上仍可以先注册 core 2 个（note/letter）跑通链路，再补 pack——**但设计文档以本文的 18 个为准**。 |
+| 1 | `docs/development/后端实现计划.md:273` 的 *"MVP：`get_component` 返回 note/letter 两个 schema"* vs 本文 §14（18 个 kind） | 计划书把组件库压到 2 个，但 00 §11 评审门第 4 条明写"`get_component` 的组件数量是否够演示"（`00:410`），doc-10 §背景也写"10-20 个"（`doc-10:3`）。**两者对"够演示"的判据不同。** | 把计划书那一行改成：`get_component` 返回**完整注册表**（索引模式 + 详单模式）；`show` 只广播不落盘。实现顺序上仍可以先注册 core 2 个（note/letter）跑通链路，再补 pack——**但设计文档以本文的 18 个为准**。 |
 | 2 | 00 §5.2 的 `entity_created.detail` 冻结为 `{ path, name, kind, summary? }`，`kind` 是 `"chalk"\|"component"\|"note"\|"letter"\|"other"` vs 本文 §5.1 想加 `component: 'lock'` 与 `secondLayer` | **不是矛盾，是增量。** 但 00 是冻结契约，加键必须显式报备。 | 建议 00 §5.2 追加一句可选键说明（不改既有键名/枚举）：`detail` MAY 额外带 `component`（更细的 kind）与 `secondLayer`，供渲染器区分「铁门落成了」/「一封信落成了」。若不采纳，本文的组件渲染模板退化为 `kind` 一档，事件段人话会变粗——**可接受但更差**。 |
 | 3 | `packages/shared/src/schemas/frontmatter.ts:45-118`（手写 YAML-lite）vs `templates/holmes-world/world/baker-street/README.md` 的 `bgStyle: { tone: warm, grain: parchment }` | **不是"解析畸形"，是整块被静默丢掉。** 逐行读 `parseFrontmatter`：顶层 `bgStyle:` 的 `val` 为空串，因此 `frontmatter.bgStyle` **根本没被赋值**（`frontmatter.ts:64` 的 `else if (val)`）；随后的缩进行（`tone: warm`）走不到任何一个 `if` 分支（不是 `choice`、`currentKey` 不是 `status`/`roll_dice`），**被直接丢弃**。`bgStyle`/`grid`/`lines`/`accepts` 这些嵌套对象全都会这样消失——**且不报错**。组件注册表要引入 `accepts: { itemKinds: [...] }`，同一个坑必踩。 | `frontmatter.ts` 加**通用一层嵌套对象**解析：顶层 `key:` 且 `val === ''` 时先置 `{}`，缩进行按 `k: v` 填入（子行以 `- ` 开头则收成数组）。不引入 YAML 库。**这是实现阶段的前置必做项**——不做，则本文 §14.4 表里所有非 `status` 的嵌套字段（`accepts`/`grid`/`lines`/`columns`/`rows`/`marks`）以及模板里已有的 `bgStyle` 全部失效。**对应 §9.1 的 D6。** |
-| 4 | `docs/doc-05-AIRP产品构想.md:398` 的组件例子（`letter、chess、puzzle-box、lamp`）vs `docs/doc-10` E1–E13 | doc-05 把 `chess`/`puzzle-box` 当**独立组件种类**举例；doc-10 E12（`doc-10:129`）建议改成"内核 2 种 + 题材包按需注册"，并指出换题材词汇全变。 | 两者其实一致：本文把 `chess` 落成 `board`、`puzzle-box` **并入 `container`**（§14.2）、`lamp` 落成 `mechanism`。**doc-05 §7.1 的表不用改**（它只是"例子"，不是清单）。 |
-| 5 | `docs/doc-10:177` 的标记：*"演出型 MVP 可做 1-2 个（聚焦推屏/关灯最出效果，烟花次之）"* vs 本文 §14.3（7 个演出） | doc-10 自己标的是 MVP 范围，不是上限；00 §11 的强度要求（`00:410`）点名 doc-19 的"够味"。 | 实现时按 doc-10 的 MVP 顺序做前 2-3 个（`spotlight`/`lights_out`/`fireworks`），其余按本文的表留位。**设计文档不设上限**。 |
-| 6 | `docs/doc-19 §3.1` 的拖拽协议里 `player_action` 事件的 payload 是 `{type:'player_action', action:'use_item_on', source, target}` | 这是**前端→server 的 HTTP 请求体**示例（`doc-19:166`），不是事件表 `type`。事件表的 `type` 是封闭十五枚举（00 §5.2），没有 `player_action`。 | 无需改 doc-19（它讲的是前端派发）；但 12 文档在做路由改造时 MUST 把 `/use-item` 的入参映射到动作函数，落 `use_item_on` 事件，**不要新增 `player_action` 事件类型**。已在本节登记以免实现时误读。 |
+| 4 | `docs/product/doc-05-AIRP产品构想.md:398` 的组件例子（`letter、chess、puzzle-box、lamp`）vs `docs/protocols/doc-10` E1–E13 | doc-05 把 `chess`/`puzzle-box` 当**独立组件种类**举例；doc-10 E12（`doc-10:129`）建议改成"内核 2 种 + 题材包按需注册"，并指出换题材词汇全变。 | 两者其实一致：本文把 `chess` 落成 `board`、`puzzle-box` **并入 `container`**（§14.2）、`lamp` 落成 `mechanism`。**doc-05 §7.1 的表不用改**（它只是"例子"，不是清单）。 |
+| 5 | `docs/protocols/doc-10:177` 的标记：*"演出型 MVP 可做 1-2 个（聚焦推屏/关灯最出效果，烟花次之）"* vs 本文 §14.3（7 个演出） | doc-10 自己标的是 MVP 范围，不是上限；00 §11 的强度要求（`00:410`）点名 doc-19 的"够味"。 | 实现时按 doc-10 的 MVP 顺序做前 2-3 个（`spotlight`/`lights_out`/`fireworks`），其余按本文的表留位。**设计文档不设上限**。 |
+| 6 | `docs/gameplay/doc-19 §3.1` 的拖拽协议里 `player_action` 事件的 payload 是 `{type:'player_action', action:'use_item_on', source, target}` | 这是**前端→server 的 HTTP 请求体**示例（`doc-19:166`），不是事件表 `type`。事件表的 `type` 是封闭十五枚举（00 §5.2），没有 `player_action`。 | 无需改 doc-19（它讲的是前端派发）；但 12 文档在做路由改造时 MUST 把 `/use-item` 的入参映射到动作函数，落 `use_item_on` 事件，**不要新增 `player_action` 事件类型**。已在本节登记以免实现时误读。 |
 
 ---
 
@@ -678,7 +678,7 @@ function formOf(kind: string) {
 - `forms.ts:1-16` 的注释把 `CARD_FORMS` 定为"唯一真相源：server 排座与 web 画卡都读它"。注册表 MUST NOT 抄第二份尺寸。
 - **模块加载时 `throw`**（不是运行时降级）：kind 注册了却没有 form 行，是**开发期错误**，启动即炸比上线后发现卡叠在一起好。T2 单测守卫这一条。
 - **`CardChrome` 扩 4 值**：`'slab'`（石板/铁件）、`'board'`（棋盘/面板）、`'panel'`（仪表/终端）、`'scroll'`（卷轴/长纸）。视觉规格见附录 A。
-- **前端渲染**：`CardRenderer.tsx` 按 `chrome` 分派壳组件；**壳的视觉细节归 `docs/前端改造计划.md`**，本文只冻结 `CardChrome` 的枚举与每个 kind 的 `w/h/chrome`。
+- **前端渲染**：`CardRenderer.tsx` 按 `chrome` 分派壳组件；**壳的视觉细节归 `docs/ui/前端改造计划.md`**，本文只冻结 `CardChrome` 的枚举与每个 kind 的 `w/h/chrome`。
 
 - **依赖方向单向（m-20 断环）**：`registry.ts → forms.ts`（只读 `CARD_FORMS`）；`forms.ts` 不 import registry，组件分支经 `registerComponentKindResolver` 反向注入。`CARD_FORMS` 是叶子。
 
@@ -736,7 +736,7 @@ doc-10 正文点名的候选是"信/书/谜题/机关/乐器/棋盘/天气/装�
 | `ink_burst` | 墨迹迸溅一次（"这一笔落下"） | `tone`(ink/rust/blue/sage)、`scale` | 1200ms | v2 的 ink-seep（blur 3.2px→0）+ 一次扩散 | doc-04 §10.2 |
 | `roll_ceremony` | 骰子入场翻滚（**不带结果**，结果归 `roll_dice`） | `dice`(def "1d100")、`anticipation`(ms) | 2200ms | 大号 2.5D 骰子入场 + 落木拟音 | doc-19 §3.3（本演出只做前半段，见 §6.3） |
 
-**`show` 的 id 是封闭枚举**（`ShowKind`），与落盘 kind 的注册表**互斥**（T8 守卫）。演出的视觉实现归 `docs/前端改造计划.md`；本文冻结的是 id、参数、默认时长与语义。
+**`show` 的 id 是封闭枚举**（`ShowKind`），与落盘 kind 的注册表**互斥**（T8 守卫）。演出的视觉实现归 `docs/ui/前端改造计划.md`；本文冻结的是 id、参数、默认时长与语义。
 
 ### 14.4 落盘组件全表（18 个）
 
@@ -1119,7 +1119,7 @@ default: { label: 'File',      w: 240, h: 168, chrome: 'paper' },  // 兜底，�
 
 - **宽高比编码"这类东西怎么用"**：锁/容器/锚是**方形**（一个点，等宽高 → 微光高亮时是正的圆角方块，视觉上就是"靶子"）；书/日记/照片是**竖高**（可翻的纸）；账本/对话/乐器是**宽幅**（横向的内容）；棋盘是**大正方**（格子要方）。
 - **相邻 kind 的尺寸必须可分辨**（200×168 vs 224×176）：排座时两张卡挨在一起，尺寸差 24px 才能看出是两种东西。
-- **`h` 只服务排座**（AGENTS.md §3 前端纪律第 2 条）：**渲染高度由内容撑开**，`h` 不是 CSS 高度。这一点与 `docs/前端改造计划.md` 一致，本文不重复。
+- **`h` 只服务排座**（AGENTS.md §3 前端纪律第 2 条）：**渲染高度由内容撑开**，`h` 不是 CSS 高度。这一点与 `docs/ui/前端改造计划.md` 一致，本文不重复。
 - **`instrument` 320 宽**：`doc-20:76` 的 piano 示例要显示 `lid/tune` 状态与两个 choice，窄卡放不下。
 
 ### A.3 新增 4 个 `CardChrome` 的视觉规格（v2 语汇，doc-04 §10.2）

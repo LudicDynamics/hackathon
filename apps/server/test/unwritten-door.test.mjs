@@ -29,7 +29,7 @@ test('doors record the entry; only the auto-write switch starts a turn', async (
     assert.equal(page.items.length, 4);
 
     // Default settings: `autoWrite` is absent ⟹ `off` (docs/settings/00). A choice
-    // lands as an event and MUST NOT start a writer turn (docs/doc-21 §5.5).
+    // lands as an event and MUST NOT start a writer turn (docs/protocols/doc-21 §5.5).
     const chosen = await (await post('/choice', { path: 'world/letter.md', choice: 'Open the envelope' })).json();
     assert.equal(chosen.ok, true);
     assert.equal(calls.length, 0, 'off: a choice must not dispatch the writer');

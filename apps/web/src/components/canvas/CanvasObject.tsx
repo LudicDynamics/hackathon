@@ -249,7 +249,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
       data-reading={reading ? '' : undefined}
       style={shellStyle(item, kind, reading)}
     >
-        {reading ? <BagItemDialog inline item={item} onClose={() => setReading(false)} /> : kind === 'portrait' ? (
+        {reading ? <BagItemDialog inline item={item} onClose={() => setReading(false)} interactions={{ onChoice: onEntityAction, onSelectChoice, onDiceRolled, onEnterGate, onOpenCharacter: onOpenCharacterModal }} /> : kind === 'portrait' ? (
           <PortraitFig
             video={item.frontmatter?.video}
             poster={item.frontmatter?.poster}

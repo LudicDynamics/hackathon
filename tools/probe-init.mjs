@@ -48,14 +48,14 @@ function makeTmpWorld() {
   return tmp;
 }
 
-/** Turn a written layer into a stub by removing its README (docs/doc-11 §3.1). */
+/** Turn a written layer into a stub by removing its README (docs/init/doc-11 §3.1). */
 function stubLayer(tmp, layerId) {
   const dir = layerId === 'map' ? 'world' : layerId;
   fs.rmSync(path.join(tmp, dir, 'README.md'), { force: true });
   return dir;
 }
 
-/** Make a nook empty by deleting every non-json file (docs/doc-11 §4.1). */
+/** Make a nook empty by deleting every non-json file (docs/init/doc-11 §4.1). */
 function emptyNook(tmp, characterId) {
   const dir = path.join(tmp, 'characters', characterId);
   for (const entry of fs.readdirSync(dir)) {

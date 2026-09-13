@@ -44,7 +44,7 @@ import { registerInitCommand } from './toolkit/init-command.js';   // docs/init/
  * vendor/pi-rp/packages/coding-agent/src/core/extensions/loader.ts:511-515 —
  * and `pnpm probe`'s warning check cannot see that).
  *
- * Names MUST match docs/doc-20 §1 / docs/tools/00 §6.3 verbatim; a synonym
+ * Names MUST match docs/protocols/doc-20 §1 / docs/tools/00 §6.3 verbatim; a synonym
  * (`write_world_file` for `write`) is forbidden.
  */
 export const AIRP_TOOLS: ReadonlyArray<{ name: string; tool: ToolDefinition }> = [

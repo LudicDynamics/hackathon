@@ -110,7 +110,7 @@ THROW holmes-world-style  Nested mappings are not allowed in compact mappings at
 | 05:526「`every tool has a promptSnippet`（`:102`）… `promptGuidelines`（`:103-106`）」 | `:102` / `:103-106` | ✅ |
 | 05:444「`check(...)`（`:74-78`）与 `container`（`:93-95`）」 | `:74-78` 是 check；`:93` 是 container | ✅（`container` 实际 93 起，94-95 为后续，属容差） |
 | 05:318 附近「`:155-165`」 | 现文件 `:155-165` = `args: [` 起至 `],` | ✅ |
-| 05:163「`docs/doc-11:408,435`"两处同源"」 | `docs/doc-11:408` 与 `:435` 正是"逐字一致（两处同源）" | ✅ |
+| 05:163「`docs/init/doc-11:408,435`"两处同源"」 | `docs/init/doc-11:408` 与 `:435` 正是"逐字一致（两处同源）" | ✅ |
 | 05:419「`extensions/context.ts:80` 的 barrel import 解析失败」 | `extensions/context.ts:75-84` 是**import 列表**，`:80` 落在 `makeSectionDeps` 一行 | **MINOR**：`:80` 不指向报错点；且该失败**本次未能复现**（探针均从仓库根解析、全部跑通）。属"无法核验的反向证据" |
 | 03:123「`prepare.ts:27` `DEFAULT_SUBAGENT_TOOLS`」 | `prepare.ts:27` | ✅ |
 | 03:36「`prepare.ts:178-180`（R1 继承）/ `spawn.ts:96-98`（R2 customTools）」 | `prepare.ts:178-180` = `extensionTools` 三元；`spawn.ts:96-98` = `tools: options.tools ?? […DEFAULT_SUBAGENT_TOOLS, …customTools]` / `inheritExtensionTools:false` | ✅ |
@@ -233,7 +233,7 @@ charpost.json 含 holmes-voice: True      ← 产物里实际是 holmes-voice
 
 | 出处 | 内容 | 判定 |
 |---|---|---|
-| `00 §5.1`（末段） | "[推断：接线属 `docs/前端改造计划.md`]" | ✅ 已标 `[推断]`，且**实测确认**零消费（`grep` 到 `writer_delta`/`character_delta` 只命中 `apps/server`）。诚实 |
+| `00 §5.1`（末段） | "[推断：接线属 `docs/ui/前端改造计划.md`]" | ✅ 已标 `[推断]`，且**实测确认**零消费（`grep` 到 `writer_delta`/`character_delta` 只命中 `apps/server`）。诚实 |
 | `00 §6.1`（角色 `--skill` 一级 vs 两级） | 倾向两级 | **真待拍板**（机制已验、两条路都 1 行） |
 | `00 §6.2`（`tool-guidelines` 要不要） | 倾向要 | **真待拍板**；且 04 §2.4/§⑤ 已按"要"写，自洽 |
 | `00 §6.3`（新增 skill 数量/命名） | 暂定 2+2/世界 | **真待拍板**；04 已细化为 6 目录 |

@@ -11,6 +11,7 @@
  */
 import React, { useState } from 'react';
 import { useWriterPhase } from '../../lib/writer-state.js';
+import { guardImeKey } from '../../lib/ime.js';
 
 export interface WriterBarProps {
   /** Receives the trimmed prompt text. Called after the field is cleared. */
@@ -56,6 +57,7 @@ export const WriterBar: React.FC<WriterBarProps> = ({
         disabled={locked}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
+          if (guardImeKey(e)) return;
           if (e.key === 'Enter') {
             e.preventDefault();
             submit();

@@ -31,6 +31,12 @@ const JSON_OUT = process.argv.includes('--json');
  */
 const BODIES = [
   {
+    route: '/api/material-review',
+    file: 'apps/web/src/components/narrative/EntityInteractions.tsx',
+    keys: ['world', 'path', 'choice', 'revision', 'selections'],
+    doc: 'docs/gameplay/多槽材料与统一行动入口.md',
+  },
+  {
     route: '/api/dice',
     file: 'apps/web/src/components/narrative/DiceRoller.tsx',
     keys: ['path'],

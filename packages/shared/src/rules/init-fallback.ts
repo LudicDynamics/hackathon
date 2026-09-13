@@ -1,5 +1,5 @@
 /**
- * W2 fallback templates — the zero-AI safety net (docs/doc-11 §5).
+ * W2 fallback templates — the zero-AI safety net (docs/init/doc-11 §5).
  *
  * When the initialiser times out, fails, or the model is unavailable, the engine
  * still drops a placeholder so the layer stops being a stub and the player sees
@@ -10,7 +10,7 @@
  * `material: stub` here is deliberate — it is the "not written yet" skin
  * (`MATERIAL_SKINS`, schemas/forms.ts:193-198). This is NOT in tension with the
  * "README takes the brief's default material" rule for *successful* products
- * (docs/doc-11 §3.3): that rule governs the initialiser's own output, this one
+ * (docs/init/doc-11 §3.3): that rule governs the initialiser's own output, this one
  * governs the engine's fallback.
  */
 

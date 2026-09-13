@@ -27,3 +27,9 @@ Verify all five files, even when README already exists. Repair a partial scene w
 
 ## First-minute reward
 When the player talks to the resident, quote a detail the player really supplied or noticed, then update resident.md with what they learned. Inspecting the found object yields one usable fact or small item, not a solved conspiracy. The punch line is recognising something from inside in a newly materialised outside. Returning uses map and preserves the outside. No campaign ending is required.
+
+## Direct actions and writer turns
+choice_actions maps stable choice.options IDs to implemented UI recipes: read(paths), take(paths), stage(paths), enter(target), character(character), reply(text), writer(optional prompt). Reading, taking, navigating existing scenes and staging materials do not invoke the writer. Stage does not submit or execute. Unknown content, new promises, fictional calls and generation still require explicit writer input. Add these bindings to new choices, preserving free RP. Never invent action kinds, script execution or references to nonexistent readable files.
+
+## Clear player guidance
+Use short, familiar language. Say what happened and what the player can do next. Explain clues as fact, possible meaning, then where to check. Keep atmosphere without hiding the goal. New dice must use 1d10, 2d10 or 1d100, with conditions and consequences visible before the player decides to roll.

@@ -10,7 +10,7 @@ import { z } from 'zod';
  *   - `scenes-and-choices`: additionally, resolving a choice advances the
  *     story with a writer turn.
  *
- * `off` is the default and the frozen contract (docs/doc-21 §5.5): an event
+ * `off` is the default and the frozen contract (docs/protocols/doc-21 §5.5): an event
  * landing in the table never starts an agent turn; the writer sees it in the
  * hook injection of the player's next input.
  */

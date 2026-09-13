@@ -70,7 +70,7 @@
 - **`model-preferences.ts`**：非法值直进 CLI argv（可让 pi-rp `findInitialModel`
   `process.exit(1)` 烧掉 lifecycle 退避）→ 加 schema 校验、fail-soft。
 - 删死模块 `effects-clock.mjs`（+测试+类型+`AGENTS` 目录表引用；连带修
-  `docs/UI验收清单.md` 一条指向已删测试的命令）。
+  `docs/ui/UI验收清单.md` 一条指向已删测试的命令）。
 - 文档回写：`AGENTS §5.1`（`--model` 断言已假）、`§7.5` 新增第 8 条（取景 effect
   只许动相机）、`docs/footprint §3.5`（登记 `isInflated` 谓词）。
 
@@ -80,7 +80,7 @@
 |---|---|---|
 | **Esc 返回上层** | niko 的 Esc 只关浮层，**不再返回上层**（而 HintBar 文案承诺 "Alt+← / Esc to return"） | **已修** `0032d58`；实测进子层后 Esc 从「Fogwharf · Harbor Chart」回「Map」 |
 | **便携卡「Take」按钮** | App 少传 `onTakeItem` → `portable:true` 的卡按钮被条件挡掉（整条链 Canvas→CanvasObject→CardRenderer 都在，只顶层断） | **已修** `22675c8`；实测 `investigator-badge.md` 的 `.note__take` 出现 |
-| **Minimap（导航小地图）** | 完全未挂载；niko 外壳无同类 | **待明月定**：main 的 `docs/前端改造计划.md:188` 把 Minimap 列为「已有地基」、T4.6 还规划深化，**不是该丢的**；但它是画布右下角视觉件，niko 用 breadcrumb 导航，恢复位置需按 niko 视觉重排，故不擅自加 |
+| **Minimap（导航小地图）** | 完全未挂载；niko 外壳无同类 | **待明月定**：main 的 `docs/ui/前端改造计划.md:188` 把 Minimap 列为「已有地基」、T4.6 还规划深化，**不是该丢的**；但它是画布右下角视觉件，niko 用 breadcrumb 导航，恢复位置需按 niko 视觉重排，故不擅自加 |
 | **HintBar（操作提示）** | 未挂载 | 待定，同上 |
 | **LayerBadge（层徽）** | 未挂载，但 niko 的 `prototype-crumbs` 已承担「当前层」显示 | 视为**已被替代**，非丢失 |
 | **RightSidebar 的 follow 开关** | 未挂载 | 非丢失：main 那只是纯本地 state + toast，不落服务端 |

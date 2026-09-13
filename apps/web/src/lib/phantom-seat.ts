@@ -10,9 +10,22 @@
  * on handover (docs/perform/00 §5).
  */
 
-import { makeBox, type Box } from './collide.js';
+import { makeBox, overlap, type Box } from './collide.js';
 import { SEAT_ANCHOR, seatSpiral } from './seat.js';
 import { getPhantomsSnapshot, type PhantomSeat } from './phantom.js';
+
+/** Measure complete provisional text before paint. Only its own DOM moves;
+ * real card seats remain server-owned and win when the file arrives. */
+export function fitPhantom(el: HTMLElement): void {
+  const siblings = el.parentElement?.querySelectorAll<HTMLElement>('.object[data-path], .object--ghost') ?? [];
+  const occupied = [...siblings].filter(other => other !== el)
+    .map(other => makeBox(other.offsetLeft, other.offsetTop, other.offsetWidth, other.offsetHeight));
+  const box = makeBox(el.offsetLeft, el.offsetTop, el.offsetWidth, el.offsetHeight);
+  if (!occupied.some(other => overlap(box, other))) return;
+  const seat = seatSpiral(SEAT_ANCHOR, occupied, box.w, box.h);
+  el.style.left = `${seat.x}px`;
+  el.style.top = `${seat.y}px`;
+}
 
 /** Current layer's rows, published by `useWorld` after each successful fetch. */
 interface SeatItem {
@@ -54,7 +67,7 @@ export function phantomSeatFor(
   const occupied = [
     ...items.map((it) => makeBox(it.x, it.y, it.w, it.h)),
     ...getPhantomsSnapshot()
-      .filter((p) => p.kind === 'image' && isVisibleIn(p.layer, layer))
+      .filter((p) => p.phase !== 'evicted' && isVisibleIn(p.layer, layer))
       .map((p) => makeBox(p.seat.x, p.seat.y, p.seat.w, p.seat.h)),
   ];
   const { x, y } = seatSpiral(SEAT_ANCHOR, occupied, size.w, size.h);

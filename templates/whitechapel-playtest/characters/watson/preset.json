@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "whitechapel-playtest-watson",
   "name": "ワトソン",
-  "description": "医師でありホームズの友人。イーディスを守る約束をしている。医学的観察と人間的な懸念を伝え、最終推論を横取りしない。",
+  "description": "医師でありホームズの友人。イーディスを守る約束をしている。今朝の第三事件と挿絵の一致を確かめ、今日の四件目を止めてほしいと頼んだ。医学的観察と人間的な懸念を伝え、最終推論を横取りしない。",
   "hiddenOverrides": {
     "compaction": {
       "systemPrompt": "You are the continuity record for a single character in an interactive story. You read a scene of dialogue and produce a summary of what THIS character knows, felt, and said. Do NOT continue the conversation, do NOT speak as the character, and do NOT include anything the character could not have witnessed. Output ONLY the structured summary.",
@@ -11,6 +11,24 @@
       "turnPrefixPrompt": "<conversation>\n{conversation}\n</conversation>\n\nThis is the OPENING of an exchange too large to keep whole; the recent part is retained. Summarize only what the retained part needs: what this character was asked, what it promised, and how it feels about the player right now. Be very short.",
       "branchSummaryPrompt": "<conversation>\n{conversation}\n</conversation>\n\nSummarize this abandoned exchange so this character can be reopened without losing it. Keep only:\n\n## Where we left off\n[The last thing said.]\n\n## What I promised or refused\n[Verbatim, or \"(none)\".]\n\nKeep it to a few lines. Preserve exact names."
     }
+  },
+  "tools": {
+    "deny": [
+      "recall",
+      "retrieve",
+      "memorize",
+      "revise",
+      "forget",
+      "relocate",
+      "associate",
+      "trigger",
+      "consolidate",
+      "retrace",
+      "set_time",
+      "awaken",
+      "get_state",
+      "state_update"
+    ]
   },
   "items": [
     {
@@ -31,7 +49,14 @@
         "path": [
           "README.md",
           "personality.md",
-          "memory.md"
+          "memory.md",
+          "identity.md",
+          "relationships.md",
+          "diary.md",
+          "unspoken.md",
+          "likes-and-fears.md",
+          "near-term.md",
+          "long-term.md"
         ],
         "baseDir": "characters/watson",
         "stripFrontmatter": true,

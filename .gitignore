@@ -72,3 +72,9 @@ assets/**
 # The MCP memory DB is per-machine state, never part of the artifact.
 .pi/memory.db*
 **/.pi/memory.db*
+
+# Local package cache is not release content.
+.pnpm-store/
+# World design documents are source, unlike runtime worlds/.
+!docs/worlds/
+!docs/worlds/**

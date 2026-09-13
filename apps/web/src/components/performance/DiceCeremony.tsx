@@ -10,14 +10,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { playFoley, playStinger } from '../../lib/audio.js';
-import { ROLL_MS, SETTLE_MS } from '../narrative/DiceRoller.js';
-import { rollingFace, type DiceFrameVerdict } from '../../lib/dice-ceremony.js';
+import { SETTLE_MS } from '../narrative/DiceRoller.js';
+import { type DiceFrameVerdict } from '../../lib/dice-ceremony.js';
+import { D10Stage } from './D10Stage.js';
 import { useStill } from '../../lib/motion.js';
 
 /** Reduced motion still rolls, just briefly: less movement, same information. */
-const STILL_ROLL_MS = 180;
+
 /** Face swap cadence while tumbling (docs/perform/02 §8). */
-const FACE_SPIN_MS = 90;
+
 /** Highlight duration once settled — one glance back at the judged card. */
 const HIGHLIGHT_MS = 800;
 
@@ -34,7 +35,7 @@ type CeremonyPhase = 'rolling' | 'settled';
 export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict, onDone }) => {
   const still = useStill();
   const [phase, setPhase] = useState<CeremonyPhase>('rolling');
-  const [tick, setTick] = useState(0);
+
 
   // `onDone` identity is not part of the effect contract: holding it in a ref
   // keeps the settle effect from re-running (and re-firing the stinger) on
@@ -46,12 +47,7 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict, onDone }) =
   useEffect(() => {
     if (phase !== 'rolling') return;
     playFoley('dice-roll');
-    const spin = still ? null : window.setInterval(() => setTick((t) => t + 1), FACE_SPIN_MS);
-    const timer = window.setTimeout(() => setPhase('settled'), still ? STILL_ROLL_MS : ROLL_MS);
-    return () => {
-      if (spin !== null) window.clearInterval(spin);
-      window.clearTimeout(timer);
-    };
+    return () => {};
   }, [phase, still]);
 
   // Settle: emotion stinger, one highlight on the judged card, then close.
@@ -86,7 +82,7 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict, onDone }) =
       </span>
     );
 
-  const faceClass = 'dice-face-tile';
+
 
   return (
     <div className="fixed inset-0 z-50 bg-[rgba(41,40,32,0.55)] backdrop-blur-sm flex items-center justify-center">
@@ -94,15 +90,7 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict, onDone }) =
       <div className={`dice-stage ${verdict.fumble && !still ? 'dice-shake' : ''}`}>
         {verdict.crit && <div className="crit-glow" />}
 
-        {/* One tile per die, each spinning its own value. `rolls` is the face
-            list (rules/dice.ts) — never re-parse `dice` for the count. */}
-        <div className="dice-stage__faces">
-          {verdict.rolls.map((value, i) => (
-            <div key={i} className={faceClass}>
-              {phase === 'rolling' ? rollingFace(i, tick, value) : value}
-            </div>
-          ))}
-        </div>
+        <D10Stage dice={verdict.dice} rolls={verdict.rolls} settled={phase === 'settled'} onLanded={() => setPhase('settled')} />
 
         <div className="dice-stage__caption">
           {verdict.desc !== '' && <span className="font-semibold">{verdict.desc}</span>}

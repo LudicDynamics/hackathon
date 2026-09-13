@@ -42,8 +42,8 @@ function* spiralCells(): Generator<[number, number]> {
 /**
  * First spiral cell (anchored at `anchor`, stepped by SEAT_STEP) whose box of
  * `w × h` does not overlap any box in `occupied`. Returns the top-left corner.
- * Falls back to the anchor's own top-left after SEAT_MAX_CANDIDATES tries
- * (same fallback as the server).
+ * After SEAT_MAX_CANDIDATES tries, falls below occupied bounds rather than
+ * overlapping the centre. This fallback is for provisional client seats.
  */
 export function seatSpiral(
   anchor: { x: number; y: number },
@@ -61,5 +61,9 @@ export function seatSpiral(
       return { x: cand.l, y: cand.t };
     }
   }
-  return { x: anchor.x - w / 2, y: anchor.y - h / 2 };
+  // A crowded search window must not stack new text at its centre.
+  return {
+    x: anchor.x - w / 2,
+    y: Math.max(anchor.y - h / 2, ...occupied.map(box => box.t + box.h + PAD)),
+  };
 }

@@ -1,0 +1,5 @@
+# 契约 CG 最终提示词
+
+工具：内置 image_gen。女性主角在左、男性骑士在右；此前角色版本的图像仅保留在仓库外生成缓存，不提交。
+
+Edit the supplied moonlit contract illustration. Swap both characters' genders while retaining the same left-right composition, ruined wooden storehouse, moonlight and glowing blue circle. LEFT: an adult young WOMAN with short auburn hair in a dark contemporary jacket, three-quarter back view, facing the knight. RIGHT: an adult young MAN, a dignified handsome knight with loose medium-length light ash-blond hair, grey eyes, masculine face and build, practical dark blue surcoat and plain brushed steel armor of an original design. No braid or hair bun, no hair bow, no dress, no recognisable emblem or distinctive armor motif from an existing character. He offers his open gauntleted hand toward her. Her hand hovers nearby but they do not touch yet; contract invitation before consent. Keep the same visual novel anime CG finish, midnight blue lighting, background architecture and framing as the reference. Original unnamed characters, no franchise references, no text or logo.

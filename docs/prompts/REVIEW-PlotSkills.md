@@ -1,7 +1,7 @@
 # REVIEW-PlotSkills — 两份「剧情脉络」世界级 skill 的独立复核
 
 > 复核对象：`templates/holmes-world/skills/holmes-world-plot/SKILL.md`（47 行）、`templates/firstsnow/skills/firstsnow-plot/SKILL.md`（32 行）。
-> 复核人只读、只写本报告。判据来源：`docs/prompts/00-共同上下文.md` §3（三层分工/常驻薄+懒加载）、`docs/prompts/04-skill体系.md` §3.4（剧情 skill 骨架与口径）、`docs/hooks/00` §8 + `docs/hooks/04`（注入块「下一步」段）、`docs/doc-23`（判据而非形容词）。
+> 复核人只读、只写本报告。判据来源：`docs/prompts/00-共同上下文.md` §3（三层分工/常驻薄+懒加载）、`docs/prompts/04-skill体系.md` §3.4（剧情 skill 骨架与口径）、`docs/hooks/00` §8 + `docs/hooks/04`（注入块「下一步」段）、`docs/prompts/doc-23`（判据而非形容词）。
 > 方法：逐条抽出 skill 的**事实性断言**，回 `world.json` / `world/**/*.md` / `journal/*` / `characters/*` 找 `file:line`；`world.json` 与全部世界文件已 100% 读过（两世界文件数各 ≤ 20）。
 > 分级：BLOCKER（会让作家写歪/自相矛盾）/ MAJOR（无据或漏依据的核心断言）/ MINOR（不精确、层级重复）/ NIT（措辞）。
 
@@ -35,8 +35,8 @@
 | H11 | "'The truth you're chasing runs deeper than a disappearance' is a hook, not a fact about the case"（`:29-31`） | 引用正确（`world/abandoned-orchard/evening.md:19`、`journal:10`）；"hook 非事实"是解读 | **有据** ✅（措辞判断成立） |
 | H12 | orchard 与 crime scene 都读作 "It exists only at first glance"（`:35`） | `world/abandoned-orchard/README.md:15` 与 `world/crime-scene/README.md:15` **逐字相同** | **有据** ✅ |
 | H13 | "Reach them by following the photograph's back ('The truth in the orchard lies beneath the tree')"（`:37`） | `world/baker-street/evening.md:19` 照片背面原句 | **有据** ✅ |
-| H14 | "they are places a clue has to earn, not places the player can simply walk to … never by narrating a direct arrival"（`:36-38`） | **与机制相反**：`docs/doc-11` §3.2 R2（`:190-192`）玩家可直接双击 stub 进入；holmes 两个 stub README **零 `requires`**（`grep -rn requires templates/holmes-world` 无命中） | **无据/矛盾（MAJOR）** → §3-C |
-| H15 | "New layers and gated scenes should carry a `requires.items` threshold"（`:39-40`） | 该门槛机制真实存在（`docs/doc-20:124-130`，`apps/server/src/routes/world.ts:751`） | **有据** ✅（前瞻建议，非现状断言） |
+| H14 | "they are places a clue has to earn, not places the player can simply walk to … never by narrating a direct arrival"（`:36-38`） | **与机制相反**：`docs/init/doc-11` §3.2 R2（`:190-192`）玩家可直接双击 stub 进入；holmes 两个 stub README **零 `requires`**（`grep -rn requires templates/holmes-world` 无命中） | **无据/矛盾（MAJOR）** → §3-C |
+| H15 | "New layers and gated scenes should carry a `requires.items` threshold"（`:39-40`） | 该门槛机制真实存在（`docs/protocols/doc-20:124-130`，`apps/server/src/routes/world.ts:751`） | **有据** ✅（前瞻建议，非现状断言） |
 | H16 | "The demo closes on … the board assembled, the connections drawn"（`:44-45`） | holmes-world **无任何 `board` 组件/收束场景**；`READMEWORLD.md:78` 反而是 "Multiple endings possible"。`board` 仅作为另一世界方案的"案卷桌"出现在 `docs/doc-24:233` | **无据（MAJOR）** → §3-D |
 | H17 | "Not a culprit named, not a confession delivered"（`:45-46`） | `world.json:50` `no_predetermined_killer: true` | **有据** ✅ |
 
@@ -62,7 +62,7 @@
 | F12 | "「初雪が降る前に答える」——それがこの Demo の形"（`:32`） | `world.json:6` description "初雪が降る前に、二つの約束へ答える。" | **有据** ✅ |
 | F13 | "誰が隣にいるかだけでなく、いない人が今どこで何をしているかまで、一つの短い情景として決着させる"（`:32`） | `world/intro/relationships/snowfall/README.md:16` **逐字** | **有据** ✅（几乎照抄，好） |
 | F14 | "台詞で締めるのではなく、雪の降り方で締める"（`:32`） | 无直接文案；`snowfall/README.md:14` "初雪が街灯の光へ落ちてくる" 提供意象 | **有据（软）** ✅（属"形状"而非台词，符合 `04 §3.4`） |
-| F15 | "この鍵を先回りして開けないこと"（`:26`） | 门槛由引擎在 `enter-layer` 强制（`docs/doc-20:130`），非作家可控 | **层级问题（MINOR）** → §3-F |
+| F15 | "この鍵を先回りして開けないこと"（`:26`） | 门槛由引擎在 `enter-layer` 强制（`docs/protocols/doc-20:130`），非作家可控 | **层级问题（MINOR）** → §3-F |
 
 **小结**：15 条中 13 条有据、0 条无据、2 条仅措辞/层级不精确。两份 description（`:3`）均与 `docs/prompts/04 §3.4` 的**逐字示例一致**，且 `world.json.locale = "ja"`（`templates/firstsnow/world.json:9`），语言分层正确。
 
@@ -89,11 +89,11 @@
 
 - **断言**："they are places a clue has to earn, not places the player can simply walk to … **never by narrating a direct arrival**."
 - **矛盾**：
-  - `docs/doc-11 §3.2` R2（`:190-192`）：玩家**可直接双击** stub 卡 → 穿越 → 玩家已经在场，看着它长出来。"两条路径都合法"。
-  - holmes 的两个 stub README（`world/abandoned-orchard/README.md`、`world/crime-scene/README.md`）**都没有 `requires` 字段**（`grep -rn requires templates/holmes-world` 零命中），所以 `enter-layer` 门槛（`docs/doc-20:130`）对它们**永不触发**——玩家**确实可以**直接走到。
+  - `docs/init/doc-11 §3.2` R2（`:190-192`）：玩家**可直接双击** stub 卡 → 穿越 → 玩家已经在场，看着它长出来。"两条路径都合法"。
+  - holmes 的两个 stub README（`world/abandoned-orchard/README.md`、`world/crime-scene/README.md`）**都没有 `requires` 字段**（`grep -rn requires templates/holmes-world` 零命中），所以 `enter-layer` 门槛（`docs/protocols/doc-20:130`）对它们**永不触发**——玩家**确实可以**直接走到。
 - **危害**：作家会拒绝/惩罚玩家直接进入果园的行为，与引擎允许的合法操作冲突（`docs/prompts/00 §7.6`：不得给作品加权限门禁；`§7.7`：不做也是合法输出）。
 - **修复（二选一）**：
-  1. **改 world**（更贴设计意图）：给 `world/abandoned-orchard/README.md` 与 `world/crime-scene/README.md` 加 `requires.items`（如 `[player/old-boat-ticket.md]` 或一道照片线索的门），并补 `blocked` 人话——这样 skill 的"必须挣得"才成立（`docs/doc-20:124-130`）。
+  1. **改 world**（更贴设计意图）：给 `world/abandoned-orchard/README.md` 与 `world/crime-scene/README.md` 加 `requires.items`（如 `[player/old-boat-ticket.md]` 或一道照片线索的门），并补 `blocked` 人话——这样 skill 的"必须挣得"才成立（`docs/protocols/doc-20:124-130`）。
   2. **改 skill**（若维持现状）：删去"not places the player can simply walk to / never by narrating a direct arrival"，改为可选建议——"The photograph's back (`world/baker-street/evening.md:19`) is a *stronger* route in; prefer it as the on-ramp, but a direct arrival is legal (doc-11 R2)."
   - 我倾向前者（改 world），因为 skill 表达的是这个世界**该有**的形态；但当前它把"应然"写成了"实然"。
 
@@ -113,7 +113,7 @@
 ### F. `firstsnow-plot:26` — "この鍵を先回りして開けないこと"（MINOR，层级）
 
 - **断言**：让作家"别提前开这把钥匙"。
-- **问题**：`requires.items` 门槛由引擎在 `enter-layer` 强制（`docs/doc-20:130`），作家不控制它；这条指令与 `docs/prompts/00 §3.1`「一条内容只住一层」（这条属于机制层）错位。
+- **问题**：`requires.items` 门槛由引擎在 `enter-layer` 强制（`docs/protocols/doc-20:130`），作家不控制它；这条指令与 `docs/prompts/00 §3.1`「一条内容只住一层」（这条属于机制层）错位。
 - **修复（改 skill）**：改为面向叙事的表述——"雪の結末は、`world/intro/request-slip.md` を手に取った者にしか開かない（`requires.items`）。まだ手に取っていない間、地の文で結末を先取りしないこと。" 即把"别开锁"变成"别抢先叙事"。
 
 ### G. 措辞层（NIT，可不改）

@@ -179,10 +179,10 @@ EXIT=1
 - `docs/hooks/00:192`、`docs/hooks/03:514`、`docs/hooks/06:287`：R1 声称"已在本批之前完成"——实测三处 `2026-09-12 核实更正` 标记分别在 `docs/hooks/00:193`、`03:517`、`06:294`（正文行 192/514/287 附近）✅ **R1 属实且已完成**。
 - R3：`packages/shared/src/actions/service.ts` 确有 `createActionService`（`:129`）✅；`routes/world.ts:578-784` 全走 `serviceFor(...)` ✅。
 - R7：`docs/tools/02-chalk.md:455` 引 `useWorld.ts:171-181`、`docs/tools/09-link与arrange.md:497` 引 `useWorld.ts:178-183`/`:208`——实际 WS switch 在 `:256-325`（漂移约 80–110 行）✅ **R7 属实**。
-- R8：`docs/doc-21-事件表协议.md:25` 与 `:204` 确有「既无写入点也无消费者，按准入第 3 问删除」✅；而 `routes/world.ts:804-811` 的 `/freeze` **确实广播** `world_frozen`/`world_thawed` ✅、`useWorld.ts:282-287` **确实消费** ✅、`docs/tools/12:588` 列为保留 ✅ **R8 属实**。
-- R9：`docs/后端实现计划.md:80` = 「`event-bridge.ts` (56 行) … 只广播 `file_changed`」、`:204` = 「现在只广播 `file_changed`」✅ **R9 属实**；实际 `event-bridge.ts` **404 行**（设计说 405，差 1，无实质影响）。`:284` 的"已实现（2026-09-12）"标注 ✅。
+- R8：`docs/protocols/doc-21-事件表协议.md:25` 与 `:204` 确有「既无写入点也无消费者，按准入第 3 问删除」✅；而 `routes/world.ts:804-811` 的 `/freeze` **确实广播** `world_frozen`/`world_thawed` ✅、`useWorld.ts:282-287` **确实消费** ✅、`docs/tools/12:588` 列为保留 ✅ **R8 属实**。
+- R9：`docs/development/后端实现计划.md:80` = 「`event-bridge.ts` (56 行) … 只广播 `file_changed`」、`:204` = 「现在只广播 `file_changed`」✅ **R9 属实**；实际 `event-bridge.ts` **404 行**（设计说 405，差 1，无实质影响）。`:284` 的"已实现（2026-09-12）"标注 ✅。
 - R6：`extensions/tools.ts:62` 注册 `show` ✅；`packages/shared/src/actions/show.ts:157-161` 产 `frame: ShowFrame` ✅；`docs/prompts/` 为 `?? ` 未跟踪 ✅ **R6 属实**（`git status` 显示 `?? docs/prompts/`）。
-- R2/R4/R5：`docs/前端改造计划.md:27`（P3 行、「`character_prompt` 仍为空注释」）、`:271`（`sampleReplies` +「空注释」）、`:361`（T3.7 落点 `apps/server/src/engine/`）、`:549`（P3 收工表「剩余 T3.1 服务端角色流式」）**逐条对上** ✅。注意 R5 写"`:551`"而实际 P3 收工行在 **`:549`**（`:551` 是 P5 行）——属轻微行号漂移，建议顺手改（P3 级，未单列 finding 以控制噪音）。
+- R2/R4/R5：`docs/ui/前端改造计划.md:27`（P3 行、「`character_prompt` 仍为空注释」）、`:271`（`sampleReplies` +「空注释」）、`:361`（T3.7 落点 `apps/server/src/engine/`）、`:549`（P3 收工表「剩余 T3.1 服务端角色流式」）**逐条对上** ✅。注意 R5 写"`:551`"而实际 P3 收工行在 **`:549`**（`:551` 是 P5 行）——属轻微行号漂移，建议顺手改（P3 级，未单列 finding 以控制噪音）。
 
 ---
 

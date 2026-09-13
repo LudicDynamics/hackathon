@@ -8,52 +8,18 @@
  * OUTSIDE `items` on purpose — at `chalk_writing` no file exists yet
  * (docs/perform/00 §6b-1).
  *
- * The reveal clock is local (`lib/chalk-reveal.ts`): the server replays the
- * whole body at `toolcall_end`, so per-character timing comes from here, not
- * from frame arrival (docs/perform/01 §3.1, §6.3).
+ * Confirmed text uses the final card's typography immediately. Do not reparse
+ * the whole Markdown document every 24ms to animate individual characters:
+ * that also produces a growing, inaccurately seated provisional footprint.
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect } from 'react';
 import { drop, type PhantomEntry } from '../../lib/phantom.js';
 import { MarkdownText } from '../../lib/md.js';
-import { revealChars, REVEAL_STEP_MS } from '../../lib/chalk-reveal.js';
 
 /** Fade-out budget after a failed chalk: ~320ms then the node is gone
  * (docs/perform/01 §7, 不留半成品). */
 const EVICT_FADE_MS = 320;
 
-/**
- * Count up to `target` one reveal step at a time, restarting from 0 whenever
- * `restartKey` changes (a fresh phantom). Settled phases (`landed`/`evicted`)
- * skip the clock and show the text whole.
- */
-function useReveal(target: number, restartKey: string, frozen: boolean): number {
-  const [shown, setShown] = useState(0);
-  const shownRef = useRef(0);
-
-  useEffect(() => {
-    shownRef.current = 0;
-    setShown(0);
-  }, [restartKey]);
-
-  useEffect(() => {
-    if (frozen || shownRef.current >= target) return;
-    let last = performance.now();
-    const iv = window.setInterval(() => {
-      const now = performance.now();
-      const dt = now - last;
-      last = now;
-      const next = revealChars(target, dt, shownRef.current, REVEAL_STEP_MS);
-      if (next !== shownRef.current) {
-        shownRef.current = next;
-        setShown(next);
-      }
-      if (next >= target) window.clearInterval(iv);
-    }, REVEAL_STEP_MS);
-    return () => window.clearInterval(iv);
-  }, [target, frozen, restartKey]);
-
-  return frozen ? target : Math.min(target, shown);
-}
 
 export interface ChalkMarkProps {
   entry: PhantomEntry;
@@ -71,7 +37,6 @@ export const ChalkMark: React.FC<ChalkMarkProps> = ({ entry }) => {
   const evicted = phase === 'evicted';
   const landed = phase === 'landed';
   const ink = phase === 'pending' || phase === 'writing';
-  const shown = useReveal(text.length, entry.toolCallId, !ink);
 
   // A failed chalk must leave no half-written ghost on the canvas: hold the
   // faded node for the exit animation, then retire it from the registry.
@@ -86,11 +51,11 @@ export const ChalkMark: React.FC<ChalkMarkProps> = ({ entry }) => {
   if (evicted) classes.push('ghost--evicting');
 
   return (
-    <div className={classes.join(' ')} data-phase={phase} aria-hidden>
-      {shown > 0 ? (
-        <MarkdownText text={text.slice(0, shown)} className="whitespace-pre-wrap" />
+    <div className={classes.join(' ')} style={{ '--chalk-size': '26px' } as React.CSSProperties} data-phase={phase} aria-hidden>
+      {text.length > 0 ? (
+        <MarkdownText text={text} className="chalk__body" />
       ) : null}
-      {ink && shown === 0 ? <span className="ink-tip" /> : null}
+      {ink && text.length === 0 ? <span className="ink-tip" /> : null}
     </div>
   );
 };

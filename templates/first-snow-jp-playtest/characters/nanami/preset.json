@@ -31,7 +31,14 @@
         "path": [
           "README.md",
           "personality.md",
-          "memory.md"
+          "memory.md",
+          "identity.md",
+          "relationships.md",
+          "diary.md",
+          "unspoken.md",
+          "likes-and-fears.md",
+          "near-term.md",
+          "long-term.md"
         ],
         "baseDir": "characters/nanami",
         "stripFrontmatter": true,

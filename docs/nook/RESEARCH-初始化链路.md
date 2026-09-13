@@ -3,7 +3,7 @@
 > 独立研究文档（不归 N1 五篇）。日期 2026-09-13，仓库根 `/home/yoshix7ti/projects/hackathon`。
 > 目标：回答「进空小天地 → 引擎直唤 `nook-init` → 落第一眼陈设」真实跑起来还缺哪几块。
 > 行号有保质期；符号名优先。不确定处标 `[推断]`。
-> 上游真相源：`docs/doc-11`（§2 执行内核 / §3 场景 / §4 小天地 / §6 事件与中断）、`docs/prompts/03`（提示词层，已冻结）、`docs/nook/00-共同上下文.md`（N1 冻结契约）。
+> 上游真相源：`docs/init/doc-11`（§2 执行内核 / §3 场景 / §4 小天地 / §6 事件与中断）、`docs/prompts/03`（提示词层，已冻结）、`docs/nook/00-共同上下文.md`（N1 冻结契约）。
 
 ---
 
@@ -22,13 +22,13 @@ R2 的可行落地通道是「**writer 进程里的一个 extension command**」
 
 | 零件 | 位置 | 状态 | 证据 |
 |---|---|---|---|
-| `scene-init` preset | `presets/scene-init.json:1-19` | 磁盘有，`delegatable:true`、`inheritHistory:0`、items = `scene-init-instruction` + `skills` | 与 `docs/doc-11 §8.1` 逐字一致 |
+| `scene-init` preset | `presets/scene-init.json:1-19` | 磁盘有，`delegatable:true`、`inheritHistory:0`、items = `scene-init-instruction` + `skills` | 与 `docs/init/doc-11 §8.1` 逐字一致 |
 | `nook-init` preset | `presets/nook-init.json:1-19` | 同上（`nook-init-instruction` + `skills`） | 零调用点 |
 | `SCENE_INIT_INSTRUCTION` | `extensions/instructions.ts:205-237` | 已写 | 冻结正文 |
 | `NOOK_INIT_INSTRUCTION` | `extensions/instructions.ts:239-266` | 已写 | 冻结正文 |
 | slot 注册 | `extensions/instructions.ts:293-298`（scene）/ `:300-305`（nook） | 已注册 | `registerSlot` |
 | `buildSceneInitBrief` | `apps/server/src/engine/brief-builder.ts:11-42` | 已写 | **无调用点** |
-| `buildNookInitBrief` | `apps/server/src/engine/brief-builder.ts:46-57` | 已写 | **无调用点**（`docs/后端实现计划.md:81` 已登记） |
+| `buildNookInitBrief` | `apps/server/src/engine/brief-builder.ts:46-57` | 已写 | **无调用点**（`docs/development/后端实现计划.md:81` 已登记） |
 | 落账动作 | `packages/shared/src/actions/layer.ts:105-131`（`recordLayerInitialized`）/ `:146-171`（`recordLayerInitFailed`）/ `:54-82`（`enterLayer`） | 已写并 `registerAction` | **三者均无真实调用点** |
 | 事件类型 + 载荷 | `packages/shared/src/schemas/events.ts:21-22`、`:96-107` | 已存在，封闭枚举内 | dev 期 `appendEvent` 会 `safeParse`（`local-store.ts:382-390`） |
 | preset 安装器 | `apps/server/src/engine/presets.ts:32-38` | 已写 | 只被 `writer.json`（`launch.ts:106`）与角色 preset（`launch.ts:149-152`）调用 |
@@ -42,7 +42,7 @@ R2 的可行落地通道是「**writer 进程里的一个 extension command**」
 | `isValidCharacterId` / `nookIdOf` / `characterIdOfPath` | 不存在；契约 §5.2（2026-09-13 修正版）冻结落点为 `packages/shared/src/rules/characters.ts`（NEW） |
 | `spawnAgent` 调用点 | 全仓仅注释（`extensions/toolkit/actor.ts:13`、`extensions/context.ts:39-43`、`presets.ts:107-108`）；`tools/probe-tools.mjs:263` 只是用 `passFor('scene-init')` 模拟 env 角色，**不是 spawn** |
 | init preset 的安装 | `templates/holmes-world/.airpworld/prompt-presets/` 实测只有 `watson.json` / `writer.json` / `character.json` |
-| init 的 HTTP 触发路由 | `apps/server/src/routes/world.ts` 全路由表（`:303` … `:901`）无 `nook` / `layer/init`（`docs/后端实现计划.md:492` 仍是施工单） |
+| init 的 HTTP 触发路由 | `apps/server/src/routes/world.ts` 全路由表（`:303` … `:901`）无 `nook` / `layer/init`（`docs/development/后端实现计划.md:492` 仍是施工单） |
 | 超时 / W2 兜底 | `DEFAULT_TURN_TIMEOUT_MS`（`lifecycle.ts:28`）服务的是作家/角色 turn，不是 init；W2 模板常量零命中 |
 | 前端触发 | `apps/web/src` 全树 `NookView` / `api/nook` / `nookChar` 零命中；角色 tab 只有 3 个按钮（`apps/web/src/components/sidebar/RightSidebar.tsx:139-168`） |
 
@@ -110,7 +110,7 @@ pi.registerCommand('nook-init', {
 //  isValidCharacterId → 400；目录不存在 → 404；非空 → 200 { ok:true, skipped:true }
 //  空 → writer.prompt('/nook-init ' + JSON.stringify(...)) 立即 202 { ok:true, started:true }
 ```
-- 场景侧对应物 `POST /api/layer/init`（`docs/后端实现计划.md:492`），同一形状，`layer` 换 stub 层。
+- 场景侧对应物 `POST /api/layer/init`（`docs/development/后端实现计划.md:492`），同一形状，`layer` 换 stub 层。
 
 ### P1-1 完成 / 失败落账（缺：调用点）
 - 现状：`recordLayerInitialized` / `recordLayerInitFailed` 已写已注册，**零调用**。

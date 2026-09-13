@@ -1,9 +1,9 @@
 ---
 type: gate
-name: 今夜
-title: 今夜
+name: 一九九五年一月一日 · 午後八時
+title: 一九九五年一月一日 · 午後八時
 bg: assets/scenes/tonight.webp
 bgVideo: assets/motion/seedance/backgrounds/tonight.webm
 ---
 
-この時間の場所を選ぶ。店はまだ開いている。ＦＡＸの前の椅子だけが空いている。ここが書き換える前の現在。
+一九九五年一月一日 · 午後八時。この時刻の常盤電器へ。時間の地図へ戻れば、別の時刻を選べる。

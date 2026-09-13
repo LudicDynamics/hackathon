@@ -32,6 +32,7 @@ import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
 import { BagItemDialog } from './components/BagItemDialog.js';
 import { appendItemAction, buildItemActionPrompt } from './lib/item-action-draft.js';
 import { PLAY_HINT_REQUEST } from './lib/play-hints.js';
+import { guardImeKey } from './lib/ime.js';
 import { initialShell, transitionShell, splitCharacters } from './lib/ui-shell.mjs';
 import { MarkdownText } from './lib/md.js';
 import { BookOpen, ChevronDown, ChevronUp, Maximize, Minimize, UserRound, Backpack, Sparkles } from 'lucide-react';
@@ -759,7 +760,8 @@ export function App() {
             <div className="prototype-dockrow">
               {writerWorking && <span role="status">{t(writerStage)} · {writerElapsed}s <button type="button" onClick={() => { sendMessage({ type: 'writer_abort' }); }}>{t('Stop writing')}</button></span>}
               <input ref={writerRef} aria-label={t("Action")} placeholder={writerLocked ? t('The writer is writing…') : t("What do you do? You can also address someone by name…")} disabled={writerLocked} autoComplete="off" onKeyDown={event => {
-                if (event.nativeEvent.isComposing || !['ArrowUp', 'ArrowDown'].includes(event.key) || !writerHistory.current.length) return;
+                if (guardImeKey(event)) return;
+                if (!['ArrowUp', 'ArrowDown'].includes(event.key) || !writerHistory.current.length) return;
                 event.preventDefault(); event.stopPropagation();
                 const history = writerHistory.current;
                 if (writerHistoryCursor.current === history.length) writerDraft.current = event.currentTarget.value;
@@ -786,7 +788,7 @@ export function App() {
         <WorldShelfDialog shelf={shelf} loading={loadingWorld} onLoad={path => void loadWorld(path)} onClose={() => setWorldPickerOpen(false)} onRefresh={async () => { setShelf(await airpGateway.worlds()); }} />
       )}
 
-      {selectedBagItem && <BagItemDialog item={selectedBagItem} onClose={() => setSelectedBagPath(null)} onPlace={handleReturnItem} onUse={prepareItemUse} useDisabled={writerLocked} />}
+      {selectedBagItem && <BagItemDialog item={selectedBagItem} onClose={() => setSelectedBagPath(null)} onPlace={handleReturnItem} onUse={prepareItemUse} useDisabled={writerLocked} interactions={{ onChoice: prepareWriter, onSelectChoice: (path, choice) => { void prepareChoice(path, choice); }, onEnterGate: enterLayer, onOpenCharacter: id => { const character = characters.find(c => c.id === id); if (character) openCharacter(character); } }} />}
 
       {radialState && <RadialMenu {...radialState} onClose={() => setRadialState(null)} onCreate={createAt} />}
 

@@ -1,10 +1,22 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import { usePhantoms, evict, drop } from '../../lib/phantom.js';
 import type { PhantomEntry } from '../../lib/phantom.js';
 import { ghostVisibleOn, LANDED_DWELL_MS, REUSED_DWELL_MS } from '../../lib/ghost.js';
 import { GhostCard } from '../narrative/GhostCard.js';
 import type { GhostCopy } from '../narrative/GhostCard.js';
 import { ChalkMark } from '../performance/WriterInkLayer.js';
+import { fitPhantom } from '../../lib/phantom-seat.js';
+
+function PhantomShell({ entry, copy }: { entry: PhantomEntry; copy: GhostCopy }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (ref.current && entry.kind === 'chalk') fitPhantom(ref.current);
+  }, [entry.text, entry.phase]);
+  return <div ref={ref} data-path={`phantom:${entry.toolCallId}`} className="object--ghost"
+    style={{ left: entry.seat.x, top: entry.seat.y, width: entry.seat.w, zIndex: entry.seat.z, pointerEvents: 'none' }}>
+    {entry.kind === 'image' ? <GhostCard entry={entry} copy={copy} /> : <ChalkMark entry={entry} />}
+  </div>;
+}
 
 /**
  * The ONE mount point for provisional cards (docs/perform/00 §5, ruling E).
@@ -74,14 +86,7 @@ export const PhantomLayer: React.FC<PhantomLayerProps> = ({ currentLayer, bgSrc,
   return (
     <>
       {visible.map((p: PhantomEntry) => (
-        <div
-          key={p.toolCallId}
-          data-path={`phantom:${p.toolCallId}`}
-          className="object--ghost"
-          style={{ left: p.seat.x, top: p.seat.y, width: p.seat.w, zIndex: p.seat.z }}
-        >
-          {p.kind === 'image' ? <GhostCard entry={p} copy={copy} /> : <ChalkMark entry={p} />}
-        </div>
+        <PhantomShell key={p.toolCallId} entry={p} copy={copy} />
       ))}
     </>
   );

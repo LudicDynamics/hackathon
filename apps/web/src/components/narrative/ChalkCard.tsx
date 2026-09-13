@@ -31,6 +31,7 @@ export const ChalkCard: React.FC<ChalkCardProps> = ({
 }) => {
   const { frontmatter, body, path } = item;
   const style = chalkStyleOf(frontmatter);
+  const roll = frontmatter?.roll_dice as { type?: string; result?: number; passed?: boolean } | undefined;
 
   const widgets = onSelectChoice || onDiceRolled
     ? renderFrontmatterWidgets(frontmatter, {
@@ -58,6 +59,11 @@ export const ChalkCard: React.FC<ChalkCardProps> = ({
     <div className={classes.join(' ')} style={sizeStyle}>
       {/* Chalk narration body — transparent ink, pre-wrap preserved. */}
       <MarkdownText text={body} className="chalk__body" />
+      {typeof roll?.result === 'number' && typeof roll.passed === 'boolean' && (
+        <output className="chalk__dice-result" aria-live="polite" style={{ display: 'block', font: '600 16px/1.6 monospace', marginTop: 12 }}>
+          {roll.type} → {roll.result} · {roll.passed ? '✓' : '✗'}
+        </output>
+      )}
       {widgets}
     </div>
   );

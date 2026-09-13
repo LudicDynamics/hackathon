@@ -1,8 +1,8 @@
 /**
- * Emptiness rules for initialisation (docs/doc-11 §3.1 / §4.1 / §3.3).
+ * Emptiness rules for initialisation (docs/init/doc-11 §3.1 / §4.1 / §3.3).
  *
  * Zero dependencies on purpose: the caller passes a file list (`store.listFiles`
- * output), so these are pure and unit-testable without a store (docs/doc-11
+ * output), so these are pure and unit-testable without a store (docs/init/doc-11
  * §9.1 item 3: "pure function, unit-testable").
  *
  * `files` semantics (LocalWorldStore.listFiles, local-store.ts:210-233): paths
@@ -29,7 +29,7 @@ export function directChildrenOf(files: readonly string[], dir: string): string[
 }
 
 /**
- * A layer is a stub ⟺ its directory has no `README.md` (docs/doc-11 §3.1).
+ * A layer is a stub ⟺ its directory has no `README.md` (docs/init/doc-11 §3.1).
  * The check is exact and case-sensitive: `README.md`, not `readme.md`.
  *
  * `dir` is world-root relative (e.g. `world/baker-street/crime-scene`).
@@ -39,7 +39,7 @@ export function isLayerEmpty(files: readonly string[], dir: string): boolean {
 }
 
 /**
- * A nook is empty ⟺ it holds nothing but `preset.json` / `*.json` (docs/doc-11
+ * A nook is empty ⟺ it holds nothing but `preset.json` / `*.json` (docs/init/doc-11
  * §4.1). `preset.json` is configuration, not content, so it does not count.
  *
  * Only DIRECT children count: content spilled into a subdirectory does not fill
@@ -55,7 +55,7 @@ export function isNookEmpty(files: readonly string[], dir: string): boolean {
  *
  * A failed product is treated as a failure so W2 can fall back: if the layer's
  * README never lands, the layer stays a stub and every later entry re-triggers
- * initialisation, forever (docs/doc-11 §3.1).
+ * initialisation, forever (docs/init/doc-11 §3.1).
  *
  * - `scene`: the direct children include `README.md`.
  * - `nook`: the direct children include any non-`*.json` file.

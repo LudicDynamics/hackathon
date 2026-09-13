@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MotionPortrait } from './MotionPortrait.js';
+import { guardImeKey } from '../../lib/ime.js';
 import { canRequestTts, invalidateTts, ttsEnabled } from '../../lib/tts-readiness.js';
 import { useLocale } from '../../lib/i18n.js';
 import { playStinger, playVoice, stopVoice, unlock, type Emotion } from '../../lib/audio.js';
@@ -786,6 +787,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => {
+              if (guardImeKey(e)) return;
               if (e.key === 'Enter') handleSend();
             }}
             placeholder={locale === 'ja' ? `${characterId}に話す…（Enterで送信）` : `Say something to ${characterId}… (Enter to send)`}

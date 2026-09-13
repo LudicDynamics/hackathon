@@ -6,6 +6,7 @@ import { existsSync, realpathSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { readWorldSettings, writeWorldSettings } from '../engine/world-settings.js';
+import { runDeclaredChoice, runDeclaredRoll, serialDeclared, prepareMaterialReview } from '../engine/declared-actions.js';
 import {
   ActionError,
   AgentModelSelectionSchema,
@@ -332,7 +333,7 @@ export function createWorldRouter(
     if (releasingWorld) {
       try { await releasingWorld; } catch { /* The unavailable world stays detached. */ }
     }
-    const needsWorld = ['/agent-settings', '/manifest', '/nook', '/layer', '/backpack', '/characters', '/move', '/card/position', '/card/footprint', '/dice', '/use-item', '/choice', '/enter-layer', '/viewpoint', '/freeze', '/god-action', '/asset', '/audio'].includes(req.path);
+    const needsWorld = ['/agent-settings', '/manifest', '/nook', '/layer', '/backpack', '/characters', '/move', '/card/position', '/card/footprint', '/dice', '/use-item', '/choice', '/material-review', '/enter-layer', '/viewpoint', '/freeze', '/god-action', '/asset', '/audio'].includes(req.path);
     if (!getActiveStore() && needsWorld) {
       return res.status(409).json({ code: 'no_active_world', error: 'Choose a world or start a new save.' });
     }
@@ -945,12 +946,8 @@ export function createWorldRouter(
     }
     // Only a forged score is a god action; a plain click is the player's (07 §5.2).
     const actor: Actor = typeof forcedResult === 'number' ? { type: 'god' } : { type: 'player' };
-    await reply(res, () =>
-      serviceFor(store, actor).rollDice({
-        path: dicePath,
-        ...(typeof forcedResult === 'number' ? { forcedResult } : {}),
-      })
-    );
+    await reply(res, () => serialDeclared(store.worldRoot, () =>
+      runDeclaredRoll(serviceFor(store, actor), dicePath, typeof forcedResult === 'number' ? forcedResult : undefined)));
   });
 
   // Use item on target (point-and-click puzzle). No bare frame: the event goes
@@ -969,6 +966,12 @@ export function createWorldRouter(
   });
 
   // Player picks one of the public options an entity declares (06 §2.5).
+  router.post('/material-review', async (req, res) => {
+    const store = getActiveStore();
+    if (!store || req.body?.world !== store.worldRoot) return res.status(409).json({ error: 'The active world changed. Reopen the materials panel.' });
+    await reply(res, () => serialDeclared(store.worldRoot, () => prepareMaterialReview(serviceFor(store, { type: 'player' }), req.body)));
+  });
+
   router.post('/choice', async (req, res) => {
     const store = getActiveStore();
     if (!store) return res.status(400).json({ error: 'No active world' });
@@ -979,7 +982,10 @@ export function createWorldRouter(
     if (!((typeof choice === 'string' && choice !== '') || (typeof choice === 'number' && Number.isFinite(choice)))) {
       return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'choice must be a string label or a 1-based number' });
     }
-    await reply(res, async () => {
+    await reply(res, () => serialDeclared(store.worldRoot, async () => {
+      const declared = await runDeclaredChoice(serviceFor(store, { type: 'player' }), choicePath, choice);
+      if (declared) Object.assign(declared.details.action, { world: store.worldRoot });
+      if (declared) return declared;
       const result = await serviceFor(store, { type: 'player' }).chooseOption({ path: choicePath, choice });
       // Auto-turn is opt-in per world (docs/settings/00). `off` — the default —
       // keeps doc-21 §5.5: the event lands, the writer sees it in the injection
@@ -988,7 +994,7 @@ export function createWorldRouter(
         dispatch(store, `[Player Event] ${JSON.stringify(result.details.event)}\nRead ${JSON.stringify(choicePath)} and the world skill. Resolve this choice, update the source file, and write a chalk response. Do not record the choice a second time.`);
       }
       return result;
-    });
+    }));
   });
 
   // Player walks through a door into another layer (05 §3.6.2 / 12 §2.4).

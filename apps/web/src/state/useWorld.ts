@@ -300,13 +300,18 @@ export function useWorld(): UseWorldApi {
       // its single warning, so there is exactly one place that decides.
       isBusy: () => writerToolsInFlight.current > 0,
       isDragging: () => document.querySelector('.object.dragging-item') !== null,
+      onResult: ({ layer: measuredLayer, updated }) => {
+        // Seat against the new dimensions immediately, not a platform-specific
+        // SQLite watcher notification. The server remains placement authority.
+        if (updated > 0 && measuredLayer === layerRef.current) void fetchLayer(measuredLayer);
+      },
     });
     fpRef.current = scheduler;
     return () => {
       scheduler.dispose();
       fpRef.current = null;
     };
-  }, []);
+  }, [fetchLayer]);
 
   // Per-card ResizeObserver: a card's height changes when its CONTENT does —
   // dragging only writes left/top, so it never fires here (03 F2). Remounted
