@@ -64,3 +64,22 @@ test('an allowed alternative is accepted with its own version', async () => {
   request.selections[0] = { slot: 'evidence', path: item.path, revision: item.revision };
   assert.match((await prepareMaterialReview(f.svc, request)).details.prompt, /A second record/);
 });
+test('one evidence slot accepts multiple files alongside an independent plan slot', async () => {
+  const f = fixture(); const request = await requestFor(f); const before = new Map(f.files);
+  const { details: { action } } = await runDeclaredChoice(f.svc, request.path, request.choice, true);
+  const item = action.items.find(i => i.path === 'player/alternative.md');
+  request.selections.push({ slot: 'evidence', path: item.path, revision: item.revision });
+  const result = await prepareMaterialReview(f.svc, request);
+  assert.equal(result.details.materials.length, 3);
+  assert.equal(result.details.materials.filter(i => i.slot === 'evidence').length, 2);
+  assert.match(result.details.prompt, /A blue mark/);
+  assert.match(result.details.prompt, /A second record/);
+  assert.deepEqual(f.files, before);
+});
+test('explicit single-item capacity is still enforced', async () => {
+  const f = fixture();
+  f.files.set('world/review.md', md({ type: 'chalk', choice: { options: [{ id: 'review', label: 'Review' }] }, choice_actions: { review: { kind: 'stage', slots: [{ id: 'evidence', title: 'Evidence', maxItems: 1, paths: ['player/evidence.md', 'player/alternative.md'] }] } } }, 'Review'));
+  const { details: { action } } = await runDeclaredChoice(f.svc, 'world/review.md', 'review');
+  await assert.rejects(() => prepareMaterialReview(f.svc, { path: action.source, choice: action.choice, revision: action.revision,
+    selections: action.items.map(i => ({ slot: 'evidence', path: i.path, revision: i.revision })) }), /Too many materials/);
+});

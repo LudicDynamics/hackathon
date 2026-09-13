@@ -5,7 +5,7 @@ import {
   type GenerateImageDetails,
 } from '../../packages/shared/dist/index.js';
 import { getActionService } from './deps.js';
-import { fail, ok } from './result.js';
+import { ok } from './result.js';
 import { createPiImageProvider } from './image-pi-provider.js';
 
 /**
@@ -104,9 +104,9 @@ export const generateImageTool = defineTool({
         path: params.path,
       });
       return ok(result as { text: string; details: GenerateImageDetails });
-    } catch (err) {
-      return fail(err);
     } finally {
+      // Let failures throw: the engine marks resolved tool results as successful,
+      // even when a returned object contains isError: true.
       clearInterval(heartbeat);
     }
   },

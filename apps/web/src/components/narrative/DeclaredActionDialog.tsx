@@ -13,7 +13,7 @@ export interface DeclaredResponse {
   source?: string;
   choice?: string;
   revision?: string;
-  slots?: Array<{ id: string; title: string; required: boolean; paths: string[] }>;
+  slots?: Array<{ id: string; title: string; required: boolean; paths: string[]; maxItems?: number }>;
   items: Array<{ path: string; declaredPath?: string; revision?: string; title: string; body: string; frontmatter?: Record<string, any> }>;
   missing: string[];
 }
@@ -25,26 +25,33 @@ export function DeclaredActionDialog({ value, onClose, onSubmit, onChoose }: {
 }) {
   const { locale } = useLocale();
   const ja = locale === 'ja'; const zh = locale === 'zh-CN';
-  const [selected, setSelected] = useState<Record<string, string>>({});
+  const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const slots = value.slots ?? [];
   const [activeSlot, setActiveSlot] = useState(slots[0]?.id ?? '');
-  const place = (path: string, target = activeSlot) => {
+  const place = (path: string, target?: string) => {
     if (busy) return;
     const item = value.items.find(i => i.path === path);
-    const slot = slots.find(s => s.id === target);
+    const compatible = (s: typeof slots[number]) => !!item && s.paths.includes(item.declaredPath ?? item.path);
+    const slot = target ? slots.find(s => s.id === target) : slots.find(s => s.id === activeSlot && compatible(s)) ?? slots.find(compatible);
     if (!item || !slot || !slot.paths.includes(item.declaredPath ?? item.path)) {
       setError(ja ? 'この場所には置けません。別の枠を選んでください。' : zh ? '这份材料不适合当前槽位，请选择其他槽位。' : 'This material does not fit here. Choose another slot.'); return;
     }
     setError('');
-    setSelected(current => Object.fromEntries([...Object.entries(current).filter(([id, p]) => id !== target && p !== path), [target, path]]));
+    const currentItems = selected[slot.id] ?? [];
+    if (currentItems.includes(path)) return;
+    if (currentItems.length >= (slot.maxItems ?? slot.paths.length)) {
+      setError(ja ? '枠がいっぱいです。材料を戻してから追加してください。' : zh ? '槽位已满，请先移除一份材料。' : 'This slot is full. Remove a material before adding another.'); return;
+    }
+    setActiveSlot(slot.id);
+    setSelected(current => ({ ...Object.fromEntries(Object.entries(current).map(([id, paths]) => [id, paths.filter(p => p !== path)])), [slot.id]: [...(current[slot.id] ?? []), path] }));
   };
-  const ready = slots.length > 0 && Object.values(selected).some(Boolean) && slots.every(s => !s.required || selected[s.id]);
+  const ready = slots.length > 0 && Object.values(selected).some(p => p.length > 0) && slots.every(s => !s.required || selected[s.id]?.length);
   const submit = async () => {
     if (!ready || busy) return;
     setBusy(true); setError('');
-    try { await onSubmit(slots.filter(s => selected[s.id]).map(s => ({ slot: s.id, path: selected[s.id], revision: value.items.find(i => i.path === selected[s.id])?.revision }))); }
+    try { await onSubmit(slots.flatMap(s => (selected[s.id] ?? []).map(path => ({ slot: s.id, path, revision: value.items.find(i => i.path === path)?.revision })))); }
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   };
@@ -71,17 +78,16 @@ export function DeclaredActionDialog({ value, onClose, onSubmit, onChoose }: {
       {value.kind === 'stage' && <fieldset className="material-slots" disabled={busy}>
         {slots.map(slot => {
           const candidates = value.items.filter(i => slot.paths.includes(i.declaredPath ?? i.path));
-          const item = candidates.find(i => i.path === selected[slot.id]);
+          const items = candidates.filter(i => selected[slot.id]?.includes(i.path));
           return <section className={`material-slot ${activeSlot === slot.id ? 'is-active' : ''}`} key={slot.id}
             onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
             onDrop={e => { e.preventDefault(); e.stopPropagation(); setActiveSlot(slot.id); place(e.dataTransfer.getData('text/plain'), slot.id); }}>
             <button type="button" className="material-slot__target" aria-pressed={activeSlot === slot.id} onClick={() => setActiveSlot(slot.id)}>
               <small>{slot.title} {slot.required && '*'}</small>
-              <strong>{item?.title ?? (ja ? 'ここに材料を置く' : zh ? '将材料放在这里' : 'Place material here')}</strong>
+              <strong>{items.length ? `${items.length} / ${slot.maxItems ?? slot.paths.length}` : (ja ? 'ここに材料を置く' : zh ? '将材料放在这里' : 'Place material here')}</strong>
             </button>
-            {item && <button type="button" onClick={() => setSelected(s => ({ ...s, [slot.id]: '' }))}>{ja ? '戻す' : zh ? '移除' : 'Remove'}</button>}
+            {items.map(item => <div key={item.path} className="material-slot__item"><strong>{item.title}</strong><button type="button" aria-label={`${ja ? '戻す' : zh ? '移除' : 'Remove'} ${item.title}`} onClick={() => setSelected(s => ({ ...s, [slot.id]: (s[slot.id] ?? []).filter(p => p !== item.path) }))}>{ja ? '戻す' : zh ? '移除' : 'Remove'}</button><details><summary>{ja ? '読む' : zh ? '查看原文' : 'Read'}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{item.body}</p></details></div>)}
             {!candidates.length && <small>{ja ? '材料がまだありません。' : zh ? '此槽位的材料尚未准备。' : 'No material available for this slot yet.'}</small>}
-            {item && <details><summary>{ja ? '選択した材料を読む' : zh ? '查看所选材料' : 'Read selected material'}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{item.body}</p></details>}
           </section>;
         })}
       </fieldset>}
@@ -89,7 +95,7 @@ export function DeclaredActionDialog({ value, onClose, onSubmit, onChoose }: {
         <p>{ja ? '枠を選び、材料をクリック。または枠へドラッグ。' : zh ? '先选槽位，再点击材料；也可将材料拖入槽位。' : 'Select a slot, then click a material—or drag it into a slot.'}</p>
         <div className="material-pool">
           {value.items.map(item => <button key={item.path} type="button" draggable={!busy} disabled={busy}
-            aria-pressed={Object.values(selected).includes(item.path)} onClick={() => place(item.path)}
+            aria-pressed={Object.values(selected).some(paths => paths.includes(item.path))} onClick={() => place(item.path)}
             onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData('text/plain', item.path); e.dataTransfer.effectAllowed = 'move'; }}>
             <span aria-hidden="true">▤</span><strong>{item.title}</strong><small>{item.body.slice(0, 80)}</small>
           </button>)}
