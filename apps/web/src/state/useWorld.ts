@@ -70,7 +70,7 @@ export interface UseWorldApi {
   layer: string;
   /** Switch layer + fetch it. When auto-write is on and the target is a stub,
    *  fires the I1 initialiser (`airp_init`) after the server confirms `first`. */
-  enterLayer(next: string): Promise<void>;
+  enterLayer(next: string, options?: { initialize?: boolean }): Promise<boolean>;
   /** Re-read the active world's settings (after a world load). */
   reloadSettings(): Promise<void>;
   /** Per-world auto-write preference (docs/settings/00); defaults to `off`. */
@@ -177,14 +177,14 @@ export function useWorld(): UseWorldApi {
   }, [fetchLayer]);
 
   const enterLayer = useCallback(
-    async (next: string) => {
+    async (next: string, options?: { initialize?: boolean }) => {
       window.dispatchEvent(new CustomEvent('airp:gate-feedback', { detail: null }));
       if (next === layerRef.current) {
         // Same layer: still re-sync (may be an explicit gate re-entry).
         await fetchLayer(next);
-        return;
+        return true;
       }
-      await airpGateway.enterLayer(next).then(async (result) => {
+      return await airpGateway.enterLayer(next).then(async (result) => {
         layerRef.current = next;
         setLayer(next);
         fpRef.current?.reset(next);
@@ -192,14 +192,16 @@ export function useWorld(): UseWorldApi {
         // When auto-write allows it, ask the engine to materialise the scene:
         // fire-and-forget, since the I1 initialiser runs 45–60s and its outcome
         // returns as a `layer_initialized` world event, not this reply.
-        if (result.first === true && startsSceneInit(settingsRef.current.autoWrite)) {
+        if (options?.initialize !== false && result.first === true && startsSceneInit(settingsRef.current.autoWrite)) {
           sendSocket(wsRef.current, { type: 'airp_init', kind: 'scene', target: next, by: 'player' });
         }
         await fetchLayer(next);
+        return true;
       }).catch(error => {
         const feedback = gateFeedback(error, next, stateRef.current?.items ?? []);
         if (feedback) window.dispatchEvent(new CustomEvent('airp:gate-feedback', { detail: feedback }));
         else window.dispatchEvent(new CustomEvent('airp:notice', { detail: String(error) }));
+        return false;
       });
     },
     [fetchLayer]

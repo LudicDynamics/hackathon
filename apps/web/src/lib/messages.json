@@ -1,8 +1,23 @@
 {
+  "Initialize to furnish this space from the character’s history.": { "zh-CN": "点击初始化，根据角色的经历布置这里。", "ja": "初期化を押すと、来歴に合う空間を作ります。" },
+  "Initializing private space…": { "zh-CN": "正在初始化小天地…", "ja": "小天地を作っています…" },
+  "Visit private space": { "zh-CN": "进入小天地", "ja": "小天地に入る" },
+  "Initialize private space": { "zh-CN": "初始化小天地", "ja": "小天地を作る" },
+  "Leave the nook": { "zh-CN": "离开小天地", "ja": "小天地を出る" },
+  "Nothing here yet": { "zh-CN": "这里还没有内容", "ja": "まだ何もない部屋" },
+  "Traces of moving in, and nothing else.": { "zh-CN": "这里只留下搬进来的痕迹。", "ja": "引っ越してきた跡だけが残っている。" },
+  "Leave it blank — what fits their history will appear.": { "zh-CN": "点击初始化，根据角色的经历布置这里。", "ja": "初期化を押すと、来歴に合う空間を作ります。" },
+  "Could not open this nook": { "zh-CN": "无法打开小天地", "ja": "小天地を開けませんでした" },
+  "Try again": { "zh-CN": "重试", "ja": "再試行" },
+  "Currently here": { "zh-CN": "此刻在这里", "ja": "ここに居る" },
+  "Selected: {action}. Review and press Send.": { "zh-CN": "已选择：{action}。请确认后点击发送。", "ja": "選択：{action}。内容を確認して送信してください。" },
+  "Ready to send: {action}": { "zh-CN": "待发送：{action}", "ja": "送信待ち：{action}" },
   "Place in current scene": {
     "zh-CN": "放回当前场景",
     "ja": "今のシーンに置く"
   },
+  "Use this item": { "zh-CN": "使用这个物品", "ja": "このものを使う" },
+  "Use {item}.": { "zh-CN": "使用{item}。", "ja": "{item}を使う。" },
   "The writer is working…": {
     "zh-CN": "作家正在续写…",
     "ja": "作家が物語を紡いでいます…"

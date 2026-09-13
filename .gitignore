@@ -7,6 +7,7 @@ dist/
 .airpworld/*.db*
 .env
 .env.local
+.local.env
 .env.*.local
 .artifacts/
 worlds/
@@ -56,6 +57,7 @@ assets/**
 .pi/agent/auth.json
 .pi/agent/models-store.json
 .pi/agent/sessions/
+.pi/agent/bin/
 
 # Agent-runtime scratch that any harness (omp / pi) drops into a project dir.
 # The MCP memory DB is per-machine state, never part of the artifact.

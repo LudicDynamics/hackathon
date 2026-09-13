@@ -148,7 +148,7 @@ const FrontmatterWidgets: React.FC<FrontmatterWidgetsProps> = ({
               <button
                 key={idx}
                 disabled={!onChoice}
-                onClick={() => onChoice?.(choice.id ?? choice.label)}
+                onClick={() => onChoice?.(choice.label)}
                 onPointerEnter={() => setHoverChoice(idx)}
                 onPointerLeave={() => setHoverChoice(null)}
                 // Ink-reverse hover: no `.ink-reverse` utility in CSS yet and the

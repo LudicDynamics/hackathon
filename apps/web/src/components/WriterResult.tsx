@@ -1,23 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
 
 /** One ephemeral receipt per settled turn; never render reasoning or tool arguments. */
-export function WriterResult({ worldKey }: { worldKey?: string }) {
+export function WriterResult({ worldKey, onContinue }: { worldKey?: string; onContinue?: () => void }) {
   const [result, setResult] = useState<{ text: string; id: number } | null>(null);
+  const [progress, setProgress] = useState('');
+  const [canContinue, setCanContinue] = useState(false);
   const lastReply = useRef('');
   const active = useRef(false);
   useEffect(() => {
-    setResult(null); lastReply.current = ''; active.current = false;
+    setResult(null); setProgress(''); setCanContinue(false); lastReply.current = ''; active.current = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const receive = (event: Event) => {
       const frame = (event as CustomEvent).detail;
       if (frame.source !== 'writer') return;
+      if (frame.type === 'agent_progress') setProgress(frame.busy && typeof frame.stage === 'string' ? frame.stage : '');
       if (['writer_delta', 'chalk_writing', 'tool_start', 'writer_message'].includes(frame.type) || (frame.type === 'agent_progress' && frame.busy)) {
-        if (!active.current) { active.current = true; lastReply.current = ''; clearTimeout(timer); setResult(null); }
+        if (!active.current) { active.current = true; setCanContinue(false); lastReply.current = ''; clearTimeout(timer); setResult(null); }
       }
       if (frame.type === 'writer_message' && typeof frame.text === 'string') lastReply.current = frame.text;
-      if (['error', 'turn_aborted'].includes(frame.type)) { active.current = false; lastReply.current = ''; setResult(null); clearTimeout(timer); }
+      if (['error', 'turn_aborted'].includes(frame.type)) { active.current = false; lastReply.current = ''; setProgress(''); setCanContinue(false); setResult(null); clearTimeout(timer); }
       if (frame.type === 'writer_idle' && active.current) {
         active.current = false;
+        setProgress(''); setCanContinue(true);
         const text = lastReply.current.replace(/\s+/g, ' ').trim();
         setResult({ text: text || 'Your action has been processed.', id: Date.now() });
         lastReply.current = '';
@@ -27,5 +31,8 @@ export function WriterResult({ worldKey }: { worldKey?: string }) {
     window.addEventListener('airp:agent-frame', receive);
     return () => { clearTimeout(timer); window.removeEventListener('airp:agent-frame', receive); };
   }, [worldKey]);
-  return result ? <div key={result.id} className="writer-result" role="status">{result.text}</div> : null;
+  return <>
+    {progress ? <div className="writer-result writer-progress" role="status">{progress}</div> : result ? <div key={result.id} className="writer-result" role="status">{result.text}</div> : null}
+    {canContinue && onContinue && <button type="button" className="writer-continue" onClick={onContinue}>Continue →</button>}
+  </>;
 }

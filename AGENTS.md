@@ -1,5 +1,7 @@
 # AGENTS.md — AIRP
 
+作家短回合：`extensions/toolkit/writer-beat-guard.ts` 在 agent_start 重置单轮预算，正常 writer 最多 24 次工具调用、一份 Chalk，允许同文件 edit，重复违规停止；初始化命令不受普通回合限制。不修改 pi-rp。`WorldActivityToast` 只根据成功世界事件合并物品提示；`WriterResult` 负责右上角阶段与最终回执。选项点击先填入作家栏，Send 才执行；小天地入口见 doc-06。
+
 当前存档被外部删除时，世界路由解除失效 store、停止 Agent 与监听，以 `409 no_active_world` 通知前端清空画布并打开世界选择；不自动恢复存档。世界列表和连接设置不依赖活跃世界。连接设置路由 `GET/POST /api/connection-settings` 只允许本机访问，密钥不回显，保存到后端 `.env.local`，详见 `docs/TTS设置面板.md`。
 
 语音设置：`GET /api/tts/config` 仅暴露配置就绪状态、模型和默认音色；前端 Voice settings 控制本浏览器语音开关，未配置时停止合成请求并单次提醒，详情见 `docs/TTS设置面板.md`。

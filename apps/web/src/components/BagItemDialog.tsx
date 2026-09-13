@@ -6,9 +6,11 @@ import { airpGateway } from '../lib/airp-gateway.js';
 import { playFoley } from '../lib/audio.js';
 import { ItemArtwork } from './ItemArtwork.js';
 
-export function BagItemDialog({ item, onClose, onPlace, inline = false }: {
+export function BagItemDialog({ item, onClose, onPlace, onUse, useDisabled = false, inline = false }: {
   item: { path: string; filename: string; body: string; frontmatter: Record<string, any> | null };
   onClose: () => void; onPlace?: (path: string) => Promise<boolean>;
+  onUse?: (path: string) => void;
+  useDisabled?: boolean;
   inline?: boolean;
 }) {
   const { t } = useLocale();
@@ -39,9 +41,12 @@ export function BagItemDialog({ item, onClose, onPlace, inline = false }: {
       <MarkdownText text={item.body} />
       <fieldset disabled={busy}>
         {renderFrontmatterWidgets(item.frontmatter, { filePath: item.path, reveal: true, onChoice: choice => void run(() => airpGateway.choose(item.path, choice)) })}
+      </fieldset>
+      </div>
+      <fieldset disabled={busy}>
         {onPlace && <button type="button" onClick={() => void run(async () => { if (await onPlace(item.path)) onClose(); else setError(t('Could not move item')); })}>{t('Place in current scene')}</button>}
+        {onUse && <button type="button" disabled={useDisabled} onClick={() => onUse(item.path)}>{t('Use this item')}</button>}
       </fieldset>
       {error && <p role="alert">{error}</p>}
-      </div>
   </section>;
 }

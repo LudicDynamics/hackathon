@@ -8,6 +8,7 @@ import { UserRound } from 'lucide-react';
 import { EntityInteractions } from '../narrative/EntityInteractions.js';
 import { highlightChalkAnchor } from '../../lib/chalk-anchor.js';
 import { airpGateway } from '../../lib/airp-gateway.js';
+import { MotionPortrait } from '../overlay/MotionPortrait.js';
 
 /**
  * Absolute-positioned card shell inside the world transform layer (v2 `.object`
@@ -49,12 +50,13 @@ export function pruneLifts(paths: Set<string>): void {
 }
 
 /** Presence figure — the world's people. Ink sketch + a name strip (proto `.sprite`). */
-const SpriteFig: React.FC<{ avatar?: string; name: string }> = ({ avatar, name }) => {
+const SpriteFig: React.FC<{ avatar?: string; video?: string; name: string; still: boolean }> = ({ avatar, video, name, still }) => {
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => setFailed(false), [avatar]);
   const src = avatar && (/^(?:https?:|data:|blob:|\/)/.test(avatar) ? avatar : airpGateway.assetUrl(avatar));
-  return <div className="presence-orb" role="img" aria-label={name}>
-    {src && !failed ? <img src={src} alt="" onError={() => setFailed(true)} /> : <UserRound size={30} strokeWidth={1.3} aria-hidden="true" />}
+  const clip = video && (/^(?:https?:|data:|blob:|\/)/.test(video) ? video : airpGateway.assetUrl(video));
+  return <div className="presence-frame" role="img" aria-label={name}>
+    {(src && !failed) || (clip && !still) ? <MotionPortrait video={clip} poster={failed ? undefined : src} enabled={!still} name={name} onPosterError={() => setFailed(true)} /> : <UserRound size={48} strokeWidth={1.1} aria-hidden="true" />}
   </div>;
 };
 
@@ -269,7 +271,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             onDrop={handleSpriteDrop}
             className={`sprite cursor-pointer transition-transform duration-200 ${chalkStyleOf(item.frontmatter).aged ? ' chalk--aged' : ''} ${spritePuzzleClasses}`}
           >
-            <SpriteFig avatar={item.frontmatter?.avatar} name={item.frontmatter?.title || item.filename.replace('.md', '')} />
+            <SpriteFig avatar={item.frontmatter?.avatar} video={item.frontmatter?.avatarVideo} still={still} name={item.frontmatter?.title || item.filename.replace('.md', '')} />
             <div className="sprite__name">
               {item.frontmatter?.title || item.filename.replace('.md', '')}
             </div>
@@ -286,7 +288,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             onTakeItem={onTakeItem}
           />
         )}
-        {!reading && <EntityInteractions item={item} active={hovered || focused} onChoice={onEntityAction} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate} onOpenCharacter={onOpenCharacterModal} />}
+        {!reading && <EntityInteractions item={item} active={hovered || focused} onChoice={onEntityAction} onSelectChoice={onSelectChoice} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate} onOpenCharacter={onOpenCharacterModal} />}
     </div>
   );
 };

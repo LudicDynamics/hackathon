@@ -47,6 +47,7 @@ export function installPreset(worldRoot: string, srcFile: string): string {
 const AIRP_ENV_PASSTHROUGH = [
   'OPENROUTER_API_KEY',
   'OPENAI_API_KEY',
+  'DEEPSEEK_API_KEY',
   'OPENAI_BASE_URL',
   'AIRP_IMAGE_BASE_URL',
   'AIRP_IMAGE_QUALITY',

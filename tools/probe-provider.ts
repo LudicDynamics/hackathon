@@ -5,7 +5,7 @@
  * `extensions/` and `<world>/extensions/`, so this file can never be loaded by
  * a production run. The probe passes it explicitly with `--extension`.
  *
- * It scripted-streams two turns: a `write` tool call that lands a `type: chalk`
+ * It scripted-streams two turns: a `chalk` tool call that lands a `type: chalk`
  * markdown file, then a plain "done". No network, no credentials — which is what
  * makes `pnpm probe` a reproducible gate (set `AIRP_PROBE_REAL=1` to run a real
  * provider instead).
@@ -18,10 +18,6 @@ const MODEL_ID = 'deterministic';
 
 const PROBE_CHALK_PATH = 'world/baker-street/probe-chalk.md';
 const PROBE_CHALK_CONTENT = [
-  '---',
-  'type: chalk',
-  'title: Probe',
-  '---',
   'The fog parts for a moment and the gaslight catches the wet cobbles.',
   '',
 ].join('\n');
@@ -103,7 +99,7 @@ export default function probeProvider(pi: any): void {
                 {
                   type: 'toolCall',
                   id: `probe_call_${turn}`,
-                  name: 'write',
+                  name: 'chalk',
                   arguments: { path: PROBE_CHALK_PATH, content: PROBE_CHALK_CONTENT },
                 },
               ],

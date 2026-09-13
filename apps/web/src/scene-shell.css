@@ -181,6 +181,17 @@
 .tts-notice button { margin-left:12px; text-decoration:underline; }
 .prototype-world-meta .writer-result { position:static; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; line-clamp:3; overflow:hidden; overflow-wrap:anywhere; margin-top:8px; max-width:350px; pointer-events:none; color:#e7dccc; text-shadow:0 1px 4px #000b; font:12px/1.6 var(--sans,Arial,sans-serif); white-space:normal; animation:writer-result-fade 7s ease both; }
 @keyframes writer-result-fade { 0% {opacity:0} 8%,75% {opacity:1} 100% {opacity:0} }
+.presence-frame { width:100%; aspect-ratio:3/4; overflow:hidden; display:flex; align-items:center; justify-content:center; border:1px solid #e7d5ba88; border-radius:5px; background:linear-gradient(160deg,#342c3422,#201a263d); box-shadow:0 5px 16px #0003; }
+.presence-frame img,.presence-frame video { width:100%; height:100%; object-fit:contain; object-position:center bottom; }
+.sprite:hover .presence-frame { border-color:#f3dfba; }
+.resident-with-actions { position:relative; }
+.resident-actions { position:absolute; right:100%; top:0; width:180px; padding-right:12px; display:none; flex-direction:column; gap:6px; }
+.resident-with-actions:hover .resident-actions,.resident-with-actions:focus-within .resident-actions { display:flex; }
+.resident-actions button { background:#282231ed; color:#f5ead8; border:1px solid #cfbda377; border-radius:15px; padding:6px 10px; font:12px/1.5 sans-serif; }
+.prepared-action { color:#f0dbbb; font:12px/1.5 sans-serif; margin-bottom:8px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.prototype-world-meta .writer-progress { animation:none; }
+.writer-continue { pointer-events:auto; margin-top:6px; padding:4px 9px; font:11px/1.5 sans-serif; border:1px solid #e5d2b766; border-radius:12px; }
+.world-activity-toast { position:fixed; bottom:32px; left:50%; transform:translateX(-50%); z-index:120; max-width:min(520px,75vw); padding:9px 18px; border:1px solid #e5d2b744; border-radius:20px; background:#282231d9; color:#f5ead8; font:13px/1.5 sans-serif; pointer-events:none; }
 @media (prefers-reduced-motion:reduce) { .prototype-world-meta .writer-result {animation:none} }
 .writer-stop-control { position:fixed; z-index:120; right:24px; bottom:82px; padding:10px 16px; border:1px solid #e4b8a880; border-radius:22px; color:#ffe9df; background:#392b36; box-shadow:0 4px 16px #0003; font:14px/1.4 Georgia,serif; cursor:pointer; }
 .writer-stop-control:focus-visible { outline:2px solid #ffe9df; outline-offset:3px; }

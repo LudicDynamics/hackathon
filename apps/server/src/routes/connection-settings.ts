@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-const fields = ['DASHSCOPE_API_KEY', 'AIRP_TTS_BASE_URL', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'FLOW_API_KEY', 'FLOW_API_BASE'] as const;
+const fields = ['DASHSCOPE_API_KEY', 'AIRP_TTS_BASE_URL', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'FLOW_API_KEY', 'FLOW_API_BASE', 'DEEPSEEK_API_KEY'] as const;
 const defaults: Record<string, string> = {
   AIRP_TTS_BASE_URL: 'https://dashscope-intl.aliyuncs.com/api/v1',
   OPENAI_BASE_URL: 'https://api.openai.com/v1',
@@ -35,7 +35,8 @@ export function saveConnectionSettings(repoRoot: string, input: unknown) {
     updates[key] = value;
   }
   if (!Object.keys(updates).length) return;
-  const file = path.join(repoRoot, '.env.local');
+  const preferred = path.join(repoRoot, '.local.env');
+  const file = fs.existsSync(preferred) ? preferred : path.join(repoRoot, '.env.local');
   if (fs.existsSync(file) && !fs.lstatSync(file).isFile()) throw new Error('Unsafe configuration file');
   let content = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
   for (const [key, value] of Object.entries(updates)) {

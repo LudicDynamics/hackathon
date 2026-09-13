@@ -7,13 +7,14 @@ interface Props {
   item: { path: string; frontmatter: Record<string, any> | null };
   active?: boolean;
   onChoice?: (prompt: string) => void;
+  onSelectChoice?: (path: string, choice: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
   onEnterGate?: (path: string) => void;
   onOpenCharacter?: (id: string) => void;
 }
 
 /** Shared by every Markdown form; visual form never decides interaction support. */
-export function EntityInteractions({ item, active = false, onChoice, onDiceRolled, onEnterGate, onOpenCharacter }: Props) {
+export function EntityInteractions({ item, active = false, onChoice, onSelectChoice, onDiceRolled, onEnterGate, onOpenCharacter }: Props) {
   const { t } = useLocale();
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -79,7 +80,8 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
   const isGate = fm?.type === 'gate' || item.path.endsWith('/README.md');
   const isPerson = fm?.type === 'character' || fm?.type === 'sprite';
   const collectable = !isGate && !isPerson && fm?.type !== 'chalk' && item.path.startsWith('world/') && fm?.portable !== false;
-  const choose = (choice: string) => { void run(async () => { await airpGateway.choose(item.path, choice); setFeedback('The world is responding…'); }); };
+  const choose = (choice: string) => onSelectChoice?.(item.path, choice);
+  const characterId = fm?.characterId || fm?.id || item.path.split('/').pop()!.replace(/\.md$/, '');
   return <div ref={ref} className={`entity-interactions entity-interactions--${side}`} data-no-drag onClick={event => event.stopPropagation()}>
     <fieldset disabled={busy}>
     {renderFrontmatterWidgets(item.frontmatter, { filePath: item.path, reveal: active, onChoice: choose, onDiceRolled })}
@@ -88,6 +90,7 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
       {collectable && <button type="button" onClick={() => void run(async () => { await airpGateway.move(item.path, `player/${item.path.split('/').pop()}`); setFeedback(t('Added to belongings.')); })}>{t("→ Take along")}</button>}
       {isGate && onEnterGate && <button type="button" onClick={() => onEnterGate(typeof fm?.target === 'string' ? fm.target : item.path.replace(/\/README\.md$/, ''))}>{t("→ Enter scene")}</button>}
       {isPerson && onOpenCharacter && <button type="button" onClick={() => onOpenCharacter(fm?.characterId || fm?.id || item.path.split('/').pop()!.replace(/\.md$/, ''))}>{t("→ Talk")}</button>}
+      {isPerson && <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('airp:open-nook', { detail: { characterId } }))}>→ {t('Visit private space')}</button>}
       {onChoice && <button type="button" onClick={() => send('Look closely at this entity and respond in the current role-playing scene. Do not move or collect it unless asked.')}>{t("→ Look closer")}</button>}
     </div>
     </fieldset>

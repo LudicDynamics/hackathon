@@ -3,7 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Canvas } from '../canvas/Canvas.js';
 import { WriterBar } from '../chrome/WriterBar.js';
 import type { LayerState } from '../../state/useWorld.js';
-import { UI_COPY, type Locale } from '../../lib/i18n.js';
+import { UI_COPY, translate, type Locale } from '../../lib/i18n.js';
 import { useStill } from '../../lib/motion.js';
 import { whenFontsSettled } from '../../lib/fonts.js';
 import { invalidateMeasures } from '../../lib/measure.js';
@@ -29,12 +29,13 @@ export interface NookViewProps {
   characterId: string;
   /** Close the nook, returning to the layer that was showing. App owns it. */
   onClose: () => void;
-  locale: Exclude<Locale, 'zh-CN'>;
+  locale: Locale;
   // Forwarded layer callbacks (02 §⑫-2): the nook MUST NOT build its own
   onMoveCard?: (path: string, x: number, y: number) => Promise<void> | void;
   onSelectChoice?: (path: string, choice: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
   onTakeItem?: (path: string) => void;
+  onInitialize?: (characterId: string) => boolean;
 }
 
 interface NookError {
@@ -120,12 +121,19 @@ export const NookView: React.FC<NookViewProps> = ({
   onSelectChoice,
   onDiceRolled,
   onTakeItem,
+  onInitialize,
 }) => {
   const [state, setState] = useState<LayerState | null>(null);
   const [error, setError] = useState<NookError | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initializing, setInitializing] = useState(false);
+  useEffect(() => {
+    if (!initializing) return;
+    const timer = setTimeout(() => { setInitializing(false); void load(characterId); }, 60000);
+    return () => clearTimeout(timer);
+  }, [initializing, characterId]);
 
-  const copy = UI_COPY[locale];
+  const copy = Object.fromEntries(Object.entries(UI_COPY.en).map(([key, value]) => [key, locale === 'ja' ? UI_COPY.ja[key as keyof typeof UI_COPY.ja] : translate(locale, value)])) as typeof UI_COPY.en;
 
   const nookIdRef = useRef('');
   const stateRef = useRef<LayerState | null>(null);
@@ -328,9 +336,9 @@ export const NookView: React.FC<NookViewProps> = ({
             <div className="font-serif text-lg text-ink/70">{copy.nookEmptyTitle}</div>
             <div className="font-mono text-xs text-ink/50">{copy.nookEmptyBody}</div>
           </div>
-          <WriterBar disabled onSend={() => {}} placeholder={copy.nookEmptyPrompt} sendLabel="⏎" />
+          <div className="absolute bottom-16 inset-x-0 text-center"><button type="button" disabled={!onInitialize || initializing} className="px-4 py-2 rounded-lg bg-paper-wall text-ink" onClick={() => { if (onInitialize?.(characterId)) setInitializing(true); }}>{translate(locale, initializing ? 'Initializing private space…' : 'Initialize private space')}</button></div>
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 font-mono text-[10px] text-ink/40 text-center px-4">
-            {copy.nookEmptyHint}
+            {translate(locale, 'Initialize to furnish this space from the character’s history.')}
           </div>
         </div>
       ) : state ? (

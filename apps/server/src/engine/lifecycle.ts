@@ -125,6 +125,7 @@ export class AgentLifecycleManager {
   /** Resolve player beats in order, including their file updates. */
   submitWriter(worldRoot: string, message: string): Promise<void> {
     if (this.switchingModels) return Promise.reject(new Error('Models are switching. Please try again shortly.'));
+    if (this.queuedBeats > 0 || this.turnStartedAt.has('writer')) return Promise.reject(new Error('The writer is still resolving your previous action. Wait or stop it before continuing.'));
     this.queuedBeats++;
     const queuedWorld = this.writerStarting?.world ?? this.writerWorld;
     const pending = this.writerQueue.catch(() => {}).then(async () => {

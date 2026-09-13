@@ -1,0 +1,18 @@
+goal: "背包物品可加入作家行动草稿，多物品引用准确，发送前不执行"
+keyresults:
+  - kr-1: "物品详情同时提供放置与使用；使用只追加草稿"
+  - kr-2: "两件物品的稳定路径均传入作家，重复点击去重，删除引用不残留"
+  - kr-3: "构建、探针、回归测试与浏览器菜单检查通过"
+rules:
+  - id: item-draft-no-side-effects
+    name: item-draft-no-side-effects
+    apply: "apps/web/src/lib/item-action-draft.ts"
+    level: error
+    desc:
+      - "准备物品行动不调用网络，不移动、消耗物品或启动作家"
+  - id: item-draft-exact-paths
+    name: item-draft-exact-paths
+    apply: "apps/web/test/item-action-draft.test.mjs"
+    level: error
+    desc:
+      - "测试覆盖追加、同名不同路径、去重、删除、取消意图与空输入"

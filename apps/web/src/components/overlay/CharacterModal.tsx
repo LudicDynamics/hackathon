@@ -750,7 +750,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
       {/* Bottom tilted paper dialog: name plate, narration, the current page, input. */}
       <div className={`speech-paper${closing ? ' speech-paper-closing' : ''}`}>
         <div className="name-plate">{displayName || characterId}</div>
-        {onOpenNook && <button type="button" onClick={onOpenNook}>Visit private space</button>}
+        {onOpenNook && <button type="button" onClick={onOpenNook}>{t('Visit private space')}</button>}
         <p className="narr-line">{bio ? bio : '(necessary description)'}</p>
 
         <div

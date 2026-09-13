@@ -2,6 +2,7 @@ import { useLocale } from './lib/i18n.js';
 import { AgentSettings } from './components/AgentSettings.js';
 import { TtsSettings } from './components/TtsSettings.js';
 import { WriterResult } from './components/WriterResult.js';
+import { WorldActivityToast } from './components/WorldActivityToast.js';
 import { ItemArtwork } from './components/ItemArtwork.js';
 import { NookView } from './components/nook/NookView.js';
 import { useViewpointReport } from './hooks/useViewpointReport.js';
@@ -28,6 +29,7 @@ import { useWorld } from './state/useWorld.js';
 import { airpGateway, type WorldShelf } from './lib/airp-gateway.js';
 import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
 import { BagItemDialog } from './components/BagItemDialog.js';
+import { appendItemAction, buildItemActionPrompt } from './lib/item-action-draft.js';
 import { initialShell, transitionShell, splitCharacters } from './lib/ui-shell.mjs';
 import { MarkdownText } from './lib/md.js';
 import { BookOpen, ChevronDown, ChevronUp, Maximize, Minimize, UserRound, Backpack, Sparkles } from 'lucide-react';
@@ -73,7 +75,7 @@ interface CharacterView {
   emotions?: Record<string, string>;
 }
 
-type Attention = 'ambient' | 'authoring';
+type Attention = 'ambient' | 'writer' | 'authoring';
 
 function labelOf(value: string): string {
   if (value === 'first-snow-jp') return '初雪ラジオ · 日本語';
@@ -123,6 +125,9 @@ export function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [activeCharacter, setActiveCharacter] = useState<CharacterView | null>(null);
   const [nookChar, setNookChar] = useState<string | null>(null);
+  const [preparedAction, setPreparedAction] = useState('');
+  const preparedSource = useRef<string | null>(null);
+  const worldLoadGeneration = useRef(0);
   const [toast, setToast] = useState<string | null>(null);
   const [loadingWorld, setLoadingWorld] = useState<string | null>(null);
   const [backdropReady, setBackdropReady] = useState(false);
@@ -191,6 +196,7 @@ export function App() {
   };
 
   const loadChromeData = async () => {
+    const generation = worldLoadGeneration.current;
     try {
       const [nextManifest, nextBackpack, nextCharacters, nextShelf] = await Promise.all([
         airpGateway.manifest<WorldManifest>(),
@@ -198,6 +204,7 @@ export function App() {
         airpGateway.characters<CharacterView[]>(),
         airpGateway.worlds(),
       ]);
+      if (generation !== worldLoadGeneration.current) return;
       setManifest(nextManifest);
       setBackpack(nextBackpack.items);
       setCharacters(nextCharacters.characters);
@@ -372,6 +379,10 @@ export function App() {
   }, [layer, manifest, activeCharacter, enterLayer]);
 
   const loadWorld = async (worldPath: string) => {
+    preparedSource.current = null;
+    if (writerRef.current) writerRef.current.value = '';
+    worldLoadGeneration.current++;
+    setCharacters([]); setBackpack([]); setPreparedAction('');
     setLoadingWorld(worldPath);
     setWorldPickerOpen(false);
     setSelectedBagPath(null);
@@ -401,6 +412,48 @@ export function App() {
     }
   };
 
+  const prepareWriter = (text: string) => {
+    if (writerLocked) { notify('Wait for the current action, or stop it first.'); return; }
+    setShell(current => ({ ...current, immersive: false }));
+    setAttention('writer');
+    preparedSource.current = null;
+    if (writerRef.current) writerRef.current.value = text;
+    requestAnimationFrame(() => writerRef.current?.focus());
+    setPreparedAction(text.split('\n')[0]);
+    notify(t('Selected: {action}. Review and press Send.', { action: text.split('\n')[0].slice(0, 100) }));
+  };
+  const prepareChoice = async (source: string, choice: string) => {
+    if (writerLocked) { notify('Wait for the current action, or stop it first.'); return; }
+    const directory = source.slice(0, source.lastIndexOf('/'));
+    const target = directory === 'world' ? 'map' : directory;
+    if (source.startsWith('world/') && target !== layer && !await enterLayer(target, { initialize: false })) return;
+    setNookChar(null);
+    prepareWriter(choice);
+    preparedSource.current = source;
+  };
+  const prepareItemUse = (path: string) => {
+    if (writerLocked) { notify('Wait for the current action, or stop it first.'); return; }
+    const item = backpack.find(candidate => candidate.path === path);
+    if (!item || !writerRef.current) return;
+    const draft = appendItemAction(writerRef.current.value, item, t);
+    writerRef.current.value = draft;
+    setShell(current => ({ ...current, immersive: false }));
+    setAttention('writer');
+    setSelectedBagPath(null);
+    setNookChar(null);
+    setPreparedAction(draft);
+    requestAnimationFrame(() => writerRef.current?.focus());
+    notify(t('Selected: {action}. Review and press Send.', { action: draft.slice(0, 100) }));
+  };
+  useEffect(() => {
+    const open = (event: Event) => {
+      const id = (event as CustomEvent).detail?.characterId;
+      if (typeof id === 'string' && characters.some(character => character.id === id)) { camera.save(layer); setNookChar(id); }
+    };
+    window.addEventListener('airp:open-nook', open);
+    return () => window.removeEventListener('airp:open-nook', open);
+  }, [characters, camera, layer]);
+
   const submitWriter = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (writerLocked) return; // belt-and-braces: the input is disabled too
@@ -412,7 +465,10 @@ export function App() {
     writerHistoryCursor.current = writerHistory.current.length;
     writerDraft.current = '';
     setWriterWorking(true);
-    sendToWriter(text);
+    setPreparedAction('');
+    const prompt = buildItemActionPrompt(text, backpack);
+    sendToWriter(preparedSource.current ? `${prompt}\n\nSource entity: ${JSON.stringify(preparedSource.current)}. Resolve only this action, then wait for my next input.` : prompt);
+    preparedSource.current = null;
     input!.value = '';
     notify('The writer is listening…');
   };
@@ -488,7 +544,7 @@ export function App() {
   };
 
   return (
-    <div className={`airp-prototype${isDusk ? ' is-dusk' : ''}${shell.immersive ? ' is-immersive' : ''}${shell.journal ? ' is-reading' : ''}${shell.header ? ' has-header' : ''}${attention === 'authoring' ? ' is-authoring' : ''}`}>
+    <div className={`airp-prototype${isDusk ? ' is-dusk' : ''}${shell.immersive ? ' is-immersive' : ''}${shell.journal ? ' is-reading' : ''}${shell.header ? ' has-header' : ''}${attention !== 'ambient' ? ' is-authoring' : ''}`}>
       <main className="prototype-workspace">
         <aside className={`prototype-narrative${shell.journal ? ' is-open' : ''}`} aria-label={t("Story journal")} aria-hidden={!shell.journal} inert={!shell.journal}>
           <div className="prototype-narrhead">
@@ -528,11 +584,9 @@ export function App() {
             links={state?.links || []}
             bg={(!loadingWorld && state?.bg) || { src: null, tone: 'warm', grain: 'parchment' }}
             onMoveCard={moveCard}
-            onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }}
+            onSelectChoice={(path, choice) => { void prepareChoice(path, choice); }}
             onEntityAction={(choice) => {
-              setWriterWorking(true);
-              sendToWriter(choice);
-              notify('The writer is listening…');
+              prepareWriter(choice);
             }}
             onDiceRolled={(result, passed) => notify(`Roll ${result} · ${passed ? 'passed' : 'failed'}`)}
             onEnterGate={enterLayer}
@@ -583,7 +637,7 @@ export function App() {
             <h1>{currentName}</h1>
             <p>{layer === 'map' ? t('The first moment') : t('The story continues')} · {state?.worldFrozen ? t('Time stands still') : t('Time flows')}</p>
             {sceneStatus.map(([key, value]) => <span className="prototype-stat" key={key}>{labelOf(key)} · {String(value)}</span>)}
-            <WriterResult worldKey={`${manifest?.id}:${layer}`} />
+            <WriterResult worldKey={`${manifest?.id}:${layer}`} onContinue={() => prepareWriter('Continue this scene by one short narrative beat, then wait for my next action.')} />
           </div>
 
           <div className="prototype-tools prototype-chrome" aria-label={t("Canvas tools")}>
@@ -640,6 +694,7 @@ export function App() {
 
           <div className="prototype-residents prototype-chrome" aria-label={t("Resident companions")}>
           {resident.map(companion => (
+            <div className="resident-with-actions" key={companion.id}>
             <button
               key={companion.id}
               className="prototype-companion-orb"
@@ -649,6 +704,11 @@ export function App() {
             >
               {!assetUrl(companion.avatar) && companion.id.charAt(0).toUpperCase()}<i /><small>{companion.name || labelOf(companion.id)}</small>
             </button>
+            <div className="resident-actions">
+              <button type="button" onClick={() => openCharacter(companion)}>{t('→ Talk')}</button>
+              <button type="button" onClick={() => { camera.save(layer); setNookChar(companion.id); }}>{t('Visit private space')}</button>
+            </div>
+            </div>
           ))}
           </div>
           <button className="prototype-action-toggle prototype-chrome" onClick={() => { setAttention(current => current === 'authoring' ? 'ambient' : 'authoring'); window.setTimeout(() => writerRef.current?.focus(), 0); }} aria-label={t("Write an action")}><Sparkles size={17} /><span aria-live="polite">{writerWorking ? `${t(writerStage)} · ${writerElapsed}s` : t('What do you do?')}</span></button>
@@ -657,6 +717,7 @@ export function App() {
             ■ {writerStopRequested ? 'Stop requested · retry' : 'Stop writing'} · {writerElapsed}s
           </button>}
           <form className="prototype-dock prototype-chrome" onSubmit={submitWriter}>
+            {preparedAction && <div className="prepared-action" role="status">{t('Ready to send: {action}', { action: preparedAction })}</div>}
             <div className="prototype-docktop">
               <b>{t("✧ SPEAK TO THE WRITER")}</b>
               <span>{state?.worldFrozen ? t('The world is paused') : t('Your action moves the world forward')}</span>
@@ -693,7 +754,7 @@ export function App() {
         <WorldShelfDialog shelf={shelf} loading={loadingWorld} onLoad={path => void loadWorld(path)} onClose={() => setWorldPickerOpen(false)} onRefresh={async () => { setShelf(await airpGateway.worlds()); }} />
       )}
 
-      {selectedBagItem && <BagItemDialog item={selectedBagItem} onClose={() => setSelectedBagPath(null)} onPlace={handleReturnItem} />}
+      {selectedBagItem && <BagItemDialog item={selectedBagItem} onClose={() => setSelectedBagPath(null)} onPlace={handleReturnItem} onUse={prepareItemUse} useDisabled={writerLocked} />}
 
       {radialState && <RadialMenu {...radialState} onClose={() => setRadialState(null)} onCreate={createAt} />}
 
@@ -723,7 +784,13 @@ export function App() {
         />
       )}
 
-      {nookChar && <div className="prototype-nook"><NookView characterId={nookChar} locale={locale === 'ja' ? 'ja' : 'en'} onClose={() => { setNookChar(null); camera.restore(layer); void refresh(); }} onMoveCard={moveCard} onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }} onTakeItem={path => { void handleTakeItem(path); }} /></div>}
+      <WorldActivityToast worldKey={`${manifest?.id}:${worldLoadGeneration.current}`} />
+      {nookChar && <div className="prototype-nook"><NookView characterId={nookChar} locale={locale} onClose={() => { setNookChar(null); camera.restore(layer); void refresh(); }} onMoveCard={moveCard} onSelectChoice={(path, choice) => { void prepareChoice(path, choice); }} onInitialize={id => {
+        if (writerWorking) { notify('Wait for the writer to finish before initializing.'); return false; }
+        sendMessage({ type: 'airp_init', kind: 'nook', target: id, by: 'player' });
+        notify('Private space initialization requested. Existing content will be preserved.');
+        return true;
+      }} onTakeItem={path => { void handleTakeItem(path); }} /></div>}
 
       {/* Dice ceremony overlay (screen-fixed layer, same visual language as the player path) */}
       {ceremony && (

@@ -154,6 +154,9 @@ async function runNarrativeRoundTrip() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'airp-probe-'));
   fs.cpSync(TEST_WORLD, tmp, { recursive: true });
   fs.rmSync(path.join(tmp, '.airpworld', 'sessions'), { recursive: true, force: true });
+  const probeStore = new LocalWorldStore(tmp);
+  probeStore.writeViewpoint({ layer: 'world/baker-street', focus: null, selected: [], bagCount: 0 });
+  probeStore.close();
 
   const spec = writerLaunch(REPO_ROOT, tmp, VENDOR_CLI);
   const realModel = process.env.AIRP_PROBE_REAL === '1';
@@ -187,9 +190,9 @@ async function runNarrativeRoundTrip() {
     if (!sawDelta) throw new Error('Probe 4: no streamed text_delta event observed');
 
     const wrote = events.some(
-      (e) => e.type === 'tool_execution_end' && e.toolName === 'write' && e.isError === false
+      (e) => e.type === 'tool_execution_end' && e.toolName === 'chalk' && e.isError === false
     );
-    if (!wrote) throw new Error('Probe 4: no successful tool_execution_end(write) observed');
+    if (!wrote) throw new Error('Probe 4: no successful tool_execution_end(chalk) observed');
 
     const landed = path.join(tmp, PROBE_CHALK_REL);
     if (!fs.existsSync(landed)) throw new Error(`Probe 4: chalk file not written to ${landed}`);
@@ -199,7 +202,7 @@ async function runNarrativeRoundTrip() {
     }
 
     console.log('✓ Streamed text_delta received (streaming channel).');
-    console.log('✓ tool_execution_end(write) succeeded (tool channel).');
+    console.log('✓ tool_execution_end(chalk) succeeded (tool channel).');
     console.log('✓ probe-chalk.md landed in the tmp world copy.');
     console.log("✓ parseFrontmatter resolved type: 'chalk'.");
   } finally {

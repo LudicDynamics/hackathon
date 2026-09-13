@@ -33,6 +33,7 @@ import { getComponentTool } from './toolkit/component.js';         // doc-tools/
 import { showTool } from './toolkit/show.js';                      // doc-tools/10
 import { generateImageTool } from './toolkit/generate-image.js';   // doc-tools/11
 import { registerTurnTracking } from './toolkit/turn.js';          // doc-tools/12
+import { registerWriterBeatGuard } from './toolkit/writer-beat-guard.js';
 import { registerInitCommand } from './toolkit/init-command.js';   // docs/init/00
 
 /**
@@ -74,6 +75,7 @@ export default function registerAirpTools(pi: ExtensionAPI): void {
   // Initialization execution kernel (docs/init/00 §2.2). Registered here — the
   // same `initialize` as the tools — so presets and command share one entry point.
   registerInitCommand(pi);
+  registerWriterBeatGuard(pi);
 
 
   for (const { name, tool } of AIRP_TOOLS) {

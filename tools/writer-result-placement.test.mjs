@@ -7,7 +7,7 @@ test('turn receipt appears only in the scene status area and clamps to three lin
   const css = fs.readFileSync(new URL('../apps/web/src/scene-shell.css', import.meta.url), 'utf8');
   const component = fs.readFileSync(new URL('../apps/web/src/components/WriterResult.tsx', import.meta.url), 'utf8');
   assert.equal((app.match(/<WriterResult\b/g) ?? []).length, 1);
-  assert.match(app, /className="prototype-world-meta prototype-chrome">[\s\S]*?<WriterResult[^>]*\/>\s*<\/div>/);
+  assert.match(app, /className="prototype-world-meta prototype-chrome">[\s\S]*?<WriterResult[^\n]*\/>\s*<\/div>/);
   const rule = css.match(/\.prototype-world-meta \.writer-result\s*\{([^}]+)\}/)?.[1];
   assert.ok(rule);
   assert.match(rule, /position:static/);
