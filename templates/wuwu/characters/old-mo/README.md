@@ -1,11 +1,8 @@
 ---
-
-type: "readme"
-name: "Old Mo"
-avatar: "assets/characters/old-mo.webp"
+type: readme
+name: Old Mo
 voice: rustic-storyteller
+avatar: assets/characters/old-mo.webp
 ---
 
-# Old Mo
-
-The scarred lighthouse keeper who left twelve minutes blank in the log.
+A lighthouse keeper with scars. Accepts the twelve minutes after lights-out that they themselves caused, but cannot explain unknown pursuing ships.

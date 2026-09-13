@@ -4,9 +4,10 @@ import { renderFrontmatterWidgets } from '../../lib/fm.js';
 import { airpGateway } from '../../lib/airp-gateway.js';
 import { DeclaredActionDialog, type DeclaredResponse } from './DeclaredActionDialog.js';
 import './declared-actions.css';
+import { MarkdownText } from '../../lib/md.js';
 
 export interface EntityInteractionProps {
-  item: { path: string; frontmatter: Record<string, any> | null };
+  item: { path: string; body?: string; frontmatter: Record<string, any> | null };
   active?: boolean;
   onChoice?: (prompt: string) => void;
   onSelectChoice?: (path: string, choice: string) => void;
@@ -103,6 +104,7 @@ export function EntityInteractions({ item, active = false, onChoice, onSelectCho
   const characterId = fm?.characterId || fm?.id || item.path.split('/').pop()!.replace(/\.md$/, '');
   return <div ref={ref} className={inline ? 'entity-interactions-inline' : `entity-interactions entity-interactions--${side}`} data-no-drag onClick={event => event.stopPropagation()}>
     <fieldset disabled={busy}>
+    {item.frontmatter?.dice_outcomes && <details className="dice-help"><summary>{String(item.frontmatter.title ?? 'Dice')}</summary><MarkdownText text={(item.body ?? '').split(/<!--\s*resolved-dice:/)[0]} /></details>}
     {renderFrontmatterWidgets(item.frontmatter, { filePath: item.path, reveal: active, onChoice: choose, onDiceRolled })}
     {!inline && <div className="entity-action-arrows" aria-label={t("Entity actions")}>
       {actions.map((action: string, index: number) => <button type="button" key={`${index}-${action}`} disabled={!onChoice} onClick={() => send(action)}><span aria-hidden="true">→ </span>{action}</button>)}

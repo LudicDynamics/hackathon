@@ -1,10 +1,10 @@
 ---
-type: "character"
-characterId: "vera"
-title: "Vera"
-role: "Mechanic · repaired the ship"
-avatar: "assets/motion/seedance/characters/viola-transparent.webp"
-avatarVideo: "assets/motion/seedance/characters/viola-transparent.webm"
+type: character
+characterId: vera
+title: Vera
+portable: false
+avatar: assets/motion/seedance/characters/viola-transparent.webp
+avatarVideo: assets/motion/seedance/characters/viola-transparent.webm
 ---
 
-“Investigator! A watch or the truth? I charge silver for the first. For the second—you must stay and talk.”
+Technician with a purple glowing prosthetic hand. Personally interested in the rudder clasp. Makes light comments but won’t talk about crimes she didn’t see.

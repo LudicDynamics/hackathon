@@ -1,19 +1,27 @@
 ---
 type: letter
-title: The Sealed Envelope
-portable: false
+title: The sealed envelope
 visual: envelope
-image: assets/tokens/envelope.png
+portable: true
+choice:
+  options:
+    - id: action-1
+      label: Open the envelope
+    - id: action-2
+      label: Examine the outside
 status:
   data:
     opened: false
-choice:
-  - Open the envelope
+intent: Only opening reveals a short concrete message. Persist the full message, public Context and opened=true. Looking outside is not opening. On revisit keep the same text.
+choice_actions:
+  action-1:
+    kind: writer
+  action-2:
+    kind: reply
+    text: The handwriting on the envelope is unfamiliar. The seal is intact. Looking at the outside has not opened it or revealed a name.
 ---
-# The Sealed Envelope
 
-An unmarked cream envelope. Its flap is still sealed. Something thin shifts inside when you lift it.
+An envelope addressed in unfamiliar handwriting.
 
 ## Context
-
-The envelope has not been opened. No sender, addressee, message, location, or explanation has been revealed.
+The letter has not been opened.

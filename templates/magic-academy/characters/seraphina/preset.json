@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "seraphina",
+  "id": "magic-academy-seraphina",
   "name": "Seraphina",
-  "description": "Your study partner at Emberglass Academy, equally diligent and reckless.",
+  "description": "A senior at the academy. Questions relations between words and things. Doesn't decide answers for others or hide costs.",
   "hiddenOverrides": {
     "compaction": {
       "systemPrompt": "You are the continuity record for a single character in an interactive story. You read a scene of dialogue and produce a summary of what THIS character knows, felt, and said. Do NOT continue the conversation, do NOT speak as the character, and do NOT include anything the character could not have witnessed. Output ONLY the structured summary.",
@@ -12,24 +12,6 @@
       "branchSummaryPrompt": "<conversation>\n{conversation}\n</conversation>\n\nSummarize this abandoned exchange so this character can be reopened without losing it. Keep only:\n\n## Where we left off\n[The last thing said.]\n\n## What I promised or refused\n[Verbatim, or \"(none)\".]\n\nKeep it to a few lines. Preserve exact names."
     }
   },
-  "tools": {
-    "deny": [
-      "recall",
-      "retrieve",
-      "memorize",
-      "revise",
-      "forget",
-      "relocate",
-      "associate",
-      "trigger",
-      "consolidate",
-      "retrace",
-      "set_time",
-      "awaken",
-      "get_state",
-      "state_update"
-    ]
-  },
   "items": [
     {
       "kind": "slot",
@@ -38,29 +20,35 @@
     },
     {
       "kind": "block",
-      "id": "persona",
-      "role": "system",
-      "content": "You are Seraphina, an apprentice at Emberglass Academy and the player's study partner. You are sharp, curious, and a little too willing to bend a rule for a good footnote. Speak warmly and precisely, with a dry wit and an eye for detail."
+      "id": "world-language",
+      "content": "Speak English. Memory is characters/seraphina/memory.md. Knows only what this person has actually seen or heard."
     },
-    { "kind": "slot", "id": "tools", "slot": "tools", "options": { "onlyWithSnippets": true } },
-    {
-      "kind": "slot",
-      "id": "tool-guidelines",
-      "slot": "tool-guidelines",
-      "options": { "includePiDefaultGuidelines": false, "heading": "Guidelines:" }
-    },
-    { "kind": "slot", "id": "skills", "slot": "skills" },
     {
       "kind": "slot",
       "id": "profile",
       "slot": "file",
       "options": {
-        "path": ["README.md", "identity.md", "personality.md"],
+        "path": [
+          "README.md",
+          "personality.md",
+          "memory.md",
+          "identity.md",
+          "relationships.md",
+          "diary.md",
+          "unspoken.md",
+          "likes-and-fears.md",
+          "near-term.md",
+          "long-term.md"
+        ],
         "baseDir": "characters/seraphina",
         "stripFrontmatter": true,
         "onMissing": "skip"
       }
     },
-    { "kind": "slot", "id": "chat-history", "slot": "chat-history" }
+    {
+      "kind": "slot",
+      "id": "chat-history",
+      "slot": "chat-history"
+    }
   ]
 }

@@ -1,3 +1,4 @@
+// Historical fixtures; current bilingual coverage is in world-editions.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -8,7 +9,7 @@ import { mediaWorlds } from './sync-seedance.mjs';
 test('mapped templates ship intact clips and transparent still fallbacks', async () => {
   const sources = new Set();
   for (const [id, config] of Object.entries(mediaWorlds)) {
-    const root = path.resolve('templates', id);
+    const root = path.resolve('archive/templates/pre-bilingual-2026-09-14', id);
     const inventory = JSON.parse(await fs.readFile(path.join(root, 'assets/motion/seedance/manifest.json')));
     assert.equal(inventory.assets.length, Object.keys(config.scenes).length + Object.keys(config.characters).length);
     for (const asset of inventory.assets) {

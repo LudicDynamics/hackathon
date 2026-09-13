@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Dices } from 'lucide-react';
 import { unlock, playFoley } from '../../lib/audio.js';
 import { D10Stage } from '../performance/D10Stage.js';
+import { useLocale } from '../../lib/i18n.js';
 
 export const CHARGE_MS = 1200;
 export const ROLL_MS = 1200;
@@ -16,6 +17,7 @@ interface DiceVerdict {
   passed: boolean;
   crit: boolean;
   fumble: boolean;
+  outcomeGrade?: string;
 }
 export function parseDiceVerdict(raw: unknown): DiceVerdict | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -23,7 +25,7 @@ export function parseDiceVerdict(raw: unknown): DiceVerdict | null {
   if (typeof o.result !== 'number' || !Number.isFinite(o.result) || typeof o.passed !== 'boolean'
     || typeof o.dice !== 'string' || !Array.isArray(o.rolls) || !o.rolls.length
     || !o.rolls.every(r => typeof r === 'number' && Number.isFinite(r))) return null;
-  return { dice: o.dice, rolls: o.rolls, result: o.result, passed: o.passed, crit: o.crit === true, fumble: o.fumble === true };
+  return { dice: o.dice, rolls: o.rolls, result: o.result, passed: o.passed, crit: o.crit === true, fumble: o.fumble === true, ...(typeof o.outcomeGrade === 'string' ? { outcomeGrade: o.outcomeGrade } : {}) };
 }
 interface DiceRollerProps {
   filePath: string;
@@ -33,6 +35,7 @@ interface DiceRollerProps {
 
 /** The HTTP verdict is authoritative. A portal keeps the throw outside transformed cards. */
 export const DiceRoller: React.FC<DiceRollerProps> = ({ filePath, rollDice, onRollComplete }) => {
+  const { locale } = useLocale();
   const [open, setOpen] = useState(false);
   const [verdict, setVerdict] = useState<DiceVerdict | null>(null);
   const [settled, setSettled] = useState(false);
@@ -44,6 +47,8 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({ filePath, rollDice, onRo
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const result = verdict?.result ?? rollDice.result;
   const passed = verdict?.passed ?? rollDice.passed;
+  const grade = verdict?.outcomeGrade ?? (verdict?.crit ? 'great-success' : passed ? 'success' : 'failure');
+  const resultLabel = grade === 'great-success' ? (locale === 'ja' ? '大成功' : locale === 'zh-CN' ? '大成功' : 'Great success') : passed ? (locale === 'ja' ? '成功' : locale === 'zh-CN' ? '成功' : 'Success') : (locale === 'ja' ? '不成功・次の手掛かりへ' : locale === 'zh-CN' ? '未成功 · 还有下一步' : 'Setback · a way forward remains');
   const roll = async () => {
     if (running.current || result !== undefined) return;
     running.current = true; completed.current = false;
@@ -64,8 +69,9 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({ filePath, rollDice, onRo
   const land = () => {
     if (!verdict || completed.current) return;
     completed.current = true; setSettled(true);
-    if (verdict.crit) playFoley('crit-chime');
-    else if (verdict.fumble) playFoley('fumble-break');
+    if (grade === 'great-success') playFoley('crit-chime');
+    else if (verdict.passed) playFoley('unlock');
+    else playFoley('page-turn');
     callback.current?.(verdict.result, verdict.passed);
   };
   return <div className="mt-4 p-4 rounded-2xl bg-paper-wall/60 border border-ink/10">
@@ -78,11 +84,11 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({ filePath, rollDice, onRo
       onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}
       onClick={e => e.stopPropagation()} onWheel={e => e.stopPropagation()}
       onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') setOpen(false); }}>
-      <div className="d10-dialog" role="dialog" aria-modal="true" aria-label={rollDice.desc}>
+      <div className={`d10-dialog ${settled ? `dice-landed dice-landed--${grade}` : ''}`} role="dialog" aria-modal="true" aria-label={rollDice.desc}>
         <strong>{rollDice.desc}</strong>
         <D10Stage integrated dice={verdict?.dice ?? rollDice.type ?? ''} rolls={verdict?.rolls} settled={settled} onLanded={land} />
         {!settled && <p role="status">{verdict ? 'Rolling…' : 'Waiting for the roll…'}</p>}
-        {settled && verdict && <><output className="dice-result-number">{verdict.result}</output><p>{verdict.passed ? 'Check Passed' : 'Check Failed'} · {rollDice.expect}</p></>}
+        {settled && verdict && <><output className="dice-result-number">{verdict.result}</output><p role="status">{resultLabel} · {rollDice.expect}</p></>}
         <button type="button" autoFocus onClick={() => setOpen(false)}>{settled ? 'Done' : 'Close'}</button>
       </div>
     </div>, document.body)}

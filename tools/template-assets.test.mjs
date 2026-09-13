@@ -1,3 +1,4 @@
+// Historical fixtures; current bilingual coverage is in world-editions.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -6,7 +7,7 @@ import { mappings, jobsFor } from './sync-template-assets.mjs';
 
 for (const [id, config] of Object.entries(mappings)) {
   test(`${id}: all source images are tracked and scene/character references resolve`, async () => {
-    const root = new URL(`../templates/${id}/`, import.meta.url);
+    const root = new URL(`../archive/templates/pre-bilingual-2026-09-14/${id}/`, import.meta.url);
     const manifest = JSON.parse(await fs.readFile(new URL('world.json', root), 'utf8'));
     const inventory = JSON.parse(await fs.readFile(new URL('assets/source-manifest.json', root), 'utf8'));
     assert.equal(inventory.assets.length, jobsFor(config).length);

@@ -1,58 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "tom",
+  "id": "whitechapel-tom",
   "name": "Tom Hale",
-  "description": "A typesetter with blackened hands and a complete night-shift ledger.",
-  "items": [
-    {
-      "kind": "slot",
-      "id": "character-instruction",
-      "slot": "system-char"
-    },
-    {
-      "kind": "slot",
-      "id": "tools",
-      "slot": "tools",
-      "options": {
-        "onlyWithSnippets": true
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "tool-guidelines",
-      "slot": "tool-guidelines",
-      "options": {
-        "includePiDefaultGuidelines": false,
-        "heading": "Guidelines:"
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "skills",
-      "slot": "skills"
-    },
-    {
-      "kind": "slot",
-      "id": "profile",
-      "slot": "file",
-      "options": {
-        "path": [
-          "README.md",
-          "identity.md",
-          "personality.md",
-          "memory.md"
-        ],
-        "baseDir": "characters/tom",
-        "stripFrontmatter": true,
-        "onMissing": "skip"
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "chat-history",
-      "slot": "chat-history"
-    }
-  ],
+  "description": "Typesetter at the print shop. Blackened fingers and duty log. Straightforward, relates dates as recorded.",
   "hiddenOverrides": {
     "compaction": {
       "systemPrompt": "You are the continuity record for a single character in an interactive story. You read a scene of dialogue and produce a summary of what THIS character knows, felt, and said. Do NOT continue the conversation, do NOT speak as the character, and do NOT include anything the character could not have witnessed. Output ONLY the structured summary.",
@@ -79,5 +29,49 @@
       "get_state",
       "state_update"
     ]
-  }
+  },
+  "items": [
+    {
+      "kind": "slot",
+      "id": "character-instruction",
+      "slot": "system-char"
+    },
+    {
+      "kind": "block",
+      "id": "world-language",
+      "content": "Speak English. Memory is characters/tom/memory.md. Knows only what this person has actually seen or heard."
+    },
+    {
+      "kind": "slot",
+      "id": "profile",
+      "slot": "file",
+      "options": {
+        "path": [
+          "README.md",
+          "personality.md",
+          "memory.md",
+          "identity.md",
+          "relationships.md",
+          "diary.md",
+          "unspoken.md",
+          "likes-and-fears.md",
+          "near-term.md",
+          "long-term.md"
+        ],
+        "baseDir": "characters/tom",
+        "stripFrontmatter": true,
+        "onMissing": "skip"
+      }
+    },
+    {
+      "kind": "block",
+      "id": "role-context",
+      "content": "Relates deliveries and shifts seen in own receipt.md and shift-ledger.md. The third chapter's illustration came at 6 PM yesterday, and incident this morning—helps compare. Did not witness crimes outside. Avoids guessing unknowns."
+    },
+    {
+      "kind": "slot",
+      "id": "chat-history",
+      "slot": "chat-history"
+    }
+  ]
 }

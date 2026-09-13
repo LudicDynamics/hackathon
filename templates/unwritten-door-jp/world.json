@@ -1,0 +1,24 @@
+{
+  "id": "unwritten-door-jp",
+  "name": "未書の扉 · 日本語",
+  "version": "1.2.0",
+  "schema": 1,
+  "description": "未開封の手紙と電話が、外に広がる場所の雰囲気を形作っています。扉はひとつ、新しい生きているシーンがひとつ。",
+  "author": "AIRP",
+  "genre": "物語体験",
+  "tags": [
+    "短い物語",
+    "生成する世界"
+  ],
+  "material": "parchment",
+  "player": {
+    "id": "you",
+    "name": "あなた"
+  },
+  "characters": [],
+  "extensions": [],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "locale": "ja",
+  "entry": "map"
+}

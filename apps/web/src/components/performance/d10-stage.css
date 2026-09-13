@@ -28,3 +28,9 @@
 }
 .d10-dialog button:hover { background: #483052; }
 .d10-dialog button:focus-visible { outline: 2px solid #d5b9ee; outline-offset: 3px; }
+.dice-landed--success { animation: dice-success-glow .8s ease-out; }
+.dice-landed--great-success { animation: dice-success-glow 1.4s ease-out; border-color: #aa8a4c; }
+.dice-landed--failure, .dice-landed--setback { animation: dice-setback .5s ease-out; border-color: #725768; }
+@keyframes dice-success-glow { 30% { box-shadow: 0 0 55px #e9bd7699, inset 0 0 30px #c6a25b44; } }
+@keyframes dice-setback { 25% { transform: translateX(-3px); } 60% { transform: translateX(2px); } }
+@media(prefers-reduced-motion:reduce) { .dice-landed { animation:none; } }

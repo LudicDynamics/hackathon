@@ -1,13 +1,13 @@
 ---
 type: readme
-name: 月下の召喚
-title: 月下の召喚
+name: Moonlit Summoning
+title: Moonlit Summoning
 bg: assets/backgrounds/opening.png
-intent: この世界の行動では必ず skills/moonlit-contract-play/SKILL.md、現在の README、行動元の Chalk、青いリボンの実在するファイルを読む。開始時点では契約は未成立。明確な同意を得たときだけ world/moonlit-courtyard を一層生成する。質問や拒否では生成しない。既存の内容を保ち、次の場所はプレイヤーの明示した一歩ごとに生成する。
+intent: In this world’s actions, always read skills/moonlit-contract-play/SKILL.md, current README, base Chalk, and the actual blue ribbon file. Initially, the contract is unformed. Generate world/moonlit-courtyard only upon clear consent. Do not generate on questions or refusals. Maintain existing content; next places generate on each explicit player step.
 ---
 
-名もない街の夜。海辺の古い天文台の床に、石床に刻まれた淡紫の残光が揺れている。ライラがあなたの返事を待っている。
+The nameless town’s night. On the floor of the old seaside observatory, pale purple residual light etched in stone floor flickers. Lyra waits for your reply.
 
-場内の読み物は opening.md 一枚、触れられる物は契約の証となる青いリボン一つ。扉の先はまだ描かれていない。人物と約束は作家が演じる。プレイヤーの名前、願い、同意は勝手に決めない。
+The reading material inside is one page opening.md, one tangible item is the blue ribbon of contract proof. Beyond the door is yet unwritten. Characters and promises are played by the writer. Player’s name, wish, and consent are not arbitrarily decided.
 
-最初の行き先は world/moonlit-courtyard。契約に同意し、外へ進む意思が示されたら、その子フォルダに README.md、opening.md、item.md と一枚の背景画像を作る。自動で先々を生成しない。帰り道は親の map。
+The first destination is world/moonlit-courtyard. If the contract is agreed and intent to proceed outside is shown, generate one layer README.md, opening.md, item.md and one background image for that child folder. Do not auto-generate ahead. Return paths are parent maps.

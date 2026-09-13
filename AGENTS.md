@@ -108,14 +108,16 @@ extensions/
   toolkit/              # 工具壳 + 共享 helper（deps/actor/turn/result）；init-command.ts = `airp-init` 初始化执行内核（R2 直唤：扩展命令 → ctx.spawnAgent）——子目录，不会被当扩展加载
 skills/                 # 项目级 skills：跨世界通用手艺（生图 / 组件叙事 / 音色选角 / 节奏 / 玩法咬合）
                         #   component-narration / tool-craft / voice-casting（音色选角，docs/tts/08）
-templates/              # 已入 Git 的六个 *-playtest 当前体验版；无后缀目录保留为旧素材版 / 原型
-  *-playtest/           # wuwu / whitechapel / divergence / first-snow-jp / magic-academy / unwritten-door
+templates/              # 已入 Git 的七世界双语正式模板；无后缀英文，-jp 日文
+  <world>[-jp]/        # wuwu / whitechapel / divergence / first-snow / magic-academy / unwritten-door / moonlit-contract
   unwritten-door/       # 第六个体验 Demo：信封、手机与空白门外，见 doc-25
   <world>/skills/       # 世界级 skills：该世界自己的文风与剧情，与 world/ 同级、随包分发
 worlds/                 # 脚手架产出的玩家世界（.gitignore）
+archive/templates/      # pre-bilingual-2026-09-14：18 个旧模板可恢复归档，不参与新游戏扫描
 vendor/pi-rp/           # 叙事引擎 submodule
 
 tools/                  # 单一职责脚本：探针（probe-*）/ 门禁（check-*）/ 工作流
+  check-world-editions.mjs # 七世界双语：文件、协议、语言、路径与素材一致性（pnpm check:worlds）
   scaffold.mjs          # 模板 → 新世界（pnpm scaffold）
   pi-rp.mjs             # pi-rp 子模块工作流（pnpm pi status|build|update|commit，见 §7.2）
   motion-clip.mjs       # 微动立绘 / 背景视频生产（pnpm motion）：绿幕→透明 webm，成片→循环 webm

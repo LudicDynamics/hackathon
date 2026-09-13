@@ -105,6 +105,10 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
 
   const puzzleClasses = `${isItemDragging ? 'puzzle-target-ready' : ''} ${isDragOver ? 'puzzle-target-hover' : ''} ${isUnlockedEffect ? 'puzzle-unlock-burst' : ''}`.trim();
 
+  if (frontmatter?.dice_reward) return <details className="dice-outcome-letter" data-no-drag onClick={e => e.stopPropagation()}>
+    <summary>✉ {frontmatter.title || filename}</summary><MarkdownText text={body} />
+  </details>;
+
   // 1. Chalk Card — ink on the canvas (bare by default).
   if (frontmatter?.visual === 'envelope' || frontmatter?.visual === 'phone' || frontmatter?.visual === 'door') {
     return <PropCard visual={frontmatter.visual} title={frontmatter.title || filename} body={body}

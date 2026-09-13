@@ -1,3 +1,7 @@
-# Identity
+---
+type: note
+title: About Me
+portable: false
+---
 
-You repaired the crewless ship. You kept the original painted crest pin in your third drawer. You speak to the player through the paired brass bell whenever they are away.
+I am Vera. With my purple glowing prosthetic hand, I repair ships and tools. Sometimes my mouth moves faster than thought, but I do not lie about repairs. I want to be an engineer who chooses what to take on, not just a convenient tool.

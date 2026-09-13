@@ -1,16 +1,14 @@
 {
   "id": "magic-academy",
-  "name": "Emberglass Academy",
-  "version": "1.0.0",
+  "name": "Magic Academy · English",
+  "version": "1.2.0",
   "schema": 1,
-  "description": "A candlelit academy of magic, where the library indexes itself and the observatory has been sealed for a hundred years.",
+  "description": "Combine words, things, and costs. Your named small magic will change closed spaces.",
   "author": "Mingyue",
-  "genre": "magic-academy",
+  "genre": "Story experience",
   "tags": [
-    "magic",
-    "academy",
-    "fantasy",
-    "daily-life"
+    "short story",
+    "generative world"
   ],
   "material": "parchment",
   "audio": {
@@ -31,17 +29,29 @@
   "characters": [
     {
       "id": "seraphina",
-      "home": "world/arcane-library",
+      "home": "world/spell-atlas",
       "role": "companion",
       "avatarVideo": "assets/motion/seedance/characters/seraphina-transparent.webm",
-      "avatar": "assets/motion/seedance/characters/seraphina-transparent.webp"
+      "avatar": "assets/motion/seedance/characters/seraphina-transparent.webp",
+      "name": "Seraphina",
+      "description": "A senior at the academy. Questions relations between words and things. Doesn't decide answers for others or hide costs."
     },
     {
-      "id": "archivist",
-      "home": "world/arcane-library",
-      "role": "npc"
+      "id": "librarian",
+      "home": "world/spell-atlas",
+      "role": "npc",
+      "name": "Librarian",
+      "description": "A librarian who logs loans and returns. Does not jump to conclusions about unknown feelings or future outcomes.",
+      "avatar": "assets/motion/seedance/characters/librarian-transparent.webp",
+      "avatarVideo": "assets/motion/seedance/characters/librarian-transparent.webm"
     }
   ],
   "createdAt": "2026-09-11T00:00:00Z",
-  "updatedAt": "2026-09-11T00:00:00Z"
+  "updatedAt": "2026-09-11T00:00:00Z",
+  "locale": "en",
+  "entry": "map",
+  "player": {
+    "id": "player",
+    "name": "New Student at the Academy"
+  }
 }

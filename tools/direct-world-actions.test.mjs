@@ -42,10 +42,10 @@ test('all investigation sites have visible dice routes, including the two map-le
     assert.equal(dice.length, pack.base === 'wuwu' ? 4 : 8);
     for (const [file, text] of dice) {
       const p = parseFrontmatter(text);
-      assert.equal(p.interactive.roll_dice.type, '2d10');
-      assert.equal(p.interactive.roll_dice.expect, '>=11');
+      assert.equal(p.interactive.roll_dice.type, pack.base === 'whitechapel' ? '1d100' : '2d10');
+      assert.equal(p.interactive.roll_dice.expect, pack.base === 'whitechapel' ? '<=60' : '>=11');
       assert.equal(p.frontmatter.requires, undefined);
-      assert.deepEqual(p.frontmatter.dice_outcomes.map(b => [b.min, b.max]), [[2,4],[5,10],[11,17],[18,20]]);
+      assert.deepEqual(p.frontmatter.dice_outcomes.map(b => [b.min, b.max]), pack.base === 'whitechapel' ? [[1,12],[13,60],[61,95],[96,100]] : [[2,4],[5,10],[11,17],[18,20]]);
       for (const b of p.frontmatter.dice_outcomes) assert.ok(b.options.length >= 2, file);
     }
   }
@@ -120,11 +120,17 @@ test('real dice resolver applies all band boundaries once and rejects malformed 
   const svc = createActionService(store, { type: 'god' });
   const source = 'world/london-map/04-investigation-dice.md';
   try {
-    for (const score of [2,4,5,10,11,17,18,20]) {
-      await store.writeFileAtomic(source, pack.files[source]);
+    for (const score of [1,12,13,60,61,95,96,100]) {
+      const fixture = parseFrontmatter(pack.files[source]);
+      for (const band of fixture.frontmatter.dice_outcomes) for (const reward of band.rewards ?? []) reward.path = reward.path.replace(/\.md$/, `-${score}.md`);
+      await store.writeFileAtomic(source, md(fixture.frontmatter, fixture.body));
       const before = await store.getMaxSeq();
       const result = await runDeclaredRoll(svc, source, score);
       assert.equal(result.details.result, score);
+      assert.equal(result.details.passed, score <= 60);
+      assert.equal(result.details.crit, score <= 12);
+      assert.equal(result.details.fumble, score >= 96);
+      assert.equal(result.details.outcomeGrade, score <= 12 ? 'great-success' : score <= 60 ? 'success' : score <= 95 ? 'setback' : 'failure');
       const resolved = parseFrontmatter(await store.readFile(source));
       assert.ok(resolved.body.includes(result.details.outcomeText));
       assert.equal(resolved.frontmatter.choice_actions['play-result'].kind, 'writer');
@@ -135,7 +141,7 @@ test('real dice resolver applies all band boundaries once and rejects malformed 
       assert.equal((await store.getEventsSince(before)).filter(e => e.type === 'roll_resolved').length, 1);
     }
     const malformed = parseFrontmatter(pack.files[source]);
-    malformed.frontmatter.dice_outcomes[0].min = 1;
+    malformed.frontmatter.dice_outcomes[0].min = 0;
     await store.writeFileAtomic(source, md(malformed.frontmatter, malformed.body));
     const seq = await store.getMaxSeq();
     await assert.rejects(runDeclaredRoll(svc, source, 12), /partition/);

@@ -24,6 +24,7 @@
     "probe:init": "node tools/probe-init.mjs",
     "probe:prompt": "node tools/probe-prompt.mjs && node tools/probe-prompt-character.mjs",
     "check:skills": "node tools/check-skills.mjs",
+    "check:worlds": "node tools/check-world-editions.mjs",
     "typecheck:extensions": "tsc -p extensions/tsconfig.json",
     "check:docs": "node tools/check-hooks-docs.mjs",
     "check:ws": "node tools/check-ws-contract.mjs",

@@ -1,58 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "edith",
+  "id": "whitechapel-edith",
   "name": "Edith Vale",
-  "description": "The frightened novelist who changed the fourth chapter’s address.",
-  "items": [
-    {
-      "kind": "slot",
-      "id": "character-instruction",
-      "slot": "system-char"
-    },
-    {
-      "kind": "slot",
-      "id": "tools",
-      "slot": "tools",
-      "options": {
-        "onlyWithSnippets": true
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "tool-guidelines",
-      "slot": "tool-guidelines",
-      "options": {
-        "includePiDefaultGuidelines": false,
-        "heading": "Guidelines:"
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "skills",
-      "slot": "skills"
-    },
-    {
-      "kind": "slot",
-      "id": "profile",
-      "slot": "file",
-      "options": {
-        "path": [
-          "README.md",
-          "identity.md",
-          "personality.md",
-          "memory.md"
-        ],
-        "baseDir": "characters/edith",
-        "stripFrontmatter": true,
-        "onMissing": "skip"
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "chat-history",
-      "slot": "chat-history"
-    }
-  ],
+  "description": "Watson's patient and novelist. The one who corrected the address in chapter four. Scared but wants to explain clearly in her own words.",
   "hiddenOverrides": {
     "compaction": {
       "systemPrompt": "You are the continuity record for a single character in an interactive story. You read a scene of dialogue and produce a summary of what THIS character knows, felt, and said. Do NOT continue the conversation, do NOT speak as the character, and do NOT include anything the character could not have witnessed. Output ONLY the structured summary.",
@@ -79,5 +29,49 @@
       "get_state",
       "state_update"
     ]
-  }
+  },
+  "items": [
+    {
+      "kind": "slot",
+      "id": "character-instruction",
+      "slot": "system-char"
+    },
+    {
+      "kind": "block",
+      "id": "world-language",
+      "content": "Speak English. Memory is characters/edith/memory.md. Knows only what this person has actually seen or heard."
+    },
+    {
+      "kind": "slot",
+      "id": "profile",
+      "slot": "file",
+      "options": {
+        "path": [
+          "README.md",
+          "personality.md",
+          "memory.md",
+          "identity.md",
+          "relationships.md",
+          "diary.md",
+          "unspoken.md",
+          "likes-and-fears.md",
+          "near-term.md",
+          "long-term.md"
+        ],
+        "baseDir": "characters/edith",
+        "stripFrontmatter": true,
+        "onMissing": "skip"
+      }
+    },
+    {
+      "kind": "block",
+      "id": "role-context",
+      "content": "Can explain why she used a fictional address and that she gave it to Blackburn. Suspects Wayne but has no eyewitness. References her own address-correction.md. Does not know of circulation or others' conversations at the print shop. Will answer protection inquiries based on her own will."
+    },
+    {
+      "kind": "slot",
+      "id": "chat-history",
+      "slot": "chat-history"
+    }
+  ]
 }

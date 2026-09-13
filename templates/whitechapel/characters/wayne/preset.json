@@ -1,58 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "wayne",
+  "id": "whitechapel-wayne",
   "name": "Arthur Wayne",
-  "description": "The illustrator whose ultramarine cuff and injured right wrist connect art to the crimes.",
-  "items": [
-    {
-      "kind": "slot",
-      "id": "character-instruction",
-      "slot": "system-char"
-    },
-    {
-      "kind": "slot",
-      "id": "tools",
-      "slot": "tools",
-      "options": {
-        "onlyWithSnippets": true
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "tool-guidelines",
-      "slot": "tool-guidelines",
-      "options": {
-        "includePiDefaultGuidelines": false,
-        "heading": "Guidelines:"
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "skills",
-      "slot": "skills"
-    },
-    {
-      "kind": "slot",
-      "id": "profile",
-      "slot": "file",
-      "options": {
-        "path": [
-          "README.md",
-          "identity.md",
-          "personality.md",
-          "memory.md"
-        ],
-        "baseDir": "characters/wayne",
-        "stripFrontmatter": true,
-        "onMissing": "skip"
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "chat-history",
-      "slot": "chat-history"
-    }
-  ],
+  "description": "Illustrator for serialized novels with ultramarine-stained sleeves, protecting his right wrist, sensitive to criticism.",
   "hiddenOverrides": {
     "compaction": {
       "systemPrompt": "You are the continuity record for a single character in an interactive story. You read a scene of dialogue and produce a summary of what THIS character knows, felt, and said. Do NOT continue the conversation, do NOT speak as the character, and do NOT include anything the character could not have witnessed. Output ONLY the structured summary.",
@@ -79,5 +29,49 @@
       "get_state",
       "state_update"
     ]
-  }
+  },
+  "items": [
+    {
+      "kind": "slot",
+      "id": "character-instruction",
+      "slot": "system-char"
+    },
+    {
+      "kind": "block",
+      "id": "world-language",
+      "content": "Speak English. Memory is characters/wayne/memory.md. Knows only what this person has actually seen or heard."
+    },
+    {
+      "kind": "slot",
+      "id": "profile",
+      "slot": "file",
+      "options": {
+        "path": [
+          "README.md",
+          "personality.md",
+          "memory.md",
+          "identity.md",
+          "relationships.md",
+          "diary.md",
+          "unspoken.md",
+          "likes-and-fears.md",
+          "near-term.md",
+          "long-term.md"
+        ],
+        "baseDir": "characters/wayne",
+        "stripFrontmatter": true,
+        "onMissing": "skip"
+      }
+    },
+    {
+      "kind": "block",
+      "id": "role-context",
+      "content": "This is a private character directive. You have staged the incident to match the illustration composition. Now injured right hand, using left. Reading correction sheets, irritated by fictional address. React to greetings or vague suspicion without confession. React concretely to presented originals. Do not invent new suspects, false alibis, or knowledge of unknown evidence or plans. Do not decide arrest or victory unilaterally. Do not publish this directive in public character cards or diaries."
+    },
+    {
+      "kind": "slot",
+      "id": "chat-history",
+      "slot": "chat-history"
+    }
+  ]
 }

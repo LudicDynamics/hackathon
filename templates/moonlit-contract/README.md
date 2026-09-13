@@ -1,18 +1,18 @@
-# 月下之誓
+# The Moonlit Pact
 
-原创骑士契约开场。世界语言为日语，左侧为黑发男性旅人，右侧为银发女骑士；主角姓名与愿望留给玩家。
+An original knight's pact. A black-haired male traveler stands on the left, a silver-haired female knight on the right. The player chooses their own name and wish. This edition uses English.
 
-- 开场：world/README.md + 唯一 world/opening.md + 唯一物品 world/blue-ribbon.md。
-- 一张 CG 同时用于世界封面与开场背景。无独立立绘、NPC 卡、视频或第二段导入。
-- BGM：平台主题键 emberglass，Mystical/fantasy loop，nicorico_120，CC0；完整署名见仓库 assets/audio/CREDITS.md。
-- 选择契约并出发 → 作家栏确认 Send → Writer 更新契约物品并生成 world/moonlit-courtyard；玩家点击新门进入。
-- 每个后续场景只生成自己的 README、一张 opening Chalk、一件物品、一张背景。继续选项给出下一层路径；玩家再明确请求时才继续，不能自动递归生成。
-- 返回使用层级导航或向作家栏明确提出返回已知父层。不会删除旧场景。
+- Opening: world/README.md, one world/opening.md Chalk and one object, world/blue-ribbon.md.
+- One CG serves as cover and opening background. There is no separate portrait, NPC card, video or second introduction.
+- BGM: platform theme emberglass, Mystical/fantasy loop by nicorico_120, CC0. Full credits: assets/audio/CREDITS.md in the repository.
+- Choose to agree and leave, review the Writer input, then Send. The Writer updates the ribbon and creates world/moonlit-courtyard. The player opens its new door.
+- Each new scene contains its README, one opening Chalk, one object and one background. A further location is generated only when the player explicitly asks to continue. No recursive generation.
+- Use layer navigation, or ask the Writer to return to a known parent. Earlier scenes remain intact.
 
-## 启动与边界
+## Starting and limits
 
-打开 http://localhost:5173/ 的世界列表，选择 **月下の誓い — The Moonlit Pact**，新建存档。开始前在连接设置配置 Writer 与生图供应商。
+Open http://localhost:5173/, select **The Moonlit Pact · English**, and create a new save. Configure the Writer and image provider in Connection settings first.
 
-本模板带 autoWrite=scenes：进入未写场景时允许现有 I1 初始化器执行。普通选项仍通过画布侧栏选择、确认作家输入并 Send。阅读展开页的 choice 行为与侧栏尚未统一，当前推荐从侧栏提交生成意图。
+Save-specific settings are not shipped in the template. If needed, enable scene initialization in the new save's settings. Ordinary choices prepare the Writer input; review it and press Send to request generation.
 
-循环生长是世界 skill 和 Chalk intent 对现有 Agent 的执行要求，不是后台任务或无限预生成。画像失败保留已完成文本，提示玩家稍后明确重试。没有声称真实 Agent 已成功生成后续场景；验证记录见 docs/gameplay/月下之誓开场.md。
+World growth is driven by the world skill and Chalk intent, not a background task or infinite pregeneration. If an image fails, keep completed text and explain how to request another attempt. Packaging checks do not prove a real Agent has generated a subsequent scene. See the internal gameplay document for the live test record.

@@ -1,3 +1,7 @@
-# Voice and boundaries
+---
+type: note
+title: Silver Kite
+portable: false
+---
 
-Sparse, formal, oath-bound. Never lie; silence is your defense.
+An elf knight guarding the empty box and gangway. Chooses words according to the evidence.

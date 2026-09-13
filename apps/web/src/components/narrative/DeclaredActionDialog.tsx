@@ -29,6 +29,17 @@ export function DeclaredActionDialog({ value, onClose, onSubmit, onChoose }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const slots = value.slots ?? [];
+  const [activeSlot, setActiveSlot] = useState(slots[0]?.id ?? '');
+  const place = (path: string, target = activeSlot) => {
+    if (busy) return;
+    const item = value.items.find(i => i.path === path);
+    const slot = slots.find(s => s.id === target);
+    if (!item || !slot || !slot.paths.includes(item.declaredPath ?? item.path)) {
+      setError(ja ? 'この場所には置けません。別の枠を選んでください。' : zh ? '这份材料不适合当前槽位，请选择其他槽位。' : 'This material does not fit here. Choose another slot.'); return;
+    }
+    setError('');
+    setSelected(current => Object.fromEntries([...Object.entries(current).filter(([id, p]) => id !== target && p !== path), [target, path]]));
+  };
   const ready = slots.length > 0 && Object.values(selected).some(Boolean) && slots.every(s => !s.required || selected[s.id]);
   const submit = async () => {
     if (!ready || busy) return;
@@ -61,18 +72,29 @@ export function DeclaredActionDialog({ value, onClose, onSubmit, onChoose }: {
         {slots.map(slot => {
           const candidates = value.items.filter(i => slot.paths.includes(i.declaredPath ?? i.path));
           const item = candidates.find(i => i.path === selected[slot.id]);
-          return <section className="material-slot" key={slot.id}>
-            <label>{slot.title} {slot.required && <span aria-label="required">*</span>}
-              <select value={selected[slot.id] ?? ''} onChange={e => setSelected(s => ({ ...s, [slot.id]: e.target.value }))}>
-                <option value="">{ja ? '材料を選ぶ（空にする）' : zh ? '选择材料（留空可移除）' : 'Choose material (empty to remove)'}</option>
-                {candidates.map(i => <option key={i.path} value={i.path} disabled={Object.entries(selected).some(([id, p]) => id !== slot.id && p === i.path)}>{i.title}</option>)}
-              </select>
-            </label>
+          return <section className={`material-slot ${activeSlot === slot.id ? 'is-active' : ''}`} key={slot.id}
+            onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+            onDrop={e => { e.preventDefault(); e.stopPropagation(); setActiveSlot(slot.id); place(e.dataTransfer.getData('text/plain'), slot.id); }}>
+            <button type="button" className="material-slot__target" aria-pressed={activeSlot === slot.id} onClick={() => setActiveSlot(slot.id)}>
+              <small>{slot.title} {slot.required && '*'}</small>
+              <strong>{item?.title ?? (ja ? 'ここに材料を置く' : zh ? '将材料放在这里' : 'Place material here')}</strong>
+            </button>
+            {item && <button type="button" onClick={() => setSelected(s => ({ ...s, [slot.id]: '' }))}>{ja ? '戻す' : zh ? '移除' : 'Remove'}</button>}
             {!candidates.length && <small>{ja ? '材料がまだありません。' : zh ? '此槽位的材料尚未准备。' : 'No material available for this slot yet.'}</small>}
             {item && <details><summary>{ja ? '選択した材料を読む' : zh ? '查看所选材料' : 'Read selected material'}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{item.body}</p></details>}
           </section>;
         })}
       </fieldset>}
+      {value.kind === 'stage' && <>
+        <p>{ja ? '枠を選び、材料をクリック。または枠へドラッグ。' : zh ? '先选槽位，再点击材料；也可将材料拖入槽位。' : 'Select a slot, then click a material—or drag it into a slot.'}</p>
+        <div className="material-pool">
+          {value.items.map(item => <button key={item.path} type="button" draggable={!busy} disabled={busy}
+            aria-pressed={Object.values(selected).includes(item.path)} onClick={() => place(item.path)}
+            onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData('text/plain', item.path); e.dataTransfer.effectAllowed = 'move'; }}>
+            <span aria-hidden="true">▤</span><strong>{item.title}</strong><small>{item.body.slice(0, 80)}</small>
+          </button>)}
+        </div>
+      </>}
       {value.text && <p style={{ whiteSpace: 'pre-wrap' }}>{value.text}</p>}
       {value.kind !== 'stage' && value.items.map(item => <article key={item.path}>
         <h3>{item.title}</h3>

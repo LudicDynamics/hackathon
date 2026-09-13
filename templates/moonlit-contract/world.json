@@ -1,23 +1,22 @@
 {
   "id": "moonlit-contract",
-  "name": "月下の誓い — The Moonlit Pact",
-  "version": "1.0.0",
+  "name": "The Moonlit Pact · English",
+  "version": "1.2.0",
   "schema": 1,
-  "description": "月下の召喚。差し出された手に、あなたはどう答える？ 一つの約束から、まだ描かれていない夜へ。",
+  "description": "Moonlit Summoning. How will you respond to the offered hand? From a single promise, to uncharted nights still to be told.",
   "author": "AIRP",
-  "genre": "生成型ビジュアルノベル",
+  "genre": "Generative Visual Novel",
   "tags": [
-    "騎士",
-    "契約",
-    "生成する世界"
+    "short story",
+    "generative world"
   ],
-  "locale": "ja",
+  "locale": "en",
   "material": "parchment",
   "entry": "map",
   "cover": "assets/backgrounds/opening.png",
   "player": {
     "id": "you",
-    "name": "あなた"
+    "name": "You"
   },
   "characters": [],
   "extensions": [],

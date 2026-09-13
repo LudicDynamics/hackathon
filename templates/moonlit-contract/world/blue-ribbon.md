@@ -1,14 +1,14 @@
 ---
 type: item
-title: 青いリボン
+title: Blue Ribbon
 portable: true
 status:
-  label: 約束
+  label: Promise
   data:
-    contract: 未成立
-intent: 世界に一つだけあるリボン。色や結び目を確かめるだけでは契約しない。持ち帰るだけでも同意にならない。契約が明確に成立したら、実在するこのファイルの本文に両者の約束とプレイヤーが実際に述べた願いを短く記し、contract を成立へ更新する。移動後は player/blue-ribbon.md を読む。同じ物を複製しない。
+    contract: Not Contracted
+intent: A single blue ribbon in the world. Checking the color or knots alone does not form a contract. Taking it away alone is not agreement. Once a contract is clearly established, record the agreed promises and the player's actual stated wish briefly in this file's body, and update contract to established. After moving, read player/blue-ribbon.md. Do not duplicate the same item.
 ---
 
-ライラの開いた手の上にある、細い青いリボン。まだ結び目はない。
+On Lyra’s open palm, a slender blue ribbon. Not knotted yet.
 
-手を伸ばして触れることも、言葉で問い返すこともできる。何を約束するかは、まだ決まっていない。
+You may reach out to touch it or ask in words. What to promise is not yet decided.

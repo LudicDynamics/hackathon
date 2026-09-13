@@ -1,26 +1,26 @@
 ---
 type: chalk
-title: あなたの意志で
+title: By Your Own Will
 size: 25
 choice:
   options:
     - id: accept-contract
-      label: 契約する。君と、この扉の向こうへ。
+      label: Make a contract. With you, beyond this door.
     - id: ask-terms
-      label: その前に、契約で何を約束するのか聞きたい。
+      label: But before that, I want to hear what you promise in the contract.
     - id: decline-contract
-      label: 今は契約しない。少し考えさせてほしい。
-intent: 選択は作家欄で確認し Send してから実行する。契約への同意と外へ進む希望が明確なら、青いリボンの本文に合意内容を記録し、現在の README と世界 skill に従って world/moonlit-courtyard を一層だけ生成する。この Chalk を短い契約の返事と新しい門への案内に edit し、開場を増やさない。質問にはライラが短く誠実に答え、拒否には敬意を示す。同意のない契約や子場面の生成は禁止。
+      label: Not making a contract now. Please let me think a little.
+intent: Confirm choices in writer panel and Send before execution. If contract agreement and intent to proceed outside are clear, record agreement in blue ribbon’s text, generate only one layer world/moonlit-courtyard per current README and world skill. Edit this Chalk as short contract reply and guide to new gate, do not add more openings. Lyra answers questions briefly and sincerely, shows respect for refusals. Contracts without consent or child scene generation is prohibited.
 ---
 
-崩れた石のアーチから、細い月の光が落ちていた。
+A slender moonlight fell through a crumbling stone arch.
 
-足元の淡紫の光が静まる。その中心に、黒銅の鎧をまとった女性が立っている。剣を下ろした彼女は、あなたを確かめるように見つめ、それから片手を差し出した。
+The pale purple glow at your feet calms. At its center stands a woman clad in black copper armor. She lowers her sword and looks at you carefully, then extends one hand.
 
-「私はライラ。あなたを守るために、ここへ来ました」
+“I am Lyra. I have come to protect you.”
 
-籠手の上で、一筋の青いリボンが夜風に揺れる。
+A slender blue ribbon sways in the night wind atop her gauntlet.
 
-「ですが、この手を取るかどうかは、あなたが決めてください。私と契約を結び、この夜を共に歩んでくれますか」
+“But whether you take this hand is your choice. Will you bind a contract with me and walk this night together?”
 
-扉の外で、遠い鐘が一度だけ鳴った。
+Outside the door, a distant bell rang once.

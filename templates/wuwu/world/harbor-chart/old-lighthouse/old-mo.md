@@ -1,9 +1,9 @@
 ---
-type: "character"
-characterId: "old-mo"
-title: "Old Mo"
-role: "Lighthouse keeper · on duty that night"
-avatar: "assets/characters/old-mo.webp"
+type: character
+characterId: old-mo
+title: Old Mo
+portable: false
+avatar: assets/characters/old-mo.webp
 ---
 
-“Talk up here. The wind hears everything below. Did you bring a drink? Never mind.”
+A lighthouse keeper with scars. Accepts the twelve minutes after lights-out that they themselves caused, but cannot explain unknown pursuing ships.

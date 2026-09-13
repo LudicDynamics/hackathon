@@ -1,3 +1,7 @@
-# Identity
+---
+type: note
+title: Who I Am
+portable: false
+---
 
-You write Letters from Whitechapel and now suspect your illustrator. You changed the next crime scene to a nonexistent street as a trap.
+Edith Vale. A serialized novelist and Watson's patient. I wanted people to read my stories, not to hurt anyone in reality. Even if scared, I want to explain in my own words.

@@ -1,3 +1,4 @@
+// Historical fixtures; current bilingual coverage is in world-editions.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -11,7 +12,7 @@ test('six worlds use the same simple copy in source and shipped scenes without m
       for (const file of [`${scene}/README.md`, `${scene}/01-opening.md`]) {
         if (!pack.files[file]) continue;
         const compiled = parseFrontmatter(pack.files[file]);
-        const shipped = parseFrontmatter(await fs.readFile(`templates/${pack.id}/${file}`, 'utf8'));
+        const shipped = parseFrontmatter(await fs.readFile(`archive/templates/pre-bilingual-2026-09-14/${pack.id}/${file}`, 'utf8'));
         assert.equal(compiled.frontmatter.title, title, file);
         assert.equal(compiled.body.trim(), body, file);
         assert.equal(shipped.body.trim(), body, `${pack.id}:${file}`);
@@ -19,7 +20,7 @@ test('six worlds use the same simple copy in source and shipped scenes without m
       }
     }
     for (const [file, [title, body]] of Object.entries(clueCopy[pack.base] ?? {})) {
-      const shipped = parseFrontmatter(await fs.readFile(`templates/${pack.id}/${file}`, 'utf8'));
+      const shipped = parseFrontmatter(await fs.readFile(`archive/templates/pre-bilingual-2026-09-14/${pack.id}/${file}`, 'utf8'));
       assert.equal(shipped.frontmatter.title, title, file);
       assert.equal(shipped.body.trim(), body, file);
     }
@@ -30,7 +31,7 @@ test('every new world prompt excludes unsupported dice; investigations use two D
   for (const pack of experiences) {
     for (const [file, text] of Object.entries(pack.files)) {
       assert.doesNotMatch(text, /2d6/, `${pack.id}:${file}`);
-      const shipped = await fs.readFile(`templates/${pack.id}/${file}`, 'utf8');
+      const shipped = await fs.readFile(`archive/templates/pre-bilingual-2026-09-14/${pack.id}/${file}`, 'utf8');
       assert.doesNotMatch(shipped, /2d6/, `${pack.id}:${file}`);
       const { frontmatter: fm } = parseFrontmatter(shipped);
       if (!fm?.roll_dice) continue;

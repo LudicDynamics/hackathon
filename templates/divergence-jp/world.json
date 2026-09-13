@@ -1,0 +1,50 @@
+{
+  "id": "divergence-jp",
+  "audio": {
+    "theme": "canvas-divergence"
+  },
+  "name": "分岐線 · 日本語",
+  "version": "1.2.0",
+  "schema": 1,
+  "description": "直った蛙と、帰らなかった少女。同じ店の三つの時間を歩き、迎えに来るはずだった朝を変える。",
+  "author": "Worldlines Canvas / AIRP",
+  "genre": "物語体験",
+  "tags": [
+    "短い物語",
+    "生成する世界"
+  ],
+  "material": "parchment",
+  "cover": "assets/scenes/intro.webp",
+  "extensions": [
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
+  ],
+  "characters": [
+    {
+      "id": "young-ryo",
+      "home": "world/time-map/1994/tokiwa-electronics",
+      "role": "companion",
+      "avatar": "assets/motion/seedance/characters/ryo-transparent.webp",
+      "description": "リョウ、七歳の少女。あなたは彼女が知っている修理見習い。明朝十時に蛙を取りに来る予定。川向こうの家から東橋を渡る。大人になったら修理の仕事がしたい。未来の事故は知らない。",
+      "avatarVideo": "assets/motion/seedance/characters/ryo-transparent.webm",
+      "name": "幼いリョウ"
+    }
+  ],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "player": {
+    "id": "player",
+    "name": "常盤電器に残されたあなた",
+    "avatar": "assets/characters/returner.webp"
+  },
+  "locale": "ja",
+  "entry": "map"
+}

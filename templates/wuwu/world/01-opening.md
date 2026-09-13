@@ -1,24 +1,25 @@
 ---
-type: "chalk"
-title: "The First Bell"
-font: "hand"
-big: true
+type: chalk
+title: Harbor Office · Begin Investigation
 choice:
-  - "Pocket the investigator badge"
-  - "Ask Vera about the rudder pin"
-  - "Open the harbor chart"
+  options:
+    - id: action-1
+      label: Receive the Commission Letter and Badge
+    - id: action-2
+      label: Read the Commission Conditions
+intent: If accepted, move the physical copies of world/commission-letter.md and world/investigator-badge.md by the same name to player/. Move only missing ones if any already held. Confirm actual possession and guide to the harbor map.
+choice_actions:
+  action-1:
+    kind: take
+    paths:
+      - world/commission-letter.md
+      - world/investigator-badge.md
+  action-2:
+    kind: read
+    paths:
+      - world/commission-letter.md
 ---
 
-You slip the investigator badge into your pocket. Bronze kisses the guild license once, then the two lie quiet together.
+You are an investigator who has come to the harbor. An unmanned ship, a person's disappearance, and the lighthouse light going out that night. You have been asked to investigate if these three are connected.
 
-The office seems to accept the gesture. Somewhere beyond the wall, the harbor bell gives a low answering note, as if Fogwharf has noticed who now carries its seal.
-
-The First Bell
-
-You tuck the investigator badge beside the guild license. Bronze and paper settle together in your bag, and the office seems to approve of the arrangement.
-
-Outside, the harbor bell gives one low note through the fog.
-
-You are the newly posted investigator of Fogwharf. On your first day, the bell rings three times—three people, none willing to tell the whole truth. The third visitor leaves half of a speaking bell.
-
-“Shake it when you find something. I will hear you from the workshop. — Vera”
+First, choose "Receive the Commission Letter and Badge" to proceed to the harbor map. The badge is a permit to investigate the harbor.

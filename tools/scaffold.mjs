@@ -12,7 +12,7 @@ const TEMPLATES_DIR = path.join(REPO_ROOT, 'templates');
 function parseArgs() {
   const args = process.argv.slice(2);
   const options = {
-    template: 'holmes-world',
+    template: 'whitechapel',
     out: '',
     name: '',
     author: 'Player',

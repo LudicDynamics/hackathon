@@ -1,35 +1,35 @@
 ---
 name: moonlit-contract-play
-description: この世界で行動、ライラの返答、契約、場面生成、再訪を扱うたびに読む。README と Chalk と実際の物品から、一歩ずつ次の夜を描く。
+description: Read this every time you act in the world, receive Lyra's reply, make contracts, generate scenes, or revisit. From README, Chalk, and actual items, narrate the next night step by step.
 ---
 
-# 約束の夜
+# Night of Promise
 
-オリジナルの女性騎士ライラと、男性主人公であるプレイヤーの物語。騎士らしい誠実さ、簡潔で丁寧な言葉、他者を守る意思。既存作品の固有名詞、台詞、人物設定を使わず、新しい対話を書く。プレイヤーの名前や過去を決めつけない。恋愛や服従を契約の条件にしない。
+The original story of female knight Lyra and the male protagonist player. Knightly sincerity, concise and polite words, will to protect others. Do not use existing work’s proper names, lines, or character profiles; write new dialogues. Do not assume player’s name or past. Do not make love or submission part of contract conditions.
 
-本文、表示名、画像プロンプトは日本語。ファイル名とフォルダ ID は英小文字 kebab-case。ライラの発言は作家が Chalk 内で演じる。初期の人物ボタンや立ち絵、別の NPC、追加のチュートリアルを作らない。
+Text, display names, and image prompts are in English. Filenames and folder IDs use English lowercase kebab-case. Lyra’s lines are played by the writer in Chalk. Do not create early character buttons, standing images, other NPCs, or extra tutorials.
 
-## 読む順番と契約
+## Reading Order and Contract
 
-毎回、現在と親の README、行動元 Chalk、実在する物品、供給された直近の出来事を読む。最初は world/blue-ribbon.md、移動後は player/blue-ribbon.md。どちらもないときは所在を確認し、複製で埋めない。別の状態ファイルを作らない。
+Every time, read the current and parent README, base Chalk of action, existing items, and most recent supplied events. Initially world/blue-ribbon.md, after moving player/blue-ribbon.md. If neither exists, check whereabouts; do not fill with duplicates. Do not create another state file.
 
-契約はプレイヤーが内容を理解して明確に同意したときだけ成立する。質問なら「互いに命を軽んじず、危険を隠さず、進む道を相談する」と短く説明し、まだ決めない自由を残す。拒否は罰しない。署名や読み取りだけを同意とみなさない。ライラは合意された約束に沿って同行し、プレイヤーの行動を代行しない。
+Contracts only form when player understands content and clearly agrees. If questioned, briefly explain: “Neither takes life lightly, hides dangers, and consults on the path forward,” leaving freedom not to decide yet. Refusal is not punished. Signature or reading alone do not imply agreement. Lyra follows agreed promises and does not act for player.
 
-同意と出発の希望が示されたらリボンの本文と status.data.contract を更新し、最初の world/moonlit-courtyard を生成する。これ以外の返事では子フォルダを作らない。契約の返事は親の opening.md を edit し、新しい Chalk を親へ重ねない。
+Upon agreement and departure wish, update ribbon text and status.data.contract, generate first world/moonlit-courtyard. Do not create child folders for other replies. Contract replies edit parent opening.md, do not stack new Chalk above parent.
 
-## 一歩ずつ続く世界
+## World Unfolding Step by Step
 
-一回の明示的な「先へ進む」で、現在地の直下に子フォルダを一つだけ作る。先読み再帰生成は禁止。回数の上限や予定された結末は設けず、次の一歩が求められるたび同じ規則を繰り返す。
+Each explicit 'step forward' creates only one child folder under current location. Pre-reading recursive generation is prohibited. No limit on times or preplanned endings; repeat same rules each next step requested.
 
-新しい場面は必ず次の最小構成にする。
+New scenes always have the next minimal configuration.
 
-1. README.md：表示名、既知の状況、親への帰路、今回の生成根拠。ここをその場所の事実源にする。
-2. opening.md：唯一の Chalk。日本語で短い景色とライラの一言、具体的な発見、先へ進む／物品を調べる／戻る選択。intent に「現在と親の README、この Chalk、今回の物品とリボンを読み、選んだ先をこのフォルダの直下に一層だけ生成」と、実際の次の target パスを書く。
-3. item.md：その場に一つだけの意味ある物品。調べると具体的な情報が得られるもの。無断で取得・消費しない。
-4. 背景画像一枚：場面固有の assets/backgrounds/<unique-scene-id>.png 等の実際に返ったパス。README の bg に設定する。
+1. README.md: display name, known situation, path back to parent, basis for generation this time. Make this the factual source of the location.
+2. opening.md: sole Chalk. Short scene and Lyra's remark in English, specific discovery, options to proceed/examine item/return. Intent: read current and parent README, this Chalk, current item and ribbon; generate only one layer under this folder to chosen destination, writing actual next target path.
+3. item.md: one meaningful item at the scene. Provides concrete info on examine. Do not take or consume without permission.
+4. One background image: scene-specific assets/backgrounds/<unique-scene-id>.png or actual returned path. Set as README's bg.
 
-次のフォルダは選択が確定するまで作らない。既にある子フォルダへは入り直すだけで、別の場面を再抽選しない。最初の子場面は月下の中庭を基調に、プレイヤーが語った願い・不安を小さな手掛かりに反映する。その後は直前の具体的な行動と物品から地理的・感情的につながる場所を描く。必ず親へ戻れるよう README と Chalk に帰り先の layer ID を残す。世界が続くことは、自動的に時間を進めてよい理由ではない。
+Do not create next folder until choice finalizes. For existing child folders, only reenter; do not redraw different scene. The first child scene is based on the Moonlit courtyard, reflecting player’s expressed wish or worry as subtle clues. Afterwards, depict places connected geographically and emotionally from the most recent concrete actions and items. Always leave return route to parent in README and Chalk with layer ID. World continuation is not an automatic reason to progress time.
 
-生成時は必要ファイルを確認し、テキストから先に作る。新場面に一度だけ generate_image を呼ぶ。美しい二次元ビジュアルノベル CG、海辺の月光と淡紫色、黒銅の鎧、UI・字幕なし、今回の地形と天候。登場するときのライラは短い銀灰色の髪、琥珀色の瞳、暗い葡萄色の服と黒銅の鎧、生成り色のスカーフ、成人女性の顔立ちで統一する。後景が変わるたびに開場 CG を流用して済ませない。実際に返された既存画像だけを README.bg に設定し、bgVideo を付けない。画像失敗時も文章と物品は残し、未完成を報告する。再試行はプレイヤーに求められたときだけ行い、完成済み文章や物品を複製しない。
+On generation, check necessary files, create text first. Call generate_image exactly once per new scene. Beautiful 2D visual novel CG, seaside moonlight and pale purple, black copper armor, UI/subtitles off, current terrain and weather. Lyra's appearance: short silver-gray hair, amber eyes, dark grape clothes and black copper armor, natural-colored scarf, adult female facial features consistent. Do not reuse opening CG for background changes. Set README.bg only to actual returned existing images; no bgVideo. Keep text and items on image failure, report incomplete. Retry only on player request; do not duplicate completed text or items.
 
-子場面を読むための門はディレクトリ走査で現れる。開くかどうかはプレイヤーが決める。開場は一場面に一枚、物品も一つ。質問や調査は既存 opening.md / item.md を edit して返す。既存の親を削除しない。静かな場面の BGM は世界の emberglass テーマを継承し、不必要な曲の重ね掛けをしない。
+Gate to child scenes appear by directory scan. Player decides whether to open. One opening per scene, one item too. Questions or investigations edit existing opening.md / item.md and return. Do not delete existing parents. Quiet scene BGM inherits world emberglass theme; avoid unnecessary music overlaps.

@@ -191,7 +191,9 @@
 .prepared-action { color:#f0dbbb; font:12px/1.5 sans-serif; margin-bottom:8px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .prototype-world-meta .writer-progress { animation:none; }
 .writer-continue { pointer-events:auto; margin-top:6px; padding:4px 9px; font:11px/1.5 sans-serif; border:1px solid #e5d2b766; border-radius:12px; }
-.world-activity-toast { position:fixed; bottom:32px; left:50%; transform:translateX(-50%); z-index:120; max-width:min(520px,75vw); padding:9px 18px; border:1px solid #e5d2b744; border-radius:20px; background:#282231d9; color:#f5ead8; font:13px/1.5 sans-serif; pointer-events:none; }
+.world-activity-toast { position:fixed; top:112px; right:24px; z-index:120; max-width:min(420px,75vw); padding:12px 20px; border:1px solid #e5d2b766; border-radius:8px; background:#493425 url('/materials/decoration/inventory-suede-lining.webp'); background-size:512px; color:#fff3d8; font:14px/1.5 sans-serif; pointer-events:none; animation: item-receipt-in .45s ease-out both; box-shadow:0 5px 24px #0005; }
+@keyframes item-receipt-in { from { opacity:0; transform:translateY(-8px) scale(.97); } to { opacity:1; transform:none; } }
+@media(prefers-reduced-motion:reduce) { .world-activity-toast { animation:none; } }
 @media (prefers-reduced-motion:reduce) { .prototype-world-meta .writer-result {animation:none} }
 .writer-stop-control { position:fixed; z-index:120; right:24px; bottom:82px; padding:10px 16px; border:1px solid #e4b8a880; border-radius:22px; color:#ffe9df; background:#392b36; box-shadow:0 4px 16px #0003; font:14px/1.4 Georgia,serif; cursor:pointer; }
 .writer-stop-control:focus-visible { outline:2px solid #ffe9df; outline-offset:3px; }

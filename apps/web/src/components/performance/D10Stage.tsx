@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { d10Display } from '../../lib/d10-display.js';
+import { diceStageDisplay } from '../../lib/d10-display.js';
 import { useStill } from '../../lib/motion.js';
 import './d10-stage.css';
 
@@ -22,7 +22,7 @@ export function D10Stage({ dice, rolls, settled, onLanded, integrated = false }:
   landed.current = onLanded;
   const still = useStill();
   const [fallback, setFallback] = useState(false);
-  const display = d10Display(dice, rolls);
+  const display = diceStageDisplay(dice, rolls);
   const key = JSON.stringify([dice, rolls]);
 
   useEffect(() => {
@@ -45,7 +45,7 @@ export function D10Stage({ dice, rolls, settled, onLanded, integrated = false }:
     }
     void (async () => {
       try {
-        const [T, { GLTFLoader }, { RoomEnvironment }, { d10Landing }, { simulateD10Throw }] = await Promise.all([
+        const [T, { GLTFLoader }, { RoomEnvironment }, { d10Landing }, { simulateD10Throw, d6Landing, D6_VALUES }] = await Promise.all([
           import('three'), import('three/addons/loaders/GLTFLoader.js'),
           import('three/addons/environments/RoomEnvironment.js'), import('../../lib/d10-pose.js'), import('../../lib/d10-physics.js'),
         ]);
@@ -89,17 +89,29 @@ export function D10Stage({ dice, rolls, settled, onLanded, integrated = false }:
           geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose());
           environment.dispose(); renderer.dispose(); renderer.domElement.remove();
         };
-        const gltf = await new GLTFLoader().loadAsync(modelUrl);
+        const gltf = display.faces === 6 ? { scene: new T.Group() } : await new GLTFLoader().loadAsync(modelUrl);
+        if (display.faces === 6) {
+          const faceMaterials = D6_VALUES.map(value => {
+            const canvas = document.createElement('canvas'); canvas.width = canvas.height = 256;
+            const ctx = canvas.getContext('2d')!;
+            ctx.fillStyle = '#e7d8b8'; ctx.fillRect(0, 0, 256, 256);
+            ctx.strokeStyle = '#aa9068'; ctx.lineWidth = 5; ctx.strokeRect(10, 10, 236, 236);
+            ctx.fillStyle = '#352c40'; ctx.font = 'bold 150px Georgia'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(value), 128, 138);
+            const texture = new T.CanvasTexture(canvas); texture.colorSpace = T.SRGBColorSpace;
+            return new T.MeshStandardMaterial({ map: texture, roughness: .65 });
+          });
+          gltf.scene.add(new T.Mesh(new T.BoxGeometry(1.6, 1.6, 1.6), faceMaterials));
+        }
         collect(gltf.scene);
         if (cancelled || finished) { teardown(); return; }
         clearTimeout(watchdog);
         const size = new T.Box3().setFromObject(gltf.scene).getSize(new T.Vector3());
-        const scale = 2.7 / Math.max(size.x, size.y, size.z);
+        const scale = display.faces === 6 ? 1 : 2.7 / Math.max(size.x, size.y, size.z);
         const objects = display.digits.map((digit, i) => {
           const pivot = new T.Group();
           const mesh = gltf.scene.clone(true); mesh.scale.multiplyScalar(scale); pivot.add(mesh);
           scene.add(pivot);
-          return { pivot, target: d10Landing(digit), x: display.percentile ? (i === 0 ? -1.65 : 1.65) : 0 };
+          return { pivot, target: display.faces === 6 ? d6Landing(digit) : d10Landing(digit), x: display.digits.length === 2 ? (i === 0 ? -1.65 : 1.65) : 0 };
         });
         // Floor receives shadows; the bounded tray is also the physical boundary.
         renderer.shadowMap.enabled = true;
@@ -157,7 +169,7 @@ export function D10Stage({ dice, rolls, settled, onLanded, integrated = false }:
         let trajectory: Awaited<ReturnType<typeof simulateD10Throw>> | undefined;
         if (rolls && !still) {
           for (let attempt = 0; attempt < 3; attempt++) {
-            try { trajectory = await simulateD10Throw(display.digits, undefined, () => cancelled); break; }
+            try { trajectory = await simulateD10Throw(display.digits, undefined, () => cancelled, display.faces); break; }
             catch (error) { if (cancelled || attempt === 2) throw error; }
           }
         }

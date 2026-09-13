@@ -24,10 +24,25 @@ export function readTopFace(q: Quaternion) {
 }
 export interface ThrowPose { position: [number, number, number]; rotation: [number, number, number, number] }
 
+// BoxGeometry material order: +X, -X, +Y, -Y, +Z, -Z. Opposites sum to seven.
+export const D6_VALUES = [1, 6, 2, 5, 3, 4];
+export function d6Normal(value: number) {
+  const normals = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+  const normal = normals[D6_VALUES.indexOf(value)];
+  if (!normal) throw new Error('D6 value must be 1–6');
+  return new Vector3(...normal as [number, number, number]);
+}
+export const d6Landing = (value: number) => new Quaternion().setFromUnitVectors(d6Normal(value), new Vector3(0, 0, 1));
+export function readD6Top(q: Quaternion) {
+  return D6_VALUES.find(value => d6Normal(value).applyQuaternion(q).z > .98) ?? null;
+}
+
 /** Simulate once, read the landing, then use the hull's rotational symmetry to
  * assign the authoritative face at the START of the recorded physical throw.
  * There is no terminal snap, no relabeling and no second random score. */
-export async function simulateD10Throw(digits: number[], seed = Math.floor(Math.random() * 0xffffffff), cancelled = () => false) {
+export async function simulateD10Throw(digits: number[], seed = Math.floor(Math.random() * 0xffffffff), cancelled = () => false, faces: 6 | 10 = 10) {
+  const readTop = faces === 6 ? readD6Top : readTopFace;
+  const landing = faces === 6 ? d6Landing : d10Landing;
   let state = seed >>> 0;
   const random = () => ((state = (Math.imul(state, 1664525) + 1013904223) >>> 0) / 4294967296);
   const world = new World({ gravity: new Vec3(0, 0, -24), allowSleep: true });
@@ -45,7 +60,7 @@ export async function simulateD10Throw(digits: number[], seed = Math.floor(Math.
   }
   const bodies = digits.map((_, i) => {
     const direction = i === 0 ? 1 : -1;
-    const body = new Body({ mass: 1, shape: d10Hull(), position: new Vec3(direction * -6.2, i === 0 ? -.65 : .65, 3.5 + i * .2), linearDamping: .08, angularDamping: .1, allowSleep: true, sleepSpeedLimit: .18, sleepTimeLimit: .35 });
+    const body = new Body({ mass: 1, shape: faces === 6 ? new Box(new Vec3(.8, .8, .8)) : d10Hull(), position: new Vec3(direction * -6.2, i === 0 ? -.65 : .65, 3.5 + i * .2), linearDamping: .08, angularDamping: .1, allowSleep: true, sleepSpeedLimit: .18, sleepTimeLimit: .35 });
     body.quaternion.setFromEuler(random() * 6, random() * 6, random() * 6);
     // A hand throw carries momentum across the tray, with guaranteed tumble
     // around a horizontal axis; random near-zero spin looks like a dropped prop.
@@ -65,9 +80,9 @@ export async function simulateD10Throw(digits: number[], seed = Math.floor(Math.
   if (bodies.some(b => Math.abs(b.position.x) > 4.5 || Math.abs(b.position.y) > 2.2)) throw new Error('Dice did not land inside the tray');
   const corrections = bodies.map((body, i) => {
     const q = new Quaternion(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w);
-    const actual = readTopFace(q);
+    const actual = readTop(q);
     if (actual === null) throw new Error('Dice landed on an edge');
-    return d10Landing(actual).invert().multiply(d10Landing(digits[i]));
+    return landing(actual).invert().multiply(landing(digits[i]));
   });
   for (const frame of frames) frame.forEach((pose, i) => {
     pose.rotation = new Quaternion(...pose.rotation).multiply(corrections[i]).toArray() as ThrowPose['rotation'];
@@ -81,6 +96,6 @@ export async function simulateD10Throw(digits: number[], seed = Math.floor(Math.
     }
   }
   const final = frames.at(-1)!;
-  if (!final.every((p, i) => readTopFace(new Quaternion(...p.rotation)) === digits[i])) throw new Error('Physical landing does not match the verdict');
+  if (!final.every((p, i) => readTop(new Quaternion(...p.rotation)) === digits[i])) throw new Error('Physical landing does not match the verdict');
   return frames;
 }

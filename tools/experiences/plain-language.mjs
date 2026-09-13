@@ -103,5 +103,6 @@ export function plainLanguagePack(pack) {
   if (!files[skill].includes(heading)) files[skill] += pack.locale === 'ja'
     ? `\n${heading}\nプレイヤー向けの文章は短く、普段の言葉で書く。場面では「何が起きたか」「今できること」を伝える。手掛かりは「分かった事実 → そこから考えられること → 次に確かめる場所」の順。事実と推測は分けるが、毎文に長い注意書きを付けない。難しい語は言い換える。雰囲気の比喩で目的や操作を隠さない。新しい骰子は1d10・2d10・1d100のみ。今回の調査カードは2d10、成功>=11、2–4/5–10/11–17/18–20の四段階。明示済みの代価を増やさず、失敗しても次の行動を示す。\n`
     : `\n${heading}\nUse short, familiar language. Say what happened and what the player can do next. Explain clues as fact, possible meaning, then where to check. Keep atmosphere without hiding the goal. New dice must use 1d10, 2d10 or 1d100, with conditions and consequences visible before the player decides to roll.\n`;
+  if (pack.base === 'whitechapel') files[skill] = files[skill].replace('今回の調査カードは2d10、成功>=11、2–4/5–10/11–17/18–20の四段階。', '今回の調査カードは1d100、成功<=60。1–12大成功、13–60成功、61–95失敗と次の手掛かり、96–100重大な失敗。閾値は振る前に固定し、既存結果を読み替えない。');
   return { ...pack, files };
 }

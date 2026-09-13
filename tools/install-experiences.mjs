@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { experiences } from './experiences/index.mjs';
 import { md } from './experiences/common.mjs';
 import { nookProfilePaths } from './experiences/character-nooks.mjs';
+import { templateArchive } from './world-editions.mjs';
 import { parseFrontmatter, WorldManifestSchema } from '../packages/shared/dist/index.js';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -20,12 +21,14 @@ async function write(root, file, body) {
   await fs.writeFile(full, body, { flag: 'wx' });
 }
 
-export async function installExperience(repo, pack, { outputRoot = path.join(repo, 'templates'), revision = '' } = {}) {
+export async function installExperience(repo, pack, { outputRoot = path.join(repo, '.artifacts/experience-builds'), revision = '' } = {}) {
   if (revision && !/^[a-z0-9-]+$/.test(revision)) throw new Error('Revision must be lowercase ASCII letters, digits or hyphens.');
   const id = pack.id + (revision ? `-${revision}` : '');
   const destination = path.join(outputRoot, id);
   if (await exists(destination)) throw new Error(`Refusing to overwrite ${destination}; choose --revision=<new-name>.`);
-  const source = path.join(repo, 'templates', pack.base);
+  const archived = path.join(repo, templateArchive, pack.base);
+  const source = await exists(archived) ? archived : path.join(repo, 'templates', pack.base);
+  if (await exists(path.join(repo, templateArchive)) && path.resolve(outputRoot) === path.join(repo, 'templates')) throw new Error('Legacy compiler output belongs in .artifacts, not the bilingual template shelf. Edit the canonical editions directly.');
   const sourceManifest = JSON.parse(await fs.readFile(path.join(source, 'world.json'), 'utf8'));
   const characterPreset = JSON.parse(await fs.readFile(path.join(repo, 'presets/character.json'), 'utf8'));
   // Reserve an exclusive directory. world.json is written last: partial builds
@@ -107,6 +110,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const packs = selected ? experiences.filter(p => p.base === selected) : experiences;
   if (!packs.length) throw new Error('Unknown world.');
   // Preflight every target before installing any pack.
-  for (const p of packs) if (await exists(path.join(repoRoot, 'templates', p.id + (revision ? `-${revision}` : '')))) throw new Error(`Template ${p.id} already exists; use --revision=<new-name>.`);
+  for (const p of packs) if (await exists(path.join(repoRoot, '.artifacts/experience-builds', p.id + (revision ? `-${revision}` : '')))) throw new Error(`Build ${p.id} already exists; use --revision=<new-name>.`);
   for (const p of packs) console.log(JSON.stringify(await installExperience(repoRoot, p, { revision })));
 }
