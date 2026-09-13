@@ -2,8 +2,8 @@
 
 > 定位：**生产车间，不是发布位**。pipeline（AI 生图等）的原始产出、筛选、差分都在这里做；
 > 定稿后经平台上传端点落入 IP 包（`.pi/ips/<ip>/assets/`），那才是 runtime 读取的发布位。
-> **入库口径（2026-09-13 更正）**：整树 `.gitignore` 排除，**只白名单 `audio/**` 与 `skills/**`**
-> ——这两支是我们自己产出、runtime 直接读的资产（见根 `AGENTS.md` §7.8）。
+> **入库口径（2026-09-13 更正）**：整树 `.gitignore` 排除，**白名单 `audio/**`、`skills/**` 与已批准的 `models/arcane-d10/` 交付文件**
+> ——音频是 runtime 直接读取的资产；模型作为独立交付物入库，尚未接入游戏组件（见根 `AGENTS.md` §7.8）。
 > `worlds/`、`_inbox/` 仍不入库（AI 生图原始产出，约 587MB，仅作生产参考）。
 
 ## 结构约定
@@ -18,6 +18,7 @@ assets/
 │  ├─ character-asset-batch/    角色 6 情绪差分 + 透明微动立绘（tools/gen-{emotions,motion}.mjs）
 │  ├─ motion-portrait/          绿幕 → 透明 webm / 成片 → 循环 webm（tools/motion-clip.mjs）
 │  └─ flow-media/               Flow 生图 / 生视频（tools/flow-gen.mjs，含认证链与降级陷阱）
+├─ models/arcane-d10/            夜辉 D10 定稿：Blender / GLB / 纹理 / 预览 / 重建脚本（已入库）
 ├─ _inbox/                      pipeline 原始产出（未筛选，随便堆；不入库）
 └─ worlds/<ip>/                 与 .pi/ips/<ip> 同名对应（不入库）
    ├─ cover/                    封面候选；定稿命名 cover.png（9:16 移动优先）
