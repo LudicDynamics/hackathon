@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 雪村澄
+voice: warm-cheerful
 avatar: "assets/motion/seedance/characters/sumi-transparent.webp"
 avatarVideo: "assets/motion/seedance/characters/sumi-transparent.webm"
 ---

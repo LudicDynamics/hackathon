@@ -1,6 +1,7 @@
 ---
 type: readme
 name: セラフィナ
+voice: playful-teasing
 avatar: assets/motion/seedance/characters/seraphina-transparent.webp
 avatarVideo: assets/motion/seedance/characters/seraphina-transparent.webm
 ---

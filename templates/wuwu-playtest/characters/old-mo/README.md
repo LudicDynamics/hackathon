@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 老モー
+voice: rustic-storyteller
 avatar: assets/characters/old-mo.webp
 ---
 

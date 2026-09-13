@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 銀鳶
+voice: deep-magnetic
 avatar: assets/motion/seedance/characters/silverkite-transparent.webp
 avatarVideo: assets/motion/seedance/characters/silverkite-transparent.webm
 ---

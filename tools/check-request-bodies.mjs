@@ -123,7 +123,12 @@ export function bodyKeysFor(text, route) {
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
     if (!lines[i].includes(route)) continue;
-    // Shape 1: inline fetch with a JSON.stringify body.
+    // A comment that merely MENTIONS the route (e.g. a doc note `fetch('/api/tts'`
+    // in a JSDoc block) must not be taken for the call: it has no balanced body,
+    // so the scan would stop there and report a false "call site moved". Skip
+    // comment-only lines and take the first real call.
+    const trimmed = lines[i].trimStart();
+    if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) continue;
     if (lines[i].includes('fetch(')) {
       // Gather the fetch call's text until parens balance (bounded window).
       let depth = 0;

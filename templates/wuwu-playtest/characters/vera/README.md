@@ -1,6 +1,7 @@
 ---
 type: readme
 name: ヴェラ
+voice: sassy-spunky
 avatar: assets/motion/seedance/characters/viola-transparent.webp
 avatarVideo: assets/motion/seedance/characters/viola-transparent.webm
 ---

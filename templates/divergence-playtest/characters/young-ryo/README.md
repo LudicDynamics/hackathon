@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 幼いリョウ
+voice: warm-energetic
 avatar: assets/motion/seedance/characters/ryo-transparent.webp
 avatarVideo: assets/motion/seedance/characters/ryo-transparent.webm
 ---
