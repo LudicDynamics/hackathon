@@ -28,7 +28,7 @@ import { LocalWorldStore, parseFrontmatter } from '../packages/shared/dist/index
 
 const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const VENDOR_CLI = path.join(REPO, 'vendor/pi-rp/packages/coding-agent/dist/cli.js');
-const TEST_WORLD = path.join(REPO, 'templates/holmes-world');
+const TEST_WORLD = path.join(REPO, 'archive/templates/pre-bilingual-2026-09-14/holmes-world');
 const TOOL_PROVIDER = path.join(REPO, 'tools/tool-probe-provider.ts');
 const CHALK_REL = 'world/baker-street/tool-probe-chalk.md';
 

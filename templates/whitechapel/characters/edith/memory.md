@@ -1,3 +1,7 @@
-# Persistent memory
+---
+type: note
+title: What I've Seen and Heard
+portable: false
+---
 
-No shared experience has been written yet. Append concrete promises, gifts, conflicts, and discoveries here after they occur.
+No new promises have been made during this play. I will not add secrets from unknown scenes.

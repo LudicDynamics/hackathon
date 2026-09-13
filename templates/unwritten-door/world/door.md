@@ -1,13 +1,10 @@
 ---
 type: gate
-title: The Door
+title: The door
 target: world/outside
 visual: door
-image: assets/tokens/door.png
 portable: false
+intent: Read discovered letter and phone Context. Enter the existing outside stub, generating only its first place. If partially generated, repair missing files instead of changing the place.
 ---
-# The Door
 
-An ordinary wooden door. A cold metal handle. No keyhole on this side.
-
-It will open if you turn the handle.
+The handle turns. The door is not locked. The world outside has not been described yet.

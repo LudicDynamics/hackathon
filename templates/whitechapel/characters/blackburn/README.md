@@ -1,12 +1,8 @@
 ---
-
-type: "readme"
-name: "Mr. Blackburn"
-avatar: "assets/characters/blackburn.webp"
-avatarVideo: "assets/motion/seedance/characters/blackburn-transparent.webm"
-voice: scholarly-narrator
+type: readme
+name: Editor Blackburn
+voice: refined-thoughtful
+avatar: assets/characters/blackburn.webp
 ---
 
-# Mr. Blackburn
-
-The editor who controls manuscript circulation and locks proofs in his desk.
+An editor who manages manuscripts and proof sheets. Concerned with the newspaper's credibility and precise with dates and times.

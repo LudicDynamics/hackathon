@@ -3,16 +3,15 @@
   "audio": {
     "theme": "canvas-divergence"
   },
-  "name": "Divergence Point",
-  "version": "1.0.0",
+  "name": "Divergence · English",
+  "version": "1.2.0",
   "schema": 1,
-  "description": "A time-line story where one electronics shop is explored through 1994, tonight, and a ruin thirty years from now.",
+  "description": "A fixed frog and a girl who never returned. Walk through three times at the same shop and change the morning she was supposed to come.",
   "author": "Worldlines Canvas / AIRP",
-  "genre": "time travel drama",
+  "genre": "Story Experience",
   "tags": [
-    "science fiction",
-    "time travel",
-    "causality"
+    "short story",
+    "generative world"
   ],
   "material": "parchment",
   "cover": "assets/scenes/intro.webp",
@@ -30,26 +29,22 @@
   ],
   "characters": [
     {
-      "id": "ryo-child",
-      "home": "world/tokiwa-electrics/1994-11-02",
+      "id": "young-ryo",
+      "home": "world/time-map/1994/tokiwa-electronics",
       "role": "companion",
       "avatar": "assets/motion/seedance/characters/ryo-transparent.webp",
-      "description": "The shopkeeper’s seven-year-old daughter, doing homework at the counter in 1994.",
-      "avatarVideo": "assets/motion/seedance/characters/ryo-transparent.webm"
-    },
-    {
-      "id": "shopkeeper",
-      "home": "world/tokiwa-electrics/tonight",
-      "role": "npc",
-      "avatar": "assets/characters/shopkeeper.webp",
-      "description": "The second-generation owner, polishing a radio nobody will collect."
+      "description": "Ryo, a seven-year-old girl. You are the repair apprentice she knows. She plans to pick up the frog at 10 tomorrow morning. She will cross the East Bridge from the house across the river. She wants to become a repair worker when she grows up. She doesn't know about future accidents.",
+      "avatarVideo": "assets/motion/seedance/characters/ryo-transparent.webm",
+      "name": "Young Ryo"
     }
   ],
   "createdAt": "2026-09-12T00:00:00Z",
   "updatedAt": "2026-09-12T00:00:00Z",
   "player": {
-    "id": "returner",
-    "name": "Returning Visitor",
+    "id": "player",
+    "name": "You, left behind at Tokiwa Electronics",
     "avatar": "assets/characters/returner.webp"
-  }
+  },
+  "locale": "en",
+  "entry": "map"
 }

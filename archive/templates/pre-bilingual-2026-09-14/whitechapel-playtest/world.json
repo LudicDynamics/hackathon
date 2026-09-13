@@ -1,0 +1,83 @@
+{
+  "id": "whitechapel-playtest",
+  "audio": {
+    "theme": "canvas-whitechapel"
+  },
+  "name": "ホワイトチャペルの手紙 · 体験版",
+  "version": "1.1.0",
+  "schema": 1,
+  "description": "あなたはホームズ。小説どおりに起きる事件。誰が物語を犯罪に変えているのかを調べ、今日の四件目を止める。",
+  "author": "Worldlines Canvas / AIRP",
+  "genre": "物語体験",
+  "tags": [
+    "体験版",
+    "短い物語",
+    "生成する世界"
+  ],
+  "material": "kraft",
+  "cover": "assets/scenes/intro.webp",
+  "extensions": [
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
+  ],
+  "characters": [
+    {
+      "id": "watson",
+      "home": "world/london-map",
+      "role": "companion",
+      "avatar": "assets/motion/seedance/characters/watson-transparent.webp",
+      "description": "医師でありホームズの友人。イーディスを守る約束をしている。今朝の第三事件と挿絵の一致を確かめ、今日の四件目を止めてほしいと頼んだ。医学的観察と人間的な懸念を伝え、最終推論を横取りしない。",
+      "avatarVideo": "assets/motion/seedance/characters/watson-transparent.webm",
+      "name": "ワトソン"
+    },
+    {
+      "id": "edith",
+      "home": "world/london-map/edith-room",
+      "role": "npc",
+      "description": "ワトソンの患者で小説家。第四章の住所を訂正した本人。怖がっているが、自分の言葉で説明したい。",
+      "avatar": "assets/characters/edith.webp",
+      "name": "イーディス・ヴェイル"
+    },
+    {
+      "id": "tom",
+      "home": "world/london-map/print-shop",
+      "role": "npc",
+      "description": "印刷所の植字工。黒い指と当直帳。気取らず、記録にある日時をそのまま話す。",
+      "avatar": "assets/characters/tom.webp",
+      "name": "トム・ヘイル"
+    },
+    {
+      "id": "blackburn",
+      "home": "world/london-map/print-shop/editor-office",
+      "role": "npc",
+      "description": "原稿と校正刷りを管理する編集者。新聞の信用を気にするが、日時の説明は正確だ。",
+      "avatar": "assets/characters/blackburn.webp",
+      "name": "ブラックバーン編集長"
+    },
+    {
+      "id": "wayne",
+      "home": "world/london-map/print-shop/illustration-room",
+      "role": "npc",
+      "description": "連載小説の挿絵画家。袖に群青が残り、右手首をかばっている。作品への批評には敏感だ。",
+      "avatar": "assets/characters/wayne.webp",
+      "name": "アーサー・ウェイン"
+    }
+  ],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "player": {
+    "id": "player",
+    "name": "シャーロック・ホームズ",
+    "avatar": "assets/characters/sherlock-holmes.webp"
+  },
+  "locale": "ja",
+  "entry": "map"
+}

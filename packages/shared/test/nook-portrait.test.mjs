@@ -17,7 +17,7 @@ import {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..', '..');
-const WORLD_ROOT = path.join(REPO_ROOT, 'templates/firstsnow');
+const WORLD_ROOT = path.join(REPO_ROOT, 'archive/templates/pre-bilingual-2026-09-14/firstsnow');
 const WEBM = path.join(WORLD_ROOT, 'assets/characters/nanami/nanami.webm');
 const POSTER = path.join(WORLD_ROOT, 'assets/characters/nanami/nanami-poster.png');
 

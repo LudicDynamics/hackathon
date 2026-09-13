@@ -1,0 +1,47 @@
+{
+  "sourceRepository": "worldlines-assets",
+  "assets": [
+    {
+      "source": "divergence-demo/backgrounds/intro.webm",
+      "target": "assets/motion/seedance/backgrounds/intro.webm",
+      "bytes": 825262,
+      "sha256": "d3686c0cf5ea323f8e42af8157d0009fdf0afb910b8a349e231b3f2bda82065a"
+    },
+    {
+      "source": "divergence-demo/backgrounds/map.webm",
+      "target": "assets/motion/seedance/backgrounds/map.webm",
+      "bytes": 1518769,
+      "sha256": "a0e0b0f445581fb7018db2f229da5f8ef4281b90cb3543bddf577944a05914c2"
+    },
+    {
+      "source": "divergence-demo/backgrounds/y1994.webm",
+      "target": "assets/motion/seedance/backgrounds/y1994.webm",
+      "bytes": 1093023,
+      "sha256": "bf406b54c25b7b1240e548a01736607e530d97dd9df82aa47d64f18d796e8e85"
+    },
+    {
+      "source": "divergence-demo/backgrounds/tonight.webm",
+      "target": "assets/motion/seedance/backgrounds/tonight.webm",
+      "bytes": 1149813,
+      "sha256": "da435b95a644d298339d397982e1a3702ad3075f3f30eaaf5f96d71674178773"
+    },
+    {
+      "source": "divergence-demo/backgrounds/ruins.webm",
+      "target": "assets/motion/seedance/backgrounds/ruins.webm",
+      "bytes": 2220322,
+      "sha256": "c52230f3b8dfde8789d43cd776b5417f833f1d1e4c6a9215285482ba6c5ac865"
+    },
+    {
+      "source": "divergence-demo/backgrounds/converge.webm",
+      "target": "assets/motion/seedance/backgrounds/converge.webm",
+      "bytes": 2017318,
+      "sha256": "946a620d5940211416ddb31b291b3621e261ed20de593dac9d971b77a56541a7"
+    },
+    {
+      "source": "divergence-demo/characters/ryo/base-transparent.webm",
+      "target": "assets/motion/seedance/characters/ryo-transparent.webm",
+      "bytes": 1428487,
+      "sha256": "67db1484342d4038258dbd3631387a0c5bac87adfaacba64439242ccff15ef73"
+    }
+  ]
+}

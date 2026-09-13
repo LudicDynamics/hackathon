@@ -66,12 +66,27 @@ function readTtsConfig(): TtsConfig {
 }
 
 /**
- * docs/tts/00 §3.2: sha256(`${model}|${voice}|${language_type}|${text}`).slice(0,20).
- * The four fields are joined verbatim (including the RESOLVED language_type, not
- * the request's short code) — same voice/text/model MUST hit, different MUST miss.
+ * Cache keys include the effective delivery instructions for instruct models,
+ * so changing voice direction cannot reuse ordinary or stale audio.
  */
-export function hashOf(model: string, voice: string, languageType: string, text: string): string {
-  return createHash('sha256').update(`${model}|${voice}|${languageType}|${text}`).digest('hex').slice(0, 20);
+export function hashOf(model: string, voice: string, languageType: string, text: string, instructions = ''): string {
+  return createHash('sha256')
+    .update(`${model}|${voice}|${languageType}|${text}${instructions ? `|delivery:${instructions}` : ''}`)
+    .digest('hex')
+    .slice(0, 20);
+}
+
+/** Ordinary Flash does not support instruction control; never send ignored options. */
+export function deliveryInstructions(model: string, voice: string): string {
+  if (!/^qwen3-tts-instruct-flash(?:-\d{4}-\d{2}-\d{2})?$/.test(model)) return '';
+  const identity = voice === 'Cherry' || voice === 'Nini'
+    ? 'Use a natural youthful feminine speaking voice, not a child voice. '
+    : 'Preserve the selected speaker identity and natural vocal register. ';
+  return identity +
+    'Speak as if talking quietly face to face, at a comfortable conversational pace. ' +
+    'Use relaxed phrasing and small, context-appropriate emotional changes. Keep pitch stable and unforced. ' +
+    'Avoid exaggerated rises, sing-song delivery, theatrical breathiness, artificial laughter, shouting and announcer-style emphasis. ' +
+    'Read only the supplied text; do not speak these instructions.';
 }
 
 /** Upstream failure carrier: a typed marker beats string-matching the message. */
@@ -122,12 +137,14 @@ export async function synthesise(opts: {
   // Step 1 — request shape (qwen3-tts-flash.md §1.1/§1.2/§2.1/§2.2). `language_type`
   // keeps its underscore: a camelCase key is silently ignored by DashScope.
   const endpoint = `${opts.baseUrl}/services/aigc/multimodal-generation/generation`;
+  const instructions = deliveryInstructions(opts.model, opts.voice);
   const payload = {
     model: opts.model,
     input: {
       text: opts.text,
       voice: opts.voice,
       language_type: opts.languageType,
+      ...(instructions ? { instructions, optimize_instructions: false } : {}),
     },
   };
   const headers = {
@@ -292,8 +309,8 @@ export function createTtsRouter(
     // (`wise-elder`) or a raw id already in the palette (`Eldric Sage`).
     // A typo is NOT silently accepted — the page still plays on the default,
     // but `check:voices` fails the build so it never ships (07 §3).
+    const defaultVoice = resolveVoice(config.defaultVoice) ?? DEFAULTS.voice;
     const requestedVoice = typeof rawVoice === 'string' ? rawVoice.trim() : '';
-    const defaultVoice = resolveVoice(config.defaultVoice) ?? config.defaultVoice;
     let voice = defaultVoice;
     if (requestedVoice !== '') {
       if (!VOICE_RE.test(requestedVoice)) {
@@ -316,7 +333,8 @@ export function createTtsRouter(
 
     // Step 7 — cache lookup. `existsSync` (not `stat`) is enough: atomic writes
     // guarantee "present ⇒ complete".
-    const hash = hashOf(config.model, voice, languageType, text);
+    const instructions = deliveryInstructions(config.model, voice);
+    const hash = hashOf(config.model, voice, languageType, text, instructions);
     const cacheDir = path.join(store.worldRoot, '.airpworld', 'tts-cache');
     const file = `${hash}.wav`;
     const abs = path.join(cacheDir, file);

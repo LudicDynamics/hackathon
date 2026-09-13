@@ -10,8 +10,13 @@ dist/
 .env.*.local
 .artifacts/
 worlds/
-# Ship the six canonical *-playtest templates; ignore experimental revisions.
+# Canonical bilingual editions live directly in templates; playtests are experimental.
+templates/*-playtest/
 templates/*-playtest-*/
+
+# Keep the documentation namespace visible despite the runtime `worlds/` rule.
+!docs/worlds/
+!docs/worlds/**
 
 # --- assets/ : worldlines-assets 素材车间 ---
 # AI 生图候选（PNG/JPG）合计约 587MB，作为生产参考太占库，整树不追踪。

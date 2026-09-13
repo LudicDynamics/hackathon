@@ -1,3 +1,4 @@
+@import './decoration.css';
 /* Worldlines Canvas material shell: the scene remains edge-to-edge. */
 .airp-prototype { --line: #bfb09766; font-size: 14px; }
 .airp-prototype button:focus-visible { outline: 2px solid #c5a1e3; outline-offset: 5px; }

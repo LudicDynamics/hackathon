@@ -119,8 +119,8 @@ test('05 §3.3: every character preset carries the platform slots verbatim (worl
   // broken walk (0 files) would pass vacuously.
   assert.ok(files.length >= 9, `expected the template/world character presets, found ${files.length}`);
   for (const anchor of [
-    'templates/cthulhu/characters/old-sailor/preset.json',
-    'templates/firstsnow/characters/sumi/preset.json',
+    'templates/wuwu/characters/old-mo/preset.json',
+    'templates/firstsnow/characters/sumi-yukimura/preset.json',
     'templates/whitechapel/characters/watson/preset.json',
   ]) {
     assert.ok(files.includes(anchor), `walk must reach ${anchor}`);

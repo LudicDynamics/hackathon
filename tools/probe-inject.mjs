@@ -34,7 +34,7 @@ import { LocalWorldStore } from '../packages/shared/dist/index.js';
 
 const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const VENDOR_CLI = path.join(REPO, 'vendor/pi-rp/packages/coding-agent/dist/cli.js');
-const TEST_WORLD = path.join(REPO, 'templates/holmes-world');
+const TEST_WORLD = path.join(REPO, 'archive/templates/pre-bilingual-2026-09-14/holmes-world');
 const INJECT_PROVIDER = path.join(REPO, 'tools/inject-probe-provider.ts');
 
 const MARKER = '[World state'; // must match STATE_HEADER (01 §4.2 / 00 §4.1)

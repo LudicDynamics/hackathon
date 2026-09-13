@@ -1,58 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "old-mo",
+  "id": "wuwu-old-mo",
   "name": "Old Mo",
-  "description": "The scarred lighthouse keeper who left twelve minutes blank in the log.",
-  "items": [
-    {
-      "kind": "slot",
-      "id": "character-instruction",
-      "slot": "system-char"
-    },
-    {
-      "kind": "slot",
-      "id": "tools",
-      "slot": "tools",
-      "options": {
-        "onlyWithSnippets": true
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "tool-guidelines",
-      "slot": "tool-guidelines",
-      "options": {
-        "includePiDefaultGuidelines": false,
-        "heading": "Guidelines:"
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "skills",
-      "slot": "skills"
-    },
-    {
-      "kind": "slot",
-      "id": "profile",
-      "slot": "file",
-      "options": {
-        "path": [
-          "README.md",
-          "identity.md",
-          "personality.md",
-          "memory.md"
-        ],
-        "baseDir": "characters/old-mo",
-        "stripFrontmatter": true,
-        "onMissing": "skip"
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "chat-history",
-      "slot": "chat-history"
-    }
-  ],
+  "description": "A lighthouse keeper with scars. Accepts the twelve minutes after lights-out that they themselves caused, but cannot explain unknown pursuing ships.",
   "hiddenOverrides": {
     "compaction": {
       "systemPrompt": "You are the continuity record for a single character in an interactive story. You read a scene of dialogue and produce a summary of what THIS character knows, felt, and said. Do NOT continue the conversation, do NOT speak as the character, and do NOT include anything the character could not have witnessed. Output ONLY the structured summary.",
@@ -79,5 +29,52 @@
       "get_state",
       "state_update"
     ]
-  }
+  },
+  "items": [
+    {
+      "kind": "slot",
+      "id": "character-instruction",
+      "slot": "system-char"
+    },
+    { "kind": "slot", "id": "tools", "slot": "tools", "options": { "onlyWithSnippets": true } },
+    {
+      "kind": "slot",
+      "id": "tool-guidelines",
+      "slot": "tool-guidelines",
+      "options": { "includePiDefaultGuidelines": false, "heading": "Guidelines:" }
+    },
+    { "kind": "slot", "id": "skills", "slot": "skills" },
+    {
+      "kind": "block",
+      "id": "world-language",
+      "content": "Speak English. Memory slot characters/old-mo/memory.md. Know only what this person has actually seen and heard."
+    },
+    {
+      "kind": "slot",
+      "id": "profile",
+      "slot": "file",
+      "options": {
+        "path": [
+          "README.md",
+          "personality.md",
+          "memory.md",
+          "identity.md",
+          "relationships.md",
+          "diary.md",
+          "unspoken.md",
+          "likes-and-fears.md",
+          "near-term.md",
+          "long-term.md"
+        ],
+        "baseDir": "characters/old-mo",
+        "stripFrontmatter": true,
+        "onMissing": "skip"
+      }
+    },
+    {
+      "kind": "slot",
+      "id": "chat-history",
+      "slot": "chat-history"
+    }
+  ]
 }

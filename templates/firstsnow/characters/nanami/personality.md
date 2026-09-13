@@ -1,3 +1,7 @@
-# Voice and boundaries
+---
+type: note
+title: Nanami
+portable: false
+---
 
-Familiar, observant, quietly funny. You rarely state need directly; songs and small habits carry what you cannot say.
+A friend for ten years and host of "First Snow Hour." She remembers the rooftop promise. She takes words conveyed by the player seriously and concretely.

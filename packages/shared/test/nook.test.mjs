@@ -19,7 +19,7 @@
  * patching only `occupied.push` leaves A13 green and A27 red. Both must be
  * green together for the fix to count as complete.
  *
- * Fixtures use REAL template content (templates/holmes-world/world/baker-street)
+ * Fixtures use REAL archived template content (archive/templates/pre-bilingual-2026-09-14/holmes-world/world/baker-street)
  * — not synthetic markdown — so a drift in the declared-size path is visible.
  *
  * Build first:  pnpm --filter @airp/shared build
@@ -39,7 +39,7 @@ const NOTE = CARD_FORMS.note; // 200 x 168
 // ------------------------------------------------------------------ fixture
 
 const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../..');
-const REAL_DIR = path.join(REPO_ROOT, 'templates/holmes-world/world/baker-street');
+const REAL_DIR = path.join(REPO_ROOT, 'archive/templates/pre-bilingual-2026-09-14/holmes-world/world/baker-street');
 
 /** The three real baker-street cards: chalk / chalk / note (mixed declared). */
 const REAL_FILES = [

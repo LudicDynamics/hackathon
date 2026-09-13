@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-const fields = ['DASHSCOPE_API_KEY', 'AIRP_TTS_BASE_URL', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'FLOW_API_KEY', 'FLOW_API_BASE'] as const;
+const fields = ['DASHSCOPE_API_KEY', 'AIRP_TTS_BASE_URL', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'FLOW_API_KEY', 'FLOW_API_BASE', 'DEEPSEEK_API_KEY'] as const;
 const defaults: Record<string, string> = {
   AIRP_TTS_BASE_URL: 'https://dashscope-intl.aliyuncs.com/api/v1',
   OPENAI_BASE_URL: 'https://api.openai.com/v1',

@@ -12,7 +12,7 @@ import { EventBridge } from '../dist/engine/event-bridge.js';
 
 test('First Snow: readable gates, both arrival choices, receipt gate and gated growth', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'airp-snow-contract-'));
-  await fs.cp(new URL('../../../templates/first-snow-jp/', import.meta.url), root, { recursive: true });
+  await fs.cp(new URL('../../../archive/templates/pre-bilingual-2026-09-14/first-snow-jp/', import.meta.url), root, { recursive: true });
   const store = new LocalWorldStore(root);
   const calls = [];
   const bridge = new EventBridge();

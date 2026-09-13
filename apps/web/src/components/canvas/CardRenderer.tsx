@@ -110,6 +110,17 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
   };
 
   const puzzleClasses = `${isItemDragging ? 'puzzle-target-ready' : ''} ${isDragOver ? 'puzzle-target-hover' : ''} ${isUnlockedEffect ? 'puzzle-unlock-burst' : ''}`.trim();
+  // Dice rewards are persisted world entities. The card only reveals the
+  // authored outcome snapshot; taking it remains EntityInteractions' move
+  // action, never a second dice or reward authority.
+  if (frontmatter?.dice_reward) {
+    return (
+      <details className="dice-outcome-letter" data-no-drag onClick={event => event.stopPropagation()}>
+        <summary>{frontmatter.title || filename}</summary>
+        <div><MarkdownText text={body} /></div>
+      </details>
+    );
+  }
 
   // 1. Chalk Card — ink on the canvas (bare by default).
   if (frontmatter?.visual === 'envelope' || frontmatter?.visual === 'phone' || frontmatter?.visual === 'door') {

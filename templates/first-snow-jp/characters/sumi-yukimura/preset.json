@@ -2,67 +2,7 @@
   "schemaVersion": 1,
   "id": "first-snow-jp-sumi-yukimura",
   "name": "雪村澄",
-  "description": "デビューしたばかりの歌手。今夜は、仕事ではない四十分を過ごしたい。",
-  "items": [
-    {
-      "kind": "slot",
-      "id": "character-instruction",
-      "slot": "system-char"
-    },
-    {
-      "kind": "slot",
-      "id": "tools",
-      "slot": "tools",
-      "options": {
-        "onlyWithSnippets": true
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "tool-guidelines",
-      "slot": "tool-guidelines",
-      "options": {
-        "includePiDefaultGuidelines": false,
-        "heading": "Guidelines:"
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "skills",
-      "slot": "skills"
-    },
-    {
-      "kind": "slot",
-      "id": "world-language",
-      "slot": "file",
-      "options": {
-        "path": "language.md",
-        "baseDir": "cwd",
-        "onMissing": "skip"
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "profile",
-      "slot": "file",
-      "options": {
-        "path": [
-          "README.md",
-          "identity.md",
-          "personality.md",
-          "memory.md"
-        ],
-        "baseDir": "characters/sumi-yukimura",
-        "stripFrontmatter": true,
-        "onMissing": "skip"
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "chat-history",
-      "slot": "chat-history"
-    }
-  ],
+  "description": "デビューしたばかりの歌手。ツアー前に仕事ではない時間を過ごしたい。七海との私的な会話を自動で知っていることにしない。",
   "hiddenOverrides": {
     "compaction": {
       "systemPrompt": "You are the continuity record for a single character in an interactive story. You read a scene of dialogue and produce a summary of what THIS character knows, felt, and said. Do NOT continue the conversation, do NOT speak as the character, and do NOT include anything the character could not have witnessed. Output ONLY the structured summary.",
@@ -89,5 +29,52 @@
       "get_state",
       "state_update"
     ]
-  }
+  },
+  "items": [
+    {
+      "kind": "slot",
+      "id": "character-instruction",
+      "slot": "system-char"
+    },
+    { "kind": "slot", "id": "tools", "slot": "tools", "options": { "onlyWithSnippets": true } },
+    {
+      "kind": "slot",
+      "id": "tool-guidelines",
+      "slot": "tool-guidelines",
+      "options": { "includePiDefaultGuidelines": false, "heading": "Guidelines:" }
+    },
+    { "kind": "slot", "id": "skills", "slot": "skills" },
+    {
+      "kind": "block",
+      "id": "world-language",
+      "content": "日本語で話す。記憶は characters/sumi-yukimura/memory.md。この人物が実際に見聞きしたことだけ知る。"
+    },
+    {
+      "kind": "slot",
+      "id": "profile",
+      "slot": "file",
+      "options": {
+        "path": [
+          "README.md",
+          "personality.md",
+          "memory.md",
+          "identity.md",
+          "relationships.md",
+          "diary.md",
+          "unspoken.md",
+          "likes-and-fears.md",
+          "near-term.md",
+          "long-term.md"
+        ],
+        "baseDir": "characters/sumi-yukimura",
+        "stripFrontmatter": true,
+        "onMissing": "skip"
+      }
+    },
+    {
+      "kind": "slot",
+      "id": "chat-history",
+      "slot": "chat-history"
+    }
+  ]
 }

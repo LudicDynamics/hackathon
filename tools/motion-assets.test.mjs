@@ -1,3 +1,4 @@
+// Historical fixtures; current bilingual coverage is in world-editions.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -9,9 +10,9 @@ test('cabin props and animated scenes reference shipped files with static fallba
     ['first-snow-jp', ['world/README.md', 'world/tonight/README.md']],
   ]) {
     for (const file of files) {
-      const { frontmatter: fm } = parseFrontmatter(await fs.readFile(`templates/${world}/${file}`, 'utf8'));
+      const { frontmatter: fm } = parseFrontmatter(await fs.readFile(`archive/templates/pre-bilingual-2026-09-14/${world}/${file}`, 'utf8'));
       assert.ok(fm.bg || fm.image);
-      for (const ref of [fm.bg, fm.image, fm.bgVideo].filter(Boolean)) assert.ok((await fs.stat(`templates/${world}/${ref}`)).size > 1000);
+      for (const ref of [fm.bg, fm.image, fm.bgVideo].filter(Boolean)) assert.ok((await fs.stat(`archive/templates/pre-bilingual-2026-09-14/${world}/${ref}`)).size > 1000);
       if (world !== 'unwritten-door') { assert.match(fm.bgVideo, /\.(webm|mp4)$/); assert.match(fm.bg, /\.webp$/); }
     }
   }

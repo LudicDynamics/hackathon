@@ -39,6 +39,7 @@ import {
 } from '@airp/shared';
 import type { AgentLifecycleManager } from '../engine/lifecycle.js';
 import type { EventBridge } from '../engine/event-bridge.js';
+import { prepareMaterialReview, runDeclaredChoice, serialDeclared } from '../engine/declared-actions.js';
 
 interface LayerItem {
   path: string;
@@ -413,7 +414,7 @@ export function createWorldRouter(
     if (releasingWorld) {
       try { await releasingWorld; } catch { /* The unavailable world stays detached. */ }
     }
-    const needsWorld = ['/agent-settings', '/manifest', '/nook', '/nook-note', '/layer', '/backpack', '/characters', '/move', '/card/position', '/card/footprint', '/dice', '/use-item', '/choice', '/enter-layer', '/viewpoint', '/freeze', '/god-action', '/asset', '/audio'].includes(req.path);
+    const needsWorld = ['/agent-settings', '/manifest', '/nook', '/nook-note', '/layer', '/backpack', '/characters', '/move', '/card/position', '/card/footprint', '/dice', '/use-item', '/choice', '/material-review', '/enter-layer', '/viewpoint', '/freeze', '/god-action', '/asset', '/audio'].includes(req.path);
     if (!getActiveStore() && needsWorld) {
       return res.status(409).json({ code: 'no_active_world', error: 'Choose a world or start a new save.' });
     }
@@ -586,7 +587,7 @@ export function createWorldRouter(
       }
 
       // `listFiles(prefix)` walks RECURSIVELY, so the direct-child cut is ours
-      // to make — `nookCardPaths` does it (direct-child .md minus README).
+      // to make — `nookCardPaths` does it (direct-child .md minus four root configuration files).
       const mdFiles = nookCardPaths(await store.listFiles(nookId), nookId);
       const items = await readLayerItems(store, mdFiles);
 
@@ -1134,6 +1135,28 @@ export function createWorldRouter(
   });
 
   // Player picks one of the public options an entity declares (06 §2.5).
+  router.post('/material-review', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    await serialDeclared(store.worldRoot, async () => {
+      try {
+        const result = await prepareMaterialReview(serviceFor(store, { type: 'player' }), req.body);
+        res.json({ ok: true, details: result.details });
+      } catch (err) {
+        if (err instanceof ActionError) {
+          const http = err.toHttp();
+          res.status(http.status).json(http.body);
+          return;
+        }
+        res.status(500).json({
+          ok: false,
+          code: 'internal',
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
+  });
+
   router.post('/choice', async (req, res) => {
     const store = getActiveStore();
     if (!store) return res.status(400).json({ error: 'No active world' });
@@ -1144,7 +1167,9 @@ export function createWorldRouter(
     if (!((typeof choice === 'string' && choice !== '') || (typeof choice === 'number' && Number.isFinite(choice)))) {
       return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'choice must be a string label or a 1-based number' });
     }
-    await reply(res, async () => {
+    await reply(res, () => serialDeclared(store.worldRoot, async () => {
+      const declared = await runDeclaredChoice(serviceFor(store, { type: 'player' }), choicePath, choice);
+      if (declared) return declared;
       const result = await serviceFor(store, { type: 'player' }).chooseOption({ path: choicePath, choice });
       // Auto-turn is opt-in per world (docs/settings/00). `off` — the default —
       // keeps doc-21 §5.5: the event lands, the writer sees it in the injection
@@ -1153,7 +1178,7 @@ export function createWorldRouter(
         dispatch(store, `[Player Event] ${JSON.stringify(result.details.event)}\nRead ${JSON.stringify(choicePath)} and the world skill. Resolve this choice, update the source file, and write a chalk response. Do not record the choice a second time.`);
       }
       return result;
-    });
+    }));
   });
 
   // Player walks through a door into another layer (05 §3.6.2 / 12 §2.4).

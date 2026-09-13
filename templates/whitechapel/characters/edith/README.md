@@ -1,12 +1,8 @@
 ---
-
-type: "readme"
-name: "Edith Vale"
-avatar: "assets/characters/edith.webp"
-avatarVideo: "assets/motion/seedance/characters/edith-transparent.webm"
+type: readme
+name: Edith Vale
 voice: shy-sweet
+avatar: assets/characters/edith.webp
 ---
 
-# Edith Vale
-
-The frightened novelist who changed the fourth chapter’s address.
+Watson's patient and novelist. The one who corrected the address in chapter four. Though scared, she wants to explain in her own words.

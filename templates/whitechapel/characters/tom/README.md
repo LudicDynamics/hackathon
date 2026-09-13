@@ -1,12 +1,8 @@
 ---
-
-type: "readme"
-name: "Tom Hale"
-avatar: "assets/characters/tom.webp"
-avatarVideo: "assets/motion/seedance/characters/tom-transparent.webm"
-voice: hoarse-weathered
+type: readme
+name: Tom Hale
+voice: casual-drawl
+avatar: assets/characters/tom.webp
 ---
 
-# Tom Hale
-
-A typesetter with blackened hands and a complete night-shift ledger.
+Typesetter at the print shop. Blackened fingers and duty log. Unpretentious, speaks plainly about recorded dates and times.

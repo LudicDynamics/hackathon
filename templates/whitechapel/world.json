@@ -3,16 +3,15 @@
   "audio": {
     "theme": "canvas-whitechapel"
   },
-  "name": "Letters from Whitechapel",
-  "version": "1.0.0",
+  "name": "Holmes: The Fourth Case · English",
+  "version": "1.2.0",
   "schema": 1,
-  "description": "An original 1888 detective case in which murders repeat illustrations from a serialized novel before the next chapter appears.",
+  "description": "You are Holmes. Investigate who’s turning the novel-like incidents into real crimes and stop the fourth incident today.",
   "author": "Worldlines Canvas / AIRP",
-  "genre": "detective mystery",
+  "genre": "Story experience",
   "tags": [
-    "detective",
-    "evidence",
-    "victorian london"
+    "short story",
+    "generative world"
   ],
   "material": "kraft",
   "cover": "assets/scenes/intro.webp",
@@ -31,52 +30,53 @@
   "characters": [
     {
       "id": "watson",
-      "home": "world/case-board",
+      "home": "world/london-map",
       "role": "companion",
       "avatar": "assets/motion/seedance/characters/watson-transparent.webp",
-      "description": "Holmes’s physician, chronicler, and humane counterweight.",
-      "avatarVideo": "assets/motion/seedance/characters/watson-transparent.webm"
+      "description": "Physician and Holmes's friend. Promised to protect Edith. Confirmed the third incident matched the illustration this morning, requested to stop today's fourth. Provides medical and human concerns, respects Holmes's deductions.",
+      "avatarVideo": "assets/motion/seedance/characters/watson-transparent.webm",
+      "name": "Watson"
     },
     {
       "id": "edith",
-      "home": "world/case-board",
+      "home": "world/london-map/edith-room",
       "role": "npc",
-      "description": "The frightened novelist who changed the fourth chapter’s address.",
-      "avatar": "assets/characters/edith.webp"
-    },
-    {
-      "id": "wayne",
-      "home": "world/case-board/fleet-street-press",
-      "role": "npc",
-      "description": "The illustrator whose ultramarine cuff and injured right wrist connect art to the crimes.",
-      "avatar": "assets/characters/wayne.webp"
-    },
-    {
-      "id": "blackburn",
-      "home": "world/case-board/fleet-street-press",
-      "role": "npc",
-      "description": "The editor who controls manuscript circulation and locks proofs in his desk.",
-      "avatar": "assets/characters/blackburn.webp"
+      "description": "Watson's patient and novelist. The one who corrected the address in chapter four. Scared but wants to explain clearly in her own words.",
+      "avatar": "assets/characters/edith.webp",
+      "name": "Edith Vale"
     },
     {
       "id": "tom",
-      "home": "world/case-board/fleet-street-press",
+      "home": "world/london-map/print-shop",
       "role": "npc",
-      "description": "A typesetter with blackened hands and a complete night-shift ledger.",
-      "avatar": "assets/characters/tom.webp"
+      "description": "Typesetter at the print shop. Blackened fingers and duty log. Straightforward, relates dates as recorded.",
+      "avatar": "assets/characters/tom.webp",
+      "name": "Tom Hale"
     },
     {
-      "id": "porter",
-      "home": "world/case-board/fleet-street-press",
+      "id": "blackburn",
+      "home": "world/london-map/print-shop/editor-office",
       "role": "npc",
-      "description": "A crime reporter who trades access for the promise of an exclusive."
+      "description": "An editor managing manuscripts and proof sheets, precise with dates and times, concerned about the newspaper's credibility.",
+      "avatar": "assets/characters/blackburn.webp",
+      "name": "Editor Blackburn"
+    },
+    {
+      "id": "wayne",
+      "home": "world/london-map/print-shop/illustration-room",
+      "role": "npc",
+      "description": "Illustrator for serialized novels with ultramarine-stained sleeves, protecting his right wrist, sensitive to criticism.",
+      "avatar": "assets/characters/wayne.webp",
+      "name": "Arthur Wayne"
     }
   ],
   "createdAt": "2026-09-12T00:00:00Z",
   "updatedAt": "2026-09-12T00:00:00Z",
   "player": {
-    "id": "sherlock-holmes",
+    "id": "player",
     "name": "Sherlock Holmes",
     "avatar": "assets/characters/sherlock-holmes.webp"
-  }
+  },
+  "locale": "en",
+  "entry": "map"
 }

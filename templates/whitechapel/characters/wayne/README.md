@@ -1,12 +1,8 @@
 ---
-
-type: "readme"
-name: "Arthur Wayne"
-avatar: "assets/characters/wayne.webp"
-avatarVideo: "assets/motion/seedance/characters/wayne-transparent.webm"
-voice: cool-composed
+type: readme
+name: Arthur Wayne
+voice: dramatic-theatrical
+avatar: assets/characters/wayne.webp
 ---
 
-# Arthur Wayne
-
-The illustrator whose ultramarine cuff and injured right wrist connect art to the crimes.
+Illustrator for serialized novels. Ultramarine stains on sleeves; protecting right wrist. Sensitive to critiques of his work.

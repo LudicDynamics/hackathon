@@ -5,6 +5,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { templateArchive } from './world-editions.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const source = path.resolve(root, '../worldlines-assets/worlds');
@@ -57,6 +58,7 @@ async function markdownFiles(dir) {
 }
 
 async function sync() {
+  if (await fs.access(path.join(root, templateArchive)).then(() => true).catch(() => false)) throw new Error('These mappings describe archived prototypes. Review the canonical bilingual scene paths before syncing assets; no files changed.');
   // Preflight all source files and destination scenes before any conversion.
   for (const [id, config] of Object.entries(mappings)) {
     const sourceWorld = path.join(source, `${id}-demo`);

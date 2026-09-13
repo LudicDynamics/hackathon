@@ -11,7 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
 const VENDOR_CLI = path.join(REPO_ROOT, 'vendor/pi-rp/packages/coding-agent/dist/cli.js');
-const TEST_WORLD = path.join(REPO_ROOT, 'templates/holmes-world');
+const TEST_WORLD = path.join(REPO_ROOT, 'archive/templates/pre-bilingual-2026-09-14/holmes-world');
 const PROBE_PROVIDER = path.join(__dirname, 'probe-provider.ts');
 const PROBE_CHALK_REL = 'world/baker-street/probe-chalk.md';
 
@@ -114,7 +114,7 @@ async function runProbe() {
   console.log('=== [AIRP Gate Probe] Testing Monorepo Pipeline ===');
 
   // 1. Verify LocalWorldStore & SQLite schemas
-  console.log('[Probe 1] Testing LocalWorldStore on templates/holmes-world...');
+  console.log('[Probe 1] Testing LocalWorldStore on archive/templates/pre-bilingual-2026-09-14/holmes-world...');
   const store = new LocalWorldStore(TEST_WORLD);
   const manifest = await store.getManifest();
   console.log(`✓ Manifest loaded: "${manifest.name}" (ID: ${manifest.id}, Genre: ${manifest.genre})`);

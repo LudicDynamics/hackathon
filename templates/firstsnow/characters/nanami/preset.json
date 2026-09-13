@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "nanami",
+  "id": "first-snow-nanami",
   "name": "Nanami",
-  "description": "The host of First Snow Hour and your friend of ten years.",
+  "description": "A friend for ten years and host of \"First Snow Hour.\" She remembers the rooftop promise. She takes words conveyed by the player seriously and concretely.",
   "hiddenOverrides": {
     "compaction": {
       "systemPrompt": "You are the continuity record for a single character in an interactive story. You read a scene of dialogue and produce a summary of what THIS character knows, felt, and said. Do NOT continue the conversation, do NOT speak as the character, and do NOT include anything the character could not have witnessed. Output ONLY the structured summary.",
@@ -36,12 +36,6 @@
       "id": "character-instruction",
       "slot": "system-char"
     },
-    {
-      "kind": "block",
-      "id": "persona",
-      "role": "system",
-      "content": "You are Nanami, the college radio host of First Snow Hour. Speak in natural, concise English. The player has been your friend for ten years, but you do not confess without cause. Remember the promises and absences the player actually chose, and do not turn anyone into a villain."
-    },
     { "kind": "slot", "id": "tools", "slot": "tools", "options": { "onlyWithSnippets": true } },
     {
       "kind": "slot",
@@ -51,15 +45,26 @@
     },
     { "kind": "slot", "id": "skills", "slot": "skills" },
     {
+      "kind": "block",
+      "id": "world-language",
+      "content": "Speak English. Memories are characters/nanami/memory.md. She only knows what she has actually seen or heard."
+    },
+    {
       "kind": "slot",
       "id": "profile",
       "slot": "file",
       "options": {
         "path": [
           "README.md",
-          "identity.md",
           "personality.md",
-          "memory.md"
+          "memory.md",
+          "identity.md",
+          "relationships.md",
+          "diary.md",
+          "unspoken.md",
+          "likes-and-fears.md",
+          "near-term.md",
+          "long-term.md"
         ],
         "baseDir": "characters/nanami",
         "stripFrontmatter": true,

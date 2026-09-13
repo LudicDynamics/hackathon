@@ -40,11 +40,12 @@
 ├── packages/
 │   └── shared/            # WorldManifest (Zod), ChalkFrontmatter, WorldStore, SQLite Schema
 ├── presets/               # 提示词预设 (writer, character, scene-init, nook-init)
-├── templates/             # 当前体验版（*-playtest）与旧素材版模板，都随 Git 分发
-│   ├── holmes-world/      # 悬疑推理：Fog Over Baker Street
-│   ├── school-romance/    # 校园恋爱：Sakura Academy
-│   ├── magic-academy/     # 魔法学院：Emberglass Academy
-│   └── cthulhu/           # 诡异惊悚：Mists of Innsmouth
+├── templates/             # 七个世界的正式双语模板；英文无后缀，日文通常为 -jp
+│   ├── wuwu/              # 雾坞镇（英文）
+│   ├── wuwu-jp/           # 雾坞镇（日文）
+│   ├── firstsnow/         # 初雪电台英文版；保留历史稳定 ID
+│   └── ...                # 完整清单见下方双语入口
+├── archive/templates/     # 旧素材版、playtest 与技术测试模板，可恢复归档
 ├── docs/                  # 设计文档（真相源，入口 docs/00-文档骨架.md）
 ├── tools/
 │   ├── scaffold.mjs       # 脚手架：模板拷贝即开世界
@@ -84,8 +85,8 @@ pnpm probe
 
 ### 3. 脚手架拉起新世界
 ```bash
-# 从当前初雪体验版创建玩家专属世界
-node tools/scaffold.mjs --template first-snow-jp-playtest --out worlds/my-first-snow
+# 从当前初雪日文正式版创建玩家专属世界
+node tools/scaffold.mjs --template first-snow-jp --out worlds/my-first-snow
 ```
 
 ### 4. 启动本地全栈开发
@@ -96,19 +97,20 @@ pnpm dev
 - 前端地址：`http://localhost:5173`
 - 后端服务：`http://localhost:3001`
 
-### 当前体验版入口
+### 当前双语体验入口
 
-以下完整模板已纳入 Git，包含场景 README、Chalk、世界 skill、角色及配套图片 / 动画。拉取后可在 5173 的世界菜单里直接创建新游戏，**不需要先运行内容生成工具**；真实 AI 游玩仍需配置服务。
+以下正式模板已纳入 Git，包含场景 README、Chalk、世界 skill、角色及配套图片 / 动画。拉取后可在 5173 的世界菜单里直接创建新游戏，**不需要先运行内容生成工具**；真实 AI 游玩仍需配置服务。
 
-| 世界 | 当前模板 |
-|---|---|
-| 雾坞镇 | [`templates/wuwu-playtest/`](templates/wuwu-playtest/) |
-| 福尔摩斯 | [`templates/whitechapel-playtest/`](templates/whitechapel-playtest/) |
-| 时间线 | [`templates/divergence-playtest/`](templates/divergence-playtest/) |
-| 初雪电台 | [`templates/first-snow-jp-playtest/`](templates/first-snow-jp-playtest/) |
-| 魔法学院 | [`templates/magic-academy-playtest/`](templates/magic-academy-playtest/) |
-| 未写之门 | [`templates/unwritten-door-playtest/`](templates/unwritten-door-playtest/) |
+| 世界 | English | 日本語 |
+|---|---|---|
+| 雾坞镇 | [`wuwu`](templates/wuwu/) | [`wuwu-jp`](templates/wuwu-jp/) |
+| 福尔摩斯 | [`whitechapel`](templates/whitechapel/) | [`whitechapel-jp`](templates/whitechapel-jp/) |
+| 分支线 | [`divergence`](templates/divergence/) | [`divergence-jp`](templates/divergence-jp/) |
+| 初雪电台 | [`firstsnow`](templates/firstsnow/) | [`first-snow-jp`](templates/first-snow-jp/) |
+| 魔法学院 | [`magic-academy`](templates/magic-academy/) | [`magic-academy-jp`](templates/magic-academy-jp/) |
+| 未写之门 | [`unwritten-door`](templates/unwritten-door/) | [`unwritten-door-jp`](templates/unwritten-door-jp/) |
+| 月下之誓 | [`moonlit-contract`](templates/moonlit-contract/) | [`moonlit-contract-jp`](templates/moonlit-contract-jp/) |
 
-不带 `-playtest` 的目录是保留的旧素材版 / 原型，不代表当前体验设计。体验版入库只解决分发，不代表六世界已通过真实 AI 通关。
+`firstsnow` 是唯一保留的历史稳定英文模板 ID；其他正式模板不再使用 `-playtest`。原有旧模板和 playtest 版本已可恢复地移入 `archive/templates/pre-bilingual-2026-09-14/`，不会作为新游戏入口出现。分发与离线校验不代表世界已经通过真实 AI 通关。
 
-内容编译源仍在 `tools/experiences/`。修改体验内容时同步源文件与对应的已提交模板；`tools/install-experiences.mjs` 用于首次生成或指定 `--revision=<新名>` 的实验副本，**不要覆盖已有模板或玩家存档**。实验副本 `templates/*-playtest-*/`、玩家存档 `worlds/`、密钥和运行缓存继续忽略；模板更新不会自动迁移旧存档。
+正式内容直接维护在上述双语模板中。`tools/experiences/` 与 archive 仅用于历史测试和实验 fixture；不要把旧编译器产物重新放回正式模板列表。玩家存档、密钥和运行缓存继续忽略，模板更新不会自动迁移旧存档。

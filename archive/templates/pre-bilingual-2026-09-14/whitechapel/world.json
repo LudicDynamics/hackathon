@@ -1,0 +1,82 @@
+{
+  "id": "whitechapel",
+  "audio": {
+    "theme": "canvas-whitechapel"
+  },
+  "name": "Letters from Whitechapel",
+  "version": "1.0.0",
+  "schema": 1,
+  "description": "An original 1888 detective case in which murders repeat illustrations from a serialized novel before the next chapter appears.",
+  "author": "Worldlines Canvas / AIRP",
+  "genre": "detective mystery",
+  "tags": [
+    "detective",
+    "evidence",
+    "victorian london"
+  ],
+  "material": "kraft",
+  "cover": "assets/scenes/intro.webp",
+  "extensions": [
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
+  ],
+  "characters": [
+    {
+      "id": "watson",
+      "home": "world/case-board",
+      "role": "companion",
+      "avatar": "assets/motion/seedance/characters/watson-transparent.webp",
+      "description": "Holmes’s physician, chronicler, and humane counterweight.",
+      "avatarVideo": "assets/motion/seedance/characters/watson-transparent.webm"
+    },
+    {
+      "id": "edith",
+      "home": "world/case-board",
+      "role": "npc",
+      "description": "The frightened novelist who changed the fourth chapter’s address.",
+      "avatar": "assets/characters/edith.webp"
+    },
+    {
+      "id": "wayne",
+      "home": "world/case-board/fleet-street-press",
+      "role": "npc",
+      "description": "The illustrator whose ultramarine cuff and injured right wrist connect art to the crimes.",
+      "avatar": "assets/characters/wayne.webp"
+    },
+    {
+      "id": "blackburn",
+      "home": "world/case-board/fleet-street-press",
+      "role": "npc",
+      "description": "The editor who controls manuscript circulation and locks proofs in his desk.",
+      "avatar": "assets/characters/blackburn.webp"
+    },
+    {
+      "id": "tom",
+      "home": "world/case-board/fleet-street-press",
+      "role": "npc",
+      "description": "A typesetter with blackened hands and a complete night-shift ledger.",
+      "avatar": "assets/characters/tom.webp"
+    },
+    {
+      "id": "porter",
+      "home": "world/case-board/fleet-street-press",
+      "role": "npc",
+      "description": "A crime reporter who trades access for the promise of an exclusive."
+    }
+  ],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "player": {
+    "id": "sherlock-holmes",
+    "name": "Sherlock Holmes",
+    "avatar": "assets/characters/sherlock-holmes.webp"
+  }
+}

@@ -48,6 +48,10 @@
     "./characters": {
       "types": "./dist/rules/characters.d.ts",
       "import": "./dist/rules/characters.js"
+    },
+    "./dice": {
+      "types": "./dist/rules/dice.d.ts",
+      "import": "./dist/rules/dice.js"
     }
   },
   "scripts": {

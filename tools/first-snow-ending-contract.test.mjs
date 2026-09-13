@@ -1,4 +1,4 @@
-// Static content contracts only; these tests do not claim live Writer compliance.
+// Historical fixture contract; current bilingual coverage is in world-editions.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { experiences } from './experiences/index.mjs';

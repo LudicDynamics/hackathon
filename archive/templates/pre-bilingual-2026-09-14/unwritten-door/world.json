@@ -1,0 +1,16 @@
+{
+  "id": "unwritten-door",
+  "name": "The Unwritten Door",
+  "version": "1.0.0",
+  "schema": 1,
+  "description": "Wake in a closed wooden cabin. An unopened envelope, a phone, and a door. What you learn inside gives shape to the world outside.",
+  "author": "AIRP",
+  "genre": "contemporary mystery",
+  "tags": ["mystery", "emergent world", "minimal opening"],
+  "material": "parchment",
+  "player": { "id": "stranger", "name": "You" },
+  "characters": [],
+  "extensions": [],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z"
+}

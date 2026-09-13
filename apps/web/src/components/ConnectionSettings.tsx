@@ -4,6 +4,7 @@ const services = [
   ['DashScope TTS', 'DASHSCOPE_API_KEY', 'AIRP_TTS_BASE_URL'],
   ['OpenAI-compatible', 'OPENAI_API_KEY', 'OPENAI_BASE_URL'],
   ['Flow media proxy', 'FLOW_API_KEY', 'FLOW_API_BASE'],
+  ['DeepSeek V4.1 Flash', 'DEEPSEEK_API_KEY', null],
 ] as const;
 
 export function ConnectionSettings({ onSaved }: { onSaved: () => void }) {
@@ -33,9 +34,10 @@ export function ConnectionSettings({ onSaved }: { onSaved: () => void }) {
   return <section style={{ marginTop: 24 }}>
     <h3>Server connections</h3>
     <p>Keys stay on the server in .env.local. Blank fields keep existing values. Flow configures the media proxy, not the writer model.</p>
+    <p>DeepSeek V4.1 Flash appears as <code>deepseek / deepseek-flash</code> in Agents → Model after saving. Restart existing agents before switching.</p>
     {available && services.map(([label, key, url]) => <fieldset key={key} disabled={saving} style={{ margin: '16px 0', display: 'grid', gap: 8 }}>
       <legend>{label}</legend>
-      <label>Service URL<input aria-label={`${label} URL`} type="url" value={draft[url] ?? String(config[url] ?? '')} onChange={e => setDraft(d => ({ ...d, [url]: e.target.value }))} style={{ display: 'block', width: '100%', color: '#272321', background: '#f5efdf', padding: 8 }} /></label>
+      {url && <label>Service URL<input aria-label={`${label} URL`} type="url" value={draft[url] ?? String(config[url] ?? '')} onChange={e => setDraft(d => ({ ...d, [url]: e.target.value }))} style={{ display: 'block', width: '100%', color: '#272321', background: '#f5efdf', padding: 8 }} /></label>}
       <label>API key · {config[key] ? 'Configured' : 'Not configured'}<input aria-label={`${label} API key`} type="password" autoComplete="new-password" spellCheck={false} value={draft[key] ?? ''} placeholder="Leave blank to keep current key" onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))} style={{ display: 'block', width: '100%', color: '#272321', background: '#f5efdf', padding: 8 }} /></label>
     </fieldset>)}
     {available && <button disabled={saving} onClick={() => void save()}>{saving ? 'Saving…' : 'Save connections'}</button>}

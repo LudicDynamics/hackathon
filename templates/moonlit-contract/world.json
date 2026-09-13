@@ -1,0 +1,28 @@
+{
+  "id": "moonlit-contract",
+  "name": "The Moonlit Pact · English",
+  "version": "1.2.0",
+  "schema": 1,
+  "description": "Moonlit Summoning. How will you respond to the offered hand? From a single promise, to uncharted nights still to be told.",
+  "author": "AIRP",
+  "genre": "Generative Visual Novel",
+  "tags": [
+    "short story",
+    "generative world"
+  ],
+  "locale": "en",
+  "material": "parchment",
+  "entry": "map",
+  "cover": "assets/backgrounds/opening.png",
+  "player": {
+    "id": "you",
+    "name": "You"
+  },
+  "characters": [],
+  "extensions": [],
+  "audio": {
+    "theme": "emberglass"
+  },
+  "createdAt": "2026-09-14T00:00:00Z",
+  "updatedAt": "2026-09-14T00:00:00Z"
+}

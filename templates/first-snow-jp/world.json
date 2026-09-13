@@ -5,23 +5,21 @@
   },
   "locale": "ja",
   "entry": "map",
-  "name": "初雪ラジオ",
-  "version": "1.0.0",
+  "name": "初雪ラジオ · 日本語",
+  "version": "1.2.0",
   "schema": 1,
-  "description": "放送が終わるまで、あと九十秒。十年越しの約束と、今夜だけの誘い。あなたが向かった場所と、行かなかった場所に、この冬の答えが残る。",
+  "description": "今夜、何を伝える？　行き先も約束も、その返事も。あなたの言葉から、この夜の結末が生まれる。",
   "author": "Worldlines / AIRP",
-  "genre": "冬の恋愛劇",
+  "genre": "物語体験",
   "tags": [
-    "初雪",
-    "ラジオ",
-    "約束",
-    "短編"
+    "短い物語",
+    "生成する世界"
   ],
   "material": "warm",
   "cover": "assets/scenes/intro.webp",
   "extensions": [],
   "player": {
-    "id": "radio-director",
+    "id": "player",
     "name": "あなた · 学生ディレクター",
     "avatar": "assets/characters/radio-director.webp"
   },
@@ -29,19 +27,19 @@
     {
       "id": "nanami",
       "name": "七海",
-      "home": "world/tonight/radio-studio",
+      "home": "world/tonight-promises/radio-studio",
       "role": "companion",
       "avatar": "assets/motion/seedance/characters/nanami-transparent.webp",
-      "description": "七海。十年来の友人で、番組「初雪アワー」のパーソナリティ。",
+      "description": "十年来の友人で「初雪アワー」のパーソナリティ。屋上の約束を覚えている。プレイヤーが伝えた言葉を具体的に受け止める。",
       "avatarVideo": "assets/motion/seedance/characters/nanami-transparent.webm"
     },
     {
       "id": "sumi-yukimura",
       "name": "雪村澄",
-      "home": "world/tonight/amber-cafe",
+      "home": "world/tonight-promises/amber-cafe",
       "role": "npc",
       "avatar": "assets/motion/seedance/characters/sumi-transparent.webp",
-      "description": "雪村澄。デビューしたばかりの歌手。今夜だけは、仕事ではない話をしたい。",
+      "description": "デビューしたばかりの歌手。ツアー前に仕事ではない時間を過ごしたい。七海との私的な会話を自動で知っていることにしない。",
       "avatarVideo": "assets/motion/seedance/characters/sumi-transparent.webm"
     }
   ],

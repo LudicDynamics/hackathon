@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { modelPreferenceArgs } from './model-preferences.js';
 import path from 'node:path';
+import { ensureProviderConfig } from './provider-config.js';
 import { airpEnv, extensionArgs, installPreset, skillArgs } from './presets.js';
 import { CHARACTER_ROLE_PREFIX, isValidCharacterId } from '@airp/shared';
 
@@ -83,6 +84,7 @@ const ISOLATION_ARGS = [
  * at a repo-local dir so `.pi/agent/models.json` is the one config that matters.
  */
 function agentDirEnv(repoRoot: string): Record<string, string> {
+  ensureProviderConfig(repoRoot);
   return { PI_CODING_AGENT_DIR: path.join(repoRoot, '.pi', 'agent') };
 }
 

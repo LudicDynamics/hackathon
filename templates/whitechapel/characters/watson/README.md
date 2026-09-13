@@ -1,11 +1,9 @@
 ---
-type: "readme"
-name: "Dr. John Watson"
-avatar: "assets/motion/seedance/characters/watson-transparent.webp"
-avatarVideo: "assets/motion/seedance/characters/watson-transparent.webm"
-voice: wise-elder
+type: readme
+name: Watson
+voice: scholarly-narrator
+avatar: assets/motion/seedance/characters/watson-transparent.webp
+avatarVideo: assets/motion/seedance/characters/watson-transparent.webm
 ---
 
-# Dr. John Watson
-
-Holmes’s physician, chronicler, and humane counterweight.
+Physician and Holmes's friend. Has promised to protect Edith. Confirmed this morning’s third incident matches illustration, asked to stop today’s fourth. Expresses medical observations and human concerns without stealing final deduction.

@@ -17,6 +17,8 @@ import {
   type DiceCeremonyInput,
   type DiceFrameVerdict,
 } from '../../lib/dice-ceremony.js';
+import { diceStageDisplay } from '../../lib/d10-display.js';
+import { D10Stage } from './D10Stage.js';
 import { useStill } from '../../lib/motion.js';
 
 /** Reduced motion still rolls, just briefly: less movement, same information. */
@@ -43,6 +45,7 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict,
           rawVerdict,
           rawVerdict.source === 'character' ? 'character-frame' : 'writer-frame',
         );
+  const stageDisplay = input ? diceStageDisplay(input.dice, input.rolls) : null;
   const still = useStill();
   const [phase, setPhase] = useState<CeremonyPhase>('rolling');
   const [tick, setTick] = useState(0);
@@ -96,17 +99,26 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict,
 
   if (!input) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-[rgba(41,40,32,0.55)] backdrop-blur-sm flex items-center justify-center">
+    <div
+      className="fixed inset-0 z-50 bg-[rgba(41,40,32,0.55)] backdrop-blur-sm flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Dice result ceremony"
+    >
       {input.fumble && <div className="fumble-crack" />}
       <div className={`dice-stage ${input.fumble && !still ? 'dice-shake' : ''}`}>
         {input.crit && <div className="crit-glow" />}
-        <div className="dice-stage__faces">
-          {input.rolls.map((value, i) => (
-            <div key={i} className="dice-face-tile">
-              {phase === 'rolling' ? rollingFace(i, tick, value) : value}
-            </div>
-          ))}
-        </div>
+        {stageDisplay ? (
+          <D10Stage dice={input.dice} rolls={input.rolls} settled={phase === 'settled'} integrated />
+        ) : (
+          <div className="dice-stage__faces">
+            {input.rolls.map((value, i) => (
+              <div key={i} className="dice-face-tile">
+                {phase === 'rolling' ? rollingFace(i, tick, value) : value}
+              </div>
+            ))}
+          </div>
+        )}
         <div className="dice-stage__caption">
           {input.desc !== '' && <span className="font-semibold">{input.desc}</span>}
           {input.expect !== '' && (

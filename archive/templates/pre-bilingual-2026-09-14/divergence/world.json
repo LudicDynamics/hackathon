@@ -1,0 +1,55 @@
+{
+  "id": "divergence",
+  "audio": {
+    "theme": "canvas-divergence"
+  },
+  "name": "Divergence Point",
+  "version": "1.0.0",
+  "schema": 1,
+  "description": "A time-line story where one electronics shop is explored through 1994, tonight, and a ruin thirty years from now.",
+  "author": "Worldlines Canvas / AIRP",
+  "genre": "time travel drama",
+  "tags": [
+    "science fiction",
+    "time travel",
+    "causality"
+  ],
+  "material": "parchment",
+  "cover": "assets/scenes/intro.webp",
+  "extensions": [
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
+  ],
+  "characters": [
+    {
+      "id": "ryo-child",
+      "home": "world/tokiwa-electrics/1994-11-02",
+      "role": "companion",
+      "avatar": "assets/motion/seedance/characters/ryo-transparent.webp",
+      "description": "The shopkeeper’s seven-year-old daughter, doing homework at the counter in 1994.",
+      "avatarVideo": "assets/motion/seedance/characters/ryo-transparent.webm"
+    },
+    {
+      "id": "shopkeeper",
+      "home": "world/tokiwa-electrics/tonight",
+      "role": "npc",
+      "avatar": "assets/characters/shopkeeper.webp",
+      "description": "The second-generation owner, polishing a radio nobody will collect."
+    }
+  ],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "player": {
+    "id": "returner",
+    "name": "Returning Visitor",
+    "avatar": "assets/characters/returner.webp"
+  }
+}
