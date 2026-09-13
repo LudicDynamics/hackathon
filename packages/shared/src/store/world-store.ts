@@ -60,6 +60,12 @@ export interface SeatFile {
    * computing from (kind,w,h); when absent the version comes from `kind`.
    */
   formVersion?: string;
+  /**
+   * NEW. Stable within-batch seating hint; never persisted in card metadata.
+   * Canonical `/api/layer` callers derive it from explicit order, kind stage,
+   * numeric filename prefix, and ASCII path.
+   */
+  order?: number;
 }
 
 /**

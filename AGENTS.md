@@ -142,6 +142,7 @@ docs/                   # 设计文档（真相源）；各实现批次目录见
   nook/ footprint/      # 角色小天地 N1 / 卡片占位尺寸
   audio/                # 音频接线（A1）：00 契约 + 01 服务端路由与解析 / 02 采样链与主轨 / 03 前端贯通 / 04 Foley 与 stinger / 05 素材缺口 / 06 回写
   tools/ hooks/ wiring/ perform/ prompts/ tts/ # 各实现批次：00 冻结契约 + 分篇 + REVIEW-*（§4 有逐批说明）
+  components/            # 组件多样化独立设计批次：00 共同契约 + 01 schema/registry + 02 resolver + 03 作者 + 04 前端 + 05 迁移验收
   merge/                # 合并登记（§6.6）：00-合并纪律.md（契约）+ BASELINE.md（立法前豁免 SHA）+ 逐次登记 + archive/ 两份 niko 复盘原始报告
   前端接线体检.md        # 2026-09-12 跨端 WS 契约静默漂移的核实报告（含缺陷分级与文档漂移清单）
 ```
@@ -225,6 +226,7 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 | `docs/前端接线体检.md` | 动 WS 帧 / 前端消费面 / `useWorld.ts` 前必读——冻结契约的机械核验（`pnpm check:ws`）与已知漂移清单 |
 | `docs/wiring/` | **前端接线 A 档（止血 + 文档回写）真相源**：`00-共同上下文.md` 是冻结契约（角色身份/去重/转发集合/请求体），`01`–`04` 逐模块设计，`05-文档回写.md` 是回写清单。**动 `useWorld.ts` WS switch / `CharacterModal` / `DiceRoller` / 角色帧载荷前必读** |
 | `docs/perform/` | **演出通道（残余 9 条 DARK 接线）真相源**：`00-共同上下文.md` 是冻结契约（`writer_delta` 来源流 / 幻影与座位过户 / `show_frame` 分发 / `canvas_patched` 归属 / 声响落点 / phantom 字段集），`01`–`05` 逐帧设计 + `06-文档回写.md` 回写清单 + `REVIEW-R1..R5` 五视角评审。**动 `event-bridge.ts` 帧映射 / `useWorld.ts` WS switch / `lib/{phantom,phantom-seat,writer-state,ghost,canvas-patch}.ts` / 演出组件前必读** |
+| `docs/layout/` | **生成组件自动排版设计真相源**：`00-共同上下文.md` 冻结 `flowColumns`、页面全量 occupied、批次顺序、幻影同源座位与 Chalk 拖拽锁；`01`–`05` 分别覆盖服务端几何、演出幻影、God Hand 交互、生成/初始化接缝与验收。**动 `seatUnplaced` / `reseatLayer` / `phantom-seat` / Canvas 拖拽 / 初始化幻影前必读；实现后同步回写 `perform`、`footprint`、`init`、`wiring` 的 00 文档** |
 | `docs/tts/` | **角色语音 TTS 批次真相源**：`00-共同上下文.md` 是冻结契约（`POST /api/tts` 请求/响应体、缓存 key、角色 `voice` frontmatter、前端 `playVoice`/`stopVoice`/`isVoicing`、页语义、env），`01`–`06` 逐模块设计，**`07` 音色别名映射 + `08` 音色 skill/门禁**。**动 `routes/tts.ts` / `lib/audio.ts` 语音面 / `CharacterModal` 分页 / `skills/voice-casting` / `voices.ts` 前必读** |
 | `docs/doc-08~18` | 各专题（多为待完善），实现对应模块前再读 |
 | `docs/init/` | **初始化执行（I1）真相源**：`00-共同上下文.md` 是冻结契约（`airp-init` 命令形状 / 执行序 / 并发防线 / brief 字段 / 边界），`01`–`04` 逐模块设计，`REVIEW-{Consistency,Semantics,Implementability}` 三份独立评审。**动 `init-command.ts` / brief / 空判定 / 前端 `first` 消费前必读** |
@@ -363,6 +365,8 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 | 音频（`ambient`/`bgm` frontmatter、`/api/audio`、stinger） | `docs/audio/00`（冻结契约）+ `01…06`；`apps/server/src/routes/world.ts` 的 `/audio` 分支与 `readLayerAudio`、`apps/web/src/lib/audio.ts`；**素材入库口径见 §7.8**——增删 `assets/audio/**` MUST 同步 `assets/audio/PLAN.md` 与 `CREDITS.md` |
 | 小天地（`GET /api/nook`、nookId、`layer` 列、footprint 门禁） | `docs/nook/00`（冻结契约）+ `01…05`；`apps/server/src/routes/world.ts` 的 nook 分支、`components/nook/NookView.tsx`、`packages/shared/src/rules/characters.ts` 的 `nookCardPaths` |
 | 卡片占位尺寸（`cards` 行 / footprint 回写 / reseat 漂移） | `docs/footprint/00`（冻结契约）+ `01…05`；`packages/shared/src/store/local-store.ts` 的建行路径、`lib/{measure,footprint}.ts`（与 §7.5 三条契约配套）|
+| 生成组件自动排版（列流 / 页面 occupied / 幻影 / Chalk 权限） | `docs/layout/00`（冻结契约）+ `01…05`；`packages/shared/src/layout/flow-columns.ts`（NEW）、`packages/shared/src/store/local-store.ts` 的 `seatUnplaced/reseatLayer`、`apps/web/src/lib/phantom-seat.ts`、`Canvas.tsx` pointer dispatcher；实施验收必须覆盖同批顺序、旧卡障碍、并发事务、幻影过户与非 God Chalk 拖拽锁 |
+| 组件多样化（appearance / 多轴主题组合） | `docs/components/00-共同上下文.md`（冻结契约）+ `01`–`05`；`packages/shared/src/schemas/appearance.ts`、`components/appearance-registry.ts`、`appearance/resolver.ts`、`apps/server/src/routes/world.ts` 的 layer+nook enriched 分支、`apps/web/src/lib/appearance-view.ts` 与 `CardRenderer`/`ChalkCard`；实现前必须核对唯一 registry/resolver、严格写入/宽容读取、Chalk 默认透明、letter surface allowlist、无新增 WS、footprint/互动不变 |
 | 角色素材（6 情绪枚举 / `<id>/<emo>.webp` 约定 / `/api/characters` 的 `emotions`） | `docs/assets/00`（冻结契约）+ `01…04`；`packages/shared/src/rules/emotions.ts`（枚举唯一源）、`apps/server/src/routes/world.ts` 的 `/characters` 探测、`apps/web/src/components/overlay/CharacterModal.tsx` 的立绘分支、`tools/{gen-emotions,gen-motion,record-emotion-assets}.mjs`；跑 `node tools/record-emotion-assets.mjs --check` + `pnpm test` |
 | 每世界设置（`autoWrite` 三态、`.airpworld/settings.json`、`/api/world-settings`） | `docs/settings/00`（冻结契约）；`packages/shared/src/schemas/world-settings.ts`（档位谓词唯一源）、`apps/server/src/engine/world-settings.ts`、`apps/server/src/routes/world.ts` 的 `/choice`·`/enter-layer`、`apps/web/src/state/useWorld.ts::enterLayer`、`components/AgentSettings.tsx`；**门走 I1（`airp_init`）、选项走 `dispatch`**，`/enter-layer` MUST NOT dispatch |
 | 文档里写的仓库路径（目录树 / 链接 / `file:line` 引用） | 无需手改同步表——**跑 `pnpm check:docs` 即可**：它核验 `docs/hooks` + `docs/audio` + `AGENTS.md` + `assets/README.md` 里的每条路径引用能否解析。改名/移动文件后引用悬空，门禁直接红 |

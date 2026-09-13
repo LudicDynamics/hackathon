@@ -107,6 +107,8 @@ export function App() {
   const [characters, setCharacters] = useState<CharacterView[]>([]);
   const [shelf, setShelf] = useState<WorldShelf>({ templates: [], worlds: [] });
   const [attention, setAttention] = useState<Attention>('ambient');
+  const [isGodHandOpen, setIsGodHandOpen] = useState(false);
+  const allowChalkDrag = isGodHandOpen;
   const [shell, setShell] = useState(initialShell);
   const [encounters, setEncounters] = useState<Record<string, string[]>>({});
   const [bagOpen, setBagOpen] = useState(false);
@@ -326,6 +328,7 @@ export function App() {
           return;
         }
         setAttention('ambient');
+        setIsGodHandOpen(false);
         if (nookChar !== null) { setNookChar(null); camera.restore(layer); void refresh(); return; }
         if (shell.header || shell.journal || shell.immersive) { setShell(initialShell); return; }
         if (layer !== 'map') {
@@ -411,6 +414,7 @@ export function App() {
       await loadChromeData();
       setWorldPickerOpen(false);
       setAttention('ambient');
+      setIsGodHandOpen(false);
       setShell(initialShell);
       setProfileOpen(false);
       setBagOpen(false);
@@ -474,6 +478,9 @@ export function App() {
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Could not change world time');
     }
+  };
+  const handleToggleGodHand = () => {
+    setIsGodHandOpen(open => !open);
   };
 
   const openCharacter = (character: CharacterView) => {
@@ -540,6 +547,7 @@ export function App() {
           <Canvas
             key={manifest?.id || 'opening'}
             effectsEnabled={effectsEnabled}
+            allowChalkDrag={allowChalkDrag}
             currentLayer={layer}
             ghost={ghostItem}
             ghostLabel={ghostLabel}
@@ -675,7 +683,7 @@ export function App() {
             </button>
           ))}
           </div>
-          <button className="prototype-action-toggle prototype-chrome" onClick={() => { setAttention(current => current === 'authoring' ? 'ambient' : 'authoring'); window.setTimeout(() => writerRef.current?.focus(), 0); }} aria-label={t("Write an action")}><Sparkles size={17} /><span aria-live="polite">{writerWorking ? `${t(writerStage)} · ${writerElapsed}s` : t('What do you do?')}</span></button>
+          <button className="prototype-action-toggle prototype-chrome" onClick={() => { if (attention === 'authoring') { setAttention('ambient'); setIsGodHandOpen(false); } else setAttention('authoring'); window.setTimeout(() => writerRef.current?.focus(), 0); }} aria-label={t("Write an action")}><Sparkles size={17} /><span aria-live="polite">{writerWorking ? `${t(writerStage)} · ${writerElapsed}s` : t('What do you do?')}</span></button>
 
           {writerWorking && <button type="button" className="writer-stop-control" onClick={() => { setWriterStopRequested(true); sendMessage({ type: 'writer_abort' }); }} aria-label="Stop writing">
             ■ {writerStopRequested ? 'Stop requested · retry' : 'Stop writing'} · {writerElapsed}s
@@ -704,8 +712,8 @@ export function App() {
 
           {attention === 'authoring' && (
             <div className="prototype-authoring">
-              <GodModeToolbar frozen={state?.worldFrozen === true} onToggleFreeze={handleToggleFreeze} />
-              <button className="prototype-quiet" onClick={() => setAttention('ambient')}>{t("Close")}</button>
+              <GodModeToolbar frozen={state?.worldFrozen === true} onToggleFreeze={handleToggleFreeze} allowChalkDrag={allowChalkDrag} onToggleChalkDrag={handleToggleGodHand} />
+              <button className="prototype-quiet" onClick={() => { setAttention('ambient'); setIsGodHandOpen(false); }}>{t("Close")}</button>
             </div>
           )}
 

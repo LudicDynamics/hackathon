@@ -25,9 +25,11 @@ import {
   parseFrontmatter,
   cardFormOf,
   cardKindOf,
+  componentDefOf,
   sanitiseForBlock,
   type Actor,
   type CardRecord,
+  type SeatFile,
   type ViewRect,
 } from '@airp/shared';
 import type { AgentLifecycleManager } from '../engine/lifecycle.js';
@@ -189,6 +191,50 @@ function storedSizeOf(
   }
   const { w, h } = boxSizeOf(row, declared);
   return { kind: declared.kind, w, h };
+}
+
+type SeatOrderInput = Pick<SeatFile, 'path' | 'kind' | 'order'>;
+
+function asciiCompare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function numericPrefixOf(filePath: string): number | null {
+  const name = path.basename(filePath);
+  const match = /^(\d+)-/.exec(name);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+
+function seatStageOf(kind: string | undefined): number {
+  if (kind === 'chalk') return 0;
+  if (componentDefOf(kind)) return 1;
+  return 2;
+}
+
+/**
+ * Canonical page order for one automatic seating batch. Explicit finite order
+ * is authoritative; the remaining files use Chalk/component/other stages,
+ * numeric filename prefixes, and finally POSIX path bytes.
+ */
+function stableSeatOrderOf(files: readonly SeatOrderInput[]): Array<{ path: string; order: number }> {
+  const sorted = [...files].sort((a, b) => {
+    const stage = seatStageOf(a.kind) - seatStageOf(b.kind);
+    if (stage !== 0) return stage;
+    const aOrder = Number.isFinite(a.order);
+    const bOrder = Number.isFinite(b.order);
+    if (aOrder !== bOrder) return aOrder ? -1 : 1;
+    if (aOrder && bOrder && a.order !== b.order) return a.order! - b.order!;
+    const aPrefix = numericPrefixOf(a.path);
+    const bPrefix = numericPrefixOf(b.path);
+    if (aPrefix === null && bPrefix !== null) return 1;
+    if (aPrefix !== null && bPrefix === null) return -1;
+    if (aPrefix !== null && bPrefix !== null && aPrefix !== bPrefix) return aPrefix - bPrefix;
+    return asciiCompare(a.path, b.path);
+  });
+  return sorted.map((file, order) => ({ path: file.path, order }));
 }
 
 /**
@@ -609,26 +655,60 @@ export function createWorldRouter(
       const items = allItems.filter(it => it.filename !== 'README.md' || !targets.has(it.path.replace(/\/README\.md$/, '')));
       const mdFiles = items.map((it) => it.path);
 
-      // Card rows keyed by path (never by layer column - a nested layer README
-      // appears in both its parent layer list and its own list).
-      const rowByPath = new Map(store.getLayerCards(mdFiles).map((r) => [r.id, r]));
-
-      // Seat and persist any card that has no row yet (placed cards never re-seat).
-      const unseated = items
-        .filter((it) => !rowByPath.has(it.path))
-        .map((it) => ({ path: it.path, ...storedSizeOf(it, rowByPath.get(it.path)) }));
-      if (unseated.length > 0) {
-        for (const row of await store.seatUnplaced(layer, unseated)) {
-          rowByPath.set(row.id, row);
+      // Store seating receives the complete page, including existing rows and
+      // cross-layer README doors, then re-reads rows inside its write transaction.
+      const initialRows = new Map(store.getLayerCards(mdFiles).map((row) => [row.id, row]));
+      const eventOrderByPath = new Map<string, number>();
+      for (const event of await store.getEvents(1000)) {
+        if (event.type === 'entity_created') {
+          const eventPath = event.detail.path;
+          if (typeof eventPath === 'string' && !eventOrderByPath.has(eventPath)) {
+            eventOrderByPath.set(eventPath, event.seq);
+          }
+        } else if (event.type === 'layer_initialized' && event.detail.layer === layer) {
+          const eventFiles = event.detail.files;
+          if (Array.isArray(eventFiles)) {
+            eventFiles.forEach((eventPath, index) => {
+              if (typeof eventPath === 'string' && !eventOrderByPath.has(eventPath)) {
+                eventOrderByPath.set(eventPath, event.seq * 1000 + index);
+              }
+            });
+          }
         }
       }
+      const orderHints = stableSeatOrderOf(
+        items.map((item) => {
+          const declared = declaredSizeOf(item);
+          const rawOrder = item.frontmatter?.order;
+          return {
+            path: item.path,
+            kind: declared.kind,
+            order:
+              typeof rawOrder === 'number' && Number.isFinite(rawOrder)
+                ? rawOrder
+                : eventOrderByPath.get(item.path),
+          };
+        })
+      );
+      const orderByPath = new Map(orderHints.map((entry) => [entry.path, entry.order]));
+      const seatFiles: SeatFile[] = items.map((item) => ({
+        path: item.path,
+        ...storedSizeOf(item, initialRows.get(item.path)),
+        order: orderByPath.get(item.path),
+      }));
+      const rowByPath = new Map(initialRows);
 
-      // Re-flow any card whose stored footprint drifted: a kind was resized in
-      // code (declared hash mismatch) or the front end measured a new size.
-      // Both live in `reseatLayer` (00 §5.1); without this the old seats overlap.
+      // The store filters rowless files again while holding BEGIN IMMEDIATE;
+      // passing the full page makes every existing page row an obstacle.
+      for (const row of await store.seatUnplaced(layer, seatFiles)) {
+        rowByPath.set(row.id, row);
+      }
+
+      // Re-flow only cards whose declared or measured footprint legitimately
+      // drifted. Stable rows retain their current x/y/z.
       for (const row of await store.reseatLayer(
         layer,
-        items.map((it) => ({ path: it.path, ...declaredSizeOf(it) }))
+        items.map((item) => ({ path: item.path, ...declaredSizeOf(item), order: orderByPath.get(item.path) }))
       )) {
         rowByPath.set(row.id, row);
       }

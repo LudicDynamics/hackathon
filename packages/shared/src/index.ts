@@ -10,6 +10,7 @@ export * from './store/local-store.js';
 export * from './schemas/forms.js';
 export * from './store/layers.js';
 export * from './db/schema.js';
+export * from './layout/flow-columns.js';
 
 // Init (I1) rules. Same no-glob discipline as below: a missing line is a silent
 // unreachable module. These are consumed by the server routes and the `airp-init`

@@ -18,6 +18,7 @@ import type { LayerItem, LayerLink } from '../../state/useWorld.js';
 
 interface CanvasProps {
   effectsEnabled?: boolean;
+  allowChalkDrag?: boolean;
   currentLayer: string;
   items: LayerItem[];
   /** true = no portrait on this canvas may play (global motion preference, nook 03 §③-6). */
@@ -85,6 +86,7 @@ function readTop(el: HTMLElement): number {
 
 
 export const Canvas: React.FC<CanvasProps> = ({
+  allowChalkDrag = false,
   effectsEnabled = false,
   currentLayer,
   ghost = null,
@@ -249,29 +251,33 @@ export const Canvas: React.FC<CanvasProps> = ({
     const obj = target.closest('.object');
     if (obj) {
       const el = obj as HTMLElement;
-      if (cardDragRef.current) return; // one drag at a time
       const path = el.dataset.path ?? '';
       if (target.closest('button, a, input, select, textarea, [data-no-drag]')) {
         return; // interactive child: plain click, no drag session
       }
+      if (cardDragRef.current) return; // one drag at a time
       const item = itemsByPath.get(path);
-      cardDragRef.current = {
-        pointerId: e.pointerId,
-        el,
-        path,
-        sx: e.clientX,
-        sy: e.clientY,
-        ix: readLeft(el),
-        iy: readTop(el),
-        moved: false,
-        captured: false,
-        pushed: new Set(),
-      };
-      raiseObject(path, el, item?.z ?? 1);
-      el.classList.add('dragging-item');
-      highlightLinks(path, true);
-      e.preventDefault();
-      return;
+      // Locked Chalk remains a viewport gesture target: do not prevent the
+      // event or create any card-drag state, so dragging over it still pans.
+      if (item?.kind !== 'chalk' || allowChalkDrag) {
+        cardDragRef.current = {
+          pointerId: e.pointerId,
+          el,
+          path,
+          sx: e.clientX,
+          sy: e.clientY,
+          ix: readLeft(el),
+          iy: readTop(el),
+          moved: false,
+          captured: false,
+          pushed: new Set(),
+        };
+        raiseObject(path, el, item?.z ?? 1);
+        el.classList.add('dragging-item');
+        highlightLinks(path, true);
+        e.preventDefault();
+        return;
+      }
     }
 
     // Blank viewport → pan + pinch (unchanged from T0.2).
