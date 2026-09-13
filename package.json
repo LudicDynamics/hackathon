@@ -29,6 +29,7 @@
     "check:ws": "node tools/check-ws-contract.mjs",
     "check:bodies": "node tools/check-request-bodies.mjs",
     "check:voices": "node tools/check-voices.mjs",
+    "check:i18n": "node tools/check-i18n.mjs",
     "check:emotions": "node tools/verify-emotions.mjs",
     "pi": "node tools/pi-rp.mjs"
   },

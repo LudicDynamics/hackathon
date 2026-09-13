@@ -112,7 +112,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   language = 'en',
   emotions,
 }) => {
-  const { locale: uiLocale } = useLocale();
+  const { locale: uiLocale, t } = useLocale();
   locale = uiLocale === 'ja' ? 'ja' : locale;
   const [receivedFrame, setReceivedFrame] = useState<CharacterFrame | null>(null);
   const incoming = suppliedFrame ?? receivedFrame;
@@ -712,7 +712,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
       aria-label={locale === 'ja' ? `${characterId}との会話` : `Dialogue with ${characterId}`}
       onPointerDown={handleUnlock}
     >
-      <button type="button" className="modal-close" onClick={handleClose} aria-label={locale === 'ja' ? '会話を閉じる' : 'Close dialog'}>
+      <button type="button" className="modal-close" onClick={handleClose} aria-label={t('Close dialog')}>
         ×
       </button>
 

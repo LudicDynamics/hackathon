@@ -121,6 +121,7 @@ tools/                  # 单一职责脚本：探针（probe-*）/ 门禁（che
   check-hooks-docs.mjs  # 设计文档门禁（pnpm check:docs）：symbol ownership / barrel union / sentinel（hooks 批语料）+ **file:line 引用核验（hooks + audio + AGENTS.md + assets/README.md）**；单测 tools/check-hooks-docs.test.mjs
   check-skills.mjs      # skill 语料门禁（pnpm check:skills）：frontmatter 真解析 / 语言分层 / 命名 / 非法工具名
   check-voices.mjs      # 音色门禁（pnpm check:voices）：角色 voice 必须解析到调色板（docs/tts/07）
+  check-i18n.mjs        # i18n 键门禁（pnpm check:i18n）：`t('…')` 字面量必须解析到 messages.json 且 zh-CN/ja 翻译齐全（缺键会静默回落成英文）
 
 assets/                 # worldlines-assets 素材车间；整树 .gitignore，**只白名单 audio/ 与 skills/**（见 §7.8）
   audio/                # 平台级音频池（已入库）：bgm（3 情绪主线）/ themes（逐世界主题曲）/ ambient（基础三轨 + pool/ 声场族）/ foley（拟音）+ PLAN.md 需求清单 + CREDITS.md
@@ -252,6 +253,7 @@ pnpm probe:prompt                               # 提示词 wire 探针（作家
 pnpm probe:init                                 # 初始化探针（真 spawn 作家，发 /airp-init，断言产物落盘 + 事件落账 + 幂等 + 零 AI 路径）
 pnpm check:skills                               # skill 语料门禁（frontmatter / 语言分层 / 命名 / 平台清单与触发词）
 pnpm check:voices                               # 音色门禁（角色 voice 解析到调色板；docs/tts/07）
+pnpm check:i18n                                 # i18n 键门禁（`t('…')` 键必须解析到 messages.json 且 zh-CN/ja 齐全）
 pnpm check:emotions                             # 角色素材门禁（6/6 齐备 + 真透明 + 9:16 + webm 真 alpha + 溯源 SHA；见 docs/assets/00 §7）
 pnpm pi status                                  # pi-rp 子模块 + dist 新鲜度体检（见 §7.2）
 pnpm motion <绿幕.mp4> -o out.webm --scale 360   # 微动立绘 / 背景视频（见 assets/skills/motion-portrait）
@@ -354,7 +356,7 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 ### 6.4 收工自检
 
 ```bash
-pnpm build && pnpm test && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:bodies && pnpm check:docs && pnpm probe:prompt && pnpm check:skills && pnpm check:voices && pnpm probe:init && pnpm check:emotions
+pnpm build && pnpm test && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:bodies && pnpm check:docs && pnpm probe:prompt && pnpm check:skills && pnpm check:voices && pnpm check:i18n && pnpm probe:init && pnpm check:emotions
 ```
 
 `pnpm test` 覆盖 `packages/shared/test/`、`apps/server/test/`、`apps/web/test/`、`tools/*.test.mjs` 四处（纯函数与非空性断言落在这里）。
@@ -362,6 +364,8 @@ pnpm build && pnpm test && pnpm probe && pnpm probe:inject && pnpm check:ws && p
 `pnpm check:ws` 是**跨端 WS 契约门禁**：服务端广播面、前端消费面、`docs/tools/12 §6.2` 契约三集合求 diff。**改了任何 WS 帧（增删帧名 / 改载荷 / 前端 case）必须让它变绿**——它会把"两端各自绿、合起来死"的漂移抓出来（2026-09-12 实际抓到 14 条）。
 
 `pnpm check:bodies` 是**HTTP 请求体门禁**（`tools/check-request-bodies.mjs`）：比对前端 `fetch('<route>', … JSON.stringify({...}))` 的键集合与 `docs/wiring/00 §6` 冻结的请求体。WS 门禁管帧名，这条管 body——`/api/dice` 曾因前端发 `{filePath,rollType,expect}` 而服务端只读 `body.path` 静默 400（2026-09-12 修复）。
+
+`pnpm check:i18n` 是**文案键门禁**（`tools/check-i18n.mjs`）：`translate()` 在缺键时**回落成 key 本身**，于是 `t('Some English')` 少了 messages.json 条目就在**每个语言**下都显示英文——静默去本地化。origin/niko 合并正是这样丢了 7 个键（场景 Chalk / 图片失败提示 / 作家书写提示）+ 1 个新增调用点。门禁只对**用到的键必须翻译齐全**这一向失败（死键只 warn，因为 `t(variable)` 扫不到）。
 
 `pnpm check:docs` 是**设计文档门禁**（`tools/check-hooks-docs.mjs`）：符号归属 / barrel union / sentinel 三条只在 hooks 批契约内成立，故只扫 `docs/hooks/`；**引用核验（file:line 必须能解析）跑更宽的语料**——`docs/hooks/` + `docs/audio/` + `AGENTS.md` + `assets/README.md`——因为"死路径在哪都是死路径"，而**入口文档的路径表恰恰是最容易悄悄过期的地方**（2026-09-13 加：§7.8 与 `assets/README.md` 都写过一句已经变了的 gitignore）。`assets/` 引用只核验 **git-tracked** 的文本路径（平台音频池 `assets/audio/PLAN.md` 等），世界相对的 `assets/...`（`<worldRoot>/assets/audio/rain.mp3`，测试 fixture）与媒体文件一律跳过——它们只是共享 `assets/` 这个前缀。**改了文档里的任何路径引用必须让它变绿**；批次文档顶部声明 `NEW` 的文件享文档级豁免。
 

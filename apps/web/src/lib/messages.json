@@ -1,21 +1,68 @@
 {
-  "Place in current scene": { "zh-CN": "放回当前场景", "ja": "今のシーンに置く" },
-  "The agent could not finish. Please try again.": { "zh-CN": "Agent 未能完成，请重试。", "ja": "応答を完了できませんでした。もう一度お試しください。" },
-  "The writer is working…": { "zh-CN": "作家正在续写…", "ja": "作家が物語を紡いでいます…" },
-  "Stop writing": { "zh-CN": "停止续写", "ja": "執筆を止める" },
-  "Saved games": { "zh-CN": "存档", "ja": "セーブデータ" },
-  "{count} saves": { "zh-CN": "{count} 个存档", "ja": "セーブ {count} 件" },
-  "← All worlds": { "zh-CN": "← 全部世界", "ja": "← ワールド一覧" },
-  "＋ Start a new game": { "zh-CN": "＋ 开始新游戏", "ja": "＋ 新しく始める" },
-  "No saves yet. Start a new game above.": { "zh-CN": "暂无存档，可以从上方开始新游戏。", "ja": "セーブはまだありません。上から新しく始められます。" },
-  "Save ID": { "zh-CN": "存档 ID", "ja": "セーブ ID" },
-  "Current game": { "zh-CN": "正在游玩", "ja": "プレイ中" },
-  "Delete save": { "zh-CN": "删除存档", "ja": "セーブを削除" },
-  "Open another save before deleting this one.": { "zh-CN": "请先切换到其他存档，再删除此存档。", "ja": "別のセーブを開いてから削除してください。" },
-  "Move this save to trash? Its files will be kept for recovery.": { "zh-CN": "将此存档移入回收目录？文件会保留，可手动恢复。", "ja": "このセーブをゴミ箱へ移動しますか？ファイルは復元用に保持されます。" },
-  "Move to trash": { "zh-CN": "移入回收目录", "ja": "ゴミ箱へ移動" },
-  "Save moved to trash.": { "zh-CN": "存档已移入回收目录。", "ja": "セーブをゴミ箱へ移動しました。" },
-  "Cancel": { "zh-CN": "取消", "ja": "キャンセル" },
+  "Place in current scene": {
+    "zh-CN": "放回当前场景",
+    "ja": "今のシーンに置く"
+  },
+  "The writer is working…": {
+    "zh-CN": "作家正在续写…",
+    "ja": "作家が物語を紡いでいます…"
+  },
+  "Stop writing": {
+    "zh-CN": "停止续写",
+    "ja": "執筆を止める"
+  },
+  "Saved games": {
+    "zh-CN": "存档",
+    "ja": "セーブデータ"
+  },
+  "{count} saves": {
+    "zh-CN": "{count} 个存档",
+    "ja": "セーブ {count} 件"
+  },
+  "← All worlds": {
+    "zh-CN": "← 全部世界",
+    "ja": "← ワールド一覧"
+  },
+  "＋ Start a new game": {
+    "zh-CN": "＋ 开始新游戏",
+    "ja": "＋ 新しく始める"
+  },
+  "No saves yet. Start a new game above.": {
+    "zh-CN": "暂无存档，可以从上方开始新游戏。",
+    "ja": "セーブはまだありません。上から新しく始められます。"
+  },
+  "Save ID": {
+    "zh-CN": "存档 ID",
+    "ja": "セーブ ID"
+  },
+  "Current game": {
+    "zh-CN": "正在游玩",
+    "ja": "プレイ中"
+  },
+  "Delete save": {
+    "zh-CN": "删除存档",
+    "ja": "セーブを削除"
+  },
+  "Open another save before deleting this one.": {
+    "zh-CN": "请先切换到其他存档，再删除此存档。",
+    "ja": "別のセーブを開いてから削除してください。"
+  },
+  "Move this save to trash? Its files will be kept for recovery.": {
+    "zh-CN": "将此存档移入回收目录？文件会保留，可手动恢复。",
+    "ja": "このセーブをゴミ箱へ移動しますか？ファイルは復元用に保持されます。"
+  },
+  "Move to trash": {
+    "zh-CN": "移入回收目录",
+    "ja": "ゴミ箱へ移動"
+  },
+  "Save moved to trash.": {
+    "zh-CN": "存档已移入回收目录。",
+    "ja": "セーブをゴミ箱へ移動しました。"
+  },
+  "Cancel": {
+    "zh-CN": "取消",
+    "ja": "キャンセル"
+  },
   "Worlds": {
     "zh-CN": "世界",
     "ja": "ワールド"
@@ -252,14 +299,6 @@
     "zh-CN": "世界书架",
     "ja": "ワールド一覧"
   },
-  "Template": {
-    "zh-CN": "模板",
-    "ja": "テンプレート"
-  },
-  "Your world": {
-    "zh-CN": "你的世界",
-    "ja": "あなたのワールド"
-  },
   "Continue this story": {
     "zh-CN": "继续这个故事",
     "ja": "この物語を続ける"
@@ -295,10 +334,6 @@
   "Added to belongings.": {
     "zh-CN": "已收入随身物品。",
     "ja": "持ち物に追加しました。"
-  },
-  "Choice recorded. The world can respond on the next turn.": {
-    "zh-CN": "已记录选择，世界将在下一轮回应。",
-    "ja": "選択を記録しました。世界は次のターンで応答できます。"
   },
   "▾ Pinned": {
     "zh-CN": "▾ 已固定",
@@ -359,5 +394,37 @@
   " · opening…": {
     "zh-CN": " · 正在打开……",
     "ja": " · 読み込み中…"
+  },
+  "Scene Chalk": {
+    "zh-CN": "场景板书",
+    "ja": "シーン・チョーク"
+  },
+  "Fold scene introduction": {
+    "zh-CN": "收起场景开场",
+    "ja": "導入をたたむ"
+  },
+  "Read scene introduction": {
+    "zh-CN": "阅读场景开场",
+    "ja": "導入を読む"
+  },
+  "The writer is writing…": {
+    "zh-CN": "作家正在书写…",
+    "ja": "作家が書いています…"
+  },
+  "Already had this image": {
+    "zh-CN": "这张图已经有了",
+    "ja": "この絵は既に持っていた"
+  },
+  "The picture could not be drawn.": {
+    "zh-CN": "图片未能生成。",
+    "ja": "絵を描けなかった。"
+  },
+  "The picture could not be shown.": {
+    "zh-CN": "图片未能显示。",
+    "ja": "絵を表示できなかった。"
+  },
+  "Could not move item": {
+    "zh-CN": "无法移动物品",
+    "ja": "アイテムを移動できませんでした"
   }
 }
