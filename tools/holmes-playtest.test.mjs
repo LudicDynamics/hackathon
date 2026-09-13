@@ -8,6 +8,7 @@ import { experiences } from './experiences/index.mjs';
 import { installExperience } from './install-experiences.mjs';
 import { LocalWorldStore, parseFrontmatter } from '../packages/shared/dist/index.js';
 import { createWorldRouter } from '../apps/server/dist/routes/world.js';
+import { HOLMES_SUBMISSION_INTENT, HOLMES_RESOLUTION_RULES } from './experiences/holmes-resolution.mjs';
 const pack = experiences.find(p => p.base === 'whitechapel');
 const root = 'templates/whitechapel-playtest';
 const map = 'world/london-map';
@@ -15,6 +16,23 @@ const expectedHomes = {
   watson: map, edith: `${map}/edith-room`, tom: `${map}/print-shop`,
   blackburn: `${map}/print-shop/editor-office`, wayne: `${map}/print-shop/illustration-room`,
 };
+
+test('submission always requests visible feedback and offers execution without a hidden correct-answer gate', async () => {
+  const source = `${map}/02-deduction-and-plan.md`;
+  const board = parseFrontmatter(await fs.readFile(`${root}/${source}`, 'utf8'));
+  assert.equal(board.frontmatter.intent, HOLMES_SUBMISSION_INTENT);
+  for (const phrase of ['読むだけ・不足という本文だけで終えない', 'この計画を実行する', '計画を直す']) assert.ok(HOLMES_SUBMISSION_INTENT.includes(phrase), phrase);
+  for (const phrase of ['二文書目を書いた回合', '提出だけで実行しない', '再確認をループしない', '隠れた正解ゲートにしない', 'Operation aborted は物語上の不正解ではない']) assert.ok(HOLMES_RESOLUTION_RULES.includes(phrase), phrase);
+  const shipped = await fs.readFile(`${root}/skills/whitechapel-playtest-play/SKILL.md`, 'utf8');
+  assert.ok(shipped.includes(HOLMES_RESOLUTION_RULES));
+});
+
+test('wrong, impossible, partial and successful attempts have authored consequences, source clues and a reachable return', () => {
+  for (const phrase of ['疑われた人が、次の手掛かりを差し出す', '待ち合わせではなかった住所', '守れたもの、逃したもの', '四枚目にいなかった人', '仮題', '題名や最終文章は現場で書く']) assert.ok(HOLMES_RESOLUTION_RULES.includes(phrase), phrase);
+  for (const phrase of ['人物の拒否は拒否として演じる', '不在の人物を勝手に登場させない', '別の真犯人や万能な新アリバイは作らない', '出典を実在する安定パス', '二重に与えない']) assert.ok(HOLMES_RESOLUTION_RULES.includes(phrase), phrase);
+  for (const phrase of ['01-outcome.md（type: note）', 'Chalk は現在地の一枚だけ', 'case-result-gate.md', '帰路や閲覧を player/case-receipt.md でロックしない', 'この手掛かりを調べる', '計画を練り直す', 'ここで一幕を終える', 'beyond-the-fourth-02/', '過去の正午を巻き戻さない']) assert.ok(HOLMES_RESOLUTION_RULES.includes(phrase), phrase);
+  assert.ok(!Object.keys(pack.files).some(f => f.includes('/beyond-the-fourth/')), 'Endings must not be prewritten into a fresh world');
+});
 
 test('clear opening motive, distributed evidence and no public culprit declaration', async () => {
   for (const file of ['world/README.md', 'world/01-opening.md']) {
