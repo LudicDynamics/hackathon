@@ -13,6 +13,13 @@ export interface Cam {
 /** Zoom clamp range (v3 L18). */
 export const Z_MIN = 0.28;
 export const Z_MAX = 2.2;
+/** Above this zoom, large text shadows are disproportionately expensive to repaint. */
+export const HIGH_ZOOM_RENDER_THRESHOLD = 1.5;
+
+/** Whether the canvas should use its compact high-zoom paint profile. */
+export function isHighZoom(z: number): boolean {
+  return Number.isFinite(z) && z >= HIGH_ZOOM_RENDER_THRESHOLD;
+}
 /** Interpolation coefficient per frame (v3 L80). */
 export const LERP_K = 0.13;
 /** Snap thresholds when close enough to target (v3 L81-83). */

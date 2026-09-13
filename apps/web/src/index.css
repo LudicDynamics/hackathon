@@ -882,6 +882,12 @@ body:before {
   color: var(--ink);
   text-shadow: -1px 1px 0 rgba(255, 252, 240, 0.8);
 }
+/* Large CSS zooms make text-shadow repaint the whole transformed glyph layer.
+   Keep the warm glow at normal scale, but drop it in the compact camera paint
+   profile so zooming remains responsive without hiding the narrative text. */
+.origin-top-left[data-zoom-paint="compact"] .chalk {
+  text-shadow: none !important;
+}
 /* ============================================================
    1. chalk — words that LIVE on the canvas (no paper, no card).
    Prototype `.chalk` L112-116 + hearth `.note` family L48-57.

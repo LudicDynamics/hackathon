@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   clampZ,
+  isHighZoom,
   lerpCam,
   worldTransform,
   type Cam,
@@ -121,11 +122,18 @@ export function useCamera(): CameraApi {
     if (!world) return; // App-level instance: nothing to drive
     let raf = 0;
     let tick = 0;
+    let compactPaint = false;
+    world.dataset.zoomPaint = 'full';
     const loop = () => {
       raf = 0;
       const c = sharedCurrent;
       lerpCam(c, sharedTarget);
       world.style.transform = worldTransform(sharedSize.w, sharedSize.h, c);
+      const nextCompactPaint = isHighZoom(c.z);
+      if (nextCompactPaint !== compactPaint) {
+        compactPaint = nextCompactPaint;
+        world.dataset.zoomPaint = nextCompactPaint ? 'compact' : 'full';
+      }
       tick++;
       const atRest =
         c.x === sharedTarget.x && c.y === sharedTarget.y && c.z === sharedTarget.z;
