@@ -276,11 +276,21 @@ export function App() {
       const target = event.target as HTMLElement | null;
       const typing = target?.closest('input, textarea, select, button, a, [role="switch"], [contenteditable="true"]');
       if (event.key === 'Escape') {
-        setWorldPickerOpen(false);
-        setProfileOpen(false);
-        setBagOpen(false);
+        // Dismiss transient chrome first; if nothing was open, Esc is the
+        // documented "go back" key (HintBar: "Alt+← / Esc to return"). Inside a
+        // nook it closes the nook and MUST NOT also walk the layer tree.
+        if (activeCharacter || bagOpen || profileOpen || worldPickerOpen) {
+          setWorldPickerOpen(false);
+          setProfileOpen(false);
+          setBagOpen(false);
+          return;
+        }
         setAttention('ambient');
-        setShell(initialShell);
+        if (nookChar !== null) { setNookChar(null); camera.restore(layer); void refresh(); return; }
+        if (shell.header || shell.journal || shell.immersive) { setShell(initialShell); return; }
+        if (layer !== 'map') {
+          enterLayer(manifest?.layers?.[layer]?.parent || 'map');
+        }
         return;
       }
       if (typing || activeCharacter) return;
@@ -297,7 +307,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [activeCharacter]);
+  }, [activeCharacter, bagOpen, profileOpen, worldPickerOpen, nookChar, shell, layer, manifest, enterLayer, refresh, camera]);
 
   const chalks = useMemo(
     () => (state?.items || []).filter((item) => item.frontmatter?.type === 'chalk'),
