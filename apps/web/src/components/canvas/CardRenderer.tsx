@@ -113,13 +113,11 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
   }
 
   if (frontmatter?.type === 'chalk') {
-    return (
-      <ChalkCard
-        item={item}
-        onSelectChoice={(choice) => onSelectChoice?.(path, choice)}
-        onDiceRolled={onDiceRolled}
-      />
-    );
+    // Widgets (choice/status/dice) are owned by EntityInteractions on canvas
+    // (CanvasObject), so the inline ChalkCard must not also render them — that
+    // double-renders. SceneChalk, sitting outside any `.object`, passes its
+    // handlers and gets them from the card instead.
+    return <ChalkCard item={item} />;
   }
 
   // 2. Gate Card (sub-scene portal) — a sub-directory's README, the door that

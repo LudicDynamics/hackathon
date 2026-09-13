@@ -100,7 +100,12 @@
 .prototype-action-toggle { position: absolute; z-index: 34; right: 100px; bottom: 28px; border-radius: 25px; padding: 10px 17px; font: italic 13px Georgia,serif!important; }
 .prototype-dock { bottom: 100px; width: min(680px,calc(100% - 60px)); }
 .prototype-authoring { top: 115px; }
-.airp-prototype .chalk { font: var(--chalk-size, 26px)/1.5 'Caveat', var(--kai), serif; letter-spacing: .01em; white-space: normal; }
+.airp-prototype .chalk { font: var(--chalk-size, 26px)/1.5 'Caveat', var(--kai), serif; letter-spacing: .01em; }
+.chalk__body { white-space: pre-wrap; }
+
+/* Dragged card must outrank the shell's hover/focus lift (AGENTS §7.5⑥):
+   the dragged card also matches :hover, so it needs a strictly higher value. */
+.airp-prototype .object.dragging-item { z-index: 1001 !important; }
 .airp-prototype .chalk--big { font-size: var(--chalk-size, 29px); }
 .airp-prototype .chalk .fm-block { font: 12px/1.6 'Manrope',sans-serif; }
 .airp-prototype .gate,.airp-prototype .note,.airp-prototype .letter { border-radius: 6px; }

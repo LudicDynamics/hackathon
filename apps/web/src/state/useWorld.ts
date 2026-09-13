@@ -358,9 +358,9 @@ export function useWorld(): UseWorldApi {
             if (msg.isError === true && typeof msg.toolCallId === 'string') {
               evictPhantom(msg.toolCallId);
               endTurn();
+              // A failed image also took the ambience; give it back (perform/03 §3.2).
+              setAmbient(stateRef.current?.audio.ambient ?? null);
             }
-            // The file's stable window opens now → arm one measurement.
-            fpRef.current?.notify();
           }
           break;
         case 'character_delta':
@@ -439,6 +439,9 @@ export function useWorld(): UseWorldApi {
             reused: msg.reused === true,
           });
           playFoley('crit-chime');
+          // Hand the sound bed back to the layer's authority (docs/perform/03
+          // §3.1 step 9): `image_generation_progress` took it with a wait bed.
+          setAmbient(stateRef.current?.audio.ambient ?? null);
           break;
         }
         case 'canvas_patched': {

@@ -163,6 +163,13 @@ export function App() {
   const chromeVisible = !shell.immersive;
   const isDusk = backdropReady;
 
+  // The free-input channel locks while the writer is mid-turn (docs/perform/01
+  // §6.4): a stray Enter must not queue a prompt the writer will never read.
+  // `writerWorking` is driven below from the writer frames (tool_start /
+  // writer_delta / chalk_writing → busy; writer_idle / error / turn_aborted →
+  // idle), so it covers a turn before its first chalk lands.
+  const writerLocked = writerWorking || state?.worldFrozen === true;
+
   const notify = (message: string) => {
     setToast(message);
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
@@ -355,6 +362,7 @@ export function App() {
 
   const submitWriter = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (writerLocked) return; // belt-and-braces: the input is disabled too
     const input = writerRef.current;
     const text = input?.value.trim() || '';
     if (!text) return;
@@ -464,10 +472,9 @@ export function App() {
         <section className="prototype-world" aria-label={t("Spatial story canvas")}>
           <Canvas
             key={manifest?.id || 'opening'}
-            openingComposition={manifest?.locale === 'ja' || ['wuwu', 'whitechapel', 'divergence', 'firstsnow', 'unwritten-door'].some(id => manifest?.id === id || manifest?.id?.startsWith(`${id}-`))}
             effectsEnabled={effectsEnabled}
             currentLayer={layer}
-            scene={null}
+            scene={state?.scene ?? null}
             sceneCopy={{ label: t('Scene Chalk'), collapse: t('Fold scene introduction'), expand: t('Read scene introduction') }}
             ghostCopy={{
               reused: t('Already had this image'),
@@ -610,7 +617,7 @@ export function App() {
             </div>
             <div className="prototype-dockrow">
               {writerWorking && <span role="status">{t(writerStage)} · {writerElapsed}s <button type="button" onClick={() => { sendMessage({ type: 'writer_abort' }); }}>{t('Stop writing')}</button></span>}
-              <input ref={writerRef} aria-label={t("Action")} placeholder={t("What do you do? You can also address someone by name…")} autoComplete="off" />
+              <input ref={writerRef} aria-label={t("Action")} placeholder={writerLocked ? t('The writer is writing…') : t("What do you do? You can also address someone by name…")} autoComplete="off" disabled={writerLocked} />
               <button className="prototype-primary" aria-label={t("Send action")}>↑</button>
             </div>
           </form>

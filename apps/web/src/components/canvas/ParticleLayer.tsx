@@ -3,6 +3,12 @@ import { getParallax } from '../../lib/parallax.js';
 
 export interface ParticleLayerProps {
   tone?: string;
+  /**
+   * Ambient dust/rain (pure decoration). Show bursts (`playBurst`) draw on this
+   * same canvas and MUST keep working when ambient is off (docs/perform/05
+   * §4.4), so this only gates the mote field — never the canvas itself.
+   */
+  ambient?: boolean;
 }
 
 interface Particle {
@@ -162,11 +168,15 @@ export function playBurst(spec: BurstSpec): () => void {
   };
 }
 
-export const ParticleLayer: React.FC<ParticleLayerProps> = ({ tone = 'warm' }) => {
+export const ParticleLayer: React.FC<ParticleLayerProps> = ({ tone = 'warm', ambient = true }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const toneRef = useRef(tone);
   toneRef.current = tone;
+  // Read imperatively in the render loop so toggling ambient never re-runs the
+  // effect (which would reset the particle field and drop live bursts).
+  const ambientRef = useRef(ambient);
+  ambientRef.current = ambient;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -233,51 +243,54 @@ export const ParticleLayer: React.FC<ParticleLayerProps> = ({ tone = 'warm' }) =
       const shiftX = -p.x * 24;
       const shiftY = -p.y * 24;
 
-      for (let i = 0; i < particles.length; i++) {
-        const part = particles[i];
+      // Ambient motes are decoration and gated; show bursts below are not.
+      if (ambientRef.current) {
+        for (let i = 0; i < particles.length; i++) {
+          const part = particles[i];
 
-        if (isCurrentRain) {
-          // Rain streaks
-          part.x += part.vx;
-          part.y += part.vy;
-          if (part.y > height) {
-            part.y = -20;
-            part.x = Math.random() * (width + 100);
+          if (isCurrentRain) {
+            // Rain streaks
+            part.x += part.vx;
+            part.y += part.vy;
+            if (part.y > height) {
+              part.y = -20;
+              part.x = Math.random() * (width + 100);
+            }
+            if (part.x < -20) part.x = width + 20;
+
+            const drawX = part.x + shiftX;
+            const drawY = part.y + shiftY;
+
+            ctx.beginPath();
+            ctx.strokeStyle = `rgba(180, 205, 225, ${part.alpha * 0.4})`;
+            ctx.lineWidth = 1.2;
+            ctx.moveTo(drawX, drawY);
+            ctx.lineTo(drawX + part.vx * 3, drawY + part.vy * 3);
+            ctx.stroke();
+          } else {
+            // Warm floating motes / dust
+            part.baseY += part.vy;
+            if (part.baseY < -20) {
+              part.baseY = height + 20;
+              part.baseX = Math.random() * width;
+            }
+
+            const wobble =
+              Math.sin(time * part.wobbleSpeed + part.pulseOffset) * part.wobbleRadius;
+            const currentAlpha =
+              (Math.sin(time * part.pulseSpeed + part.pulseOffset) * 0.5 + 0.5) * part.maxAlpha;
+
+            // Glowing dust mote — one pre-rendered sprite, scaled and faded.
+            const d = part.size * 4.4; // sprite diameter in CSS px
+            ctx.globalAlpha = currentAlpha;
+            ctx.drawImage(
+              glowSprite!,
+              part.baseX + wobble + shiftX - d / 2,
+              part.baseY + shiftY - d / 2,
+              d,
+              d
+            );
           }
-          if (part.x < -20) part.x = width + 20;
-
-          const drawX = part.x + shiftX;
-          const drawY = part.y + shiftY;
-
-          ctx.beginPath();
-          ctx.strokeStyle = `rgba(180, 205, 225, ${part.alpha * 0.4})`;
-          ctx.lineWidth = 1.2;
-          ctx.moveTo(drawX, drawY);
-          ctx.lineTo(drawX + part.vx * 3, drawY + part.vy * 3);
-          ctx.stroke();
-        } else {
-          // Warm floating motes / dust
-          part.baseY += part.vy;
-          if (part.baseY < -20) {
-            part.baseY = height + 20;
-            part.baseX = Math.random() * width;
-          }
-
-          const wobble =
-            Math.sin(time * part.wobbleSpeed + part.pulseOffset) * part.wobbleRadius;
-          const currentAlpha =
-            (Math.sin(time * part.pulseSpeed + part.pulseOffset) * 0.5 + 0.5) * part.maxAlpha;
-
-          // Glowing dust mote — one pre-rendered sprite, scaled and faded.
-          const d = part.size * 4.4; // sprite diameter in CSS px
-          ctx.globalAlpha = currentAlpha;
-          ctx.drawImage(
-            glowSprite!,
-            part.baseX + wobble + shiftX - d / 2,
-            part.baseY + shiftY - d / 2,
-            d,
-            d
-          );
         }
       }
 

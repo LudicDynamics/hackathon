@@ -235,8 +235,18 @@ export function registerInitCommand(pi: ExtensionAPI): void {
 
         // (5) Spawn the initializer in-process. `customTools` is required:
         //     spawnAgent does not inherit the parent's extension tools (spawn.ts:97).
+        //
+        // The spawned agent writes via the NATIVE `write` tool, which
+        // `extensions/world-context.ts` turns into a `layer_initialized`
+        // fallback — but this command OWNS that event (docs/init/02 §6: the
+        // command records by outcome) and records it in step 6. Without the
+        // flag the one scene init lands TWO `layer_initialized` rows (mutual
+        // exclusion, docs/tools/00 §6). jiti gives each extension file its own
+        // module instance (actor.ts header), so `process.env` is the only
+        // channel that reaches the OTHER extension.
         let result: { status: string; text?: string; error?: string };
         try {
+          process.env.AIRP_INIT_IN_FLIGHT = '1';
           result = await ctx.spawnAgent({
             profileId: isScene ? 'scene-init' : 'nook-init',
             task: brief,
@@ -245,6 +255,8 @@ export function registerInitCommand(pi: ExtensionAPI): void {
           });
         } catch (err) {
           result = { status: 'failed', error: msg(err) };
+        } finally {
+          delete process.env.AIRP_INIT_IN_FLIGHT;
         }
 
         // (6) Split: success needs BOTH 'completed' AND a product on disk.

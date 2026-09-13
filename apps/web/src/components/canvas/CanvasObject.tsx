@@ -148,6 +148,27 @@ export interface CanvasObjectProps {
   onTakeItem?: (path: string) => void;
 }
 
+/** `--target-rot` is a CSS custom property, which `CSSProperties` cannot name. */
+type ShellStyle = React.CSSProperties & { '--target-rot': string };
+
+/**
+ * The shell owns position, declared width and rotation. Height is left to the
+ * content so the painted box IS the real box (chalk overruns `form.h`).
+ * Rotation belongs to the shell alone: narration (chalk) and the presence
+ * figure stay level, every paper form keeps its hand tilt (AGENTS §7.5③).
+ */
+function shellStyle(item: CanvasObjectProps['item'], kind: string, reading: boolean): ShellStyle {
+  return {
+    left: item.x,
+    top: item.y,
+    // Declared width only — the reading panel floats (prop-card.css) so it never
+    // grows the shell. Mutating width here was a 4th collision authority
+    // (docs/footprint §3.5, AGENTS §7.5①).
+    width: item.w,
+    zIndex: reading ? 100 : liftFor(item.path, item.z),
+    '--target-rot': kind === 'chalk' || kind === 'sprite' ? '0deg' : `${item.rot}deg`,
+  };
+}
 export const CanvasObject: React.FC<CanvasObjectProps> = ({
   item,
   still = false,
@@ -223,20 +244,8 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
       onFocus={event => { setFocused(true); highlight(event.currentTarget, true); }}
       onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) { setFocused(false); highlight(event.currentTarget, false); } }}
       className={`object ink-form${reading ? ' object--reading' : ''}`}
-      style={
-        {
-          left: item.x,
-          top: item.y,
-          width: reading ? Math.max(item.w, 500) : item.w,
-          // No height: the shell hugs its card, so the painted box IS the real
-          // box (chalk runs far past form.h and used to overflow the shell).
-          zIndex: reading ? 100 : liftFor(item.path, item.z),
-          // Rotation belongs to the shell alone. Narration (chalk) and the
-          // presence figure stay level; every paper form keeps its hand tilt.
-          ['--target-rot' as any]:
-            kind === 'sprite' ? '0deg' : `${item.rot}deg`,
-        } as React.CSSProperties
-      }
+      data-reading={reading ? '' : undefined}
+      style={shellStyle(item, kind, reading)}
     >
         {reading ? <BagItemDialog inline item={item} onClose={() => setReading(false)} /> : kind === 'portrait' ? (
           <PortraitFig

@@ -11,14 +11,13 @@ import { useCamera } from '../../state/useCamera.js';
 import { clampZ, zoomAt, screenToWorld } from '../../lib/camera.js';
 import { makeBox, pushFrom, relaxAll } from '../../lib/collide.js';
 import { unlock, playFoley } from '../../lib/audio.js';
-import { separateBounds } from '../../lib/ui-shell.mjs';
+import { whenFontsSettled } from '../../lib/fonts.js';
 import { elementBox, invalidateMeasures } from '../../lib/measure.js';
 import { setParallax } from '../../lib/parallax.js';
 import { portraitPlayStateOf } from '../../lib/motion.js';
 import type { LayerItem, LayerLink } from '../../state/useWorld.js';
 
 interface CanvasProps {
-  openingComposition?: boolean;
   effectsEnabled?: boolean;
   currentLayer: string;
   items: LayerItem[];
@@ -84,7 +83,6 @@ function readTop(el: HTMLElement): number {
 
 
 export const Canvas: React.FC<CanvasProps> = ({
-  openingComposition = false,
   effectsEnabled = false,
   currentLayer,
   items,
@@ -149,7 +147,11 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   }, [currentLayer, camera]);
 
-  // Frame real rendered bounds once per scene, preserving subsequent pan/zoom.
+  // Frame the camera on the cards' real rendered bounds, once per scene.
+  // MUST NOT rewrite or persist card left/top: collision/position authority is
+  // the server's seated rows (docs/footprint/00 §5.1, I1), and a second
+  // collision pass here (separateBounds) laid cards out on a grid the drag
+  // relaxer then had to violently undo — the "first drag snaps" bug.
   useEffect(() => {
     if (!items.length || framedLayers.current.has(currentLayer)) return;
     let cancelled = false;
@@ -158,34 +160,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       const viewport = camera.viewportRef.current;
       const objects = [...(viewport?.querySelectorAll<HTMLElement>('.object') || [])];
       if (!viewport || !objects.length) return;
-      const measured = objects.map(el => ({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: Math.max(el.offsetHeight, el.scrollHeight) }));
-      if (openingComposition && currentLayer === 'map') {
-        const narration = objects.findIndex(el => el.querySelector('.chalk'));
-        if (narration >= 0) {
-          const main = measured[narration];
-          main.x = 580;
-          main.y = 350;
-          let rowY = 350;
-          let rowHeight = 0;
-          let column = 0;
-          measured.forEach((box, index) => {
-            if (index === narration) return;
-            box.x = main.x + main.w + 80 + column * 260;
-            box.y = rowY;
-            rowHeight = Math.max(rowHeight, box.h);
-            if (++column === 2) { column = 0; rowY += rowHeight + 40; rowHeight = 0; }
-          });
-        }
-      }
-      const separated = separateBounds(measured);
       framedLayers.current.add(currentLayer);
-      separated.forEach((box, index) => {
-        const el = objects[index];
-        if (box.y === el.offsetTop && box.x === el.offsetLeft) return;
-        el.style.left = `${box.x}px`;
-        el.style.top = `${box.y}px`;
-        if (el.dataset.path) void onMoveCard?.(el.dataset.path, box.x, box.y);
-      });
       const left = Math.min(...objects.map(el => el.offsetLeft));
       const top = Math.min(...objects.map(el => el.offsetTop));
       const right = Math.max(...objects.map(el => el.offsetLeft + el.offsetWidth));
@@ -197,9 +172,11 @@ export const Canvas: React.FC<CanvasProps> = ({
       const z = Math.min(.95, (width - (width < 700 ? 95 : 220)) / Math.max(1, right - left), (height - topSpace - bottomSpace) / Math.max(1, bottom - top));
       camera.flyTo((left + right) / 2, (top + bottom) / 2 + (bottomSpace - topSpace) / (2 * z), z);
     };
-    void document.fonts.ready.then(() => requestAnimationFrame(frame));
+    // Font-dependent heights must settle before measuring (docs/footprint §3.5):
+    // a bare document.fonts.ready can read pre-swap metrics.
+    void whenFontsSettled().then(() => requestAnimationFrame(frame));
     return () => { cancelled = true; };
-  }, [currentLayer, items, camera, openingComposition]);
+  }, [currentLayer, items, camera]);
 
   // Session z-lifts die with the payload that carries the server order: the
   // `links` array reference only changes on fetchLayer-driven refreshes and on
@@ -583,8 +560,10 @@ export const Canvas: React.FC<CanvasProps> = ({
         onDiceRolled={onDiceRolled}
       />
 
-      {/* Atmospheric 1.35x foreground particle system: floating dust & rain overlay */}
-      {effectsEnabled && <ParticleLayer key={bg.tone} tone={bg.tone} />}
+      {/* Atmospheric 1.35x foreground particle system. Always mounted: show
+          bursts (`playBurst`) draw on this same canvas (docs/perform/05 §4.4),
+          so `effectsEnabled` only toggles the ambient dust/rain field. */}
+      <ParticleLayer key={bg.tone} tone={bg.tone} ambient={effectsEnabled} />
     </div>
   );
 };

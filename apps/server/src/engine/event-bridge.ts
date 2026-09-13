@@ -120,8 +120,17 @@ export function mapEngineEvent(
     case 'message_end': {
       if (event.message?.role === 'assistant') {
         const result = event.message as { stopReason?: string; errorMessage?: string };
-        if (result.stopReason === 'error' || result.stopReason === 'aborted') {
+        // A user-aborted turn is not a failure: the Stop control routes through
+        // `abort` → `stopReason: 'aborted'`, so surfacing it as `error` would
+        // show a red notice for the action the player just asked for. Fresh
+        // `turn_aborted` frames are recognised by the client; a redundant one
+        // after lifecycle's timeout abort is harmless.
+        if (result.stopReason === 'error') {
           push({ type: 'error', source, message: result.errorMessage || 'The agent could not finish this turn.' });
+          break;
+        }
+        if (result.stopReason === 'aborted') {
+          push({ type: 'turn_aborted', source, reason: 'aborted' });
           break;
         }
         const text = messageText(event.message);
