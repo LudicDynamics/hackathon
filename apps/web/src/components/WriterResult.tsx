@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { usePlayHintsEnabled } from '../lib/play-hints.js';
+import { useLocale } from '../lib/i18n.js';
+import { AgentActivity } from './AgentActivity.js';
 
 /** One ephemeral receipt per settled turn; never render reasoning or tool arguments. */
 export function WriterResult({ worldKey, onContinue }: { worldKey?: string; onContinue?: () => void }) {
+  const hintsEnabled = usePlayHintsEnabled();
+  const { t } = useLocale();
   const [result, setResult] = useState<{ text: string; id: number } | null>(null);
   const [progress, setProgress] = useState('');
   const [canContinue, setCanContinue] = useState(false);
@@ -33,6 +38,7 @@ export function WriterResult({ worldKey, onContinue }: { worldKey?: string; onCo
   }, [worldKey]);
   return <>
     {progress ? <div className="writer-result writer-progress" role="status">{progress}</div> : result ? <div key={result.id} className="writer-result" role="status">{result.text}</div> : null}
-    {canContinue && onContinue && <button type="button" className="writer-continue" onClick={onContinue}>Continue →</button>}
+    {hintsEnabled && onContinue && <button type="button" className="writer-continue" disabled={!!progress} onClick={onContinue}>{t('Continue · next-step hint →')}</button>}
+    <AgentActivity worldKey={worldKey} />
   </>;
 }

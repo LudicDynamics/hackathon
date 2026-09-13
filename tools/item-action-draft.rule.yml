@@ -3,6 +3,7 @@ keyresults:
   - kr-1: "物品详情同时提供放置与使用；使用只追加草稿"
   - kr-2: "两件物品的稳定路径均传入作家，重复点击去重，删除引用不残留"
   - kr-3: "构建、探针、回归测试与浏览器菜单检查通过"
+  - kr-4: "可关闭下一步提示，右上角区分工具尝试、落盘回执和中断"
 rules:
   - id: item-draft-no-side-effects
     name: item-draft-no-side-effects
