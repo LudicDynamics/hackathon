@@ -509,6 +509,7 @@ export function App() {
             }}
             onItemDropOnTarget={handleItemDrop}
             onDropItemToScene={handleReturnItem}
+            onTakeItem={handleTakeItem}
             onOpenRadialMenu={(x, y, worldX, worldY) => { if (attention === 'authoring') setRadialState({ x, y, worldX, worldY }); }}
           />
 
