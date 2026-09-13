@@ -89,8 +89,8 @@ export interface UseWorldApi {
   moveCard(path: string, x: number, y: number): Promise<void>;
   /** Send a writer_prompt WS message (choices / free input). */
   sendToWriter(text: string): void;
-  /** Raw WS send (character_prompt etc.). */
-  sendMessage(payload: Record<string, unknown>): void;
+  /** Raw WS send (character_prompt etc.). false = socket not OPEN. */
+  sendMessage(payload: Record<string, unknown>): boolean;
   /** Debug/test seam: force a footprint flush (gates still apply). */
   flushFootprints(): void;
 }
@@ -238,8 +238,11 @@ export function useWorld(): UseWorldApi {
     }
   }, []);
 
-  const sendMessage = useCallback((payload: Record<string, unknown>) => {
-    sendSocket(wsRef.current, payload);
+  // Returns false when the socket is not OPEN (docs/init/03 §⑫-4 ruling: the
+  // `airp_init` caller must know a request was actually sent before showing a
+  // ghost for it). Existing callers ignore the value.
+  const sendMessage = useCallback((payload: Record<string, unknown>): boolean => {
+    return sendSocket(wsRef.current, payload);
   }, []);
 
   const flushFootprints = useCallback(() => {

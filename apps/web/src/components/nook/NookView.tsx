@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Canvas } from '../canvas/Canvas.js';
 import { WriterBar } from '../chrome/WriterBar.js';
+import { StubPrompt } from '../chrome/StubPrompt.js';
+import { ghostItemFor } from '../../lib/init-ghost.js';
 import type { LayerState } from '../../state/useWorld.js';
 import { UI_COPY, type Locale } from '../../lib/i18n.js';
 import { useStill } from '../../lib/motion.js';
@@ -35,6 +37,13 @@ export interface NookViewProps {
   onSelectChoice?: (path: string, choice: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
   onTakeItem?: (path: string) => void;
+  /**
+   * Ask the engine to materialise this empty nook (docs/init/03 §3.7: the N1
+   * view owns the ENTRY, the `airp_init` kernel stays in one place). `request`
+   * is the player's one-line intent, or undefined for "leave it blank".
+   * Returns false when the socket is down, so the caller keeps its UI state.
+   */
+  onRequestInit?: (kind: 'nook', target: string, request?: string) => boolean;
 }
 
 interface NookError {
@@ -120,10 +129,18 @@ export const NookView: React.FC<NookViewProps> = ({
   onSelectChoice,
   onDiceRolled,
   onTakeItem,
+  onRequestInit,
 }) => {
   const [state, setState] = useState<LayerState | null>(null);
   const [error, setError] = useState<NookError | null>(null);
   const [loading, setLoading] = useState(true);
+  // The nook whose I1 initialiser is in flight (docs/init/03 §3.6). Cleared ONLY
+  // by the `layer_initialized` / `layer_init_failed` event — events are the single
+  // change source, so there is no timer here. `useWorld` already dispatches
+  // `airp:layer-init` for ANY layer (its `ev.type` check is not layer-scoped),
+  // so the nook reuses that channel with zero new contract.
+  const [initializing, setInitializing] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const copy = UI_COPY[locale];
 
@@ -158,6 +175,40 @@ export const NookView: React.FC<NookViewProps> = ({
   useEffect(() => {
     void load(characterId);
   }, [characterId, load]);
+
+  // The initialiser's outcome (docs/init/03 §3.6): clear the ghost. A failure
+  // must ALSO be visible — never a silent blank room (contract §8 anti-pattern 8).
+  // Scope by layer: `airp:layer-init` also fires for scene inits.
+  useEffect(() => {
+    const onLayerInit = (event: Event) => {
+      const msg = (event as CustomEvent).detail as { event?: { type?: string; layer?: string } } | undefined;
+      const ev = msg?.event;
+      if (!ev || ev.layer !== nookIdRef.current) return;
+      setInitializing(false);
+      if (['layer_init_failed'].includes(ev.type ?? '')) setNotice(copy.nookInitFailed);
+      else void load(characterId); // success: the refetched furnishing replaces the ghost
+    };
+    window.addEventListener('airp:layer-init', onLayerInit);
+    return () => window.removeEventListener('airp:layer-init', onLayerInit);
+  }, [characterId, load, copy.nookInitFailed]);
+
+  /**
+   * The one exit of the empty-state prompt (docs/init/03 §3.3/§3.7): Submit and
+   * Skip are the same call; `''` means "leave it blank". `onRequestInit` returns
+   * false when the socket is down — then keep the prompt up rather than showing a
+   * ghost for a request that was never sent.
+   */
+  const resolveInit = useCallback(
+    (text: string) => {
+      if (!onRequestInit) return;
+      const req = text.trim();
+      if (onRequestInit('nook', characterId, req === '' ? undefined : req)) {
+        setNotice(null);
+        setInitializing(true);
+      }
+    },
+    [onRequestInit, characterId]
+  );
 
   // A world file changed (writer added a furnishing / drag persisted) → re-read
   // the whole nook. `useWorld` already forwards `file_changed` before its own
@@ -319,19 +370,55 @@ export const NookView: React.FC<NookViewProps> = ({
       )}
 
       {isEmpty ? (
-        /* Empty room (doc-11 §4.1): a room nothing has moved into yet. The
-           room text sits centred; the input line reuses the writer bar's
-           paper-slip imagery but MUST stay a dead control — initialisation
-           is a later batch (00 §4). */
+        /* Empty room (doc-11 §4.1): a room nothing has moved into yet. While an
+           initialiser runs, the ghost card occupies the room instead of the
+           prompt (docs/init/03 §3.5); otherwise the prompt collects the one-line
+           intent — an EMPTY submit is a valid meaning ("leave it blank"). */
         <div className="w-full h-full">
-          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 px-8 text-center">
-            <div className="font-serif text-lg text-ink/70">{copy.nookEmptyTitle}</div>
-            <div className="font-mono text-xs text-ink/50">{copy.nookEmptyBody}</div>
-          </div>
-          <WriterBar disabled onSend={() => {}} placeholder={copy.nookEmptyPrompt} sendLabel="⏎" />
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 font-mono text-[10px] text-ink/40 text-center px-4">
-            {copy.nookEmptyHint}
-          </div>
+          {initializing ? (
+            <Canvas
+              currentLayer={state.layer}
+              items={[]}
+              links={[]}
+              bg={state.bg}
+              ghost={ghostItemFor(state.layer, copy.nookGenerating)}
+              ghostLabel={copy.nookGenerating}
+              ghostCopy={{
+                reused: copy.ghostReused,
+                failed: copy.ghostFailed,
+                unreachable: copy.ghostUnreachable,
+              }}
+              stillPortraits={reduceMotion}
+            />
+          ) : (
+            <>
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 px-8 text-center">
+                <div className="font-serif text-lg text-ink/70">{copy.nookEmptyTitle}</div>
+                <div className="font-mono text-xs text-ink/50">{copy.nookEmptyBody}</div>
+              </div>
+              {onRequestInit ? (
+                <StubPrompt
+                  kind="nook"
+                  copy={{
+                    label: copy.nookEmptyPrompt,
+                    placeholder: copy.nookEmptyHint,
+                    skip: copy.nookInitSkip,
+                  }}
+                  onResolve={resolveInit}
+                />
+              ) : (
+                <WriterBar disabled onSend={() => {}} placeholder={copy.nookEmptyPrompt} sendLabel="⏎" />
+              )}
+            </>
+          )}
+          {notice && (
+            <div
+              role="alert"
+              className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 px-3 py-2 rounded-lg bg-rust/10 border border-rust/40 font-mono text-[11px] text-ink shadow-soft"
+            >
+              {notice}
+            </div>
+          )}
         </div>
       ) : state ? (
         <Canvas

@@ -747,7 +747,7 @@ export function App() {
         />
       )}
 
-      {nookChar && <div className="prototype-nook"><NookView characterId={nookChar} locale={locale === 'ja' ? 'ja' : 'en'} onClose={() => { setNookChar(null); camera.restore(layer); void refresh(); }} onMoveCard={moveCard} onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }} onTakeItem={path => { void handleTakeItem(path); }} /></div>}
+      {nookChar && <div className="prototype-nook"><NookView characterId={nookChar} locale={locale === 'ja' ? 'ja' : 'en'} onClose={() => { setNookChar(null); camera.restore(layer); void refresh(); }} onMoveCard={moveCard} onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }} onTakeItem={path => { void handleTakeItem(path); }} onRequestInit={(kind, target, request) => sendMessage({ type: 'airp_init', kind, target, ...(request ? { request } : {}), by: 'player' })} /></div>}
 
       {/* Dice ceremony overlay (screen-fixed layer, same visual language as the player path) */}
       {ceremony && (
