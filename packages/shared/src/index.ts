@@ -1,5 +1,6 @@
 export * from './schemas/world.js';
 export * from './schemas/agent-settings.js';
+export * from './schemas/world-settings.js';
 export * from './schemas/frontmatter.js';
 export * from './schemas/components.js';
 export * from './schemas/events.js';

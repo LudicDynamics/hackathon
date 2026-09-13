@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
+import type { AutoWrite, WorldSettings } from '@airp/shared/world-settings';
 type Model = { provider: string; id: string; name?: string };
 type Status = { world: string; active: string[]; models: Model[]; writer: { model: Model | null; thinking: string }; characters: { id: string; model: Model | null; thinking: string }[]; preferences: Partial<Record<'writer' | 'character', { provider: string; model: string; thinking: string }>>; busy: boolean; progress: Record<string, { stage: string; startedAt: number; updatedAt: number }> };
-export function AgentSettings() {
+export function AgentSettings({ settings, onSaveSettings }: {
+  settings: WorldSettings;
+  onSaveSettings: (next: WorldSettings) => Promise<void>;
+}) {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState('');
@@ -49,6 +53,7 @@ export function AgentSettings() {
       <p role="status">{!status ? 'Connecting to the engine' : status.busy ? progress?.stage ?? 'Preparing the response' : 'Ready for your next action'}</p>
       <p>Writer: {status?.writer.model?.id ?? 'Unknown'} · {status?.writer.thinking ?? '—'}<br />{status?.characters.map(c => <span key={c.id}>{c.id}: {c.model?.id ?? 'Unknown'} · {c.thinking}<br /></span>)}</p>
       {status?.busy && <p>{seconds}s elapsed · You can browse while waiting. {progress && Date.now() - progress.updatedAt > 15000 ? 'No recent progress. You can stop the turn.' : ''}</p>}
+      <label>Auto-write<select value={settings.autoWrite} onChange={e => void onSaveSettings({ autoWrite: e.target.value as AutoWrite })}><option value="off">Off · the writer waits for you</option><option value="scenes">Scenes · write unwritten scenes on entry</option><option value="scenes-and-choices">Scenes + choices · also advance on each choice</option></select></label>
       <label>Agent<select value={role} onChange={e => setRole(e.target.value as typeof role)}><option value="writer">Writer</option><option value="character">Characters</option></select></label>
       <label>Model<select value={model} onChange={e => setModel(e.target.value)}><option value="">Choose a model</option>{status?.models.map(m => <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>{m.provider} / {m.name || m.id}</option>)}</select></label>
       <label>Reasoning<select value={thinking} onChange={e => setThinking(e.target.value)}><option value="off">Off · fastest</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>

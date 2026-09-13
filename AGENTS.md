@@ -1,6 +1,7 @@
 # AGENTS.md — AIRP
 
 模型与执行进度：`apps/server/src/engine/model-preferences.ts` 管理世界存档内的运行偏好，`GET/POST /api/agent-settings` 与 `agent_progress` 接前端 Agents 面板和行动状态。协议及验证见 `docs/Agent模型选择与进度.md`。这不是独立叙事状态文件；正文仍是世界真相源。
+每世界设置：`apps/server/src/engine/world-settings.ts` 管理存档内的玩法偏好（`<worldRoot>/.airpworld/settings.json` 的 `autoWrite`），`GET/POST /api/world-settings` 接前端 Agents 面板。三态 `off`（默认，回到 doc-21 §5.5）/ `scenes` / `scenes-and-choices`：**「进未写场景」走 I1 初始化器（门），「玩家选项」才可能起作家一轮**；`/api/enter-layer` MUST NOT 起作家。契约见 `docs/settings/00-共同上下文.md`。这不是独立叙事状态文件；正文仍是世界真相源。
 
 > 在这个仓库里干活的人与 agent 的入口手册。
 > **本文与 `docs/` 都是设计真相源：架构一变，本文同步改。**
@@ -219,6 +220,7 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 | `docs/audio/` | **音频接线（A1）真相源**：`00-共同上下文.md` 是冻结契约（`ambient`/`bgm` frontmatter / `/api/audio` 路径解析 / 采样优先合成兜底 / stinger 触发），`01`–`06` 分篇。素材清单在 `assets/audio/PLAN.md`（P0 已完成，P1/P2 缺口逐条登记）。**动 `lib/audio.ts` / `routes/world.ts` 的 `/audio` / 世界主题曲声明前必读** |
 | `docs/prompts/` | **提示词与 skill 体系真相源**：`00-共同上下文.md` 是冻结契约，`01`–`03` 是作家/角色/初始化器**正文逐字源**（`extensions/instructions.ts` 与之对应），`04` skill 体系，`05` 装配与验证 + 四份评审。**改任何 preset / skill / instruction slot 前必读** |
 | `docs/assets/` | **角色素材批次真相源（6 情绪差分 + 微动立绘 + 氛围音）**：`00-共同上下文.md` 是冻结契约（`EMOTIONS` 六枚举 / `assets/characters/<id>/<emo>.webp` 约定 / `/api/characters` 的 `emotions`（6 张全在才回传）/ 微动片归小天地 `portrait`），`01`–`04` 分篇。生产工具 `tools/gen-emotions.mjs`、`tools/gen-motion.mjs`、`tools/record-emotion-assets.mjs`。**动 `routes/world.ts` 的 `/characters` / `CharacterModal` 立绘 / 6 情绪素材 / nook portrait 前必读** |
+| `docs/settings/` | **每世界设置（S1）真相源**：`00-共同上下文.md` 是冻结契约（`autoWrite` 三态语义 / `.airpworld/settings.json` 形状 / `GET|POST /api/world-settings` / 门控点：门走 I1、选项走 dispatch）。**动 `routes/world.ts` 的 `/choice`·`/enter-layer` / `useWorld.enterLayer` / `AgentSettings` 前必读** |
 
 **参考实现（都在本项目的兄弟目录，不进本仓库）**：
 
@@ -344,6 +346,7 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 | 小天地（`GET /api/nook`、nookId、`layer` 列、footprint 门禁） | `docs/nook/00`（冻结契约）+ `01…05`；`apps/server/src/routes/world.ts` 的 nook 分支、`components/nook/NookView.tsx`、`packages/shared/src/rules/characters.ts` 的 `nookCardPaths` |
 | 卡片占位尺寸（`cards` 行 / footprint 回写 / reseat 漂移） | `docs/footprint/00`（冻结契约）+ `01…05`；`packages/shared/src/store/local-store.ts` 的建行路径、`lib/{measure,footprint}.ts`（与 §7.5 三条契约配套）|
 | 角色素材（6 情绪枚举 / `<id>/<emo>.webp` 约定 / `/api/characters` 的 `emotions`） | `docs/assets/00`（冻结契约）+ `01…04`；`packages/shared/src/rules/emotions.ts`（枚举唯一源）、`apps/server/src/routes/world.ts` 的 `/characters` 探测、`apps/web/src/components/overlay/CharacterModal.tsx` 的立绘分支、`tools/{gen-emotions,gen-motion,record-emotion-assets}.mjs`；跑 `node tools/record-emotion-assets.mjs --check` + `pnpm test` |
+| 每世界设置（`autoWrite` 三态、`.airpworld/settings.json`、`/api/world-settings`） | `docs/settings/00`（冻结契约）；`packages/shared/src/schemas/world-settings.ts`（档位谓词唯一源）、`apps/server/src/engine/world-settings.ts`、`apps/server/src/routes/world.ts` 的 `/choice`·`/enter-layer`、`apps/web/src/state/useWorld.ts::enterLayer`、`components/AgentSettings.tsx`；**门走 I1（`airp_init`）、选项走 `dispatch`**，`/enter-layer` MUST NOT dispatch |
 | 文档里写的仓库路径（目录树 / 链接 / `file:line` 引用） | 无需手改同步表——**跑 `pnpm check:docs` 即可**：它核验 `docs/hooks` + `docs/audio` + `AGENTS.md` + `assets/README.md` 里的每条路径引用能否解析。改名/移动文件后引用悬空，门禁直接红 |
 
 文档里已被推翻的说法**直接改掉**，不要另起一段解释——`docs/archive/` 才是存废案的地方。

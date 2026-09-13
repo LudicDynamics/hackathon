@@ -17,6 +17,10 @@
       "types": "./dist/schemas/forms.d.ts",
       "import": "./dist/schemas/forms.js"
     },
+    "./world-settings": {
+      "types": "./dist/schemas/world-settings.d.ts",
+      "import": "./dist/schemas/world-settings.js"
+    },
     "./viewpoint": {
       "types": "./dist/render/viewpoint.d.ts",
       "import": "./dist/render/viewpoint.js"

@@ -14,6 +14,11 @@ import { mergeItemPatch, mergeLinkPatch } from '../lib/canvas-patch.js';
 import { beginTurn, endTurn, reset as resetWriter } from '../lib/writer-state.js';
 import { playFoley, playCharge, endCharge, setAmbient } from '../lib/audio.js';
 import { ghostSizeFor, stageText, GHOST_WAIT_AMBIENT } from '../lib/ghost.js';
+import {
+  DEFAULT_WORLD_SETTINGS,
+  startsSceneInit,
+  type WorldSettings,
+} from '@airp/shared/world-settings';
 
 export interface LayerItem {
   path: string;
@@ -62,8 +67,15 @@ export interface UseWorldApi {
   loading: boolean;
   /** The layer currently being shown (reactive; src of truth for layer). */
   layer: string;
-  /** Switch layer + fetch it (WS subscriptions stay bound to the layer). */
+  /** Switch layer + fetch it. When auto-write is on and the target is a stub,
+   *  fires the I1 initialiser (`airp_init`) after the server confirms `first`. */
   enterLayer(next: string): Promise<void>;
+  /** Re-read the active world's settings (after a world load). */
+  reloadSettings(): Promise<void>;
+  /** Per-world auto-write preference (docs/settings/00); defaults to `off`. */
+  settings: WorldSettings;
+  /** Persist a new auto-write preference; updates local state on success. */
+  saveSettings(next: WorldSettings): Promise<void>;
   /** Re-fetch the current layer. */
   refresh(): Promise<void>;
   /**
@@ -120,6 +132,11 @@ export function useWorld(): UseWorldApi {
   const fpRef = useRef<FootprintScheduler | null>(null);
   const writerToolsInFlight = useRef(0);
   const fontsSettledRef = useRef(false);
+  // Per-world auto-write preference (docs/settings/00). Kept in a ref as well as
+  // state: `enterLayer` reads it synchronously (a fresh fetch may not have
+  // landed when a gate is clicked) and the ref is what the callback closes over.
+  const [settings, setSettings] = useState<WorldSettings>(DEFAULT_WORLD_SETTINGS);
+  const settingsRef = useRef<WorldSettings>(DEFAULT_WORLD_SETTINGS);
 
   const fetchLayer = useCallback(async (target: string) => {
     const seq = ++reqSeqRef.current;
@@ -160,10 +177,17 @@ export function useWorld(): UseWorldApi {
         await fetchLayer(next);
         return;
       }
-      await airpGateway.enterLayer(next).then(async () => {
+      await airpGateway.enterLayer(next).then(async (result) => {
         layerRef.current = next;
         setLayer(next);
         fpRef.current?.reset(next);
+        // `first` ⟺ the target had no README ⟺ it is a stub (docs/init/03 §3.2).
+        // When auto-write allows it, ask the engine to materialise the scene:
+        // fire-and-forget, since the I1 initialiser runs 45–60s and its outcome
+        // returns as a `layer_initialized` world event, not this reply.
+        if (result.first === true && startsSceneInit(settingsRef.current.autoWrite)) {
+          sendSocket(wsRef.current, { type: 'airp_init', kind: 'scene', target: next, by: 'player' });
+        }
         await fetchLayer(next);
       }).catch(error => window.dispatchEvent(new CustomEvent('airp:notice', { detail: String(error) })));
     },
@@ -514,10 +538,31 @@ export function useWorld(): UseWorldApi {
     };
   }, [fetchLayer, noteWorldEvent, forwardWorldEvent]);
 
-  // Initial load of the default layer.
+  // Active world's auto-write preference. Loaded on mount and after any world
+  // load (`App` calls `reloadSettings` once the new save is active, since the
+  // value is per-world and the file lives under that save's `.airpworld/`).
+  const reloadSettings = useCallback(async () => {
+    try {
+      const next = await airpGateway.worldSettings();
+      settingsRef.current = { autoWrite: next.autoWrite };
+      setSettings(settingsRef.current);
+    } catch {
+      // Fail-soft: an unreachable settings route keeps the `off` default, which
+      // is the safe (contract-preserving) state.
+    }
+  }, []);
+
+  const saveSettings = useCallback(async (next: WorldSettings) => {
+    const saved = await airpGateway.saveWorldSettings(next);
+    settingsRef.current = { autoWrite: saved.autoWrite };
+    setSettings(settingsRef.current);
+  }, []);
+
+  // Initial load of the default layer + the active world's settings.
   useEffect(() => {
     void fetchLayer(layerRef.current);
-  }, [fetchLayer]);
+    void reloadSettings();
+  }, [fetchLayer, reloadSettings]);
 
   return {
     state,
@@ -528,6 +573,9 @@ export function useWorld(): UseWorldApi {
     moveCard,
     sendToWriter,
     sendMessage,
+    settings,
+    saveSettings,
+    reloadSettings,
     flushFootprints,
   };
 }

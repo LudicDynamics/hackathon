@@ -1,3 +1,5 @@
+import type { WorldSettings } from '@airp/shared/world-settings';
+
 export interface WorldShelf {
   templates: string[];
   worlds: string[];
@@ -48,7 +50,16 @@ export const airpGateway = {
     request<{ characters: TCharacters }>('/api/characters'),
   move: (from: string, to: string) => request('/api/move', json('POST', { from, to })),
   choose: (path: string, choice: string) => request('/api/choice', json('POST', { path, choice })),
-  enterLayer: (layer: string) => request('/api/enter-layer', json('POST', { layer })),
+  // `first` = the target layer had no README (a stub) — the auto-init signal
+  // (docs/init/03 §3.2). The server decides it; the client only reads it.
+  enterLayer: (layer: string) =>
+    request<{ ok: boolean; layer: string; name: string; first: boolean }>(
+      '/api/enter-layer',
+      json('POST', { layer }),
+    ),
+  worldSettings: () => request<WorldSettings>('/api/world-settings'),
+  saveWorldSettings: (settings: WorldSettings) =>
+    request<WorldSettings>('/api/world-settings', json('POST', settings)),
   moveCard: (path: string, x: number, y: number) =>
     request('/api/card/position', json('POST', { path, x, y })),
   // Frozen request bodies (docs/wiring/00 §6): the server reads `path` only;

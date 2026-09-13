@@ -5,9 +5,12 @@ import fs from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { readWorldSettings, writeWorldSettings } from '../engine/world-settings.js';
 import {
   ActionError,
   AgentModelSelectionSchema,
+  WorldSettingsSchema,
+  startsChoiceTurn,
   LocalWorldStore,
   SEAT_ANCHOR,
   boxSizeOf,
@@ -335,6 +338,25 @@ export function createWorldRouter(
     if (world !== store.worldRoot) { res.status(409).json({ error: 'The active world changed. Reopen model settings.' }); return; }
     try { res.json(await lifecycle.changeModel(store.worldRoot, role, { provider, model, thinking })); }
     catch (error) { res.status(409).json({ error: error instanceof Error ? error.message : 'Could not change models.' }); }
+  });
+  // Per-world auto-write preference (docs/settings/00). GET returns the stored
+  // value (defaults when absent); POST validates and writes. The route is the
+  // ONLY writer of `<worldRoot>/.airpworld/settings.json`, so the client and the
+  // `/choice` auto-turn gate below always read the same value.
+  router.get('/world-settings', (_req, res) => {
+    const store = getActiveStore();
+    if (!store) { res.status(409).json({ error: 'Load a world first.' }); return; }
+    res.json({ world: store.worldRoot, ...readWorldSettings(store.worldRoot) });
+  });
+  router.post('/world-settings', (req, res) => {
+    const store = getActiveStore();
+    if (!store) { res.status(409).json({ error: 'Load a world first.' }); return; }
+    const parsed = WorldSettingsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid world settings.' }); return;
+    }
+    writeWorldSettings(store.worldRoot, parsed.data);
+    res.json({ world: store.worldRoot, ...parsed.data });
   });
   const dispatch = (store: LocalWorldStore, prompt: string) => {
     void lifecycle.submitWriter(store.worldRoot, prompt).catch(error => {
@@ -940,7 +962,12 @@ export function createWorldRouter(
     }
     await reply(res, async () => {
       const result = await serviceFor(store, { type: 'player' }).chooseOption({ path: choicePath, choice });
-      dispatch(store, `[Player Event] ${JSON.stringify(result.details.event)}\nRead ${JSON.stringify(choicePath)} and the world skill. Resolve this choice, update the source file, and write a chalk response. Do not record the choice a second time.`);
+      // Auto-turn is opt-in per world (docs/settings/00). `off` — the default —
+      // keeps doc-21 §5.5: the event lands, the writer sees it in the injection
+      // of the player's next input, no turn starts here.
+      if (startsChoiceTurn(readWorldSettings(store.worldRoot).autoWrite)) {
+        dispatch(store, `[Player Event] ${JSON.stringify(result.details.event)}\nRead ${JSON.stringify(choicePath)} and the world skill. Resolve this choice, update the source file, and write a chalk response. Do not record the choice a second time.`);
+      }
       return result;
     });
   });
@@ -998,15 +1025,18 @@ export function createWorldRouter(
       }
     }
     // A stub has no README yet; entering it is what asks the world to
-    // materialise one, so absence must not become an artificial lock.
+    // materialise one, so absence must not become an artificial lock. The
+    // materialisation itself is NOT a writer turn: it goes through the I1
+    // initialiser (`airp-init` → scene-init preset + structured brief + W2
+    // fallback), which the frontend fires on the `first` signal below
+    // (docs/init/03 §3.2). This route only records `layer_entered`. The
+    // `dispatch` that used to live here was a second, contract-violating path
+    // (doc-21 §5.5: an event landing never starts a turn) that also bypassed
+    // the brief, the emptiness check and the fallback.
     await reply(res, async () => {
       const layers = (await store.getManifest()).layers;
       if (!layers[layer]) throw new ActionError({ code: 'not_found', message: 'Scene does not exist.' });
-      const result = await serviceFor(store, { type: 'player' }).enterLayer({ layer });
-      if (result.details.first) {
-        dispatch(store, `[Player Event] ${JSON.stringify(result.details.event)}\n[Target Path] ${layer === 'map' ? 'world' : layer}\nThe player opens a door into an unwritten scene. Read world.json, the world skill, the parent README and its props before writing. Preserve all revealed context. If the target README now exists, continue it without regenerating. Otherwise write its README, two objects, and opening chalk. Then generate and attach one background image if available. Use the world skill's door procedure when present.`);
-      }
-      return result;
+      return serviceFor(store, { type: 'player' }).enterLayer({ layer });
     });
   });
 

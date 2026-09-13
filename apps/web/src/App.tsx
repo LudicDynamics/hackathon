@@ -360,6 +360,10 @@ export function App() {
     try {
       const result = await airpGateway.loadWorld<WorldManifest>(worldPath);
       setManifest(result.manifest);
+      // Settings are per-world and live under the (now-active) save's
+      // `.airpworld/`, so re-read them before entering the world's first layer
+      // — `enterLayer` gates the I1 initialiser on `autoWrite`.
+      await world.reloadSettings();
       await enterLayer('map');
       await loadChromeData();
       setWorldPickerOpen(false);
@@ -537,7 +541,7 @@ export function App() {
             <span className="prototype-status">{t('{items} ITEMS · {people} PEOPLE', { items: handItems.length, people: characters.length })}</span>
             <button className="prototype-pill" onClick={() => setWorldPickerOpen(true)}>{t("Worlds")}</button>
             <label className="prototype-language"><span className="sr-only">{t('Language')}</span><select aria-label={t('Language')} value={locale} onChange={event => setLocale(event.target.value as 'en' | 'zh-CN' | 'ja')}><option value="en">English</option><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
-            <AgentSettings />
+            <AgentSettings settings={world.settings} onSaveSettings={world.saveSettings} />
             <MuteButton />
             <button className="prototype-effects-toggle" role="switch" aria-label={t("Visual effects")} aria-checked={effectsEnabled} onClick={() => setEffectsEnabled(value => !value)} title={t("Particles, parallax and animated backgrounds")}><span aria-hidden="true" />{t(effectsEnabled ? 'Effects on' : 'Effects off')}</button>
             <button className="prototype-quiet" onClick={() => toggleShell('header')} aria-label={t("Close header")}><ChevronUp size={16} /></button>

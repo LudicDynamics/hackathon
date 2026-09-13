@@ -10,7 +10,7 @@ import { LocalWorldStore } from '../../../packages/shared/dist/index.js';
 import { createWorldRouter } from '../dist/routes/world.js';
 import { EventBridge } from '../dist/engine/event-bridge.js';
 
-test('First Snow: readable gates, both arrival choices, receipt gate and optional growth dispatch', async () => {
+test('First Snow: readable gates, both arrival choices, receipt gate and gated growth', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'airp-snow-contract-'));
   await fs.cp(new URL('../../../templates/first-snow-jp/', import.meta.url), root, { recursive: true });
   const store = new LocalWorldStore(root);
@@ -35,6 +35,9 @@ test('First Snow: readable gates, both arrival choices, receipt gate and optiona
     assert.equal((await post('/enter-layer', { layer: main })).status, 200);
     assert.equal((await post('/enter-layer', { layer: ending })).status, 409);
     assert.equal(calls.length, 0, 'browsing prewritten rooms must not start generation');
+    // Choices only dispatch once the world opts in (docs/settings/00). Turn the
+    // switch on before the arrival choices so their prompts are produced.
+    await fs.writeFile(path.join(root, '.airpworld/settings.json'), '{"autoWrite":"scenes-and-choices"}\n');
     for (const scene of ['radio-studio', 'amber-cafe']) {
       const layer = `${main}/${scene}`;
       await post('/enter-layer', { layer });
