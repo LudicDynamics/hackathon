@@ -128,3 +128,32 @@ test('P11 超长单行不被截断（页文本原样保留）', { skip }, () => 
 test('P12 负向：不按标点自动切页（分页单位只有 \\n）', { skip }, () => {
   assert.equal(pages.parseEmoPages('one. two. three.', { final: true }).pages.length, 1);
 });
+
+test('P13 角色多 assistant message 按序聚合，delta/message_end 不重复', { skip }, () => {
+  let buffer = pages.createCharacterTurn();
+  let projection;
+  for (const frame of [
+    { type: 'character_delta', delta: '先说前台词。' },
+    { type: 'character_message', text: '先说前台词。' },
+    { type: 'character_delta', delta: '工具回来后的回应。' },
+    { type: 'character_message', text: '工具回来后的回应。' },
+    { type: 'character_idle' },
+  ]) {
+    projection = pages.consumeCharacterFrame(buffer, frame);
+    buffer = projection.buffer;
+  }
+  assert.equal(projection.rawText, '先说前台词。\n工具回来后的回应。');
+  assert.deepEqual(pages.parseEmoPages(projection.rawText, { final: true }).pages.map((p) => p.text), [
+    '先说前台词。',
+    '工具回来后的回应。',
+  ]);
+});
+
+test('P14 纯工具轮与空 message_end 不产生台词', { skip }, () => {
+  let buffer = pages.createCharacterTurn();
+  let projection = pages.consumeCharacterFrame(buffer, { type: 'character_message', text: '   ' });
+  projection = pages.consumeCharacterFrame(projection.buffer, { type: 'character_idle' });
+  assert.equal(projection.rawText, '');
+  assert.equal(projection.buffer.messages.length, 0);
+  assert.equal(projection.buffer.ended, true);
+});

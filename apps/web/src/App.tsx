@@ -2,6 +2,7 @@ import { useLocale } from './lib/i18n.js';
 import { AgentSettings } from './components/AgentSettings.js';
 import { TtsSettings } from './components/TtsSettings.js';
 import { WriterResult } from './components/WriterResult.js';
+import { ActivityRail } from './components/chrome/ActivityRail.js';
 import { ItemArtwork } from './components/ItemArtwork.js';
 import { NookView } from './components/nook/NookView.js';
 import { ghostItemFor } from './lib/init-ghost.js';
@@ -20,6 +21,7 @@ import {
   subscribeCeremony,
   getCeremonySnapshot,
 } from './lib/dice-ceremony.js';
+import { agentActivityStore } from './lib/agent-activity-store.js';
 import { GodModeToolbar } from './components/god/GodModeToolbar.js';
 import { RadialMenu, type RadialItemType } from './components/god/RadialMenu.js';
 import { MuteButton } from './components/chrome/MuteButton.js';
@@ -400,9 +402,10 @@ export function App() {
     setLoadingWorld(worldPath);
     setWorldPickerOpen(false);
     setSelectedBagPath(null);
-    setActiveCharacter(null);
-    setNookChar(null);
     setWriterWorking(false);
+    // Old-world chips must not leak onto the new world's canvas (03 §5.4).
+    agentActivityStore.clearAll();
+    setNookChar(null);
     try {
       const result = await airpGateway.loadWorld<WorldManifest>(worldPath);
       setManifest(result.manifest);
@@ -512,6 +515,9 @@ export function App() {
 
   const closeCharacter = () => {
     if (activeCharacter) sendMessage({ type: 'character_stop', characterId: activeCharacter.id });
+    // 契约 §7.2：角色关闭时未闭合的 started 胶囊必须收束，不能留成"仍在工作"
+    // 并在重开同一角色时复活（03 §5.3）。
+    agentActivityStore.clearSurface('character-modal');
     setActiveCharacter(null);
     camera.restore('dialogue');
   };
@@ -617,6 +623,11 @@ export function App() {
             {sceneStatus.map(([key, value]) => <span className="prototype-stat" key={key}>{labelOf(key)} · {String(value)}</span>)}
             <WriterResult worldKey={`${manifest?.id}:${layer}`} />
           </div>
+
+          {/* 全局 activity rail（契约 §7.1）：writer/functional 在角色或小天地
+              打开时也必须可见；character 只进入 CharacterModal 自己的 surface，
+              避免串台。始终挂在这里，不作为 modal 的后代。 */}
+          <ActivityRail surface="rail" className="prototype-chrome" />
 
           <div className="prototype-tools prototype-chrome" aria-label={t("Canvas tools")}>
             <button className="active" title={t("Explore")}>↖</button>
@@ -755,7 +766,7 @@ export function App() {
         />
       )}
 
-      {nookChar && <div className="prototype-nook"><NookView characterId={nookChar} locale={locale === 'ja' ? 'ja' : 'en'} onClose={() => { setNookChar(null); camera.restore(layer); void refresh(); }} onMoveCard={moveCard} onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }} onTakeItem={path => { void handleTakeItem(path); }} onRequestInit={(kind, target, request) => sendMessage({ type: 'airp_init', kind, target, ...(request ? { request } : {}), by: 'player' })} /></div>}
+      {nookChar && <div className="prototype-nook"><NookView characterId={nookChar} locale={locale === 'ja' ? 'ja' : 'en'} onClose={() => { agentActivityStore.clearSurface('character-modal'); setNookChar(null); camera.restore(layer); void refresh(); }} onMoveCard={moveCard} onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }} onTakeItem={path => { void handleTakeItem(path); }} onRequestInit={(kind, target, request) => sendMessage({ type: 'airp_init', kind, target, ...(request ? { request } : {}), by: 'player' })} /></div>}
 
       {/* Dice ceremony overlay (screen-fixed layer, same visual language as the player path) */}
       {ceremony && (

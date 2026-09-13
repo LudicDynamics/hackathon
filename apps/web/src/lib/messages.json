@@ -434,5 +434,285 @@
   "Could not move item": {
     "zh-CN": "无法移动物品",
     "ja": "アイテムを移動できませんでした"
+  },
+  "Reading {subject}…": {
+    "zh-CN": "正在读取 {subject}…",
+    "ja": "{subject}を読んでいます…"
+  },
+  "Reading…": {
+    "zh-CN": "正在读取…",
+    "ja": "読んでいます…"
+  },
+  "Creating {subject}…": {
+    "zh-CN": "正在创建 {subject}…",
+    "ja": "{subject}を作成しています…"
+  },
+  "Creating…": {
+    "zh-CN": "正在创建…",
+    "ja": "作成しています…"
+  },
+  "Writing {subject}…": {
+    "zh-CN": "正在写入 {subject}…",
+    "ja": "{subject}を書いています…"
+  },
+  "Writing…": {
+    "zh-CN": "正在写入…",
+    "ja": "書いています…"
+  },
+  "Editing {subject}…": {
+    "zh-CN": "正在修改 {subject}…",
+    "ja": "{subject}を編集しています…"
+  },
+  "Editing…": {
+    "zh-CN": "正在修改…",
+    "ja": "編集しています…"
+  },
+  "Deleting {subject}…": {
+    "zh-CN": "正在删除 {subject}…",
+    "ja": "{subject}を削除しています…"
+  },
+  "Deleting…": {
+    "zh-CN": "正在删除…",
+    "ja": "削除しています…"
+  },
+  "Moving {subject}…": {
+    "zh-CN": "正在移动 {subject}…",
+    "ja": "{subject}を移動しています…"
+  },
+  "Moving…": {
+    "zh-CN": "正在移动…",
+    "ja": "移動しています…"
+  },
+  "Using {subject}…": {
+    "zh-CN": "正在使用 {subject}…",
+    "ja": "{subject}を使っています…"
+  },
+  "Using…": {
+    "zh-CN": "正在使用…",
+    "ja": "使っています…"
+  },
+  "Rolling the dice…": {
+    "zh-CN": "正在掷骰…",
+    "ja": "サイコロを振っています…"
+  },
+  "Making a choice…": {
+    "zh-CN": "正在做出选择…",
+    "ja": "選択しています…"
+  },
+  "Preparing the scene…": {
+    "zh-CN": "正在准备场景…",
+    "ja": "シーンを準備しています…"
+  },
+  "Read {subject}": {
+    "zh-CN": "读完了 {subject}",
+    "ja": "{subject}を読みました"
+  },
+  "Read": {
+    "zh-CN": "读完了",
+    "ja": "読みました"
+  },
+  "Created {subject}": {
+    "zh-CN": "创建了 {subject}",
+    "ja": "{subject}を作成しました"
+  },
+  "Created": {
+    "zh-CN": "创建完成",
+    "ja": "作成しました"
+  },
+  "Wrote {subject}": {
+    "zh-CN": "写下了 {subject}",
+    "ja": "{subject}を書きました"
+  },
+  "Wrote": {
+    "zh-CN": "写完了",
+    "ja": "書きました"
+  },
+  "Edited {subject}": {
+    "zh-CN": "修改了 {subject}",
+    "ja": "{subject}を編集しました"
+  },
+  "Edited": {
+    "zh-CN": "修改完成",
+    "ja": "編集しました"
+  },
+  "Deleted {subject}": {
+    "zh-CN": "删除了 {subject}",
+    "ja": "{subject}を削除しました"
+  },
+  "Deleted": {
+    "zh-CN": "删除完成",
+    "ja": "削除しました"
+  },
+  "Moved {subject}": {
+    "zh-CN": "移动了 {subject}",
+    "ja": "{subject}を移動しました"
+  },
+  "Moved": {
+    "zh-CN": "移动完成",
+    "ja": "移動しました"
+  },
+  "Used {subject}": {
+    "zh-CN": "使用了 {subject}",
+    "ja": "{subject}を使いました"
+  },
+  "Used": {
+    "zh-CN": "使用完成",
+    "ja": "使いました"
+  },
+  "Rolled the dice": {
+    "zh-CN": "掷骰完成",
+    "ja": "サイコロを振りました"
+  },
+  "Chose an option": {
+    "zh-CN": "做出了选择",
+    "ja": "選択しました"
+  },
+  "Scene is ready": {
+    "zh-CN": "场景已就绪",
+    "ja": "シーンの準備ができました"
+  },
+  "Done": {
+    "zh-CN": "完成",
+    "ja": "完了"
+  },
+  "Could not read {subject}": {
+    "zh-CN": "无法读取 {subject}",
+    "ja": "{subject}を読めませんでした"
+  },
+  "Could not read": {
+    "zh-CN": "无法读取",
+    "ja": "読み込めませんでした"
+  },
+  "Could not create {subject}": {
+    "zh-CN": "无法创建 {subject}",
+    "ja": "{subject}を作成できませんでした"
+  },
+  "Could not create": {
+    "zh-CN": "无法创建",
+    "ja": "作成できませんでした"
+  },
+  "Could not write {subject}": {
+    "zh-CN": "无法写入 {subject}",
+    "ja": "{subject}を書けませんでした"
+  },
+  "Could not write": {
+    "zh-CN": "无法写入",
+    "ja": "書き込めませんでした"
+  },
+  "Could not edit {subject}": {
+    "zh-CN": "无法修改 {subject}",
+    "ja": "{subject}を編集できませんでした"
+  },
+  "Could not edit": {
+    "zh-CN": "无法修改",
+    "ja": "編集できませんでした"
+  },
+  "Could not delete {subject}": {
+    "zh-CN": "无法删除 {subject}",
+    "ja": "{subject}を削除できませんでした"
+  },
+  "Could not delete": {
+    "zh-CN": "无法删除",
+    "ja": "削除できませんでした"
+  },
+  "Could not move {subject}": {
+    "zh-CN": "无法移动 {subject}",
+    "ja": "{subject}を移動できませんでした"
+  },
+  "Could not move": {
+    "zh-CN": "无法移动",
+    "ja": "移動できませんでした"
+  },
+  "Could not use {subject}": {
+    "zh-CN": "无法使用 {subject}",
+    "ja": "{subject}を使えませんでした"
+  },
+  "Could not use": {
+    "zh-CN": "无法使用",
+    "ja": "使えませんでした"
+  },
+  "Could not roll the dice": {
+    "zh-CN": "无法掷骰",
+    "ja": "サイコロを振れませんでした"
+  },
+  "Could not make that choice": {
+    "zh-CN": "无法做出选择",
+    "ja": "選択できませんでした"
+  },
+  "Could not prepare the scene": {
+    "zh-CN": "无法准备场景",
+    "ja": "シーンを準備できませんでした"
+  },
+  "That action failed": {
+    "zh-CN": "该操作失败了",
+    "ja": "その操作は失敗しました"
+  },
+  "Took too long": {
+    "zh-CN": "等待超时",
+    "ja": "時間がかかりすぎました"
+  },
+  "Stopped": {
+    "zh-CN": "已停止",
+    "ja": "停止しました"
+  },
+  "Writer": {
+    "zh-CN": "作家",
+    "ja": "作家"
+  },
+  "Character": {
+    "zh-CN": "角色",
+    "ja": "キャラクター"
+  },
+  "Background task": {
+    "zh-CN": "后台任务",
+    "ja": "バックグラウンド処理"
+  },
+  "{name} is reading {subject}…": {
+    "zh-CN": "{name}正在读取 {subject}…",
+    "ja": "{name}が{subject}を読んでいます…"
+  },
+  "{name} is working…": {
+    "zh-CN": "{name}正在处理…",
+    "ja": "{name}が処理しています…"
+  },
+  "{name} finished {subject}": {
+    "zh-CN": "{name}完成了 {subject}",
+    "ja": "{name}が{subject}を完了しました"
+  },
+  "{name} is done": {
+    "zh-CN": "{name}完成了",
+    "ja": "{name}は完了しました"
+  },
+  "{name} could not use {subject}": {
+    "zh-CN": "{name}无法使用 {subject}",
+    "ja": "{name}は{subject}を使えませんでした"
+  },
+  "{name} could not act": {
+    "zh-CN": "{name}的操作失败了",
+    "ja": "{name}の操作は失敗しました"
+  },
+  "{name} took too long": {
+    "zh-CN": "{name}等待超时",
+    "ja": "{name}は時間がかかりすぎました"
+  },
+  "{name} stopped": {
+    "zh-CN": "{name}已停止",
+    "ja": "{name}は停止しました"
+  },
+  "{count} action in progress": {
+    "zh-CN": "{count} 项进行中",
+    "ja": "{count}件進行中"
+  },
+  "{count} actions in progress": {
+    "zh-CN": "{count} 项进行中",
+    "ja": "{count}件進行中"
+  },
+  "{count} action finished": {
+    "zh-CN": "{count} 项已完成",
+    "ja": "{count}件完了"
+  },
+  "{count} actions finished": {
+    "zh-CN": "{count} 项已完成",
+    "ja": "{count}件完了"
   }
 }

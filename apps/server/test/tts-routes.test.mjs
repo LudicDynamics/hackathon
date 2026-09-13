@@ -289,3 +289,30 @@ test('G1 上游回非 wav 字节 → 502 tts_upstream 且不写缓存（不污�
   await assert.rejects(() => fs.readFile(path.join(h.cacheDir, `${hash}.wav`)));
   await h.close();
 });
+// ── H 组：共享清洗防线（清洗先于截断 / hash / 合成） ──
+
+test('H1 动作与情绪控制标签先清洗，再发送并写入对应缓存键', async () => {
+  const h = await harness();
+  const r1 = await post(h.base, { text: '[emo: smile] （笑了一下）好啊' });
+  const j1 = await r1.json();
+  assert.equal(r1.status, 200);
+  assert.equal(h.ds.calls[0].body.input.text, '好啊');
+  assert.equal(j1.url, `/api/tts/audio/${hashOf(MODEL, DEFAULT_VOICE, 'Auto', '好啊')}.wav`);
+
+  const r2 = await post(h.base, { text: '好啊' });
+  const j2 = await r2.json();
+  assert.equal(j2.cached, true);
+  assert.equal(h.ds.calls.length, 1, 'equivalent cleaned text must share one cache entry');
+  await h.close();
+});
+
+test('H2 纯动作行和异常括号 → 400 invalid_argument 且不上游', async () => {
+  const h = await harness();
+  for (const text of ['（笑了一下）', '（说完就走了', '还好）', '（他说\\n完了']) {
+    const r = await post(h.base, { text });
+    assert.equal(r.status, 400, text);
+    assert.equal((await r.json()).code, 'invalid_argument');
+  }
+  assert.equal(h.ds.calls.length, 0);
+  await h.close();
+});

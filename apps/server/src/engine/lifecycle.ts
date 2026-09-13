@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { RpcClient } from '../../../../vendor/pi-rp/packages/coding-agent/dist/index.js';
 import type { JsonAgentSessionEvent } from '../../../../vendor/pi-rp/packages/coding-agent/dist/index.js';
 
@@ -5,14 +6,20 @@ import { CHARACTER_ROLE_PREFIX } from '@airp/shared';
 
 import { characterLaunch, hasExistingSession, writerLaunch } from './launch.js';
 import { readModelPreferences, writeModelPreferences, type ModelPreference } from './model-preferences.js';
-
 /** Raw WS frame produced by lifecycle itself (warmup replay), not by the engine event map. */
 export type FrameSink = (message: Record<string, any>) => void;
 /** Engine event sink — `eventBridge.emitEngine`. */
 export type EventSink = (
   source: 'writer' | 'character',
   event: JsonAgentSessionEvent,
-  characterId?: string
+  characterId?: string,
+  turnId?: string,
+) => void;
+export type ActivityFailureSink = (
+  source: 'writer' | 'character',
+  characterId: string | undefined,
+  turnId: string,
+  reason: 'timeout' | 'cancelled' | 'agent_stopped',
 ) => void;
 
 export interface AgentLifecycleManagerOptions {
@@ -20,6 +27,7 @@ export interface AgentLifecycleManagerOptions {
   vendorCliPath: string;
   eventSink?: EventSink;
   frameSink?: FrameSink;
+  activityFailureSink?: ActivityFailureSink;
 }
 
 /**
@@ -62,6 +70,7 @@ export class AgentLifecycleManager {
   private vendorCliPath: string;
   private eventSink: EventSink | undefined;
   private frameSink: FrameSink | undefined;
+  private activityFailureSink: ActivityFailureSink | undefined;
 
   private writer: RpcClient | null = null;
   private writerWorld: string | null = null;
@@ -70,6 +79,7 @@ export class AgentLifecycleManager {
   private characterClients = new Map<string, RpcClient>();
   private turnTimeouts = new Map<string, NodeJS.Timeout>();
   private turnStartedAt = new Map<string, number>();
+  private turnIds = new Map<string, string>();
   private writerQueue: Promise<void> = Promise.resolve();
   private queuedBeats = 0;
   private switchingModels = false;
@@ -151,6 +161,7 @@ export class AgentLifecycleManager {
     this.vendorCliPath = options.vendorCliPath;
     this.eventSink = options.eventSink;
     this.frameSink = options.frameSink;
+    this.activityFailureSink = options.activityFailureSink;
   }
 
   /**
@@ -224,8 +235,12 @@ export class AgentLifecycleManager {
   }
 
   async stopCharacter(characterId: string): Promise<void> {
-    this.clearTurnTimeout(`character:${characterId}`);
-    this.turnStartedAt.delete(`character:${characterId}`);
+    const clientKey = `character:${characterId}`;
+    const turnId = this.turnIds.get(clientKey);
+    if (turnId) this.activityFailureSink?.('character', characterId, turnId, 'cancelled');
+    this.clearTurnTimeout(clientKey);
+    this.turnStartedAt.delete(clientKey);
+    this.turnIds.delete(clientKey);
     const client = this.characterClients.get(characterId);
     if (!client) return;
     this.characterClients.delete(characterId);
@@ -237,11 +252,13 @@ export class AgentLifecycleManager {
     const characters = [...this.characterClients.keys()];
     await Promise.all(characters.map((id) => this.stopCharacter(id)));
   }
-
   async stopWriter(): Promise<void> {
+    const turnId = this.turnIds.get('writer');
+    if (turnId) this.activityFailureSink?.('writer', undefined, turnId, 'cancelled');
     this.progress.delete('writer');
     this.clearTurnTimeout('writer');
     this.turnStartedAt.delete('writer');
+    this.turnIds.delete('writer');
     if (this.writerPing) {
       clearInterval(this.writerPing);
       this.writerPing = null;
@@ -280,27 +297,44 @@ export class AgentLifecycleManager {
       }
     }
     if (event.type === 'agent_start') {
+      // Keep the legacy run-level watchdog; no turn identity is allocated here.
       this.turnStartedAt.set(clientKey, Date.now());
       this.armTurnTimeout(clientKey, client, source);
-    } else if (event.type === 'agent_settled') {
+    } else if (event.type === 'turn_start') {
+      const previousTurnId = this.turnIds.get(clientKey);
+      if (previousTurnId) this.activityFailureSink?.(source, characterIdFromClientKey(clientKey), previousTurnId, 'agent_stopped');
+      const nextTurnId = `${source}:${randomUUID()}`;
+      this.turnIds.set(clientKey, nextTurnId);
+      this.turnStartedAt.set(clientKey, Date.now());
+      this.armTurnTimeout(clientKey, client, source);
+    } else if (event.type === 'turn_end' || event.type === 'agent_settled') {
       this.clearTurnTimeout(clientKey);
       this.turnStartedAt.delete(clientKey);
     } else if (this.turnStartedAt.has(clientKey) && ['message_update', 'tool_execution_start', 'tool_execution_update', 'tool_execution_end'].includes(event.type)) {
       this.armTurnTimeout(clientKey, client, source);
     }
-    this.eventSink?.(source, event, characterIdFromClientKey(clientKey));
+    let activeTurnId = this.turnIds.get(clientKey);
+    if (!activeTurnId && ['tool_execution_start', 'tool_execution_update', 'tool_execution_end'].includes(event.type)) {
+      activeTurnId = `orphan:${randomUUID()}`;
+      this.turnIds.set(clientKey, activeTurnId);
+    }
+    this.eventSink?.(source, event, characterIdFromClientKey(clientKey), activeTurnId);
+    if (event.type === 'turn_end' || event.type === 'agent_settled') this.turnIds.delete(clientKey);
   }
 
   private armTurnTimeout(clientKey: string, client: RpcClient, source: 'writer' | 'character'): void {
-    this.clearTurnTimeout(clientKey);
     const idleBudget = Number(process.env.AIRP_TURN_TIMEOUT_MS) > 0 ? Number(process.env.AIRP_TURN_TIMEOUT_MS) : DEFAULT_TURN_TIMEOUT_MS;
+    this.clearTurnTimeout(clientKey);
     const remaining = MAX_TURN_DURATION_MS - (Date.now() - (this.turnStartedAt.get(clientKey) ?? Date.now()));
     const delay = Math.max(0, Math.min(idleBudget, remaining));
     const timer = setTimeout(() => {
       console.warn(
         `[AIRP Lifecycle] ${clientKey} exceeded ${remaining <= idleBudget ? 'total turn' : 'inactivity'} budget; aborting turn`
       );
+      const turnId = this.turnIds.get(clientKey);
+      if (turnId) this.activityFailureSink?.(source, characterIdFromClientKey(clientKey), turnId, 'timeout');
       this.turnStartedAt.delete(clientKey);
+      this.turnIds.delete(clientKey);
       client.abort().catch(() => {});
       this.frameSink?.({
         type: 'turn_aborted',
@@ -344,10 +378,13 @@ export class AgentLifecycleManager {
       clearInterval(this.writerPing);
       this.writerPing = null;
     }
+    const turnId = this.turnIds.get('writer');
+    if (turnId) this.activityFailureSink?.('writer', undefined, turnId, 'agent_stopped');
+    this.turnIds.delete('writer');
+    this.turnStartedAt.delete('writer');
     const dead = this.writer;
     this.writer = null;
     this.writerWorld = null;
-    if (dead) await dead.stop().catch(() => {});
 
     if (this.writerRestarts >= MAX_RESTART_ATTEMPTS) {
       console.error(

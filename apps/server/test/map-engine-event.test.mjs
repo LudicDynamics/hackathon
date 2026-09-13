@@ -11,8 +11,8 @@ import { test } from 'node:test';
 import { mapEngineEvent, messageText } from '../dist/engine/event-bridge.js';
 
 /** Strip the broadcast timestamp so a frame compares structurally. */
-function frames(source, event, args = new Map(), characterId = undefined, buf = new Map()) {
-  return mapEngineEvent(source, event, args, characterId, buf).map(({ timestamp: _t, ...rest }) => rest);
+function frames(source, event, args = new Map(), characterId = undefined, buf = new Map(), turnId = `orphan:${source}`, projector = undefined) {
+  return mapEngineEvent(source, event, args, characterId, buf, turnId, projector).map(({ timestamp: _t, ...rest }) => rest);
 }
 
 test('chalk_landed reads details.path (the frozen shape) and result.path (legacy)', () => {
@@ -269,4 +269,56 @@ test('chalk delta backstop uses replacement mode when the extractor lags', () =>
   const replace = out.find((f) => f.mode === 'replace');
   assert.ok(replace, 'expected a replacement backstop frame');
   assert.equal(replace.delta, 'parts');
+});
+
+test('agent_activity preserves writer/character identity and terminal idempotency', async () => {
+  const { ActivityProjector } = await import('../dist/engine/agent-activity.js');
+  const projector = new ActivityProjector();
+  const args = new Map();
+  const start = {
+    type: 'tool_execution_start',
+    toolCallId: 'activity-1',
+    toolName: 'write',
+    args: { path: '/private/secret.md', content: 'do not expose' },
+  };
+  const end = {
+    type: 'tool_execution_end',
+    toolCallId: 'activity-1',
+    toolName: 'write',
+    result: { details: { path: '/private/secret.md' } },
+    isError: false,
+  };
+  const started = frames('writer', start, args, undefined, new Map(), 'turn-1', projector)
+    .find((frame) => frame.type === 'agent_activity');
+  const completed = frames('writer', end, args, undefined, new Map(), 'turn-1', projector)
+    .find((frame) => frame.type === 'agent_activity');
+  assert.equal(started.source, 'writer');
+  assert.equal(started.agentId, 'writer');
+  assert.equal(started.phase, 'started');
+  assert.equal(started.subject, 'secret');
+  assert.equal(completed.activityId, started.activityId);
+  assert.equal(completed.phase, 'completed');
+  assert.equal(frames('writer', end, args, undefined, new Map(), 'turn-1', projector).some((frame) => frame.type === 'agent_activity'), false);
+});
+
+test('custom role airp activity relay is not hidden by assistant-only mapping', async () => {
+  const { ActivityProjector } = await import('../dist/engine/agent-activity.js');
+  const projector = new ActivityProjector();
+  const message = {
+    role: 'custom',
+    customType: 'airp_agent_activity',
+    content: JSON.stringify({
+      type: 'tool_start',
+      context: { source: 'functional', agentId: 'scene-init', turnId: 'functional:t1' },
+      toolCallId: 'child-1',
+      toolName: 'read',
+      args: { path: '/private/note.md' },
+    }),
+  };
+  const out = mapEngineEvent('writer', { type: 'message_end', message }, new Map(), undefined, new Map(), 'writer:t1', projector);
+  const activity = out.find((frame) => frame.type === 'agent_activity');
+  assert.equal(activity.source, 'functional');
+  assert.equal(activity.agentId, 'scene-init');
+  assert.equal(activity.phase, 'started');
+  assert.equal(activity.characterId, undefined);
 });

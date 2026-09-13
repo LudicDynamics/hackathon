@@ -8,6 +8,9 @@ export * from './schemas/canvas.js';
 export * from './store/world-store.js';
 export * from './store/local-store.js';
 export * from './schemas/forms.js';
+export * from './schemas/appearance.js';
+export * from './components/appearance-registry.js';
+export * from './appearance/resolver.js';
 export * from './store/layers.js';
 export * from './db/schema.js';
 export * from './layout/flow-columns.js';
@@ -20,6 +23,7 @@ export * from './rules/emptiness.js';     // isLayerEmpty / isNookEmpty / hasIni
 export * from './rules/init-fallback.js'; // w2SceneTemplate (docs/init/00 §3.3)
 export * from './rules/voices.js';       // resolveVoice / VOICES / voiceEntry (docs/tts/07)
 export * from './rules/emotions.js';     // EMOTIONS / Emotion / isEmotion / emotionPortraitsOf (docs/assets/00 §3.1)
+export * from './rules/tts-text.js';     // sanitiseTtsText (docs/agent-awareness/00 §5)
 
 // Action layer public surface (01 §8). Extensions import the whole barrel from
 // `shared/dist/index.js`, so anything they call MUST be exported here.

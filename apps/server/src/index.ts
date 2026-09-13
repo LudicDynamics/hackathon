@@ -60,7 +60,8 @@ let warnedMissingHighWater = false;
 const lifecycle = new AgentLifecycleManager({
   repoRoot: REPO_ROOT,
   vendorCliPath: VENDOR_CLI,
-  eventSink: (source, event, characterId) => eventBridge.emitEngine(source, event, characterId),
+  eventSink: (source, event, characterId, turnId) => eventBridge.emitEngine(source, event, characterId, turnId),
+  activityFailureSink: (source, characterId, turnId, reason) => eventBridge.failActivity(source, characterId, turnId, reason),
   frameSink: (message) => eventBridge.broadcast(message),
 });
 

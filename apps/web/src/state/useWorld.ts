@@ -9,10 +9,12 @@ import {
   type FootprintScheduler,
 } from '../lib/footprint.js';
 import { CARD_FORMS } from '@airp/shared/forms';
-import { register as registerPhantom, land as landPhantom, appendInk, setInk, evict as evictPhantom, reconcileLanded } from '../lib/phantom.js';
+import type { AppearanceResolution } from '@airp/shared';
+import { register as registerPhantom, land as landPhantom, appendInk, setInk, evict as evictPhantom, reconcileLanded, getPhantomsSnapshot } from '../lib/phantom.js';
 import { phantomSeatFor, publishSeatItems } from '../lib/phantom-seat.js';
 import { mergeItemPatch, mergeLinkPatch } from '../lib/canvas-patch.js';
 import { beginTurn, endTurn, reset as resetWriter } from '../lib/writer-state.js';
+import { agentActivityStore } from '../lib/agent-activity-store.js';
 import { playFoley, playCharge, endCharge, setAmbient } from '../lib/audio.js';
 import { ghostSizeFor, stageText, GHOST_WAIT_AMBIENT } from '../lib/ghost.js';
 import {
@@ -33,6 +35,10 @@ export interface LayerItem {
   h: number;
   z: number;
   rot: number;
+  /** Verified appearance from the server resolver (docs/components/04 §:54). Optional:
+   *  an old server / old payload omits it, and the card then falls back to its kind
+   *  default. The frontend MUST NOT compute this from raw frontmatter. */
+  appearance?: AppearanceResolution;
 }
 
 export interface LayerLink {
@@ -171,7 +177,7 @@ export function useWorld(): UseWorldApi {
       setState(next);
       // 幻影排座镜像 + 真实卡一到就把对应幻影撤掉（docs/perform/00 §6b-5）。
       publishSeatItems(next.layer, next.items);
-      reconcileLanded(next.items.map((it) => it.path));
+      reconcileLanded(new Set(next.items.map((it) => it.path)));
     } catch (err) {
       console.warn('Could not fetch layer:', err);
     } finally {
@@ -408,21 +414,32 @@ export function useWorld(): UseWorldApi {
             });
           }
           break;
+        case 'agent_activity':
+          // 玩家感知通道（docs/agent-awareness/00 §3, 03 §5.1）。与 tool_start/
+          // tool_end 的 footprint 计数完全无关：那两条继续只服务 writer
+          // footprint（writerToolsInFlight）。前端唯一入口是 store，组件不得
+          // 监听 airp:agent-frame 自建第二套去重。
+          agentActivityStore.ingest(msg);
+          break;
         case 'tool_start':
           if (msg.source === 'writer') writerToolsInFlight.current++;
           break;
-        case 'tool_end':
+        case 'tool_end': {
+          const failedToolCallId = msg.isError === true && typeof msg.toolCallId === 'string'
+            ? msg.toolCallId
+            : undefined;
+          // Failed tools of either source must release their phantom. Writer
+          // bookkeeping remains scoped to the writer lane.
+          if (failedToolCallId !== undefined) evictPhantom(failedToolCallId);
           if (msg.source === 'writer') {
             writerToolsInFlight.current = Math.max(0, writerToolsInFlight.current - 1);
-            // 失败也要收笔：撤掉未落地的幻影并归位状态机（docs/perform/01 §7）。
-            if (msg.isError === true && typeof msg.toolCallId === 'string') {
-              evictPhantom(msg.toolCallId);
+            if (failedToolCallId !== undefined) {
               endTurn();
-              // A failed image also took the ambience; give it back (perform/03 §3.2).
               setAmbient(stateRef.current?.audio.ambient ?? null);
             }
           }
           break;
+        }
         case 'character_delta':
         case 'character_message':
         case 'character_idle':
@@ -479,12 +496,14 @@ export function useWorld(): UseWorldApi {
           break;
         }
         case 'image_generation_progress': {
-          if (typeof msg.toolCallId !== 'string') break;
+          const source = msg.source === 'character' || msg.source === 'writer' ? msg.source : undefined;
+          if (typeof msg.toolCallId !== 'string' || source === undefined) break;
           const size = ghostSizeFor(msg.width as number, msg.height as number);
           registerPhantom(msg.toolCallId, {
             kind: 'image',
-            source: 'writer',
-            seat: phantomSeatFor(size, layerRef.current).seat,
+            source,
+            seat: getPhantomsSnapshot().find((entry) => entry.toolCallId === msg.toolCallId)?.seat
+              ?? phantomSeatFor(size, layerRef.current).seat,
             layer: layerRef.current,
             label: stageText(msg.stage as string, msg.elapsedMs as number),
             elapsedMs: typeof msg.elapsedMs === 'number' ? msg.elapsedMs : undefined,
@@ -560,6 +579,10 @@ export function useWorld(): UseWorldApi {
       };
       ws.onclose = () => {
         if (wsRef.current === ws) wsRef.current = null;
+        // A dropped socket never delivers the terminal frames (activity frames
+        // are transient, not logged), so the chips are hard-cleared rather than
+        // left to the 90s stale sweep (docs/agent-awareness/03 §5.5).
+        agentActivityStore.clearAll();
         if (!stopped) retryTimer = window.setTimeout(connect, 1200);
       };
     };

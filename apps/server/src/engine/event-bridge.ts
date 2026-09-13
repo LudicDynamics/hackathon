@@ -4,6 +4,11 @@ import type { WebSocketServer } from 'ws';
 import type { JsonAgentSessionEvent } from '../../../../vendor/pi-rp/packages/coding-agent/dist/index.js';
 import type { LocalWorldStore } from '@airp/shared';
 import { extractContentPrefix } from './chalk-delta.js';
+import {
+  ActivityProjector,
+  type ActivityTurnContext,
+  type ChildActivityEnvelope,
+} from './agent-activity.js';
 
 export type EventSource = 'writer' | 'character';
 
@@ -66,12 +71,8 @@ function emitChalkDeltas(
  * lets `tool_execution_end` recover the path a `write`/`chalk` targeted; the
  * function reads and prunes it, so a long session never accumulates entries.
  *
- * Presentation frames and world-event `type`s are two namespaces (docs/tools/00
- * §5.3 / doc-21:276): everything here is a transient frame driven by a tool
- * return value, never an event row.
- *
- * Events outside the table (`agent_start`/`turn_*`/`message_start`/…) map to `[]`:
- * B0 forwards only the frames the frontend's ink/brush work consumes.
+ * Presentation frames and world-event `type`s are two namespaces; everything
+ * here is a transient frame driven by an engine result, never an event row.
  */
 export function mapEngineEvent(
   source: EventSource,
@@ -79,17 +80,28 @@ export function mapEngineEvent(
   toolArgs: Map<string, unknown>,
   characterId?: string,
   toolcallBuf?: Map<number, string[]>,
+  turnIdOrContext: string | ActivityTurnContext = `orphan:${source}`,
+  projector = new ActivityProjector(),
 ): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
-  // A1: stamp every frame this call produces in ONE place. `characterId` is
-  // omitted (not null/empty) for writer frames so the frontend's nullish
-  // fallback (`detail.characterId ?? openOverlay`) keeps working.
-  const push = (msg: Record<string, unknown>) =>
+  const context: ActivityTurnContext = typeof turnIdOrContext === 'string'
+    ? {
+      source,
+      agentId: source === 'character' ? `character:${characterId ?? 'unknown'}` : source,
+      turnId: turnIdOrContext,
+    }
+    : turnIdOrContext;
+  // Activity frames deliberately omit characterId; the stable character identity
+  // is carried by `agentId`. Legacy presentation frames retain old routing metadata.
+  const push = (msg: Record<string, unknown>, includeCharacterId = true) =>
     out.push({
       ...msg,
-      ...(characterId === undefined ? {} : { characterId }),
+      ...(includeCharacterId && characterId === undefined ? {} : includeCharacterId ? { characterId } : {}),
       timestamp: new Date().toISOString(),
     });
+  const pushActivities = (frames: Record<string, unknown>[]) => {
+    for (const frame of frames) push({ type: 'agent_activity', ...frame }, false);
+  };
 
   switch (event.type) {
     case 'message_update': {
@@ -118,13 +130,57 @@ export function mapEngineEvent(
       break;
     }
     case 'message_end': {
-      if (event.message?.role === 'assistant') {
-        const result = event.message as { stopReason?: string; errorMessage?: string };
+      const message = event.message as unknown as Record<string, unknown> | undefined;
+      // Relay messages are custom-role entries and must be handled before the
+      // assistant guard: pi-rp intentionally does not classify them as replies.
+      if (message?.role === 'custom' && message.customType === 'airp_agent_activity' &&
+        typeof message.content === 'string' && message.content.length <= 8192) {
+        try {
+          const envelope = JSON.parse(message.content) as Record<string, unknown>;
+          const relayContext = envelope.context as Record<string, unknown> | undefined;
+          const relayType = envelope.type;
+          const allowedEnvelopeKeys = new Set(['type', 'context', 'toolCallId', 'toolName', 'args', 'details', 'isError', 'errorKind']);
+          const allowedContextKeys = new Set(['source', 'agentId', 'turnId']);
+          const validContext =
+            relayContext?.source === 'functional' &&
+            typeof relayContext.agentId === 'string' &&
+            /^[a-z][a-z0-9-]{1,63}$/.test(relayContext.agentId) &&
+            typeof relayContext.turnId === 'string' &&
+            /^functional:[A-Za-z0-9._:-]{1,160}$/.test(relayContext.turnId) &&
+            Object.keys(relayContext).every((key) => allowedContextKeys.has(key));
+          const validEnvelope =
+            Object.keys(envelope).every((key) => allowedEnvelopeKeys.has(key)) &&
+            validContext &&
+            typeof envelope.toolCallId === 'string' &&
+            envelope.toolCallId.length > 0 &&
+            envelope.toolCallId.length <= 128 &&
+            typeof envelope.toolName === 'string' &&
+            envelope.toolName.length > 0 &&
+            envelope.toolName.length <= 128 &&
+            (envelope.isError === undefined || typeof envelope.isError === 'boolean') &&
+            (envelope.errorKind === undefined ||
+              ['tool_error', 'timeout', 'cancelled', 'agent_stopped'].includes(String(envelope.errorKind)));
+          if (validEnvelope) {
+            const relayEvent = envelope as unknown as ChildActivityEnvelope;
+            const relayTurn = relayContext as unknown as ActivityTurnContext;
+            pushActivities(relayType === 'tool_start'
+              ? projector.acceptToolStart(relayTurn, relayEvent)
+              : projector.acceptToolEnd(relayTurn, relayEvent));
+            if (relayType === 'tool_end' && ['airp-init', 'scene-init', 'nook-init'].includes(String(envelope.toolName))) {
+              const reason = envelope.errorKind === 'timeout' ? 'timeout' : envelope.errorKind === 'cancelled' ? 'cancelled' : 'agent_stopped';
+              pushActivities(projector.failAgent(relayTurn, reason));
+            }
+          }
+        } catch {
+          // Invalid custom messages are intentionally invisible to players.
+        }
+        break;
+      }
+      if (message?.role === 'assistant') {
+        const result = message as { stopReason?: string; errorMessage?: string };
         // A user-aborted turn is not a failure: the Stop control routes through
         // `abort` → `stopReason: 'aborted'`, so surfacing it as `error` would
-        // show a red notice for the action the player just asked for. Fresh
-        // `turn_aborted` frames are recognised by the client; a redundant one
-        // after lifecycle's timeout abort is harmless.
+        // show a red notice for the action the player just asked for.
         if (result.stopReason === 'error') {
           push({ type: 'error', source, message: result.errorMessage || 'The agent could not finish this turn.' });
           break;
@@ -133,7 +189,7 @@ export function mapEngineEvent(
           push({ type: 'turn_aborted', source, reason: 'aborted' });
           break;
         }
-        const text = messageText(event.message);
+        const text = messageText(message);
         if (text) {
           push({ type: source === 'writer' ? 'writer_message' : 'character_message', source, text });
         }
@@ -143,6 +199,13 @@ export function mapEngineEvent(
     case 'tool_execution_start': {
       toolArgs.set(event.toolCallId, event.args);
       push({ type: 'tool_start', source, toolName: event.toolName, toolCallId: event.toolCallId, args: event.args });
+      pushActivities(projector.acceptToolStart(context, {
+        type: 'tool_start',
+        context,
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        args: event.args,
+      }));
       if (event.toolName === 'chalk') {
         push({ type: 'chalk_writing', source, toolCallId: event.toolCallId });
       }
@@ -172,6 +235,16 @@ export function mapEngineEvent(
       // so a tool's `details` live under `result.details`, never on `result`.
       const r = (event.result ?? null) as Record<string, unknown> | null;
       const details = (r?.details ?? {}) as Record<string, unknown>;
+      pushActivities(projector.acceptToolEnd(context, {
+        type: 'tool_end',
+        context,
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        args,
+        details,
+        isError: event.isError,
+        errorKind: event.isError ? 'tool_error' : undefined,
+      }));
       push({
         type: 'tool_end',
         source,
@@ -247,7 +320,13 @@ export function mapEngineEvent(
       }
       break;
     }
+    case 'turn_end': {
+      // A missing tool_execution_end must not strand a running capsule.
+      pushActivities(projector.failTurn(context, 'agent_stopped'));
+      break;
+    }
     case 'agent_settled': {
+      pushActivities(projector.failTurn(context, 'agent_stopped'));
       push({ type: source === 'writer' ? 'writer_idle' : 'character_idle', source });
       break;
     }
@@ -263,6 +342,7 @@ interface BroadcastSink {
 
 export class EventBridge {
   private wss: BroadcastSink | null = null;
+  private activityProjector = new ActivityProjector();
   private fileWatcher: fs.FSWatcher | null = null;
   private watchDebounceTimer: NodeJS.Timeout | null = null;
   private toolArgsByCallId = new Map<string, unknown>();
@@ -313,17 +393,33 @@ export class EventBridge {
   }
 
   /** Fan an engine event out to every WS client as the mapped AIRP frames. */
-  emitEngine(source: EventSource, event: JsonAgentSessionEvent, characterId?: string): void {
+  emitEngine(source: EventSource, event: JsonAgentSessionEvent, characterId?: string, turnId?: string): void {
     // A buffered tool-call that never reached `toolcall_end` (aborted turn)
     // would leak across turns; clear it when the turn settles.
     if (event.type === 'message_end' || event.type === 'agent_settled') {
       this.toolcallBuf.clear();
     }
-    for (const message of mapEngineEvent(source, event, this.toolArgsByCallId, characterId, this.toolcallBuf)) {
+    for (const message of mapEngineEvent(
+      source, event, this.toolArgsByCallId, characterId, this.toolcallBuf,
+      turnId ?? `orphan:${source}`, this.activityProjector,
+    )) {
       this.broadcast(message);
     }
-  }
 
+  }
+  failActivity(
+    source: EventSource,
+    characterId: string | undefined,
+    turnId: string,
+    reason: 'timeout' | 'cancelled' | 'agent_stopped',
+  ): void {
+    const context: ActivityTurnContext = {
+      source,
+      agentId: source === 'character' ? `character:${characterId ?? 'unknown'}` : source,
+      turnId,
+    };
+    for (const frame of this.activityProjector.failTurn(context, reason)) this.broadcast(frame);
+  }
   /**
    * docs/tools/00 §5.3 — the ONE channel that carries world events to the
    * frontend. Extensions cannot touch the WS (00 §1), so the server polls the
@@ -468,6 +564,7 @@ export class EventBridge {
 
   close(): void {
     this.stopTailReader();
+    this.activityProjector.clear();
     if (this.fileWatcher) {
       this.fileWatcher.close();
       this.fileWatcher = null;

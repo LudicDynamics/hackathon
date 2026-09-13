@@ -1,13 +1,19 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MotionPortrait } from './MotionPortrait.js';
+import { ActivityRail } from '../chrome/ActivityRail.js';
 import { canRequestTts, invalidateTts, ttsEnabled } from '../../lib/tts-readiness.js';
 import { useLocale } from '../../lib/i18n.js';
 import { playStinger, playVoice, stopVoice, unlock, type Emotion } from '../../lib/audio.js';
+import { sanitiseTtsText } from '@airp/shared/tts-text';
 import {
   clampPageIndex,
   charDelay,
+  createCharacterTurn,
+  consumeCharacterFrame,
   GREETING_LINE,
   parseEmoPages,
+  resetCharacterTurn,
+  type CharacterTurnBuffer,
   type DialoguePage,
 } from './dialogue-pages.js';
 
@@ -87,7 +93,7 @@ type Phase = 'idle' | 'thinking' | 'streaming' | 'done';
 type VoiceState = 'idle' | 'pending' | 'ready' | 'failed';
 
 /** A dialogue page (contract §6.1) plus its voice request state. */
-type StagePage = DialoguePage & { voiceUrl?: string; voiceState: VoiceState };
+type StagePage = DialoguePage & { voiceUrl?: string; voiceState: VoiceState; voiceText?: string };
 
 
 /** Grace window while a page's voice prefetch is still in flight, before the
@@ -139,7 +145,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const closeTimer = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // 流式驱动器的唯一状态（全是 ref：帧回调读 state 会拿到闭包旧值）。
-  const lineRef = useRef(''); // 已收到的原始全文（含标签、增量累积）
+  const turnBufferRef = useRef<CharacterTurnBuffer | null>(null); // turn/message aggregation truth
   const pagesRef = useRef<StagePage[]>([]); // 页数组（命令式真相源）
   const pageIndexRef = useRef(0); // 当前页下标，恒在 [0, max(0,len-1)]
   const pageShownRef = useRef(0); // 页内已显示字符数（取代旧的全局游标 shownRef）
@@ -148,9 +154,9 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const mockSeededRef = useRef(false); // StrictMode 单实例只 seed 一次
   const stingerGraceRef = useRef<number | null>(null); // pending 语音的 stinger 宽限定时器
   const streamingRef = useRef(false);
-  const messageEndedRef = useRef(false); // 收到过 character_message
-  const channelIdleRef = useRef(false); // 收到过 character_idle
-  const finalRef = useRef(false); // true → 末行可封口
+  const messageEndedRef = useRef(false); // mock greeting compatibility; real turns close on idle
+  const channelIdleRef = useRef(false); // received character_idle
+  const finalRef = useRef(false); // true → final projection may seal its tail
   const phaseRef = useRef<Phase>('idle');
   const phaseBeforeTurnRef = useRef<Phase>('idle');
   const lastEmoRef = useRef<Emotion>('normal');
@@ -187,8 +193,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   /** 末页封口 + 追平 + turn 终结 → 收工（contract §6.6。`pageIndex === last`
    *  是「页翻尽才放输入框」的机械落点）。 */
   const settleIfDrained = useCallback(() => {
-    if (!(messageEndedRef.current || channelIdleRef.current)) return;
-    if (streamTimer.current !== null) return; // 还在逐字
+    if (!channelIdleRef.current && !mockRef.current) return;
     const last = pagesRef.current.length - 1;
     const drained =
       last >= 0 &&
@@ -255,19 +260,30 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const prefetchVoice = useCallback(
     async (page: StagePage, i: number): Promise<void> => {
       if (page.voiceState !== 'idle') return; // 已 pending/ready/failed → 不重发
-      if (page.text.trim() === '') return; // 空页不发（服务端 400）
+      const text = sanitiseTtsText(page.text);
+      page.voiceText = text;
+      if (text === '') {
+        page.voiceState = 'failed';
+        onVoiceResolved(page, i);
+        return;
+      }
       page.voiceState = 'pending';
+      const requestedText = text;
       const token = voiceTurnRef.current;
       try {
         const ready = await canRequestTts();
-        if (token !== voiceTurnRef.current) return;
-        if (!ready || !ttsEnabled()) { page.voiceState = 'failed'; onVoiceResolved(page, i); return; }
+        if (token !== voiceTurnRef.current || sanitiseTtsText(page.text) !== requestedText) return;
+        if (!ready || !ttsEnabled()) {
+          page.voiceState = 'failed';
+          onVoiceResolved(page, i);
+          return;
+        }
         const res = await fetch('/api/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: page.text, voice, language }),
+          body: JSON.stringify({ text, voice, language }),
         });
-        if (token !== voiceTurnRef.current) return; // 已换轮 → 丢弃结果（不写、不播）
+        if (token !== voiceTurnRef.current || sanitiseTtsText(page.text) !== requestedText) return;
         const data = (await res.json()) as { ok?: boolean; url?: string; code?: string };
         if (!res.ok || !data.ok || typeof data.url !== 'string' || data.url === '') {
           page.voiceState = 'failed';
@@ -279,7 +295,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         page.voiceState = 'ready';
         onVoiceResolved(page, i); // 若正是当前页 → playVoice（truncated 不重试）
       } catch {
-        if (token !== voiceTurnRef.current) return;
+        if (token !== voiceTurnRef.current || sanitiseTtsText(page.text) !== requestedText) return;
         invalidateTts();
         page.voiceState = 'failed';
         onVoiceResolved(page, i);
@@ -333,7 +349,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     [applyMood, armStingerGrace, pump]
   );
 
-  /** 分页与封口（唯一入口）：每次 lineRef 变化都调它。 */
+  /** 分页与封口（唯一入口）：每次 turn projection 变化都调它。 */
   const syncPages = useCallback(
     (raw: string, opts: { final?: boolean; reset?: boolean }) => {
       const next = parseEmoPages(raw, { final: opts.final ?? false }).pages;
@@ -357,10 +373,12 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         if (np.text !== prev.text) {
           prev.text = np.text;
           prev.emo = np.emo;
-          if (prev.sealed) {
-            // 权威文本覆盖了已封口行（唯一允许路径，§3.5）→ 重取 TTS
-            prev.voiceUrl = undefined;
-            prev.voiceState = 'idle';
+          // Any text correction invalidates the prior request, whether the
+          // page was already sealed or was still being projected.
+          prev.voiceUrl = undefined;
+          prev.voiceText = undefined;
+          prev.voiceState = 'idle';
+          if (np.sealed) {
             void prefetchVoice(prev, i);
             if (pageIndexRef.current === i) enterPage(i, { announce: false }); // 重驱当前页
           }
@@ -388,7 +406,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     channelIdleRef.current = false;
     finalRef.current = false;
     stingerFiredRef.current = false;
-    lineRef.current = '';
+    turnBufferRef.current = resetCharacterTurn();
     pageShownRef.current = 0;
     voiceTurnRef.current += 1; // 新 turn：作废在途的语音结果
     setPageShown('');
@@ -426,7 +444,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     turnWatchdog.current = window.setTimeout(() => {
       turnWatchdog.current = null;
       const silence = SILENCE_LINE[locale];
-      lineRef.current = silence.text;
+      turnBufferRef.current = resetCharacterTurn();
       streamingRef.current = false;
       syncPages(silence.text, { final: true, reset: true });
       enterPage(0, { announce: false });
@@ -474,7 +492,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
       if (!mockRef.current || pagesRef.current.length === 0) return;
       for (const p of pagesRef.current) {
         p.voiceState = 'idle';
-        p.voiceUrl = undefined;
+        p.voiceText = undefined;
       }
       streamingRef.current = true;
       messageEndedRef.current = true;
@@ -487,7 +505,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     setEmo('normal');
     setPhase('idle');
     setPlayerEcho('');
-    lineRef.current = '';
+    turnBufferRef.current = resetCharacterTurn();
     pagesRef.current = [];
     pageIndexRef.current = 0;
     pageShownRef.current = 0;
@@ -567,46 +585,45 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     if (incoming.type === 'character_delta') {
       dropMock();
       if (!streamingRef.current) beginStream();
-      lineRef.current += incoming.delta;
-      syncPages(lineRef.current, { final: false });
+      const buffer = turnBufferRef.current ?? createCharacterTurn();
+      const projection = consumeCharacterFrame(buffer, { type: 'character_delta', delta: incoming.delta });
+      turnBufferRef.current = projection.buffer;
+      syncPages(projection.rawText, { final: false });
       pump();
       return;
     }
 
     if (incoming.type === 'character_message') {
       dropMock();
-      const lostAll = lineRef.current === '';
-      if (!streamingRef.current) beginStream(); // 会复位终结标志，故先建流
-      messageEndedRef.current = true;
+      if (!streamingRef.current) beginStream(); // 首个真实帧也能建立新 turn
+      const buffer = turnBufferRef.current ?? createCharacterTurn();
+      const projection = consumeCharacterFrame(buffer, { type: 'character_message', text: incoming.text });
+      turnBufferRef.current = projection.buffer;
       finalRef.current = true;
-      if (lostAll) {
-        // delta 全丢（断线 / 非流式）：直接落定权威文本。
-        lineRef.current = incoming.text;
-        cancelStreamTimer(); // 取消沉思窗——权威文本无需揭幕延迟
-        streamingRef.current = true;
-        syncPages(lineRef.current, { final: true, reset: true });
-        enterPage(0, { announce: false });
-        settleIfDrained();
-      } else {
-        if (lineRef.current !== incoming.text) lineRef.current = incoming.text; // 丢帧 → 以权威文本为准
-        syncPages(lineRef.current, { final: true });
-        pump();
-        settleIfDrained();
-      }
+      // message_end closes only this assistant message; idle remains the turn boundary.
+      cancelStreamTimer();
+      streamingRef.current = true;
+      setPhase('streaming');
+      syncPages(projection.rawText, { final: true });
+      pump();
       return;
     }
 
     if (incoming.type === 'character_idle') {
+      dropMock();
+      const buffer = turnBufferRef.current ?? createCharacterTurn();
+      const projection = consumeCharacterFrame(buffer, { type: 'character_idle' });
+      turnBufferRef.current = projection.buffer;
       channelIdleRef.current = true;
       finalRef.current = true;
-      if (lineRef.current === '') {
+      if (projection.rawText.trim() === '') {
         // 纯工具轮：整轮无文本 → 归还 phase，纸上页数组不动（保留刚说完的页）。
         cancelStreamTimer();
         streamingRef.current = false;
         clearWatchdog();
         setPhase(phaseBeforeTurnRef.current);
       } else {
-        syncPages(lineRef.current, { final: true });
+        if (projection.changed) syncPages(projection.rawText, { final: true });
         pump();
         settleIfDrained();
       }
@@ -621,7 +638,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     messageEndedRef.current = false;
     channelIdleRef.current = false;
     finalRef.current = true;
-    lineRef.current = incoming.message;
+    turnBufferRef.current = createCharacterTurn();
     syncPages(incoming.message, { final: true, reset: true });
     enterPage(0, { announce: false });
     const errPage = pagesRef.current[0];
@@ -632,6 +649,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     setEmo('normal');
     lastEmoRef.current = 'normal';
     setPhase('done');
+
   }, [incoming, closing, beginStream, pump, syncPages, enterPage, settleIfDrained, cancelStreamTimer, clearWatchdog, clearStingerGrace]);
 
   // Unmount: cancel every pending timer + stop the voice channel.
@@ -677,6 +695,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     finalRef.current = false;
     // 清页队列（contract §6.6）：否则新回复的页接在旧页后面。
     voiceTurnRef.current += 1;
+    turnBufferRef.current = resetCharacterTurn();
     pagesRef.current = [];
     pageIndexRef.current = 0;
     pageShownRef.current = 0;
@@ -749,6 +768,10 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 
       {/* Bottom tilted paper dialog: name plate, narration, the current page, input. */}
       <div className={`speech-paper${closing ? ' speech-paper-closing' : ''}`}>
+        {/* 角色 activity rail（契约 §7.2）：挂在纸上沿之外的独立流式带，作为第一个
+            子节点、absolute 定位（bottom:100%）故不进纸的文档流、不改纸高。按
+            agentId 过滤，只显示本角色的动作。 */}
+        <ActivityRail surface="character-modal" agentId={`character:${characterId}`} />
         <div className="name-plate">{displayName || characterId}</div>
         {onOpenNook && <button type="button" onClick={onOpenNook}>Visit private space</button>}
         <p className="narr-line">{bio ? bio : '(necessary description)'}</p>

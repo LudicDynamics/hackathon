@@ -32,6 +32,10 @@
     "./layout": {
       "types": "./dist/layout/flow-columns.d.ts",
       "import": "./dist/layout/flow-columns.js"
+    },
+    "./tts-text": {
+      "types": "./dist/rules/tts-text.d.ts",
+      "import": "./dist/rules/tts-text.js"
     }
   },
   "scripts": {

@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { resolveVoice, type LocalWorldStore } from '@airp/shared';
+import { resolveVoice, sanitiseTtsText, type LocalWorldStore } from '@airp/shared';
 
 /**
  * Server-side TTS: the ONE synthesis point (docs/tts/00 §1, docs/tts/01).
@@ -254,8 +254,8 @@ export function createTtsRouter(
       return res.status(400).json({ ok: false, code: 'no_active_world', error: 'No active world' });
     }
 
-    // Step 2 — `text` must be a non-empty string. Only the emptiness check
-    // trims; the page text is sent verbatim (leading space may be a beat).
+    // Step 2 — `text` must be a non-empty string before it enters the shared
+    // safety boundary. Only the emptiness check trims the raw input here.
     const {
       text: rawText,
       voice: rawVoice,
@@ -267,17 +267,27 @@ export function createTtsRouter(
         .json({ ok: false, code: 'invalid_argument', error: 'text must be a non-empty string' });
     }
 
-    // Step 3 — truncate BEFORE hashing, so the cache key matches the text that
+    // Step 3 — clean before truncation, hashing, cache lookup, and synthesis.
+    // The helper is pure and idempotent; this server-side pass is mandatory even
+    // when the browser already performed its preflight.
+    const cleanedText = sanitiseTtsText(rawText);
+    if (cleanedText === '') {
+      return res
+        .status(400)
+        .json({ ok: false, code: 'invalid_argument', error: 'text must be a non-empty string' });
+    }
+
+    // Step 4 — truncate BEFORE hashing, so the cache key matches the text that
     // was actually sent. Truncation keeps the performance alive rather than
     // failing silently; `truncated` reaches the client.
-    let text = rawText;
+    let text = cleanedText;
     let truncated = false;
     if (text.length > MAX_TEXT_CHARS) {
       text = text.slice(0, MAX_TEXT_CHARS);
       truncated = true;
     }
 
-    // Step 4 — resolve the declared voice through the palette (docs/tts/07 §3).
+    // Step 5 — resolve the declared voice through the palette (docs/tts/07 §3).
     // Two vocabularies reach here: an effect alias from world content
     // (`wise-elder`) or a raw id already in the palette (`Eldric Sage`).
     // A typo is NOT silently accepted — the page still plays on the default,
@@ -301,10 +311,10 @@ export function createTtsRouter(
       }
     }
 
-    // Step 5 — world locale short code → DashScope `language_type`.
+    // Step 6 — world locale short code → DashScope `language_type`.
     const languageType = typeof rawLanguage === 'string' ? (LANGUAGE_MAP[rawLanguage] ?? 'Auto') : 'Auto';
 
-    // Step 6 — cache lookup. `existsSync` (not `stat`) is enough: atomic writes
+    // Step 7 — cache lookup. `existsSync` (not `stat`) is enough: atomic writes
     // guarantee "present ⇒ complete".
     const hash = hashOf(config.model, voice, languageType, text);
     const cacheDir = path.join(store.worldRoot, '.airpworld', 'tts-cache');
@@ -320,7 +330,7 @@ export function createTtsRouter(
       });
     }
 
-    // Step 7 — key check comes AFTER the cache probe on purpose: an already
+    // Step 8 — key check comes AFTER the cache probe on purpose: an already
     // synthesised page keeps playing even if the key was withdrawn.
     if (!config.apiKey) {
       return res

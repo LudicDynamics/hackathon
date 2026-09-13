@@ -31,6 +31,12 @@ import {
   type WorldManifest,
 } from '../../packages/shared/dist/index.js';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import {
+  observeSubagentSession,
+  relayActivityViaParentMessage,
+  type ActivityRelay,
+  type ActivityTurnContext,
+} from './activity-relay.js';
 import { AIRP_TOOLS } from '../tools.js';
 import { getActionService, worldStore } from './deps.js';
 
@@ -165,6 +171,12 @@ function report(args: InitArgs, outcome: string): string {
 }
 
 export function registerInitCommand(pi: ExtensionAPI): void {
+  if (typeof pi.registerCustomType === 'function') {
+    pi.registerCustomType('airp_agent_activity', {
+      context: 'exclude',
+      compaction: 'exclude',
+    });
+  }
   pi.registerCommand(INIT_COMMAND, {
     description: 'Instantiate a stub scene layer or an empty character nook (docs/init).',
     handler: async (rawArgs: string, ctx) => {
@@ -193,11 +205,50 @@ export function registerInitCommand(pi: ExtensionAPI): void {
       // the nook id (`characters/<id>`) — the two id domains `local-store` uses
       // (docs/nook/RESEARCH-初始化链路.md:122).
       const layer = isScene ? args.target : dir;
+      const activityContext: ActivityTurnContext = {
+        source: 'functional',
+        agentId: isScene ? 'scene-init' : 'nook-init',
+        turnId: `functional:${crypto.randomUUID()}`,
+      };
+      const sendParentMessage = (
+        message: { customType: string; content: string; display: boolean },
+        options: { triggerTurn: false },
+      ) => pi.sendMessage(message, options);
+      const relay = (event: Parameters<ActivityRelay>[0]) =>
+        relayActivityViaParentMessage(sendParentMessage, event.context, event);
+      const sendRootStart = () =>
+        relayActivityViaParentMessage(sendParentMessage, activityContext, {
+          type: 'tool_start',
+          toolCallId: 'initialize',
+          toolName: INIT_COMMAND,
+          args: { target: args.target },
+        });
+      const sendRootTerminal = (isError: boolean, errorKind?: 'tool_error' | 'timeout' | 'cancelled') =>
+        relayActivityViaParentMessage(sendParentMessage, activityContext, {
+          type: 'tool_end',
+          toolCallId: 'initialize',
+          toolName: INIT_COMMAND,
+          details: { target: args.target },
+          isError,
+          ...(errorKind ? { errorKind } : {}),
+        });
+
+      // A syntactically valid, addressable request gets an initialize capsule.
+      // Invalid JSON/kind/target and invalid nook ids return before this point.
+      sendRootStart();
 
       // (1) Emptiness short-circuit — the sequential idempotency source.
-      const files = await store.listFiles();
+      let files: string[];
+      try {
+        files = await store.listFiles();
+      } catch {
+        sendRootTerminal(true, 'tool_error');
+        emit(report(args, 'failed (store unavailable)'));
+        return;
+      }
       const empty = isScene ? isLayerEmpty(files, dir) : isNookEmpty(files, dir);
       if (!empty) {
+        sendRootTerminal(false);
         emit(report(args, 'already initialized (no action)'));
         return;
       }
@@ -205,10 +256,19 @@ export function registerInitCommand(pi: ExtensionAPI): void {
       // (2) Concurrency guard — the parallel idempotency source.
       const key = `${args.kind}:${args.target}`;
       if (inFlight.has(key)) {
+        sendRootTerminal(true, 'cancelled');
         emit(report(args, 'initialization already in flight'));
         return;
       }
       inFlight.add(key);
+
+      let terminalSent = false;
+      let unsubscribeChild: (() => void) | undefined;
+      const finish = (isError: boolean, errorKind?: 'tool_error' | 'timeout' | 'cancelled') => {
+        if (terminalSent) return;
+        terminalSent = true;
+        sendRootTerminal(isError, errorKind);
+      };
 
       try {
         const svc = getActionService(ext);
@@ -218,6 +278,7 @@ export function registerInitCommand(pi: ExtensionAPI): void {
           const dirName = dir.split('/').pop() ?? layer;
           const written = await writeW2Scene(store, dir, dirName);
           const res = await svc.recordLayerInitialized({ layer, by: 'engine', files: written });
+          finish(false);
           emit(report(args, `template placed — ${res.text}`));
           return;
         }
@@ -238,12 +299,7 @@ export function registerInitCommand(pi: ExtensionAPI): void {
         //
         // The spawned agent writes via the NATIVE `write` tool, which
         // `extensions/world-context.ts` turns into a `layer_initialized`
-        // fallback — but this command OWNS that event (docs/init/02 §6: the
-        // command records by outcome) and records it in step 6. Without the
-        // flag the one scene init lands TWO `layer_initialized` rows (mutual
-        // exclusion, docs/tools/00 §6). jiti gives each extension file its own
-        // module instance (actor.ts header), so `process.env` is the only
-        // channel that reaches the OTHER extension.
+        // fallback — but this command OWNS that event and records it below.
         let result: { status: string; text?: string; error?: string };
         try {
           process.env.AIRP_INIT_IN_FLIGHT = '1';
@@ -252,6 +308,10 @@ export function registerInitCommand(pi: ExtensionAPI): void {
             task: brief,
             customTools: AIRP_TOOLS.map((t) => t.tool),
             timeoutMs: TIMEOUT_MS[args.kind],
+            onSessionCreated: (child) => {
+              unsubscribeChild?.();
+              unsubscribeChild = observeSubagentSession(child, activityContext, relay);
+            },
           });
         } catch (err) {
           result = { status: 'failed', error: msg(err) };
@@ -264,23 +324,31 @@ export function registerInitCommand(pi: ExtensionAPI): void {
         if (result.status === 'completed' && hasInitProduct(after, dir, args.kind)) {
           const produced = after.filter((f) => f.startsWith(`${dir}/`));
           const res = await svc.recordLayerInitialized({ layer, by: args.by, files: produced });
+          finish(false);
           emit(report(args, `done — ${res.text}`));
           return;
         }
 
         const reason = result.status === 'completed' ? 'no product written' : result.status;
+        const errorKind =
+          result.status === 'timed-out' ? 'timeout' : result.status === 'cancelled' ? 'cancelled' : 'tool_error';
         if (isScene) {
           const dirName = dir.split('/').pop() ?? layer;
           await writeW2Scene(store, dir, dirName);
           await svc.recordLayerInitFailed({ layer, reason, fallback: 'template' });
+          finish(true, errorKind);
           emit(report(args, `failed (${reason}); scene fell back to template`));
         } else {
           // A nook that stays empty is a normal state — do not invent content.
           await svc.recordLayerInitFailed({ layer, reason, fallback: 'none' });
+          finish(true, errorKind);
           emit(report(args, `failed (${reason}); nook left empty`));
         }
       } finally {
+        unsubscribeChild?.();
         inFlight.delete(key);
+        // Covers store/action failures that bypass the normal result split.
+        finish(true, 'tool_error');
       }
     },
   });
