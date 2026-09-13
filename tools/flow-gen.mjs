@@ -207,17 +207,19 @@ function save(url, out, kind, prompt) {
  * request is how a silent downgrade becomes visible.
  *
  * Two key dialects exist upstream and they do NOT share a shape:
- *   abra: abra_{t2v|i2v}_{N}s_{360|720|1080}p   <- spec encoded in the name
- *   veo : veo_3_1_t2v_{variant}[_{N}s]          <- spec in the name, NO resolution
- * So the resolution check only applies to abra; for veo the variant name already
- * fixes the output (base = 720p). Asking veo for a resolution is meaningless —
- * the proxy now refuses to silently swap families, so a bad veo key surfaces as
- * an error instead of a mysterious 360p clip.
+ *   abra: abra_{t2v|i2v|fl|r2v}_{N}s            <- duration only, NO resolution
+ *   veo : veo_3_1_{t2v|i2v}_{variant}[_{N}s]    <- spec in the variant name
+ *
+ * abra carries its resolution in the request body (outputSpec), not the key —
+ * probing proved `abra_t2v_8s_720p` does not exist upstream (404) while
+ * `abra_t2v_8s` does. veo is the opposite: resolution is baked into the
+ * variant, and sending outputSpec gets rejected as 400 INVALID_ARGUMENT.
+ * So only abra's *duration* is checkable from the key; resolution is not.
  */
 function parseUpstreamKey(key) {
   const s = String(key || '');
-  const abra = s.match(/^abra_(t2v|i2v|fl|r2v)_(\d+)s_(\d{3,4})p$/);
-  if (abra) return { family: 'abra', kind: abra[1], seconds: Number(abra[2]), res: Number(abra[3]) };
+  const abra = s.match(/^abra_(t2v|i2v|fl|r2v)_(\d+)s(?:_(\d{3,4})p)?$/);
+  if (abra) return { family: 'abra', kind: abra[1], seconds: Number(abra[2]), res: abra[3] ? Number(abra[3]) : null };
   // veo_3_1_t2v_lite / veo_3_1_t2v_fast_8s / veo_3_1_i2v_s_fast_fl
   const veo = s.match(/^veo_3_1_(t2v|i2v)_(.+)$/);
   if (veo) {
@@ -258,10 +260,11 @@ async function cmdImage(opts) {
 
   const body = { model: opts.model || 'nano-banana-2-lite', prompt };
   if (opts.aspect) body.aspect_ratio = opts.aspect;
+  // 2K 是生成后的二次放大（4K 需更高订阅档，不支持），返回 base64 而非 URL。
+  if (String(opts.resolution || '').toLowerCase() === '2k') body.resolution = '2k';
 
   const out = resolveOut(opts, 'image', prompt);
-  console.log(`生图  model=${body.model} aspect=${body.aspect || '(默认 landscape)'}`);
-  console.log(`      prompt="${String(prompt).slice(0, 70)}${String(prompt).length > 70 ? '…' : ''}"`);
+  console.log(`生图  model=${body.model} aspect=${body.aspect || '(默认 landscape)'}${body.resolution ? ` resolution=${body.resolution}` : ''}`);
 
   const t0 = Date.now();
   const json = await api('/v1/images/generations', { method: 'POST', body, timeoutMs: 300_000 });
@@ -287,10 +290,15 @@ async function cmdImage(opts) {
       written.push({ dest, bytes: got.bytes, type: got.type, remote: it.url });
     } else if (it.b64_json) {
       const buf = Buffer.from(it.b64_json, 'base64');
-      dest = save(it, { ...out, type: 'image/png' }, 'image', prompt);
+      // 上游 2K 放大返回的是 JPEG（实测 2752x1536），别硬编码成 .png——
+      // 按魔数判断，避免扩展名与内容不符。
+      const mime = buf[0] === 0xff && buf[1] === 0xd8 ? 'image/jpeg'
+        : buf[0] === 0x89 && buf[1] === 0x50 ? 'image/png'
+        : 'image/jpeg';
+      dest = save(it, { ...out, type: mime }, 'image', prompt);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       fs.writeFileSync(dest, buf);
-      written.push({ dest, bytes: buf.length, type: 'image/png' });
+      written.push({ dest, bytes: buf.length, type: mime });
     } else {
       console.log(`  ⚠ 第 ${index + 1} 张没有可下载内容（只有 media_id=${it.media_id}）`);
     }
@@ -345,16 +353,25 @@ async function cmdVideo(opts) {
     delay = Math.min(delay + 2000, 8000);
     task = await api(`/v1/videos/${id}`, { timeoutMs: 60_000 });
     const pct = task.progress != null ? ` ${task.progress}%` : '';
-    process.stdout.write(`\r        生成中… ${task.status}${pct}  (${((Date.now() - t0) / 1000).toFixed(0)}s)   `);
+    const stage = task.upsample === 'submitted' ? '1080p 升采样' : task.upsample === 'pending' ? '生成' : '';
+    process.stdout.write(
+      `\r        生成中… ${task.status}${pct}${stage ? ` [${stage}]` : ''}  (${((Date.now() - t0) / 1000).toFixed(0)}s)   `
+    );
   }
-  process.stdout.write('\r' + ' '.repeat(70) + '\r');
+  process.stdout.write('\r' + ' '.repeat(78) + '\r');
 
+  const secs = ((Date.now() - t0) / 1000).toFixed(1);
   // `/content` re-signs the CDN URL on every call, so never reuse a stored link.
   const dest = save({ url: '', type: '' }, out, 'video', prompt);
   const got = await download(`/v1/videos/${id}/content`, dest);
-  const secs = ((Date.now() - t0) / 1000).toFixed(1);
   console.log(`  ✓ ${dest}  (${human(got.bytes)}, ${got.type || 'video/mp4'})`);
   reportDowngrade(task, { seconds: body.seconds, res: body.resolution });
+  // 1080p 是生成后的二次放大，失败时会**静默回退成 720p**——必须说出来。
+  if (task.upsample === 'failed') {
+    console.log(`  ⚠ 1080p 升采样失败，已回退为原始 720p：${task.upsample_error || '原因未上报'}`);
+  } else if (task.upsample === 'submitted') {
+    console.log(`  ✓ 已升采样至 1080p`);
+  }
   console.log(`  用时 ${secs}s${task.credits_remaining != null ? `，剩余额度 ${task.credits_remaining}` : ''}`);
   if (opts.json) {
     console.log(
@@ -367,6 +384,8 @@ async function cmdVideo(opts) {
             type: got.type,
             elapsed_s: Number(secs),
             upstream_key: task.model,
+            size: task.size,
+            upsample: task.upsample ?? null,
             remote_url: task.video?.remote_url,
           },
           null,
@@ -427,11 +446,12 @@ flow-gen — 通过本地 Flow 代理生成图片与视频
 image 选项:
       --model <名>     默认 nano-banana-2-lite
       --aspect <比例>  landscape | portrait | square | four-three | three-four
+      --resolution 2k  走生成后的二次放大（4K 需更高订阅档，不支持）
 
 video 选项:
       --model <名>     默认 veo-3.1-lite（720p）
       --seconds <4|6|8>      时长（默认 4）
-      --resolution <360|720>  仅 omni-1.1-flash(abra) 生效，默认 720；veo 分辨率由模型决定，1080p 需后处理
+      --resolution <360|720|1080>  360/720 为生成档位(仅 omni 可调，默认 720)；1080 走生成后的升采样(4K 需更高订阅档)
       --aspect <比例>  landscape | portrait
       --image <路径|URL>     首帧图片（本地路径会内联为 data URL），走图生视频
 
@@ -443,6 +463,8 @@ video 选项:
 示例:
   node tools/flow-gen.mjs image --prompt "黄昏的海边灯塔，赛璐璐动画风" -o assets/_inbox/
   node tools/flow-gen.mjs video --prompt "海浪拍打礁石" --seconds 6 --resolution 720p -o out.mp4
+  node tools/flow-gen.mjs video --prompt "烛光摇曳" --resolution 1080p -o out.mp4   # 生成后自动升采样
+  node tools/flow-gen.mjs image --prompt "海边灯塔" --resolution 2k -o out.jpg
   node tools/flow-gen.mjs video --prompt "让她微微转头" --image assets/_inbox/base.png -o ./  # 图生视频
 `;
 

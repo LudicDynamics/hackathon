@@ -84,13 +84,14 @@ pnpm gen credits     # 剩余额度
 ## 二、生图
 
 ```bash
-pnpm gen image --prompt "描述" [--model M] [--aspect R] [-o 路径]
+pnpm gen image --prompt "描述" [--model M] [--aspect R] [--resolution 2k] [-o 路径]
 ```
 
 | 参数 | 取值 |
 |---|---|
 | `--model` | `nano-banana-2-lite`（默认）/ `nano-banana-2` / `gemini-3.0-pro-image` |
 | `--aspect` | `landscape`（默认）/ `portrait` / `square` / `four-three` / `three-four` |
+| `--resolution` | `2k`（走生成后放大；4K 需更高订阅档，不支持） |
 
 - 实测耗时 **~19s**，返回**真实的 1024×1024 级 JPEG**（签名 CDN 直链可直接下载）。
 - 三个模型实测都可用。**`nano-banana-pro` 与 `imagen-4.0-generate-preview` 已从中游 404**，
@@ -104,11 +105,10 @@ pnpm gen image --prompt "描述" [--model M] [--aspect R] [-o 路径]
 
 ## 三、生视频（异步）
 
-```bash
-pnpm gen video --prompt "描述" [--model M] [--seconds 4|6|8] [--image 首帧] [-o 路径]
+pnpm gen video --prompt "描述" [--model M] [--seconds 4|6|8] [--resolution 720|1080p] [--image 首帧] [-o 路径]
 ```
 
-工具封装了三步：**提交 → 轮询 → 下载**。耗时实测 **~25–40s**（lite 8s 档约 40s）。
+工具封装了三步：**提交 → 轮询 → 下载**。耗时实测 **~25–80s**（lite 8s 档约 40s；加 1080p 升采样约 76s）。
 
 ### 3.1 模型与分辨率
 
@@ -119,11 +119,8 @@ pnpm gen video --prompt "描述" [--model M] [--seconds 4|6|8] [--image 首帧] 
 | `veo-3.1-quality` | `veo_3_1_t2v_fast_ultra` | 720p | ✅ |
 | `omni-1.1-flash` | `abra_t2v_8s` | **360p / 720p 可选** | ✅ 720p 实测 1280×720 |
 
-`--seconds 4|6|8` 对所有预设有效。`omni-1.1-flash` 是唯一能用 `--resolution` 调分辨率的
-（**默认已改 720p**，要小文件才传 `--resolution 360`）。
-
-> **默认用 `veo-3.1-lite`**（工具默认值）。不要用 `--resolution` 对着 veo 系调——
-> veo 的分辨率由 key 变体决定，传了也不生效。
+`--seconds 4|6|8` 对所有预设有效。`omni-1.1-flash` 是唯一能用 `--resolution 360/720` 调**生成**分辨率的
+（**默认已改 720p**）；`--resolution 1080p` 对所有模型都有效——它触发的是生成后的升采样（见 3.3）。
 
 ### 3.2 上游 key 的两套命名（改代理时必读）
 
@@ -152,7 +149,7 @@ pnpm gen video --prompt "描述" [--model M] [--seconds 4|6|8] [--image 首帧] 
    结果 404 后回落到 omni，**你拿到 360p 片却以为在用 veo**。该 bug 已修（实测 veo-3.1-lite 现在真出 1280×720）。
    工具会打降级告警，别忽略。
 
-### 3.3 1080p 是后处理，不是生成档位
+### 3.3 1080p / 2K 升采样（已实现；4K 不可用）
 
 网页端"导出 1080p"**不是生成参数**，而是对**已生成的视频**再做一次放大。上游是独立工序：
 
@@ -163,8 +160,23 @@ POST /v1/video:batchAsyncGenerateVideoUpsampleVideo
   resolution         : VIDEO_RESOLUTION_1080P
 ```
 
-**所以生成时的分辨率上限就是 720p**，`--resolution 1080` 会被上游拒为 `400 INVALID_ARGUMENT`。
-本代理尚未实现 upsample 这道工序；需要 1080p 得另行处理成片。
+图片同理，走 `/flow/upsampleImage` + `UPSAMPLE_IMAGE_RESOLUTION_2K`，**返回 base64**（不是 URL）。
+
+**代理已实现这两条链路**，调用方只传参数即可：
+
+```bash
+node tools/flow-gen.mjs video --prompt "..." --resolution 1080p   # 生成 → 自动放大 → 下载
+node tools/flow-gen.mjs image --prompt "..." --resolution 2k
+```
+
+**生成档位上限仍是 720p**；`--resolution 1080p` 触发的是"生成完再放大"。
+任务 JSON 的 `upsample` 字段反映状态：`pending`（生成中）→ `submitted`（已出 1080p，`size` 变
+1920x1080）→ `failed`（**已回退成原始 720p**，带 `upsample_error`）。工具对失败会打 ⚠。
+
+实测：视频 1920×1080 / 8s / 2.34MB；图片 2752×1536 / 3.44MB。
+
+> ⚠️ **4K 不要用**：`veo_3_1_upsampler_4k` 这个 key 探测时返回 403（存在），但需要**更高订阅档**，
+> 实际用不了。图片 4K 同理。传 `--resolution 4k` 会被按 720p 生成。
 
 ### 3.4 降级告警
 
