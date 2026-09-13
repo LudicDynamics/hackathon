@@ -2,8 +2,9 @@
 
 type: "readme"
 name: "Sumi Yukimura"
-avatar: "assets/characters/sumi-yukimura.webp"
+avatar: "assets/motion/seedance/characters/sumi-transparent.webp"
 voice: mature-elegant
+avatarVideo: "assets/motion/seedance/characters/sumi-transparent.webm"
 ---
 
 # Sumi Yukimura

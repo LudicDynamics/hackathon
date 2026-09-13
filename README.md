@@ -40,7 +40,7 @@
 ├── packages/
 │   └── shared/            # WorldManifest (Zod), ChalkFrontmatter, WorldStore, SQLite Schema
 ├── presets/               # 提示词预设 (writer, character, scene-init, nook-init)
-├── templates/             # 预设世界模板
+├── templates/             # 当前体验版（*-playtest）与旧素材版模板，都随 Git 分发
 │   ├── holmes-world/      # 悬疑推理：Fog Over Baker Street
 │   ├── school-romance/    # 校园恋爱：Sakura Academy
 │   ├── magic-academy/     # 魔法学院：Emberglass Academy
@@ -84,9 +84,8 @@ pnpm probe
 
 ### 3. 脚手架拉起新世界
 ```bash
-# 从模板创建玩家专属世界
-node tools/scaffold.mjs --template holmes-world --out worlds/my-holmes
-# 可选模板: holmes-world, school-romance, magic-academy, cthulhu
+# 从当前初雪体验版创建玩家专属世界
+node tools/scaffold.mjs --template first-snow-jp-playtest --out worlds/my-first-snow
 ```
 
 ### 4. 启动本地全栈开发
@@ -96,3 +95,20 @@ pnpm dev
 ```
 - 前端地址：`http://localhost:5173`
 - 后端服务：`http://localhost:3001`
+
+### 当前体验版入口
+
+以下完整模板已纳入 Git，包含场景 README、Chalk、世界 skill、角色及配套图片 / 动画。拉取后可在 5173 的世界菜单里直接创建新游戏，**不需要先运行内容生成工具**；真实 AI 游玩仍需配置服务。
+
+| 世界 | 当前模板 |
+|---|---|
+| 雾坞镇 | [`templates/wuwu-playtest/`](templates/wuwu-playtest/) |
+| 福尔摩斯 | [`templates/whitechapel-playtest/`](templates/whitechapel-playtest/) |
+| 时间线 | [`templates/divergence-playtest/`](templates/divergence-playtest/) |
+| 初雪电台 | [`templates/first-snow-jp-playtest/`](templates/first-snow-jp-playtest/) |
+| 魔法学院 | [`templates/magic-academy-playtest/`](templates/magic-academy-playtest/) |
+| 未写之门 | [`templates/unwritten-door-playtest/`](templates/unwritten-door-playtest/) |
+
+不带 `-playtest` 的目录是保留的旧素材版 / 原型，不代表当前体验设计。体验版入库只解决分发，不代表六世界已通过真实 AI 通关。
+
+内容编译源仍在 `tools/experiences/`。修改体验内容时同步源文件与对应的已提交模板；`tools/install-experiences.mjs` 用于首次生成或指定 `--revision=<新名>` 的实验副本，**不要覆盖已有模板或玩家存档**。实验副本 `templates/*-playtest-*/`、玩家存档 `worlds/`、密钥和运行缓存继续忽略；模板更新不会自动迁移旧存档。

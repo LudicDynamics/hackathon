@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { airpGateway, openAirpSocket, sendSocket } from '../lib/airp-gateway.js';
+import { gateFeedback } from '../lib/gate-feedback.js';
 import { invalidateMeasures } from '../lib/measure.js';
 import { whenFontsSettled } from '../lib/fonts.js';
 import {
@@ -123,6 +124,11 @@ export function useWorld(): UseWorldApi {
   const stateRef = useRef<LayerState | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reqSeqRef = useRef(0);
+  useEffect(() => {
+    const unavailable = () => { ++reqSeqRef.current; setState(null); setLoading(false); };
+    window.addEventListener('airp:world-unavailable', unavailable);
+    return () => window.removeEventListener('airp:world-unavailable', unavailable);
+  }, []);
   // world_event 去重（docs/tools/12 §6.4）：集合与 FIFO 队列同进同出。
   const seenEventIdsRef = useRef<Set<string>>(new Set());
   const seenEventOrderRef = useRef<string[]>([]);
@@ -172,6 +178,7 @@ export function useWorld(): UseWorldApi {
 
   const enterLayer = useCallback(
     async (next: string) => {
+      window.dispatchEvent(new CustomEvent('airp:gate-feedback', { detail: null }));
       if (next === layerRef.current) {
         // Same layer: still re-sync (may be an explicit gate re-entry).
         await fetchLayer(next);
@@ -189,7 +196,11 @@ export function useWorld(): UseWorldApi {
           sendSocket(wsRef.current, { type: 'airp_init', kind: 'scene', target: next, by: 'player' });
         }
         await fetchLayer(next);
-      }).catch(error => window.dispatchEvent(new CustomEvent('airp:notice', { detail: String(error) })));
+      }).catch(error => {
+        const feedback = gateFeedback(error, next, stateRef.current?.items ?? []);
+        if (feedback) window.dispatchEvent(new CustomEvent('airp:gate-feedback', { detail: feedback }));
+        else window.dispatchEvent(new CustomEvent('airp:notice', { detail: String(error) }));
+      });
     },
     [fetchLayer]
   );

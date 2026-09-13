@@ -6,7 +6,6 @@ import { SceneBackdrop } from './SceneBackdrop.js';
 import { PhantomLayer } from './PhantomLayer.js';
 import type { GhostCopy } from '../narrative/GhostCard.js';
 import { ParticleLayer } from './ParticleLayer.js';
-import { SceneChalk } from '../narrative/SceneChalk.js';
 import { useCamera } from '../../state/useCamera.js';
 import { clampZ, zoomAt, screenToWorld } from '../../lib/camera.js';
 import { makeBox, pushFrom, relaxAll } from '../../lib/collide.js';
@@ -25,8 +24,6 @@ interface CanvasProps {
   stillPortraits?: boolean;
   links: LayerLink[];
   bg: { src: string | null; video?: string; tone: string; grain: string };
-  scene: LayerItem | null;
-  sceneCopy: { label: string; collapse: string; expand: string };
   ghostCopy: GhostCopy;
   onMoveCard?: (path: string, x: number, y: number) => Promise<void> | void;
   onSelectChoice?: (path: string, choice: string) => void;
@@ -89,8 +86,6 @@ export const Canvas: React.FC<CanvasProps> = ({
   stillPortraits = false,
   links,
   bg,
-  scene,
-  sceneCopy,
   ghostCopy,
   onMoveCard,
   onSelectChoice,
@@ -550,15 +545,6 @@ export const Canvas: React.FC<CanvasProps> = ({
         ))}
         <PhantomLayer currentLayer={currentLayer} bgSrc={bg.src} copy={ghostCopy} />
       </div>
-
-      <SceneChalk
-        scene={scene}
-        label={sceneCopy.label}
-        collapseLabel={sceneCopy.collapse}
-        expandLabel={sceneCopy.expand}
-        onSelectChoice={onSelectChoice}
-        onDiceRolled={onDiceRolled}
-      />
 
       {/* Atmospheric 1.35x foreground particle system. Always mounted: show
           bursts (`playBurst`) draw on this same canvas (docs/perform/05 §4.4),

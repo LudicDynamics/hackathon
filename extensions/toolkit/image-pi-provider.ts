@@ -16,7 +16,8 @@
 // it, but only `builtinImagesModels` lives there (verified against
 // vendor/pi-rp/packages/ai/dist/providers/all.d.ts).
 import { builtinImagesModels } from '@earendil-works/pi-ai/providers/all';
-import { getImageModel, generateImages, type ImagesModel } from '@earendil-works/pi-ai';
+import { getImageModel } from '@earendil-works/pi-ai';
+import { createOpenAIImageProvider } from './image-openai-provider.js';
 import type { ImageProvider } from '../../packages/shared/dist/index.js';
 
 /** The default provider/model id when `AIRP_IMAGE_MODEL` is unset (doc-tools/11 §4.3.3). */
@@ -59,26 +60,7 @@ export function createPiImageProvider(env: NodeJS.ProcessEnv = process.env): Ima
   const [providerId, ...rest] = raw.split('/');
   const modelId = rest.join('/');
   if (providerId === 'openai' && modelId) {
-    const model: ImagesModel<'openai-images'> = {
-      id: modelId, name: modelId, api: 'openai-images', provider: 'openai',
-      baseUrl: env.AIRP_IMAGE_BASE_URL ?? env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
-      input: ['text', 'image'], output: ['image'],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    };
-    return {
-      id: 'openai', model: modelId, supportsReference: true,
-      async generate(req, opts) {
-        if (!env.OPENAI_API_KEY) return { ok: false, reason: 'no_credentials', message: 'OPENAI_API_KEY is not set' };
-        const result = await generateImages(model, { input: [
-          { type: 'text', text: req.prompt }, ...(req.reference ? [referenceBlock(req.reference)] : []),
-        ] }, { apiKey: env.OPENAI_API_KEY, signal: opts.signal, timeoutMs: opts.timeoutMs,
-          metadata: { size: `${req.width}x${req.height}`, quality: env.AIRP_IMAGE_QUALITY ?? 'low' } });
-        if (result.stopReason === 'aborted') return { ok: false, reason: 'aborted', message: 'Generation cancelled' };
-        if (result.stopReason === 'error') return { ok: false, reason: failureReasonFor(result.errorMessage ?? ''), message: result.errorMessage ?? 'Image provider failed' };
-        const image = imageBlockOf(result.output);
-        return image ? { ok: true, mimeType: image.mimeType, dataB64: image.data } : { ok: false, reason: 'no_image', message: 'No image returned' };
-      },
-    };
+    return createOpenAIImageProvider(modelId, env);
   }
   // OpenRouter is today's only built-in image provider (doc-tools/11 §4.3.1).
   if (providerId !== 'openrouter' || modelId === '') return null;

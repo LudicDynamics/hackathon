@@ -47,8 +47,9 @@
     {
       "source": "firstsnow-demo/characters/sumi/base.png",
       "target": "assets/characters/sumi-yukimura.webp",
-      "sourceSha256": "513c80630a6503b7d228cf9b113738d72124ab45c465a1a6a28be98d116ced84",
-      "targetSha256": "d37dd186e7eb1cd11227dbf6c83703b3b72f5dd3269892991c9b3352431c4ebd"
+      "sourceSha256": "ce6d9d7e114bcc47f319b470d92eb7ba9ccdeaffe11587ffbb17948794f8770d",
+      "targetSha256": "f3be038c43b752d4c24e6fdbe7d22363d1ed106be016b822c29c52e77f16e30e",
+      "encoding": "webp-q92"
     },
     {
       "source": "firstsnow-demo/characters/director/base.png",

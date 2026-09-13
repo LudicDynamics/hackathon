@@ -1,0 +1,30 @@
+{
+  "sourceRepository": "worldlines-assets",
+  "design": "canonical-long-straight",
+  "assets": [
+    {
+      "target": "assets/motion/seedance/characters/sumi-transparent.webp",
+      "bytes": 278036,
+      "sha256": "a906c75008845d61f1bba9ca9276cad88a3bcf07836280c4f4fdc8d9eef9231f",
+      "source": "worlds/firstsnow-demo/characters/sumi/base-transparent.webp"
+    },
+    {
+      "target": "assets/motion/seedance/characters/sumi-transparent.webm",
+      "bytes": 1982627,
+      "sha256": "f384a948415363711e682efacc9a7a8064f1755f6f364c04e35a0af9d9eff0df",
+      "source": "looping/seedance/firstsnow-demo/characters/sumi/base-transparent.webm"
+    },
+    {
+      "target": "assets/characters/sumi.webp",
+      "bytes": 261030,
+      "sha256": "f3be038c43b752d4c24e6fdbe7d22363d1ed106be016b822c29c52e77f16e30e",
+      "source": "worlds/firstsnow-demo/characters/sumi/base.webp"
+    },
+    {
+      "target": "assets/characters/sumi-yukimura.webp",
+      "bytes": 261030,
+      "sha256": "f3be038c43b752d4c24e6fdbe7d22363d1ed106be016b822c29c52e77f16e30e",
+      "source": "worlds/firstsnow-demo/characters/sumi/base.webp"
+    }
+  ]
+}

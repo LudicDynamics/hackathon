@@ -115,8 +115,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
   if (frontmatter?.type === 'chalk') {
     // Widgets (choice/status/dice) are owned by EntityInteractions on canvas
     // (CanvasObject), so the inline ChalkCard must not also render them — that
-    // double-renders. SceneChalk, sitting outside any `.object`, passes its
-    // handlers and gets them from the card instead.
+    // double-renders. Keep the canvas entity as the single interaction owner.
     return <ChalkCard item={item} />;
   }
 

@@ -230,6 +230,13 @@ export function createTtsRouter(
 ): Router {
   const router = Router();
 
+  // Public readiness only: never expose credentials or gateway URLs.
+  router.get('/tts/config', (_req, res) => {
+    const config = readTtsConfig();
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ configured: Boolean(config.apiKey.trim()), model: config.model, defaultVoice: config.defaultVoice });
+  });
+
   /**
    * Synthesise one page of character dialogue (docs/tts/01 §3.D, eight steps).
    * Request body: `{ text: string, voice?: string, language?: string }`.

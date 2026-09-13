@@ -11,6 +11,7 @@ import { AgentLifecycleManager } from './engine/lifecycle.js';
 import { EventBridge } from './engine/event-bridge.js';
 import { createWorldRouter } from './routes/world.js';
 import { createTtsRouter } from './routes/tts.js';
+import { createConnectionSettingsRouter } from './routes/connection-settings.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,6 +67,7 @@ const lifecycle = new AgentLifecycleManager({
 // Open the first curated world and start its writer.
 const DEFAULT_WORLD = path.resolve(REPO_ROOT, process.env.AIRP_WORLD ?? 'templates/wuwu');
 try {
+  if (!existsSync(path.join(DEFAULT_WORLD, 'world.json'))) throw new Error('Default world is unavailable');
   activeStore = new LocalWorldStore(DEFAULT_WORLD);
   // Align the tail cursor BEFORE watching — the watcher kicks `drain()`, and
   // aligning first keeps "align, then listen" unambiguous (docs/tools/12 §8.6).
@@ -98,6 +100,7 @@ app.use(
 // never shadows the first. Only getActiveStore is shared: TTS is HTTP-only and
 // must never touch the WS fan-out (docs/tts/00 §10.1).
 app.use('/api', createTtsRouter(REPO_ROOT, () => activeStore));
+app.use('/api', createConnectionSettingsRouter(REPO_ROOT));
 
 // Serve static frontend files from apps/web/dist
 app.use(express.static(WEB_DIST));

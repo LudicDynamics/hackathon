@@ -1,5 +1,8 @@
 import { useLocale } from './lib/i18n.js';
 import { AgentSettings } from './components/AgentSettings.js';
+import { TtsSettings } from './components/TtsSettings.js';
+import { WriterResult } from './components/WriterResult.js';
+import { ItemArtwork } from './components/ItemArtwork.js';
 import { NookView } from './components/nook/NookView.js';
 import { useViewpointReport } from './hooks/useViewpointReport.js';
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
@@ -124,6 +127,8 @@ export function App() {
   const [loadingWorld, setLoadingWorld] = useState<string | null>(null);
   const [backdropReady, setBackdropReady] = useState(false);
   const [writerWorking, setWriterWorking] = useState(false);
+  const [writerStopRequested, setWriterStopRequested] = useState(false);
+  useEffect(() => { if (!writerWorking) setWriterStopRequested(false); }, [writerWorking]);
   const [writerStage, setWriterStage] = useState('The writer is working…');
   const [writerStarted, setWriterStarted] = useState(0);
   const [writerElapsed, setWriterElapsed] = useState(0);
@@ -149,6 +154,9 @@ export function App() {
     return () => window.removeEventListener('airp:agent-frame', receive);
   }, []);
   const writerRef = useRef<HTMLInputElement>(null);
+  const writerHistory = useRef<string[]>([]);
+  const writerHistoryCursor = useRef(0);
+  const writerDraft = useRef('');
   const toastTimer = useRef<number | null>(null);
 
   // 角色演出帧（A3）：useWorld 转发给遮罩；本组件按 activeCharacter.id 路由后下推。
@@ -198,6 +206,19 @@ export function App() {
       console.warn('Could not load AIRP chrome data:', error);
     }
   };
+
+  useEffect(() => {
+    const unavailable = () => {
+      setManifest(null);
+      setCharacters([]);
+      setBackpack([]);
+      setWriterWorking(false);
+      setWorldPickerOpen(true);
+      void airpGateway.worlds().then(setShelf).catch(() => notify('Could not load the world shelf. Please retry.'));
+    };
+    window.addEventListener('airp:world-unavailable', unavailable);
+    return () => window.removeEventListener('airp:world-unavailable', unavailable);
+  }, []);
 
   useEffect(() => {
     const onNotice = (event: Event) => notify(String((event as CustomEvent).detail));
@@ -386,6 +407,10 @@ export function App() {
     const input = writerRef.current;
     const text = input?.value.trim() || '';
     if (!text) return;
+    if (writerHistory.current.at(-1) !== text) writerHistory.current.push(text);
+    if (writerHistory.current.length > 50) writerHistory.current.shift();
+    writerHistoryCursor.current = writerHistory.current.length;
+    writerDraft.current = '';
     setWriterWorking(true);
     sendToWriter(text);
     input!.value = '';
@@ -494,8 +519,6 @@ export function App() {
             key={manifest?.id || 'opening'}
             effectsEnabled={effectsEnabled}
             currentLayer={layer}
-            scene={state?.scene ?? null}
-            sceneCopy={{ label: t('Scene Chalk'), collapse: t('Fold scene introduction'), expand: t('Read scene introduction') }}
             ghostCopy={{
               reused: t('Already had this image'),
               failed: t('The picture could not be drawn.'),
@@ -542,6 +565,7 @@ export function App() {
             <button className="prototype-pill" onClick={() => setWorldPickerOpen(true)}>{t("Worlds")}</button>
             <label className="prototype-language"><span className="sr-only">{t('Language')}</span><select aria-label={t('Language')} value={locale} onChange={event => setLocale(event.target.value as 'en' | 'zh-CN' | 'ja')}><option value="en">English</option><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
             <AgentSettings settings={world.settings} onSaveSettings={world.saveSettings} />
+            <TtsSettings />
             <MuteButton />
             <button className="prototype-effects-toggle" role="switch" aria-label={t("Visual effects")} aria-checked={effectsEnabled} onClick={() => setEffectsEnabled(value => !value)} title={t("Particles, parallax and animated backgrounds")}><span aria-hidden="true" />{t(effectsEnabled ? 'Effects on' : 'Effects off')}</button>
             <button className="prototype-quiet" onClick={() => toggleShell('header')} aria-label={t("Close header")}><ChevronUp size={16} /></button>
@@ -559,6 +583,7 @@ export function App() {
             <h1>{currentName}</h1>
             <p>{layer === 'map' ? t('The first moment') : t('The story continues')} · {state?.worldFrozen ? t('Time stands still') : t('Time flows')}</p>
             {sceneStatus.map(([key, value]) => <span className="prototype-stat" key={key}>{labelOf(key)} · {String(value)}</span>)}
+            <WriterResult worldKey={`${manifest?.id}:${layer}`} />
           </div>
 
           <div className="prototype-tools prototype-chrome" aria-label={t("Canvas tools")}>
@@ -585,20 +610,19 @@ export function App() {
           </div>
           <div className="prototype-belongings prototype-chrome" aria-label={t("Belongings")}>
             <button className="prototype-bag-toggle" onClick={() => setBagOpen(open => !open)} aria-label={t("Open belongings")} aria-expanded={bagOpen}><Backpack size={19} /><span>{handItems.length}</span></button>
-            {bagOpen && <div className="prototype-bag-content"><span className="prototype-eyebrow">{t("BELONGINGS")}</span>{handItems.length === 0 && <p>{t("Nothing carried yet.")}</p>}{handItems.map((item) => {
-              const image = assetUrl(item.frontmatter?.image || item.frontmatter?.cover);
+            {bagOpen && <div className="prototype-bag-content"><div className="inventory-heading"><span>{t("BELONGINGS")}</span><button type="button" onClick={() => setBagOpen(false)} aria-label={t('Close')}>×</button></div>{handItems.length === 0 && <p>{t("Nothing carried yet.")}</p>}{handItems.map((item) => {
               return (
                 <button
                   key={item.path}
-                  className="prototype-hand-chip"
+                  className="inventory-item"
                   draggable
                   onClick={() => setSelectedBagPath(item.path)}
                   onDragStart={(event) => event.dataTransfer.setData('text/plain', item.path)}
-                  title={item.body}
-                  style={image ? { backgroundImage: `url("${image}")` } : undefined}
+                  aria-label={String(item.frontmatter?.title || labelOf(item.filename.replace(/\.md$/, '')))}
                 >
-                  <span>{item.frontmatter?.icon || '◇'}</span>
-                  <small>{item.frontmatter?.title || labelOf(item.filename.replace(/\.md$/, ''))}</small>
+                  <ItemArtwork item={item} />
+                  <span className="inventory-item__name">{item.frontmatter?.title || labelOf(item.filename.replace(/\.md$/, ''))}</span>
+                  <span className="inventory-item__open" aria-hidden="true">↗</span>
                 </button>
               );
             })}</div>}
@@ -629,6 +653,9 @@ export function App() {
           </div>
           <button className="prototype-action-toggle prototype-chrome" onClick={() => { setAttention(current => current === 'authoring' ? 'ambient' : 'authoring'); window.setTimeout(() => writerRef.current?.focus(), 0); }} aria-label={t("Write an action")}><Sparkles size={17} /><span aria-live="polite">{writerWorking ? `${t(writerStage)} · ${writerElapsed}s` : t('What do you do?')}</span></button>
 
+          {writerWorking && <button type="button" className="writer-stop-control" onClick={() => { setWriterStopRequested(true); sendMessage({ type: 'writer_abort' }); }} aria-label="Stop writing">
+            ■ {writerStopRequested ? 'Stop requested · retry' : 'Stop writing'} · {writerElapsed}s
+          </button>}
           <form className="prototype-dock prototype-chrome" onSubmit={submitWriter}>
             <div className="prototype-docktop">
               <b>{t("✧ SPEAK TO THE WRITER")}</b>
@@ -638,7 +665,15 @@ export function App() {
             </div>
             <div className="prototype-dockrow">
               {writerWorking && <span role="status">{t(writerStage)} · {writerElapsed}s <button type="button" onClick={() => { sendMessage({ type: 'writer_abort' }); }}>{t('Stop writing')}</button></span>}
-              <input ref={writerRef} aria-label={t("Action")} placeholder={writerLocked ? t('The writer is writing…') : t("What do you do? You can also address someone by name…")} autoComplete="off" disabled={writerLocked} />
+              <input ref={writerRef} aria-label={t("Action")} placeholder={writerLocked ? t('The writer is writing…') : t("What do you do? You can also address someone by name…")} disabled={writerLocked} autoComplete="off" onKeyDown={event => {
+                if (event.nativeEvent.isComposing || !['ArrowUp', 'ArrowDown'].includes(event.key) || !writerHistory.current.length) return;
+                event.preventDefault(); event.stopPropagation();
+                const history = writerHistory.current;
+                if (writerHistoryCursor.current === history.length) writerDraft.current = event.currentTarget.value;
+                writerHistoryCursor.current = Math.max(0, Math.min(history.length, writerHistoryCursor.current + (event.key === 'ArrowUp' ? -1 : 1)));
+                event.currentTarget.value = writerHistoryCursor.current === history.length ? writerDraft.current : history[writerHistoryCursor.current];
+                event.currentTarget.setSelectionRange(event.currentTarget.value.length, event.currentTarget.value.length);
+              }} />
               <button className="prototype-primary" aria-label={t("Send action")}>↑</button>
             </div>
           </form>

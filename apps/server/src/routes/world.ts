@@ -321,6 +321,23 @@ export function createWorldRouter(
   setActiveStore: (store: LocalWorldStore | null) => void
 ): Router {
   const router = Router();
+  let releasingWorld: Promise<void> | null = null;
+  router.use(async (req, res, next) => {
+    const store = getActiveStore();
+    if (store && !existsSync(path.join(store.worldRoot, 'world.json'))) {
+      setActiveStore(null);
+      eventBridge.close();
+      releasingWorld = lifecycle.stopAll().finally(() => { store.close(); releasingWorld = null; });
+    }
+    if (releasingWorld) {
+      try { await releasingWorld; } catch { /* The unavailable world stays detached. */ }
+    }
+    const needsWorld = ['/agent-settings', '/manifest', '/nook', '/layer', '/backpack', '/characters', '/move', '/card/position', '/card/footprint', '/dice', '/use-item', '/choice', '/enter-layer', '/viewpoint', '/freeze', '/god-action', '/asset', '/audio'].includes(req.path);
+    if (!getActiveStore() && needsWorld) {
+      return res.status(409).json({ code: 'no_active_world', error: 'Choose a world or start a new save.' });
+    }
+    next();
+  });
   router.get('/agent-settings', async (req, res) => {
     const store = getActiveStore();
     if (!store) { res.status(409).json({ error: 'Load a world first.' }); return; }
@@ -392,6 +409,8 @@ export function createWorldRouter(
     try {
       const { worldPath } = req.body;
       let resolvedPath = path.isAbsolute(worldPath) ? worldPath : path.join(repoRoot, worldPath);
+      // Validate before copying or closing the current store. Never recreate a deleted save.
+      JSON.parse(await fs.readFile(path.join(resolvedPath, 'world.json'), 'utf8'));
       const templatesRoot = path.join(repoRoot, 'templates') + path.sep;
       if (resolvedPath.startsWith(templatesRoot)) {
         const playPath = path.join(repoRoot, 'worlds', `${path.basename(resolvedPath)}-${randomUUID().slice(0, 8)}`);

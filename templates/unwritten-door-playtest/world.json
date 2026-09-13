@@ -1,0 +1,25 @@
+{
+  "id": "unwritten-door-playtest",
+  "name": "The Unwritten Door · Playtest",
+  "version": "1.1.0",
+  "schema": 1,
+  "description": "An unopened letter and a phone shape the place that waits outside. One door, one living new scene.",
+  "author": "AIRP",
+  "genre": "narrative experience",
+  "tags": [
+    "playtest",
+    "short story",
+    "generative world"
+  ],
+  "material": "parchment",
+  "player": {
+    "id": "you",
+    "name": "You"
+  },
+  "characters": [],
+  "extensions": [],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "locale": "en",
+  "entry": "map"
+}

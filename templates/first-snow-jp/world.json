@@ -40,8 +40,9 @@
       "name": "雪村澄",
       "home": "world/tonight/amber-cafe",
       "role": "npc",
-      "avatar": "assets/characters/sumi-yukimura.webp",
-      "description": "雪村澄。デビューしたばかりの歌手。今夜だけは、仕事ではない話をしたい。"
+      "avatar": "assets/motion/seedance/characters/sumi-transparent.webp",
+      "description": "雪村澄。デビューしたばかりの歌手。今夜だけは、仕事ではない話をしたい。",
+      "avatarVideo": "assets/motion/seedance/characters/sumi-transparent.webm"
     }
   ],
   "createdAt": "2026-09-12T00:00:00Z",

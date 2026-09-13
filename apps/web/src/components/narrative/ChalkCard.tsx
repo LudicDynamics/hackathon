@@ -21,10 +21,8 @@ interface ChalkCardProps {
  * (canvas-stack-mingyue.html `.chalk`). Style variants are opt-in frontmatter and
  * resolved by the shared `chalkStyleOf` table (§10.2).
  *
- * `SceneChalk` (the folder README shown as the entry Chalk) renders outside any
- * `.object`, so it gets no `EntityInteractions` layer: when `onSelectChoice` is
- * passed this card renders widgets itself, or the scene's choice/status/dice
- * would vanish (docs/doc-06 §E-series entry Chalk).
+ * Canvas entities delegate widgets to EntityInteractions. Standalone readers
+ * may explicitly pass handlers to render those widgets here.
  */
 export const ChalkCard: React.FC<ChalkCardProps> = ({
   item,

@@ -12,11 +12,23 @@ export interface WorldLoadResult<TManifest = Record<string, unknown>> {
   path: string;
 }
 
+export class AirpRequestError extends Error {
+  constructor(message: string, public status: number, public payload: Record<string, unknown> | null) {
+    super(message);
+    this.name = 'AirpRequestError';
+  }
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(`${init?.method ?? 'GET'} ${url} -> ${response.status}${message ? ` ${message}` : ''}`);
+    let payload: Record<string, unknown> | null = null;
+    try { payload = JSON.parse(message); } catch { /* Keep non-JSON diagnostics. */ }
+    if (payload?.code === 'no_active_world' && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('airp:world-unavailable'));
+    }
+    throw new AirpRequestError(`${init?.method ?? 'GET'} ${url} -> ${response.status}${message ? ` ${message}` : ''}`, response.status, payload);
   }
   return response.json() as Promise<T>;
 }
@@ -39,7 +51,10 @@ export const airpGateway = {
   deleteSave: (worldPath: string) => request<{ ok: boolean; recoveryPath: string }>('/api/worlds/save', json('DELETE', { worldPath })),
   loadWorld: async <TManifest = Record<string, unknown>>(worldPath: string) => {
     const result = await request<WorldLoadResult<TManifest>>('/api/worlds/load', json('POST', { worldPath }));
-    if (result.ok) assetSession = `${Date.now()}-${++assetGeneration}`;
+    if (result.ok) {
+      assetSession = `${Date.now()}-${++assetGeneration}`;
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('airp:gate-feedback', { detail: null }));
+    }
     return result;
   },
   manifest: <TManifest = Record<string, unknown>>() => request<TManifest>('/api/manifest'),

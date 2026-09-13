@@ -1,5 +1,11 @@
 # AGENTS.md — AIRP
 
+当前存档被外部删除时，世界路由解除失效 store、停止 Agent 与监听，以 `409 no_active_world` 通知前端清空画布并打开世界选择；不自动恢复存档。世界列表和连接设置不依赖活跃世界。连接设置路由 `GET/POST /api/connection-settings` 只允许本机访问，密钥不回显，保存到后端 `.env.local`，详见 `docs/TTS设置面板.md`。
+
+语音设置：`GET /api/tts/config` 仅暴露配置就绪状态、模型和默认音色；前端 Voice settings 控制本浏览器语音开关，未配置时停止合成请求并单次提醒，详情见 `docs/TTS设置面板.md`。
+
+图片适配边界：`extensions/toolkit/image-openai-provider.ts` 在项目内实现 `ImageProvider`，直接请求 OpenAI-compatible Images 接口；OpenRouter 继续复用 pi-rp。图片供应商接入不修改引擎内建注册表，动作层仍负责素材落盘与复用。
+
 模型与执行进度：`apps/server/src/engine/model-preferences.ts` 管理世界存档内的运行偏好，`GET/POST /api/agent-settings` 与 `agent_progress` 接前端 Agents 面板和行动状态。协议及验证见 `docs/Agent模型选择与进度.md`。这不是独立叙事状态文件；正文仍是世界真相源。
 每世界设置：`apps/server/src/engine/world-settings.ts` 管理存档内的玩法偏好（`<worldRoot>/.airpworld/settings.json` 的 `autoWrite`），`GET/POST /api/world-settings` 接前端 Agents 面板。三态 `off`（默认，回到 doc-21 §5.5）/ `scenes` / `scenes-and-choices`：**「进未写场景」走 I1 初始化器（门），「玩家选项」才可能起作家一轮**；`/api/enter-layer` MUST NOT 起作家。契约见 `docs/settings/00-共同上下文.md`。这不是独立叙事状态文件；正文仍是世界真相源。
 
@@ -25,22 +31,23 @@
 
 ### 1.1 语言规范（硬要求）
 
-**世界语言贯穿提示词、内容与内容路径；沟通与内部设计文档一律中文。** 2026-09-13 用户确认：日语世界的提示词、正文、内容文件和目录使用日语；英语世界对应使用英文，不再统一要求内容路径为英文 / 罗马字。此前五个样板世界日语化先迁 `first-snow-jp` 的安排保留；未迁旧文件不代表已完成。协议保留名与迁移清单见 `docs/世界日语化迁移.md`。
+**稳定 ID 一律英文；标题、正文与世界提示词随世界语言；内部文档中文。** 2026-09-13 用户最新确认：所有体验版世界统一 ASCII 小写 kebab-case 文件/目录/人物 ID，日语世界仍显示日语。路径与显示名分离，迁移清单见 `docs/世界日语化迁移.md`。
 
 | 范围 | 语言 | 理由 |
 |---|---|---|
 | 样板世界 UI 默认语言、演示内容、世界文本 | **日语** | 日语版世界载入时切到日语；通用 UI 保留语言切换 |
-| 世界提示词、人物与世界内容、内容目录和文件名 | **随世界语言：日语 / 英文** | 不仅翻译显示名；包括生成的新地点、物件、线索与结果文件 |
-| 世界内资产文件名与说明 | **随世界语言** | 图形字节可复用，世界内资源引用随迁移更新；共享技术资产不擅自重命名 |
+| 世界提示词、标题、正文、人物显示名 | **随世界语言：日语 / 英文** | 新生成内容也遵守 |
+| 世界/地点/时间/人物/物品/Chalk 的文件、目录与 ID | **英文 kebab-case** | 跳转与关联用稳定路径，不用显示标题 |
+| 世界内资产文件名与说明 | **稳定英文文件名；说明随世界语言** | 图形字节及既有引用可复用；共享技术资产不擅自重命名 |
 | 代码注释、报错文案、日志 | **英文** | 仓库是公开的黑客松产物，评审会直接读代码 |
 | commit message、与队友/用户沟通 | **中文** | 开发者都是中国人 |
 | `docs/**`、本文件、根 `README.md` | **中文** | 内部设计文档 |
 
-黑客松官方语言是 **英文 / 日语**。日语世界使用正常日文，包括内容路径；英语世界的对应内容与路径用英文。世界运行时的人类可读指令也应随语言，平台共用规则按语言复用，不按世界复制；现有英文共享提示词尚需单独迁移验收，不能只加一句“用日语回答”就算完成。
+黑客松官方语言是 **英文 / 日语**。世界运行时的人类可读内容随世界语言，普通内容路径与 ID 固定英文。平台共用规则复用，不按世界复制；共享提示词语言的验收与内容路径迁移分开。
 
-**固定引擎的保留名边界**：`README.md`、`world.json`、`SKILL.md`、协议键 / 枚举 / 工具名，以及引擎硬编码的系统目录（如 `world/`、`player/`、`characters/`、`.airpworld/`）保留，不当成普通内容翻译；这项技术边界不等于已完成全部路径本地化。普通场景、物件、世界说明与可配置的人物文档名不因历史上使用英文就永久豁免。日语内容示例 `world/港町/灯台/航海日誌.md`；英语使用 `world/harbor/lighthouse/logbook.md`。
+**保留名**：`README.md`、`world.json`、`SKILL.md`、协议键/枚举/工具名保持原样。示例 `world/harbor-chart/amber-cafe/README.md` 内写 `title: 琥珀カフェ`；生成新的子目录、人物文档与 Chalk 也使用英文稳定路径。
 
-改世界内容时**目录名即层 id**——**层不是声明出来的，是扫描出来的**：`world/**/` 下每个目录就是一个层，目录里的 `README.md` 是它的场景配置。改名必须同步所有引用、`characters[].home`、preset 文件槽、Gate target、物件门槛、图片路径、存档定位与测试；`world.json` 里**没有** `layers`。本轮独立试玩包已迁移普通内容路径；旧模板和运行存档不自动改名。不能只改目录不改引用。
+改世界内容时**目录名即层 id**——**层不是声明出来的，是扫描出来的**：`world/**/` 下每个目录就是一个层，目录里的 `README.md` 是它的场景配置。改名必须同步所有引用、`characters[].home`、preset 文件槽、Gate target、物件门槛、图片路径、存档定位与测试；`world.json` 里**没有** `layers`。体验版的既有模板与存档通过离线迁移工具同步路径；先备份，保留背包、剧情、骰子与画布坐标。非体验版不在本次范围。不能只改目录不改引用。
 
 ---
 
@@ -93,7 +100,8 @@ extensions/
   toolkit/              # 工具壳 + 共享 helper（deps/actor/turn/result）；init-command.ts = `airp-init` 初始化执行内核（R2 直唤：扩展命令 → ctx.spawnAgent）——子目录，不会被当扩展加载
 skills/                 # 项目级 skills：跨世界通用手艺（生图 / 组件叙事 / 音色选角 / 节奏 / 玩法咬合）
                         #   component-narration / tool-craft / voice-casting（音色选角，docs/tts/08）
-templates/              # 开箱世界模板；whitechapel（英文）/ firstsnow（日文）/ wuwu / divergence / first-snow-jp 等素材版世界
+templates/              # 已入 Git 的六个 *-playtest 当前体验版；无后缀目录保留为旧素材版 / 原型
+  *-playtest/           # wuwu / whitechapel / divergence / first-snow-jp / magic-academy / unwritten-door
   unwritten-door/       # 第六个体验 Demo：信封、手机与空白门外，见 doc-25
   <world>/skills/       # 世界级 skills：该世界自己的文风与剧情，与 world/ 同级、随包分发
 worlds/                 # 脚手架产出的玩家世界（.gitignore）

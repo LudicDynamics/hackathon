@@ -1,0 +1,49 @@
+{
+  "id": "first-snow-jp-playtest",
+  "audio": {
+    "theme": "canvas-firstsnow"
+  },
+  "locale": "ja",
+  "entry": "map",
+  "name": "初雪ラジオ · 体験版",
+  "version": "1.1.0",
+  "schema": 1,
+  "description": "今夜、何を伝える？　行き先も約束も、その返事も。あなたの言葉から、この夜の結末が生まれる。",
+  "author": "Worldlines / AIRP",
+  "genre": "物語体験",
+  "tags": [
+    "体験版",
+    "短い物語",
+    "生成する世界"
+  ],
+  "material": "warm",
+  "cover": "assets/scenes/intro.webp",
+  "extensions": [],
+  "player": {
+    "id": "player",
+    "name": "あなた · 学生ディレクター",
+    "avatar": "assets/characters/radio-director.webp"
+  },
+  "characters": [
+    {
+      "id": "nanami",
+      "name": "七海",
+      "home": "world/tonight-promises/radio-studio",
+      "role": "companion",
+      "avatar": "assets/motion/seedance/characters/nanami-transparent.webp",
+      "description": "十年来の友人で「初雪アワー」のパーソナリティ。屋上の約束を覚えている。プレイヤーが伝えた言葉を具体的に受け止める。",
+      "avatarVideo": "assets/motion/seedance/characters/nanami-transparent.webm"
+    },
+    {
+      "id": "sumi-yukimura",
+      "name": "雪村澄",
+      "home": "world/tonight-promises/amber-cafe",
+      "role": "npc",
+      "avatar": "assets/motion/seedance/characters/sumi-transparent.webp",
+      "description": "デビューしたばかりの歌手。ツアー前に仕事ではない時間を過ごしたい。七海との私的な会話を自動で知っていることにしない。",
+      "avatarVideo": "assets/motion/seedance/characters/sumi-transparent.webm"
+    }
+  ],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z"
+}

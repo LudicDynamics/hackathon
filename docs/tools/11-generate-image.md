@@ -1,5 +1,7 @@
 # doc-tools/11 generate_image
 
+当前接线：OpenAI-compatible 图片请求由项目内 `extensions/toolkit/image-openai-provider.ts` 实现 `ImageProvider`，不依赖 pi-rp 的图片注册表补丁。`AIRP_IMAGE_MODEL=openai/<model>` 选用此路径，`AIRP_IMAGE_BASE_URL`（回退 `OPENAI_BASE_URL`）、`OPENAI_API_KEY`、`AIRP_IMAGE_QUALITY` 保持兼容。单张 PNG Base64 输出；参考图走 multipart edits；不自动重试、不跟随重定向。适配器支持取消、超时（默认 120 秒），但工具到 action 的取消信号仍未贯通，不能宣称整轮已支持中断。OpenRouter 路径不变。协议依据：[官方 Images 文档](https://developers.openai.com/api/docs/guides/image-generation)。模拟测试：`node --test tools/image-openai-provider.test.mjs`。
+
 > 状态：**设计（2026-09-12）**，待评审。本文只写设计，不改任何代码、不改现有文档。
 > 权威层级：`00-共同上下文.md`（冻结契约）> `doc-21` > `doc-20` > `doc-10` > `doc-19` > 本文。
 > 关联：`00 §2.2/§2.5/§4.2/§5.2/§6.2`；`doc-20 §1/§10/§12`；`doc-21 §1（准入三问）/§3.6（失败不落）/§4.1`；`doc-05 §7.4（渲染路由）/§8（目录结构）`；`doc-10 E0（bg 不是 asset）/E1（bg 是 README 字段）`；`doc-02 §4.2（幻影物件：座位过户）`；`doc-19 §5（AI 游戏工坊）`；`后端实现计划 §4（B1 工具面）/§12（降级预案）`；`前端改造计划 T3.8/§12`。

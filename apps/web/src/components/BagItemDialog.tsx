@@ -4,6 +4,7 @@ import { useLocale } from '../lib/i18n.js';
 import { renderFrontmatterWidgets } from '../lib/fm.js';
 import { airpGateway } from '../lib/airp-gateway.js';
 import { playFoley } from '../lib/audio.js';
+import { ItemArtwork } from './ItemArtwork.js';
 
 export function BagItemDialog({ item, onClose, onPlace, inline = false }: {
   item: { path: string; filename: string; body: string; frontmatter: Record<string, any> | null };
@@ -33,7 +34,8 @@ export function BagItemDialog({ item, onClose, onPlace, inline = false }: {
         <button autoFocus className="paper-reading__fold" aria-label={t('Close')} onClick={onClose}>↙</button>
       </header>
       <div className="paper-reading__content">
-      {typeof image === 'string' && <img src={airpGateway.assetUrl(image)} alt="" style={{ maxHeight: 200, maxWidth: '100%', objectFit: 'contain' }} />}
+      {!inline && <div className="carried-item-artwork"><ItemArtwork item={item} /></div>}
+      {inline && typeof image === 'string' && <img src={airpGateway.assetUrl(image)} alt="" style={{ maxHeight: 200, maxWidth: '100%', objectFit: 'contain' }} />}
       <MarkdownText text={item.body} />
       <fieldset disabled={busy}>
         {renderFrontmatterWidgets(item.frontmatter, { filePath: item.path, reveal: true, onChoice: choice => void run(() => airpGateway.choose(item.path, choice)) })}
