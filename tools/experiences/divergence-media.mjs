@@ -1,0 +1,32 @@
+// Reviewed media copied byte-for-byte; base assets keep fresh builds offline.
+export const divergenceMedia = {
+  "version": 1,
+  "productionRecord": "worldlines-assets/worlds/divergence-demo/THREE-TIMES-ASSETS.json",
+  "adultAlpha": false,
+  "assets": [
+    {
+      "sourceRepository": "worldlines-assets",
+      "source": "worlds/divergence-demo/characters/ryo-adult/base.webp",
+      "target": "assets/characters/ryo-adult.webp",
+      "sha256": "d43e288e4afae9f9bcb97b8e780a2c56158968de05c36bdb003e2f9d07c1866e"
+    },
+    {
+      "sourceRepository": "worldlines-assets",
+      "source": "worlds/divergence-demo/backgrounds/future-original.webp",
+      "target": "assets/scenes/future-original.webp",
+      "sha256": "e7e93a39db1d921769dbe13c7f9c0873e1f89364efbcee4ecaab0c4079772d8e"
+    },
+    {
+      "sourceRepository": "worldlines-assets",
+      "source": "worlds/divergence-demo/backgrounds/future-restored.webp",
+      "target": "assets/scenes/future-restored.webp",
+      "sha256": "fc7cc66c58468164b13dacf702fcb5dc98854d5ac410bc9d0c9cd0f1961d4cb2"
+    },
+    {
+      "sourceRepository": "hackathon",
+      "source": "templates/divergence/assets/scenes/1994-11-02.webp",
+      "target": "assets/scenes/shop-daylight.webp",
+      "sha256": "621153899bf53079b61e27b15028b62a2a2a1981d94a60b1baa918ba32f48c37"
+    }
+  ]
+};

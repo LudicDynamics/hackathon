@@ -16,15 +16,17 @@ const scene = time => `world/time-map/${time}/tokiwa-electronics`;
 const text = file => pack.files[file];
 const rules = text('skills/divergence-playtest-play/SKILL.md');
 
-test('same shop image, distinct dates, people and readable causal evidence', () => {
+test('same shop, daylight child scene, original introduction and readable causal evidence', () => {
   const fm = file => parseFrontmatter(text(file)).frontmatter;
-  assert.equal(fm(`${scene('1994')}/README.md`).bg, fm(`${scene('tonight')}/README.md`).bg);
+  assert.equal(fm('world/README.md').bg, 'assets/scenes/intro.webp');
+  assert.equal(fm(`${scene('1994')}/README.md`).bg, 'assets/scenes/shop-daylight.webp');
+  assert.equal(fm(`${scene('tonight')}/README.md`).bg, 'assets/scenes/tonight.webp');
   assert.match(text(`${scene('1994')}/collection-slip.md`), /一九九五年一月一日午前十時/);
   assert.match(text(`${scene('1994')}/route-note.md`), /八時半.*東橋/s);
   assert.match(text('world/accident-notice.md'), /午前九時.*転落/s);
   assert.match(text(`${scene('tonight')}/fax-machine.md`), /同じ日の午前八時/);
   assert.match(text(`${scene('thirty-years-later')}/shop-record.md`), /店を閉めた.*取り壊された/s);
-  assert.doesNotMatch(Object.values(pack.files).join('\n'), /2011|二〇一一年|1994-11-02|new-present/);
+  assert.doesNotMatch(Object.entries(pack.files).filter(([file]) => file.endsWith('.md')).map(([, text]) => text).join('\n'), /2011|二〇一一年|1994-11-02|new-present/);
 });
 
 test('prompt contract: draft is not sending; missing draft and failed intervention have exits', () => {

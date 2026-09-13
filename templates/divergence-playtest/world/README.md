@@ -1,13 +1,17 @@
 ---
 type: readme
-name: 導入 · 一九九五年一月一日、午後八時
-title: 導入 · 一九九五年一月一日、午後八時
-bg: assets/scenes/tonight.webp
-intent: 取ると言われたら world/clockwork-frog.md を player/clockwork-frog.md へ move。手紙も希望された場合のみ player/undelivered-letter.md へ move。蛙だけで時間図へ入れる。事故の知らせは読むだけでよい。救済を先取りしない。
+name: 後悔 · 最初の一頁
+title: 後悔 · 最初の一頁
+bg: assets/scenes/intro.webp
+intent: 取ると言われたら world/clockwork-frog.md を player/clockwork-frog.md へ move。手紙も希望された場合のみ player/undelivered-letter.md へ move。蛙だけで時間図へ入れる。事故の知らせは読むだけでよい。救済を先取りしない。背景の電話表示を新しい証拠や必須操作にしない。
 choice:
   - 手紙を読み、ぜんまいの蛙を持つ
   - 事故の知らせを読む
-bgVideo: assets/motion/seedance/backgrounds/tonight.webm
+bgVideo: assets/motion/seedance/backgrounds/intro.webm
 ---
 
-あなたは常盤電器で蛙を修理した若い見習い。昨日リョウと約束した「明日の朝十時」は、もう過ぎた。蛙は跳ねる。少女は帰らない。事故の知らせには、今朝九時、東橋で店へ向かう少女が転落したとある。
+雨が窓をたたく。灯りの下には、宛名だけを書いた手紙と、直ったばかりの蛙。
+
+あなたは常盤電器の修理見習い。一九九五年一月一日、午後八時。昨日リョウに約束した「明日の朝十時」は、もう過ぎた。
+
+蛙は跳ねる。来るはずだった少女だけが、帰らない。
