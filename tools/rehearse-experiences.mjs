@@ -65,15 +65,17 @@ for (const pack of packs) {
       await player.enterLayer({ layer: 'world/tonight-promises' });
       await player.enterLayer({ layer: 'world/tonight-promises/radio-studio' });
       const memory = await read('characters/nanami/memory.md');
-      const ending = await read('world/tonight-promises/first-snow/README.md');
       await turn('world/tonight-promises/radio-studio', 'world/tonight-promises/radio-studio/01-opening.md', 1);
-      for (const file of ['player/tonight-letter.md', 'world/tonight-promises/radio-studio/02-tonight-response.md', 'world/tonight-promises/amber-cafe/absence-trace.md']) await present(file);
+      for (const file of ['player/tonight-letter.md', 'world/tonight-promises/radio-studio/02-tonight-response.md']) await present(file);
       assert.notEqual(await read('characters/nanami/memory.md'), memory);
-      assert.notEqual(await read('world/tonight-promises/first-snow/README.md'), ending);
+      // A first promise must not write an ending or invent the other person's absence.
+      await assert.rejects(() => read('world/tonight-promises/first-snow/epilogue.md'), { code: 'ENOENT' });
+      await assert.rejects(() => read('world/tonight-promises/amber-cafe/absence-trace.md'), { code: 'ENOENT' });
       assert.equal(parseFrontmatter(await read('player/tonight-letter.md')).frontmatter.type, 'letter');
       await player.enterLayer({ layer: 'world/tonight-promises/first-snow' });
-      await turn('world/tonight-promises/first-snow', 'world/tonight-promises/first-snow/01-opening.md', '今夜の余韻を読む');
+      await turn('world/tonight-promises/first-snow', 'world/tonight-promises/first-snow/01-opening.md', '七海との今夜を結ぶ');
       await present('world/tonight-promises/first-snow/epilogue.md');
+      assert.equal(parseFrontmatter(await read('world/tonight-promises/first-snow/README.md')).frontmatter.status?.data?.closingState, 'complete');
     } else if (pack.base === 'magic-academy') {
       await turn('map', 'world/01-opening.md', 1);
       await present('player/freshman-badge.md');
