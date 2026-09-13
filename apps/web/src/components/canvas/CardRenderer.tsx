@@ -213,11 +213,13 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
             <span>{frontmatter.sign || (ja ? '開いて読む' : 'Click to open and read')}</span>
           </div>
         </div>
-
         {letterOpen && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ background: 'rgba(41, 40, 32, 0.35)', backdropFilter: 'blur(2px)' }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={String(frontmatter.title || filename)}
             onClick={() => setLetterOpen(false)}
           >
             <div
@@ -247,6 +249,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
               )}
               <div className="mt-6 text-center">
                 <button
+                  autoFocus
                   onClick={() => setLetterOpen(false)}
                   className="px-6 py-2 text-xs font-mono transition-all border border-ink/20 hover:bg-ink hover:text-cream"
                 >

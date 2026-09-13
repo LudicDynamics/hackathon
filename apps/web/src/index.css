@@ -652,6 +652,31 @@ body:before {
   cursor: not-allowed;
 }
 
+/* Character activity rail (docs/agent-awareness/03 §6.2) — sits above the paper's
+   top edge via bottom:100%, so it never enters the paper's flow or changes its
+   height. Cream/ink material deliberately differs from the global dark glass. */
+.speech-paper .activity-rail { position: absolute; bottom: 100%; left: 0; margin-bottom: .55rem;
+  display: flex; flex-direction: column; gap: 4px; max-width: 100%; pointer-events: none; }
+.speech-paper .activity-rail__list { display: flex; flex-direction: column; gap: 4px;
+  margin: 0; padding: 0; list-style: none; }
+.speech-paper .activity-rail__item { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  padding: 3px 10px; border-radius: 9999px; background: var(--cream); color: var(--muted);
+  border: 1px solid rgba(41, 40, 32, 0.18); box-shadow: 0 1px 4px rgba(41, 40, 32, 0.12);
+  font-family: 'Manrope', system-ui, sans-serif; font-size: .78rem;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.speech-paper .activity-rail__item[data-state='running'] { color: var(--ink); }
+.speech-paper .activity-rail__item[data-state='error'] { color: var(--ink); border-color: rgba(201, 111, 76, 0.55); background: #f9ece4; }
+.speech-paper .activity-rail__dot { width: 5px; height: 5px; border-radius: 50%; flex: none; background: var(--sage); }
+.speech-paper .activity-rail__item[data-state='running'] .activity-rail__dot { background: var(--blue); animation: activity-pulse 1.6s ease-out infinite; }
+.speech-paper .activity-rail__item[data-state='error'] .activity-rail__dot { background: var(--rust); }
+@media (prefers-reduced-motion: reduce) {
+  .speech-paper .activity-rail__item[data-state='running'] .activity-rail__dot { animation: none; }
+}
+
+/* Visually hidden but screen-reader available (App.tsx already used the class). */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
 /* minimal top-right close affordance (Esc also closes) */
 .modal-close {
   position: absolute;
@@ -1240,7 +1265,6 @@ body:before {
   font-size: 13.5px;
   line-height: 1.8;
 }
-
 /* ============================================================
    4. letter — the file-as-correspondence (prototype `.letter` L134-145)
    ============================================================ */

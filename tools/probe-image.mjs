@@ -7,9 +7,9 @@ import { fileURLToPath } from 'node:url';
 import { createJiti } from '../vendor/pi-rp/node_modules/jiti/lib/jiti.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-if (existsSync(path.join(root, '.env.local'))) process.loadEnvFile(path.join(root, '.env.local'));
+if (existsSync(path.join(root, '.env'))) process.loadEnvFile(path.join(root, '.env'));
 if (!process.env.AIRP_IMAGE_MODEL || !(process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY)) {
-  throw new Error('Configure AIRP_IMAGE_MODEL and its API key in .env.local before running a real image probe.');
+  throw new Error('Configure AIRP_IMAGE_MODEL and its API key in .env before running a real image probe.');
 }
 const world = path.join(root, '.artifacts/image-probe');
 await fs.mkdir(world, { recursive: true });

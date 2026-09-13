@@ -184,3 +184,28 @@
 @media (prefers-reduced-motion:reduce) { .prototype-world-meta .writer-result {animation:none} }
 .writer-stop-control { position:fixed; z-index:120; right:24px; bottom:82px; padding:10px 16px; border:1px solid #e4b8a880; border-radius:22px; color:#ffe9df; background:#392b36; box-shadow:0 4px 16px #0003; font:14px/1.4 Georgia,serif; cursor:pointer; }
 .writer-stop-control:focus-visible { outline:2px solid #ffe9df; outline-offset:3px; }
+
+/* Activity rail (docs/agent-awareness/03 §6.1) — writer + functional chips under
+   the scene shell. pointer-events:none so it never intercepts canvas drags. */
+.activity-rail { position: fixed; z-index: 95; left: 50%; bottom: 88px; transform: translateX(-50%);
+  max-width: min(520px, 48vw); pointer-events: none; }
+.airp-prototype.is-authoring .activity-rail { bottom: 172px; }
+.activity-rail__list { display: flex; flex-direction: column; align-items: center; gap: 4px;
+  margin: 0; padding: 0; list-style: none; }
+.activity-rail__item { display: flex; align-items: center; gap: 7px; padding: 4px 12px;
+  border-radius: 9999px; color: #eee2d1; background: #241f30b8; border: 1px solid #d8c4a633;
+  backdrop-filter: blur(10px); font: italic 12px/1.4 Georgia, serif; }
+.activity-rail__item[data-state='ok']    { opacity: .78; }
+.activity-rail__item[data-state='error'] { color: #f0cfc6; border-color: #d4a08c55; }
+.activity-rail__dot { width: 5px; height: 5px; border-radius: 50%; background: #c5a1e3; flex: none; }
+.activity-rail__item[data-state='ok'] .activity-rail__dot    { background: #899b87; }
+.activity-rail__item[data-state='error'] .activity-rail__dot { background: #c96f4c; }
+.activity-rail__item[data-state='running'] .activity-rail__dot { animation: activity-pulse 1.6s ease-out infinite; }
+@keyframes activity-pulse { 0%,100% { opacity: .45 } 50% { opacity: 1 } }
+@media (max-width: 700px) {
+  .activity-rail { bottom: 156px; max-width: calc(100% - 40px); }
+  .airp-prototype.is-authoring .activity-rail { bottom: 236px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .activity-rail__item[data-state='running'] .activity-rail__dot { animation: none; opacity: .9; }
+}
