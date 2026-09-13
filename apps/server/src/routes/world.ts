@@ -12,6 +12,8 @@ import {
   SEAT_ANCHOR,
   boxSizeOf,
   dirOfLayer,
+  EMOTIONS,
+  emotionPortraitsOf,
   createActionService,
   isValidCharacterId,
   listBackpack,
@@ -727,12 +729,22 @@ export function createWorldRouter(
               voice = frontmatter.voice.trim();
             }
           } catch {}
+          // 6-emotion differentials (docs/assets/00 §5.1): the server is the ONE
+          // place that knows the `<id>/<emo>.webp` convention. Reported only when
+          // ALL SIX exist — a half set would switch faces mid-reply and jump;
+          // absent ⇒ the client keeps its single-portrait fallback.
+          const portraits = emotionPortraitsOf(c.id);
+          const present = await Promise.all(
+            EMOTIONS.map(async (e) => (await store.statKind(portraits[e])) === 'file')
+          );
+          const emotions = present.every(Boolean) ? portraits : undefined;
           return {
             ...c,
             avatar: avatar || '/assets/characters/portraits/fella_1.png',
             avatarVideo,
             bio,
             ...(voice ? { voice } : {}),
+            ...(emotions ? { emotions } : {}),
           };
         })
       );

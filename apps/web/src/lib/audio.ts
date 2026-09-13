@@ -34,7 +34,12 @@ export type FoleyName =
 
 export type BGMood = 'calm' | 'tense' | 'crisis';
 
-export type Emotion = 'normal' | 'smile' | 'shock' | 'sad' | 'angry' | 'thinking';
+// `Emotion` is the ONE list of the six emotion differentials; it lives in
+// @airp/shared so the server route and the web bundle cannot drift
+// (docs/assets/00 §3.1). Re-exported here because audio.ts was its long-time
+// home and existing importers read it from `lib/audio.js`.
+import type { Emotion } from '@airp/shared';
+export type { Emotion };
 
 type ToneKey = 'rain' | 'fireplace' | 'drip';
 

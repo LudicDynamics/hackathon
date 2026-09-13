@@ -17,6 +17,7 @@ export * from './rules/characters.js';    // isValidCharacterId / nookIdOf / cha
 export * from './rules/emptiness.js';     // isLayerEmpty / isNookEmpty / hasInitProduct (docs/init/00 §3.1)
 export * from './rules/init-fallback.js'; // w2SceneTemplate (docs/init/00 §3.3)
 export * from './rules/voices.js';       // resolveVoice / VOICES / voiceEntry (docs/tts/07)
+export * from './rules/emotions.js';     // EMOTIONS / Emotion / isEmotion / emotionPortraitsOf (docs/assets/00 §3.1)
 
 // Action layer public surface (01 §8). Extensions import the whole barrel from
 // `shared/dist/index.js`, so anything they call MUST be exported here.

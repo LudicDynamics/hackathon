@@ -194,3 +194,8 @@ doc-19 §2.1 点名了"夜风 + 钟楼、钟表滴答、远方雷鸣、低声杂
 3. **演出音效**（钟鸣 / 墨洇 / 悬念滚奏）—— P1，可复用 `pool/bell-church` 与 `foley/*`；
 4. **`gate-open` / `page-turn` 接线**（有素材无调用点）：`gate-open` 留 T4.3 门卡过场，`page-turn` 留 book/pages 二级层；
 5. 剩余环境音族与 2 个模板主题曲（school / cthulhu），**等 doc-24 五世界选项定案**。
+
+### 8.1 角色素材批次（`docs/assets/`）对音频的结论（2026-09-13）
+
+- **三情绪 BGM 与世界主题曲无需重做**：whitechapel / firstsnow 的 `audio.theme` 已生效，气质匹配（见 §1.2）。用户建议的"氛围音自生成"**未执行**——Flow Music 链路当日报 401（凭据缺 `refresh_token`，需在浏览器重推，见 `docs/assets/00 §9`）；若日后要重生成，用 `pnpm gen music --prompt "... Instrumental only, no vocals ..."`。
+- **`stinger/` 6 条仍缺**：本批把 6 情绪差分图接进了遮罩，而 `playStinger(emo)` 的素材缺口不变（缺则静默 no-op，不影响主轨）。这是与本批天然相邻的下一步。

@@ -105,6 +105,9 @@ tools/                  # 单一职责脚本：探针（probe-*）/ 门禁（che
                         #   手艺包见 assets/skills/motion-portrait/SKILL.md（alpha 解码陷阱在彼）
   flow-gen.mjs          # 生图 / 生视频（pnpm gen）：调本地反代 ../flow-proxy-api，封装异步轮询与降级告警
                         #   手艺包见 assets/skills/flow-media/SKILL.md（认证链与静默降级在彼）
+  gen-emotions.mjs      # 6 情绪差分批产（docs/assets/00 §4.1）：base.png --(img2img)→ 绿幕图 → chromakey → 透明 webp；**图片链路不扣额度**
+  gen-motion.mjs        # 角色微动立绘批产（docs/assets/00 §4.2）：绿幕 normal 图 --(i2v 720p 6s)→ motion-clip 360w 乒乓；**扣额度（实测 10/条）**
+  record-emotion-assets.mjs # 本批媒体溯源：写 templates/<world>/assets/character-media.json；--check 可核验（不并入 sync-* 的两张账）
   probe-writer.mjs      # 全链路探针（pnpm probe）
   probe-tools.mjs       # 工具面探针：jiti 载入 extensions/tools.ts，断言注册表 + 真执行（probe:tools 第一段）
   probe-tools-engine.mjs # 工具面探针（强形式）：真 spawn 引擎，断言 AIRP 工具被引擎执行（probe:tools 第二段）
@@ -215,6 +218,7 @@ Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → w
 | `docs/footprint/` | **卡片占位尺寸真相源**：`00-共同上下文.md` 是冻结契约（`cards` 行写入路径 / measuredAt 与 formVersion / reseat 漂移判据），`01`–`05` 分篇。**动 `cards` 行建行 / `/api/card/footprint` / `lib/{measure,footprint}.ts` 前必读**（与 AGENTS §7.5 配套）|
 | `docs/audio/` | **音频接线（A1）真相源**：`00-共同上下文.md` 是冻结契约（`ambient`/`bgm` frontmatter / `/api/audio` 路径解析 / 采样优先合成兜底 / stinger 触发），`01`–`06` 分篇。素材清单在 `assets/audio/PLAN.md`（P0 已完成，P1/P2 缺口逐条登记）。**动 `lib/audio.ts` / `routes/world.ts` 的 `/audio` / 世界主题曲声明前必读** |
 | `docs/prompts/` | **提示词与 skill 体系真相源**：`00-共同上下文.md` 是冻结契约，`01`–`03` 是作家/角色/初始化器**正文逐字源**（`extensions/instructions.ts` 与之对应），`04` skill 体系，`05` 装配与验证 + 四份评审。**改任何 preset / skill / instruction slot 前必读** |
+| `docs/assets/` | **角色素材批次真相源（6 情绪差分 + 微动立绘 + 氛围音）**：`00-共同上下文.md` 是冻结契约（`EMOTIONS` 六枚举 / `assets/characters/<id>/<emo>.webp` 约定 / `/api/characters` 的 `emotions`（6 张全在才回传）/ 微动片归小天地 `portrait`），`01`–`04` 分篇。生产工具 `tools/gen-emotions.mjs`、`tools/gen-motion.mjs`、`tools/record-emotion-assets.mjs`。**动 `routes/world.ts` 的 `/characters` / `CharacterModal` 立绘 / 6 情绪素材 / nook portrait 前必读** |
 
 **参考实现（都在本项目的兄弟目录，不进本仓库）**：
 
@@ -244,10 +248,14 @@ pnpm probe:prompt                               # 提示词 wire 探针（作家
 pnpm probe:init                                 # 初始化探针（真 spawn 作家，发 /airp-init，断言产物落盘 + 事件落账 + 幂等 + 零 AI 路径）
 pnpm check:skills                               # skill 语料门禁（frontmatter / 语言分层 / 命名 / 平台清单与触发词）
 pnpm check:voices                               # 音色门禁（角色 voice 解析到调色板；docs/tts/07）
+pnpm check:emotions                             # 角色素材门禁（6/6 齐备 + 真透明 + 9:16 + webm 真 alpha + 溯源 SHA；见 docs/assets/00 §7）
 pnpm pi status                                  # pi-rp 子模块 + dist 新鲜度体检（见 §7.2）
 pnpm motion <绿幕.mp4> -o out.webm --scale 360   # 微动立绘 / 背景视频（见 assets/skills/motion-portrait）
 pnpm gen image --prompt "..." -o assets/_inbox/   # 生图 / 生视频（见 assets/skills/flow-media）
 pnpm gen video --prompt "..." --seconds 6 -o out.mp4
+node tools/gen-emotions.mjs --world whitechapel   # 6 情绪差分批产（图片免费，见 docs/assets/00 §4.1）
+node tools/gen-motion.mjs --world whitechapel --parallel 2   # 角色微动立绘批产（扣额度 ~10/条）
+node tools/record-emotion-assets.mjs             # 写 character-media.json 溯源；--check 核验
 node tools/scaffold.mjs --template holmes-world --out worlds/my-holmes
 pnpm --filter @airp/server dev                  # 只起后端
 ```
@@ -333,6 +341,7 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 | 音频（`ambient`/`bgm` frontmatter、`/api/audio`、stinger） | `docs/audio/00`（冻结契约）+ `01…06`；`apps/server/src/routes/world.ts` 的 `/audio` 分支与 `readLayerAudio`、`apps/web/src/lib/audio.ts`；**素材入库口径见 §7.8**——增删 `assets/audio/**` MUST 同步 `assets/audio/PLAN.md` 与 `CREDITS.md` |
 | 小天地（`GET /api/nook`、nookId、`layer` 列、footprint 门禁） | `docs/nook/00`（冻结契约）+ `01…05`；`apps/server/src/routes/world.ts` 的 nook 分支、`components/nook/NookView.tsx`、`packages/shared/src/rules/characters.ts` 的 `nookCardPaths` |
 | 卡片占位尺寸（`cards` 行 / footprint 回写 / reseat 漂移） | `docs/footprint/00`（冻结契约）+ `01…05`；`packages/shared/src/store/local-store.ts` 的建行路径、`lib/{measure,footprint}.ts`（与 §7.5 三条契约配套）|
+| 角色素材（6 情绪枚举 / `<id>/<emo>.webp` 约定 / `/api/characters` 的 `emotions`） | `docs/assets/00`（冻结契约）+ `01…04`；`packages/shared/src/rules/emotions.ts`（枚举唯一源）、`apps/server/src/routes/world.ts` 的 `/characters` 探测、`apps/web/src/components/overlay/CharacterModal.tsx` 的立绘分支、`tools/{gen-emotions,gen-motion,record-emotion-assets}.mjs`；跑 `node tools/record-emotion-assets.mjs --check` + `pnpm test` |
 | 文档里写的仓库路径（目录树 / 链接 / `file:line` 引用） | 无需手改同步表——**跑 `pnpm check:docs` 即可**：它核验 `docs/hooks` + `docs/audio` + `AGENTS.md` + `assets/README.md` 里的每条路径引用能否解析。改名/移动文件后引用悬空，门禁直接红 |
 
 文档里已被推翻的说法**直接改掉**，不要另起一段解释——`docs/archive/` 才是存废案的地方。
@@ -340,7 +349,7 @@ pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受
 ### 6.4 收工自检
 
 ```bash
-pnpm build && pnpm test && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:bodies && pnpm check:docs && pnpm probe:prompt && pnpm check:skills && pnpm check:voices && pnpm probe:init
+pnpm build && pnpm test && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:bodies && pnpm check:docs && pnpm probe:prompt && pnpm check:skills && pnpm check:voices && pnpm probe:init && pnpm check:emotions
 ```
 
 `pnpm test` 覆盖 `packages/shared/test/`、`apps/server/test/`、`apps/web/test/`、`tools/*.test.mjs` 四处（纯函数与非空性断言落在这里）。
@@ -490,3 +499,5 @@ pnpm pi commit "fix(...): …" [--no-build]   # build 红线 → 子模块 commi
 **坑（2026-09-13 实际踩到）**：`assets/README.md` 写的是"本目录不进 git"，**这句已过期**——`audio/` 与 `skills/` 现在是入库的。找音频资产时**不要只查 `apps/web/public/` 或 `templates/**/`**，平台池在仓库根 `assets/audio/`；世界级样本则走 `templates/<world>/assets/`（`/api/asset` 伺服）。判据：平台池 = `/api/audio?path=…`，世界级 = `/api/asset?…`。
 
 **改素材时**：音频走 `docs/audio/`（`00` 冻结契约）；`assets/audio/**` 增删 MUST 同步 `assets/audio/PLAN.md` 的状态列与 `CREDITS.md`（授权合规）。**路径引用由 `pnpm check:docs` 守着**——`assets/` 下 git-tracked 的文本路径（PLAN/CREDITS/skills）都有引用核验，写错即红；世界相对的 `assets/...` 与媒体自动跳过（见 §6.4）。
+
+**改角色素材时**（6 情绪差分 / 微动立绘）：走 `docs/assets/`（`00` 冻结契约）。车间落点 `<world>-demo/characters/<id>/variants/`，发布位 `templates/<world>/assets/characters/<id>/<emo>.webp` 与 `assets/motion/seedance/characters/<id>-transparent.webm`。**增删后 MUST 跑 `node tools/record-emotion-assets.mjs` 重写 `templates/<world>/assets/character-media.json`**（`--check` 可核验，`pnpm check:emotions` 是总门禁）；**不并入** `source-manifest.json` / `motion/seedance/manifest.json`（其测试断言精确行数绑死各自的 sync 工具，见 `docs/assets/00 §4.4`）。

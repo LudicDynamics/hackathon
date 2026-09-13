@@ -25,8 +25,23 @@ assets/
    └─ prompts.md                生成 prompt / 种子 / 模型记录（可复现）
 ```
 
-## 定稿 → 发布（进 IP 包）
+## 角色素材批次落点（2026-09-13）
 
+6 情绪差分的车间产出固定在 `<world>-demo/characters/<id>/variants/`：
+
+```
+variants/
+├─ <emo>-green.jpg     img2img 绿幕源（模型直接产出，未抠像）
+├─ <emo>.png           chromakey+despill 后的透明 PNG（发布位 webp 的来源）
+└─ <id>-green.mp4      （可选）i2v 绿幕视频源，供 motion-clip 抠成透明 webm
+```
+
+`<emo>` ∈ `normal/smile/shock/sad/angry/thinking`。规格、命令与验收见 `docs/assets/00`；
+批量工具 `tools/gen-emotions.mjs`（图，免费）/ `tools/gen-motion.mjs`（视频，扣额度）。
+发布位写 `templates/<world>/assets/characters/<id>/<emo>.webp`，溯源另记于
+`templates/<world>/assets/character-media.json`（不并入 `source-manifest.json`，理由见 `docs/assets/00 §4.4`）。
+
+## 定稿 → 发布（进 IP 包）
 平台已有上传端点（base64 JSON，kind 白名单 covers/backgrounds/avatars）：
 
 ```bash

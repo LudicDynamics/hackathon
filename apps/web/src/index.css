@@ -400,9 +400,10 @@ body:before {
   }
 }
 
-/* Emotion diffs — CSS-only until sprite-sheet assets land (T3.2/T3.8).
-   Once emo sheets arrive, replace these filter rules with background-position
-   sprite switching on .portrait-emo. */
+/* Emotion differentials (docs/assets/00 §5.2). Worlds that ship the six
+   portraits get a real image swap on `[emo: tag]`; the old CSS-filter
+   simulation is gone. The container stays so `.portrait-emo` still owns the
+   `.emo-shock-shake` ornament and the breathing transform. */
 .portrait-emo {
   position: relative;
   width: 100%;
@@ -421,31 +422,10 @@ body:before {
   object-position: center top;
 }
 
-.emo-smile {
-  /* warm lift */
-  filter: brightness(1.08) saturate(1.18) sepia(0.12) hue-rotate(-8deg);
-}
-
-.emo-shock {
-  /* brighter + high contrast */
-  filter: brightness(1.15) saturate(1.1) contrast(1.06);
-}
-
-.emo-sad {
-  /* grey, dimmed */
-  filter: grayscale(0.85) brightness(0.78);
-}
-
-.emo-angry {
-  /* red tint + slight slant */
-  filter: sepia(0.35) saturate(1.6) hue-rotate(-15deg) brightness(1.02);
-  transform: rotate(-2deg);
-}
-
-.emo-thinking {
-  /* desaturated + slightly receded */
-  filter: saturate(0.55) brightness(0.92);
-  transform: scale(0.97);
+/* The per-emotion still. Sized/contained by the `.portrait-emo img` rule above
+   (same box as MotionPortrait, so a video→still swap never shifts). */
+.portrait-still {
+  transition: opacity 0.35s ease;
 }
 
 .emo-shock-shake {

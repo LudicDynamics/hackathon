@@ -13,6 +13,9 @@
     "gen": "node tools/flow-gen.mjs",
     "gen:image": "node tools/flow-gen.mjs image",
     "gen:video": "node tools/flow-gen.mjs video",
+    "gen:emotions": "node tools/gen-emotions.mjs",
+    "gen:motion": "node tools/gen-motion.mjs",
+    "gen:record": "node tools/record-emotion-assets.mjs",
     "test": "node --test packages/shared/test/ apps/server/test/ apps/web/test/ tools/*.test.mjs",
     "probe": "node tools/probe-writer.mjs",
     "probe:image": "node tools/probe-image.mjs",
@@ -26,6 +29,7 @@
     "check:ws": "node tools/check-ws-contract.mjs",
     "check:bodies": "node tools/check-request-bodies.mjs",
     "check:voices": "node tools/check-voices.mjs",
+    "check:emotions": "node tools/verify-emotions.mjs",
     "pi": "node tools/pi-rp.mjs"
   },
   "devDependencies": {

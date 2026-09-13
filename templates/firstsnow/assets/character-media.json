@@ -1,0 +1,118 @@
+{
+  "sourceRepository": "worldlines-assets",
+  "encoding": "webp-q82",
+  "assets": [
+    {
+      "character": "nanami",
+      "emo": "normal",
+      "source": "assets/worlds/firstsnow-demo/characters/nanami/variants/normal.png",
+      "asset": "assets/characters/nanami/normal.webp",
+      "sourceSha256": "0183243ef707a34e20d28536ef94b28e2a6984042a1306573d1e30a74acd4023",
+      "assetSha256": "6e8fc5b99462c6c2f526b056980f88a077ef4ce8ee883d188cc8b6c0fc4b8f61"
+    },
+    {
+      "character": "nanami",
+      "emo": "smile",
+      "source": "assets/worlds/firstsnow-demo/characters/nanami/variants/smile.png",
+      "asset": "assets/characters/nanami/smile.webp",
+      "sourceSha256": "b9aa3ca6c1fec4689c844233abb47e7e3165cbfe7d79dc8c673d30466060901f",
+      "assetSha256": "649a4a8993072e563c1d7a0ea2653b04837730d2ad3ee6c25e540d1410cc44f8"
+    },
+    {
+      "character": "nanami",
+      "emo": "shock",
+      "source": "assets/worlds/firstsnow-demo/characters/nanami/variants/shock.png",
+      "asset": "assets/characters/nanami/shock.webp",
+      "sourceSha256": "f47d472c844bad833442ae849d8903bbca52c577dffe44f2a545dcff1e445b24",
+      "assetSha256": "c204242e72ef6c5e9536a712b3439636e34b38da132d60251d88aa85849a821b"
+    },
+    {
+      "character": "nanami",
+      "emo": "sad",
+      "source": "assets/worlds/firstsnow-demo/characters/nanami/variants/sad.png",
+      "asset": "assets/characters/nanami/sad.webp",
+      "sourceSha256": "915882cc320e24e46cacc012d999f799853e9b34ae96101f0bcfed0a06a1a8e3",
+      "assetSha256": "048e832bd194bcced50ceedb9e83a6ee7ba66172d42689475ed4a65d3557b71f"
+    },
+    {
+      "character": "nanami",
+      "emo": "angry",
+      "source": "assets/worlds/firstsnow-demo/characters/nanami/variants/angry.png",
+      "asset": "assets/characters/nanami/angry.webp",
+      "sourceSha256": "36e3ebf91c27089e88fa6636ee61822317e35509e517613973c7aae89862fffd",
+      "assetSha256": "799f360fde74b5dd6c731cbcc0b1a49ee2fcc69fefc770225d6e79ea51970162"
+    },
+    {
+      "character": "nanami",
+      "emo": "thinking",
+      "source": "assets/worlds/firstsnow-demo/characters/nanami/variants/thinking.png",
+      "asset": "assets/characters/nanami/thinking.webp",
+      "sourceSha256": "1f47639b252e9832fef1d52d9c7628889374d2ae06c29b87202cba36576cb7a9",
+      "assetSha256": "c3ce1bb4d1cc7ca7c078f1d650bd2c04f987515c71636aa951c502b93d727b38"
+    },
+    {
+      "character": "nanami",
+      "kind": "living-portrait",
+      "source": "assets/worlds/firstsnow-demo/characters/nanami/nanami-green.mp4",
+      "asset": "assets/motion/seedance/characters/nanami-transparent.webm",
+      "sourceSha256": "ec034c8c6dda9dc4b02a44ebc88f9e1cc107d828e24ff5a5275d9ce33b3d85c1",
+      "assetSha256": "0cce4fdc12aba40f819ba39f5e5ebc69857c77c8530c4655115057eb4f5536ca"
+    },
+    {
+      "character": "sumi-yukimura",
+      "emo": "normal",
+      "source": "assets/worlds/firstsnow-demo/characters/sumi/variants/normal.png",
+      "asset": "assets/characters/sumi-yukimura/normal.webp",
+      "sourceSha256": "092d8c66a583c8d39a3f47ddca36bfba33a5f7018bf4b86b4503d1b1d8190d76",
+      "assetSha256": "48b752758907231495a2b605fc8e180175183b015a4603342791731179a55474"
+    },
+    {
+      "character": "sumi-yukimura",
+      "emo": "smile",
+      "source": "assets/worlds/firstsnow-demo/characters/sumi/variants/smile.png",
+      "asset": "assets/characters/sumi-yukimura/smile.webp",
+      "sourceSha256": "0a7baa0582617797bbd5243a66bc9f890399d9549916b0a3a44c720942c45dae",
+      "assetSha256": "5513d097a779d33f73eeb3e0e62c7c532c7ea014b34af3437d5e4cab45fc0d4e"
+    },
+    {
+      "character": "sumi-yukimura",
+      "emo": "shock",
+      "source": "assets/worlds/firstsnow-demo/characters/sumi/variants/shock.png",
+      "asset": "assets/characters/sumi-yukimura/shock.webp",
+      "sourceSha256": "ee03b607b2142decdc07a2a0e6c649759fe16b20b38942777ade59fd0176066a",
+      "assetSha256": "fa3978edcffe0a978e875d601f955fc8a69b686c6a64d285197deea9390167ba"
+    },
+    {
+      "character": "sumi-yukimura",
+      "emo": "sad",
+      "source": "assets/worlds/firstsnow-demo/characters/sumi/variants/sad.png",
+      "asset": "assets/characters/sumi-yukimura/sad.webp",
+      "sourceSha256": "63da176610fefb92fb739191397fd5b325534a1be50a38b905638de69790ab64",
+      "assetSha256": "9c71ddf49847bfe49075769acd40bfeb6f8999a52c73acee6bc153314d74c702"
+    },
+    {
+      "character": "sumi-yukimura",
+      "emo": "angry",
+      "source": "assets/worlds/firstsnow-demo/characters/sumi/variants/angry.png",
+      "asset": "assets/characters/sumi-yukimura/angry.webp",
+      "sourceSha256": "222e728ad4203beb0bb9d8a7bb9b6a65fcf2d1fe95a3eb56ddec26489696e01c",
+      "assetSha256": "175c8a3c90b29edddfd66b9beffc626fdd422f2de57dce93f61207d4f31f8694"
+    },
+    {
+      "character": "sumi-yukimura",
+      "emo": "thinking",
+      "source": "assets/worlds/firstsnow-demo/characters/sumi/variants/thinking.png",
+      "asset": "assets/characters/sumi-yukimura/thinking.webp",
+      "sourceSha256": "bfd7a8e36ae3959c266bb46fce861f127792d1ccc8e2ded3b6ccfcf6d08af975",
+      "assetSha256": "b8b7df73ac1a430dd711e139efa25bf73c375339b927f2a8db54300bf7a66e8e"
+    },
+    {
+      "character": "sumi-yukimura",
+      "kind": "living-portrait",
+      "source": "assets/worlds/firstsnow-demo/characters/sumi/sumi-yukimura-green.mp4",
+      "asset": "assets/motion/seedance/characters/sumi-yukimura-transparent.webm",
+      "sourceSha256": "43774ec33eef55b556aa3544c929272c661722110f16aca1b07032b45fdf2917",
+      "assetSha256": "0da8f609369b2ce3fcaec9ed6e2db10b1f41f45820af05279126db33c816cafd"
+    }
+  ]
+}

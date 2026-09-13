@@ -62,6 +62,12 @@ interface CharacterView {
   description?: string;
   /** README frontmatter `voice` alias, via /api/characters. undefined → server default. */
   voice?: string;
+  /**
+   * Per-emotion portrait paths (docs/assets/00 §5.2), via /api/characters.
+   * Present only when all six exist; undefined → the modal keeps the single
+   * MotionPortrait fallback.
+   */
+  emotions?: Record<string, string>;
 }
 
 type Attention = 'ambient' | 'authoring';
@@ -659,6 +665,13 @@ export function App() {
           displayName={activeCharacter.name}
           avatar={assetUrl(activeCharacter.avatar)}
           avatarVideo={assetUrl(activeCharacter.avatarVideo)}
+          emotions={
+            activeCharacter.emotions
+              ? Object.fromEntries(
+                  Object.entries(activeCharacter.emotions).map(([emo, path]) => [emo, assetUrl(path) ?? ''])
+                )
+              : undefined
+          }
           effectsEnabled={effectsEnabled}
           bio={activeCharacter.bio || activeCharacter.description}
           incoming={activeModalFrame}

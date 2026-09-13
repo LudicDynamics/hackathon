@@ -51,6 +51,12 @@ interface CharacterModalProps {
   voice?: string;
   /** NEW: TTS request-body `language` — the world content language. Defaults to 'en'. */
   language?: string;
+  /**
+   * NEW: per-emotion portrait URLs (docs/assets/00 §5.2). Present only when the
+   * world ships all six; when set, the stage shows the matching still per
+   * `[emo: tag]` instead of the single MotionPortrait clip.
+   */
+  emotions?: Record<string, string>;
 }
 
 /** Raw character-lane frame as forwarded by useWorld (`detail: msg` verbatim). */
@@ -104,6 +110,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   worldId,
   voice,
   language = 'en',
+  emotions,
 }) => {
   const { locale: uiLocale } = useLocale();
   locale = uiLocale === 'ja' ? 'ja' : locale;
@@ -648,7 +655,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   }, [handleClose, advance]);
 
   // Reset the monogram fallback if the avatar path changes.
-  useEffect(() => setAvatarError(false), [avatar]);
+  useEffect(() => setAvatarError(false), [avatar, emo]);
 
   // Focus the input only once it is actually revealed (it is hidden before that).
   const busy = phase === 'thinking' || phase === 'streaming' || (pages.length > 0 && pageIndex < pages.length - 1);
@@ -690,6 +697,10 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   phaseRef.current = phase;
   const showAvatar = !avatarError && !!avatar;
   const monogram = characterId.trim().charAt(0).toUpperCase() || '?';
+  // The still for the current mood, when the world ships the six-emotion set.
+  // Undefined keeps the legacy single-portrait path, so nothing changes for
+  // worlds without differentials.
+  const emotionStill = emotions?.[emo];
   const currentPage = pages[pageIndex];
   // ▼ 提示仅在「有页可推、非沉思、且还没到该玩家输入」时出现（contract §16.2）。
   const canAdvance = phase !== 'thinking' && pages.length > 0 && !inputReady;
@@ -713,7 +724,18 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         <div className="portrait-slot lit">
           <div className="portrait-breathe">
             <div className={`portrait-emo emo-${emo}${emo === 'shock' ? ' emo-shock-shake' : ''}`}>
-              {showAvatar ? (
+              {/* Six-emotion world (docs/assets/00 §5.2): the still for the
+                  current `[emo: tag]` wins over the single clip, so the face
+                  actually changes. A missing/failed still falls through to
+                  MotionPortrait, never a blank stage. */}
+              {emotionStill && !avatarError ? (
+                <img
+                  className="portrait-still"
+                  src={emotionStill}
+                  alt={displayName || characterId}
+                  onError={() => setAvatarError(true)}
+                />
+              ) : showAvatar ? (
                 <MotionPortrait video={avatarVideo} poster={avatar} enabled={effectsEnabled} name={displayName || characterId} onPosterError={() => setAvatarError(true)} />
               ) : (
                 <div className="portrait-fallback" role="img" aria-label={`${characterId} portrait`}>
