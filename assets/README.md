@@ -15,6 +15,7 @@ assets/
 │  ├─ PLAN.md                   全量音频需求清单 + 逐条缺口状态
 │  └─ CREDITS.md                素材授权信息（增删音频 MUST 同步）
 ├─ skills/                      素材生产手艺包（纯文本，已入库）
+│  ├─ character-asset-batch/    角色 6 情绪差分 + 透明微动立绘（tools/gen-{emotions,motion}.mjs）
 │  ├─ motion-portrait/          绿幕 → 透明 webm / 成片 → 循环 webm（tools/motion-clip.mjs）
 │  └─ flow-media/               Flow 生图 / 生视频（tools/flow-gen.mjs，含认证链与降级陷阱）
 ├─ _inbox/                      pipeline 原始产出（未筛选，随便堆；不入库）

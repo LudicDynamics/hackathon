@@ -104,6 +104,10 @@ ffmpeg -c:v libvpx-vp9 -i out.webm -frames:v 1 -f rawvideo -pix_fmt rgba -
 - **直聊遮罩**：**不用视频**——那里要 6 情绪差分快速切换，静态立绘 + CSS 呼吸更合适。
 - **fallback**：视频加载失败或 `prefers-reduced-motion` 时，回退到 `base.png` 静态立绘。
 
+> 要**批量**给一个世界补齐 6 情绪差分 + 透明微动立绘（含发布位接线与验收门禁）时，
+> 走 `assets/skills/character-asset-batch/SKILL.md`——本文是抠像/循环这一道工序的手艺，
+> 那篇是整条角色素材流水线的操作手册。
+
 ## 命令速查
 
 ```bash
