@@ -1,0 +1,9 @@
+---
+type: character
+characterId: edith
+title: イーディス・ヴェイル
+portable: false
+avatar: assets/characters/edith.webp
+---
+
+ワトソンの患者で小説家。第四章の住所を訂正した本人。怖がっているが、自分の言葉で説明したい。

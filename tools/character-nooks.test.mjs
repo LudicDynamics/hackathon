@@ -13,8 +13,8 @@ const express = require('express');
 const repo = process.cwd();
 const people = experiences.flatMap(pack => pack.characters.map(person => ({ pack, person })));
 
-test('nine registered characters, seven distinct cards each; no invented Unwritten Door NPC', () => {
-  assert.equal(people.length, 9);
+test('thirteen registered characters, seven distinct cards each; no invented Unwritten Door NPC', () => {
+  assert.equal(people.length, 13);
   assert.equal(experiences.find(p => p.base === 'unwritten-door').characters.length, 0);
   const bodies = new Set();
   for (const { pack, person } of people) {
@@ -33,7 +33,7 @@ test('nine registered characters, seven distinct cards each; no invented Unwritt
       bodies.add(p.body);
     }
   }
-  assert.equal(bodies.size, 63);
+  assert.equal(bodies.size, 91);
 });
 
 for (const { pack, person } of people) {
@@ -62,7 +62,7 @@ test('spoiler boundaries: opening diary is not an already-played ending', () => 
   assert.match(all('first-snow-jp', 'sumi-yukimura'), /返事の前に失約と決めない/);
 });
 
-test('real nook endpoint exposes all 63 cards on isolated saves without adding scene layers', async () => {
+test('real nook endpoint exposes all 91 cards on isolated saves without adding scene layers', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'airp-nook-content-'));
   let visible = 0;
   for (const pack of experiences.filter(p => p.characters.length)) {
@@ -89,5 +89,5 @@ test('real nook endpoint exposes all 63 cards on isolated saves without adding s
       }
     } finally { await new Promise(resolve => server.close(resolve)); store.close(); }
   }
-  assert.equal(visible, 63);
+  assert.equal(visible, 91);
 });
