@@ -312,6 +312,81 @@ async function cmdImage(opts) {
   if (opts.json) console.log('\n' + JSON.stringify({ files: written, elapsed_s: Number(secs) }, null, 2));
 }
 
+
+// 音乐是独立的第二条链路（Flow Music / Lyria），端点与视频完全不同：
+// 提交走 /v1/music/generations，查询 /v1/music/{id}，下载 /v1/music/{id}/content。
+async function cmdMusic(opts) {
+  const prompt = opts.prompt || opts._[1];
+  if (!prompt) die('缺少 --prompt');
+
+  const body = { model: opts.model || 'lyria', prompt };
+  const out = resolveOut(opts, 'music', prompt);
+  console.log(`生音乐  model=${body.model}`);
+  console.log(`        prompt="${String(prompt).slice(0, 70)}${String(prompt).length > 70 ? '…' : ''}"`);
+
+  const t0 = Date.now();
+  const job = await api('/v1/music/generations', { method: 'POST', body, timeoutMs: 120_000 });
+  const id = job?.id;
+  if (!id) die(`提交失败，未拿到任务 id: ${JSON.stringify(job).slice(0, 300)}`);
+  console.log(`        任务 ${id}`);
+
+  // 音乐比视频慢（先消费 SSE 拿 clip id，再轮询出片），默认上限 15 分钟
+  const limitMs = Number(process.env.FLOW_MUSIC_TIMEOUT_MS || 900_000);
+  let delay = 5000;
+  let task = job;
+  for (;;) {
+    if (task.status === 'completed') break;
+    if (task.status === 'failed') die(`任务失败: ${task.error || '未知原因'}`);
+    const left = limitMs - (Date.now() - t0);
+    if (left <= 0) {
+      die(
+        `等待超时（${limitMs / 1000}s），任务 ${id} 仍在 ${task.status}。\n` +
+          `  任务没丢，可稍后用同一 id 取回：node tools/flow-gen.mjs fetch --id ${id} --type music\n` +
+          `  拉长上限：FLOW_MUSIC_TIMEOUT_MS=${limitMs * 2}`
+      );
+    }
+    await sleep(Math.min(delay, left));
+    delay = Math.min(delay + 2000, 10000);
+    task = await api(`/v1/music/${id}`, { timeoutMs: 60_000 });
+    const pct = task.progress != null ? ` ${task.progress}%` : '';
+    process.stdout.write(`\r        生成中… ${task.status}${pct}  (${((Date.now() - t0) / 1000).toFixed(0)}s)   `);
+  }
+  process.stdout.write('\r' + ' '.repeat(78) + '\r');
+
+  const secs = ((Date.now() - t0) / 1000).toFixed(1);
+  if (task.title) console.log(`  ♪ ${task.title}`);
+  const dest = save({ url: '', type: '' }, out, 'music', prompt);
+  const got = await download(`/v1/music/${id}/content`, dest);
+  console.log(`  ✓ ${dest}  (${human(got.bytes)}, ${got.type || 'audio/mp4'})`);
+  if (task.duration_seconds) {
+    const m = Math.floor(task.duration_seconds / 60);
+    const s = Math.round(task.duration_seconds % 60);
+    console.log(`  时长 ${m}:${String(s).padStart(2, '0')}`);
+  }
+  if (task.audio?.wav_url) console.log(`  无损 WAV：${task.audio.wav_url}`);
+  if (task.cover?.url) console.log(`  封面：${task.cover.url}`);
+  console.log(`  用时 ${secs}s`);
+  if (opts.json) {
+    console.log(
+      '\n' +
+        JSON.stringify(
+          {
+            id,
+            file: dest,
+            bytes: got.bytes,
+            title: task.title || null,
+            duration_seconds: task.duration_seconds || null,
+            wav_url: task.audio?.wav_url || null,
+            cover_url: task.cover?.url || null,
+            lyrics: task.lyrics || null,
+            elapsed_s: Number(secs),
+          },
+          null,
+          2
+        )
+    );
+  }
+}
 async function cmdVideo(opts) {
   const prompt = opts.prompt || opts._[1];
   if (!prompt) die('缺少 --prompt');
@@ -455,14 +530,19 @@ video 选项:
       --aspect <比例>  landscape | portrait
       --image <路径|URL>     首帧图片（本地路径会内联为 data URL），走图生视频
 
+music 选项（独立链路，需先用扩展推送 Flow Music 凭据）:
+      --model <名>     默认 lyria（Lyria 3.5）；lyria-pro 为旧版 Lyria 3 Pro
+
 环境变量:
   FLOW_API_BASE          代理地址，默认 http://127.0.0.1:8317
   FLOW_API_KEY           代理的 API Key（对应 config.yaml 的 api-keys）
   FLOW_VIDEO_TIMEOUT_MS  视频轮询上限，默认 900000（15 分钟）
+  FLOW_MUSIC_TIMEOUT_MS  音乐轮询上限，默认 900000（15 分钟）
 
 示例:
   node tools/flow-gen.mjs image --prompt "黄昏的海边灯塔，赛璐璐动画风" -o assets/_inbox/
   node tools/flow-gen.mjs video --prompt "海浪拍打礁石" --seconds 6 --resolution 720p -o out.mp4
+  node tools/flow-gen.mjs music --prompt "轻快的夏日海边电子流行歌，女声" -o song.m4a
   node tools/flow-gen.mjs video --prompt "烛光摇曳" --resolution 1080p -o out.mp4   # 生成后自动升采样
   node tools/flow-gen.mjs image --prompt "海边灯塔" --resolution 2k -o out.jpg
   node tools/flow-gen.mjs video --prompt "让她微微转头" --image assets/_inbox/base.png -o ./  # 图生视频
@@ -486,6 +566,8 @@ async function main() {
       return cmdImage(opts);
     case 'video':
       return cmdVideo(opts);
+    case 'music':
+      return cmdMusic(opts);
     case 'fetch':
       return cmdFetch(opts);
     case 'credits':
@@ -493,7 +575,7 @@ async function main() {
     case 'models':
       return cmdModels();
     default:
-      die(`未知子命令: ${cmd}\n  可用: image | video | fetch | credits | models`);
+      die(`未知子命令: ${cmd}\n  可用: image | video | music | fetch | credits | models`);
   }
 }
 

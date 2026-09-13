@@ -215,7 +215,56 @@ pnpm gen video --prompt "让灯塔的光缓缓扫过" --image assets/_inbox/cove
 
 ---
 
-## 四、拿到资产之后
+## 四、生音乐（Lyria，独立链路）
+
+Flow Music 与 Flow 视频**是两套毫不相干的后端**：认证走 Supabase（不是 Google），
+上游域名是 `flowmusic.app`（不是 `aisandbox-pa`），**而且没有 reCAPTCHA**。
+
+```bash
+pnpm gen music --prompt "轻快的夏日海边电子流行歌，女声，副歌抓耳" -o song.m4a
+```
+
+产出是**完整歌曲**（实测 150–180 秒），并附带：
+
+| | 内容 |
+|---|---|
+| 音频 | m4a / AAC 48kHz 立体声，约 2 MB |
+| 无损 | `wav_url` 直链 |
+| 歌词 | 带 `[Verse]`/`[Chorus]` 标记；纯音乐为 `[Instrumental]` |
+| 封面 | `cover_url` |
+
+### 4.1 模型
+
+| `--model` | 上游 | 说明 |
+|---|---|---|
+| `lyria`（默认） | Lyria 3.5 | flagship |
+| `lyria-pro` | Lyria 3 Pro | 旧版，推理更深 |
+
+别名 `lyria-3.5` / `lyria-fast` / `flowmusic` → `lyria`。
+
+### 4.2 凭据（唯一门槛，但基本自动化了）
+
+扩展已内置监听：**浏览器访问过一次 flowmusic.app** 就会自动把凭据抓进代理。
+没抓到时按 `flow-proxy-api/README.md` 的「Flow Music」一节排查。
+
+> 注意：该站**既不写 localStorage 也不写可读 Cookie**（实测），
+> 所以"从浏览器里翻开找 token"这条路是死的——只能靠抓请求头。
+
+### 4.3 时长约 1–3 分钟
+
+链路是「提交 → 消费 SSE（30–70s 才拿到 clip id）→ 轮询出片 → 下载」。
+**歌词与时长是上游异步后算的**，出片瞬间可能还是 null，工具会自动补采。
+
+超时不代表失败，用同一 id 回捞（注意 `--type music`）：
+
+```bash
+pnpm gen fetch --id fp_xxxx --type music -o song.m4a
+```
+
+---
+
+
+## 五、拿到资产之后
 
 生成物默认落在 `assets/_inbox/`（未筛选的原始产出，**不入库**）。
 定稿走 `assets/README.md` 的流程：挑图 → 命名（`cover.png` / `base.png` / 差分）→
@@ -227,7 +276,7 @@ veo 系输出 720p，做全屏背景可用；`omni-1.1-flash` 只有 360p，别�
 
 ---
 
-## 五、命令速查
+## 六、命令速查
 
 ```bash
 pnpm gen --help
@@ -237,6 +286,7 @@ pnpm gen credits                                  # 查额度
 pnpm gen image  --prompt "..." --aspect portrait -o assets/_inbox/
 pnpm gen video  --prompt "..." --seconds 8 -o out.mp4
 pnpm gen video  --prompt "..." --image base.png -o i2v.mp4
+pnpm gen music  --prompt "..." -o song.m4a        # 完整歌曲（Lyria，1–3 分钟）
 pnpm gen fetch  --id fp_xxxx -o out.mp4           # 回捞超时任务
 
 # 换代理地址 / 密钥
