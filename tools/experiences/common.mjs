@@ -17,8 +17,8 @@ export function author(base, name, description, locale = 'ja') {
   pack.note = (file, title, body, extra = {}) => pack.put(file, { type: 'note', title, portable: true, ...extra }, body);
   pack.person = (source, id, home, body) => pack.characters.push({ source, id, name: id, home, body });
   pack.rules = text => {
-    const ruleDir = locale === 'ja' ? '世界の遊び方' : 'world-play';
-    pack.files[`skills/${ruleDir}/SKILL.md`] = md({ name: 'world-play', description: locale === 'ja' ? 'この世界の全ての行動、移動、判定、生成と回訪で必ず読む。世界の連続性と完成条件。' : 'Read for every action, entry, adjudication, generation and revisit in this world.' }, `${locale === 'ja' ? JAPANESE_RULES : ENGLISH_RULES}\n\n${text}`);
+    const ruleDir = `${pack.id}-play`;
+    pack.files[`skills/${ruleDir}/SKILL.md`] = md({ name: ruleDir, description: locale === 'ja' ? 'この世界の全ての行動、移動、判定、生成と回訪で必ず読む。世界の連続性と完成条件。' : 'Read for every action, entry, adjudication, generation and revisit in this world.' }, `${locale === 'ja' ? JAPANESE_RULES : ENGLISH_RULES}\n\n${text}`);
   };
   return pack;
 }
@@ -28,7 +28,7 @@ export const JAPANESE_RULES = `# 世界の実行規則
 これはファイルを実際に更新する遊び。台詞だけで成功を宣言しない。まず今回の行動元、現在地と親の README、その intent、関連する現物、人物の記憶、提供された既訪問の履歴を読む。README は場所と既知の出口、Chalk は今の選択と具体的な生成意図、この skill は世界の不変条件を持つ。intent は新しいエンジン命令ではなく作家への指示。
 
 ## 言語と知識
-地の文、選択、生成指示、人物、普通のファイル名とディレクトリ名は全て日本語。例：world/港の地図/霧の向こう/灯台道/README.md、player/紹介状.md、characters/七海/記憶.md。README.md、SKILL.md、world.json、preset.json、world、player、characters、skills、プロトコルのキー、ツール ID、既存の素材パスだけは固定。新規 Chalk にも明示的な日本語 path を渡す。人物は目撃・伝聞した事実だけ知る。プレイヤーに見せていない秘密を後日談の思い出にしない。
+地の文、title、選択、生成指示は日本語。ファイル名、ディレクトリ名、人物 ID は英語の小文字 kebab-case で固定し、表示名をパスとして使わない。例：world/harbor-chart/beyond-the-fog/lighthouse-road/README.md、player/introduction-letter.md、characters/nanami/memory.md。README.md、SKILL.md、world.json、preset.json と既存の素材パスは保持。新規 Chalk にも英語の安定した path を渡し、title と本文を日本語にする。人物は目撃・伝聞した事実だけ知る。プレイヤーに見せていない秘密を後日談の思い出にしない。
 
 ## 行動の完了
 一つの選択に具体的な一つの変化を返す。取ると言われた現物は move、読むだけなら動かさない。README は移動しない。人物を道具扱いしない。提出は参照であり、消費ではない。現物へのパスと、プレイヤーが言った意味を確認する。選択を押したことだけで未発言の推論・計画・告白を代筆しない。草稿の代筆はプレイヤーが依頼し、内容を確認した時だけ。

@@ -1,4 +1,4 @@
-// Offline startup check for every generated world and Japanese character id.
+// Offline startup check for every generated world and stable character ID.
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,7 +20,7 @@ for (const pack of experiences) {
       await client.start();
       await client.getState();
       const commands = await client.getCommands();
-      if (writer) assert.ok(commands.some(c => c.name === 'skill:world-play' || c.name === 'world-play'), `${name}: missing world skill`);
+      if (writer) assert.ok(commands.some(c => c.name === `skill:${pack.id}-play` || c.name === `${pack.id}-play`), `${name}: missing world skill`);
       const stderr = client.getStderr?.() ?? '';
       assert.doesNotMatch(stderr, /not found|unknown slot|invalid preset|name contains invalid/iu, name);
       console.log(`PASS ${name}`);

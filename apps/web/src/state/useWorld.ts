@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { airpGateway, openAirpSocket, sendSocket } from '../lib/airp-gateway.js';
+import { gateFeedback } from '../lib/gate-feedback.js';
 import { invalidateMeasures } from '../lib/measure.js';
 import { whenFontsSettled } from '../lib/fonts.js';
 import {
@@ -155,6 +156,7 @@ export function useWorld(): UseWorldApi {
 
   const enterLayer = useCallback(
     async (next: string) => {
+      window.dispatchEvent(new CustomEvent('airp:gate-feedback', { detail: null }));
       if (next === layerRef.current) {
         // Same layer: still re-sync (may be an explicit gate re-entry).
         await fetchLayer(next);
@@ -165,7 +167,11 @@ export function useWorld(): UseWorldApi {
         setLayer(next);
         fpRef.current?.reset(next);
         await fetchLayer(next);
-      }).catch(error => window.dispatchEvent(new CustomEvent('airp:notice', { detail: String(error) })));
+      }).catch(error => {
+        const feedback = gateFeedback(error, next, stateRef.current?.items ?? []);
+        if (feedback) window.dispatchEvent(new CustomEvent('airp:gate-feedback', { detail: feedback }));
+        else window.dispatchEvent(new CustomEvent('airp:notice', { detail: String(error) }));
+      });
     },
     [fetchLayer]
   );

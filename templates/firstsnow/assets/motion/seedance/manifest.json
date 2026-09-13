@@ -2,16 +2,20 @@
   "sourceRepository": "worldlines-assets",
   "assets": [
     {
-      "source": "firstsnow-demo/backgrounds/intro.webm",
+      "source": "templates/firstsnow/assets/backgrounds/intro.webm",
       "target": "assets/motion/seedance/backgrounds/intro.webm",
-      "bytes": 906969,
-      "sha256": "0d64054a4d43142d4aa5dd4508131acc344bd1691cee52249e337b4a3d7cae64"
+      "bytes": 2082920,
+      "sha256": "940c0c510037cf4010a3da0314b4f586cc45e0fe53741033d55bce854a9fec8a",
+      "sourceRepository": "hackathon",
+      "sourceCommit": "1120872bf46e89968c949d8fd27a31ff0bff2fff"
     },
     {
-      "source": "firstsnow-demo/backgrounds/map.webm",
+      "source": "templates/firstsnow/assets/backgrounds/map.webm",
       "target": "assets/motion/seedance/backgrounds/map.webm",
-      "bytes": 2017797,
-      "sha256": "8dbd58708fa8bb17966e64cd03216f5b46f3986063551ec449fdf6e47104a3a6"
+      "bytes": 5484992,
+      "sha256": "ef8dff29ae3ad8ccd7aa11202cd972c3963fad7c0a08f422a2302fb4f5fb2725",
+      "sourceRepository": "hackathon",
+      "sourceCommit": "1120872bf46e89968c949d8fd27a31ff0bff2fff"
     },
     {
       "source": "firstsnow-demo/backgrounds/studio.webm",

@@ -44,7 +44,7 @@ export async function installExperience(repo, pack, { outputRoot = path.join(rep
     locale: pack.locale, entry: 'map', version: '1.1.0',
     genre: pack.locale === 'ja' ? '物語体験' : 'narrative experience',
     tags: pack.locale === 'ja' ? ['体験版', '短い物語', '生成する世界'] : ['playtest', 'short story', 'generative world'],
-    player: { ...sourceManifest.player, id: pack.locale === 'ja' ? 'あなた' : 'you', name: playerLabels[pack.base] },
+    player: { ...sourceManifest.player, id: 'player', name: playerLabels[pack.base] },
     characters: [],
   };
   delete manifest.layers;
@@ -54,8 +54,8 @@ export async function installExperience(repo, pack, { outputRoot = path.join(rep
     for (const key of ['avatar', 'avatarVideo']) if (profile[key] && !await exists(contained(destination, profile[key]))) delete profile[key];
     manifest.characters.push(profile);
     const root = `characters/${person.id}`;
-    const identity = pack.locale === 'ja' ? '人物.md' : 'identity.md';
-    const memory = pack.locale === 'ja' ? '記憶.md' : 'memory.md';
+    const identity = 'personality.md';
+    const memory = 'memory.md';
     await write(destination, `${root}/README.md`, md({ type: 'readme', name: person.name, ...(profile.avatar ? { avatar: profile.avatar } : {}), ...(profile.avatarVideo ? { avatarVideo: profile.avatarVideo } : {}) }, person.body));
     await write(destination, `${root}/${identity}`, md({ type: 'note', title: person.name, portable: false }, person.body));
     await write(destination, `${root}/${memory}`, md({ type: 'note', title: pack.locale === 'ja' ? '見聞きしたこと' : 'What I witnessed', portable: false }, pack.locale === 'ja' ? 'このプレイで交わした新しい約束はまだない。知らない場面の秘密を加えない。' : 'No new promises in this playthrough yet. Do not import secrets from unvisited scenes.'));

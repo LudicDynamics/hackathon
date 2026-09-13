@@ -52,31 +52,31 @@ for (const pack of packs) {
     assert.equal(state.model?.provider, 'openai');
     assert.equal(state.model?.id, 'gpt-4.1');
     if (pack.base === 'wuwu') {
-      await turn('map', 'world/01-目の前のこと.md', 1);
-      await present('player/依頼書.md'); await present('player/調査員の徽章.md');
+      await turn('map', 'world/01-opening.md', 1);
+      await present('player/commission-letter.md'); await present('player/investigator-badge.md');
     } else if (pack.base === 'whitechapel') {
-      await turn('map', 'world/01-目の前のこと.md', 2);
-      await present('player/青い真鍮の蓋.md');
+      await turn('map', 'world/01-opening.md', 2);
+      await present('player/blue-brass-cap.md');
     } else if (pack.base === 'divergence') {
-      await turn('map', 'world/01-目の前のこと.md', 1);
-      await present('player/ぜんまいの蛙.md');
+      await turn('map', 'world/01-opening.md', 1);
+      await present('player/clockwork-frog.md');
     } else if (pack.base === 'first-snow-jp') {
-      await player.moveEntity({ from: 'world/リクエスト用紙.md', to: 'player/リクエスト用紙.md' });
-      await player.enterLayer({ layer: 'world/今夜の約束' });
-      await player.enterLayer({ layer: 'world/今夜の約束/放送室' });
-      const memory = await read('characters/七海/記憶.md');
-      const ending = await read('world/今夜の約束/初雪/README.md');
-      await turn('world/今夜の約束/放送室', 'world/今夜の約束/放送室/01-目の前のこと.md', 1);
-      for (const file of ['player/今夜の手紙.md', 'world/今夜の約束/放送室/02-今夜の返事.md', 'world/今夜の約束/琥珀カフェ/欠席の痕跡.md']) await present(file);
-      assert.notEqual(await read('characters/七海/記憶.md'), memory);
-      assert.notEqual(await read('world/今夜の約束/初雪/README.md'), ending);
-      assert.equal(parseFrontmatter(await read('player/今夜の手紙.md')).frontmatter.type, 'letter');
-      await player.enterLayer({ layer: 'world/今夜の約束/初雪' });
-      await turn('world/今夜の約束/初雪', 'world/今夜の約束/初雪/01-目の前のこと.md', '今夜の余韻を読む');
-      await present('world/今夜の約束/初雪/後日談.md');
+      await player.moveEntity({ from: 'world/request-slip.md', to: 'player/request-slip.md' });
+      await player.enterLayer({ layer: 'world/tonight-promises' });
+      await player.enterLayer({ layer: 'world/tonight-promises/radio-studio' });
+      const memory = await read('characters/nanami/memory.md');
+      const ending = await read('world/tonight-promises/first-snow/README.md');
+      await turn('world/tonight-promises/radio-studio', 'world/tonight-promises/radio-studio/01-opening.md', 1);
+      for (const file of ['player/tonight-letter.md', 'world/tonight-promises/radio-studio/02-tonight-response.md', 'world/tonight-promises/amber-cafe/absence-trace.md']) await present(file);
+      assert.notEqual(await read('characters/nanami/memory.md'), memory);
+      assert.notEqual(await read('world/tonight-promises/first-snow/README.md'), ending);
+      assert.equal(parseFrontmatter(await read('player/tonight-letter.md')).frontmatter.type, 'letter');
+      await player.enterLayer({ layer: 'world/tonight-promises/first-snow' });
+      await turn('world/tonight-promises/first-snow', 'world/tonight-promises/first-snow/01-opening.md', '今夜の余韻を読む');
+      await present('world/tonight-promises/first-snow/epilogue.md');
     } else if (pack.base === 'magic-academy') {
-      await turn('map', 'world/01-目の前のこと.md', 1);
-      await present('player/新入生の名札.md');
+      await turn('map', 'world/01-opening.md', 1);
+      await present('player/freshman-badge.md');
     } else {
       await turn('map', 'world/letter.md', 1);
       const letter = parseFrontmatter(await read('world/letter.md'));
