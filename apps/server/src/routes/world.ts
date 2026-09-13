@@ -26,6 +26,7 @@ import {
   cardFormOf,
   cardKindOf,
   componentDefOf,
+  resolveAppearance,
   sanitiseForBlock,
   type Actor,
   type CardRecord,
@@ -359,6 +360,36 @@ async function readLayerItems(store: LocalWorldStore, paths: string[]): Promise<
   );
 }
 
+/** Read the world/layer material context used by the shared appearance resolver. */
+async function appearanceContext(
+  store: LocalWorldStore,
+  layerId: string
+): Promise<{ worldId: string; worldMaterial: string | null; layerId: string; layerMaterial: string | null }> {
+  // Appearance context only needs the two world-level leaves. Do not call
+  // `getManifest()` here: nook reads are also valid for legacy fixtures whose
+  // character records predate the required `home` field, and resolving a card
+  // appearance must not turn that unrelated manifest compatibility issue into
+  // a 500 response.
+  let worldId = path.basename(store.worldRoot);
+  let worldMaterial: string | null = null;
+  try {
+    const raw = JSON.parse(await store.readFile('world.json')) as Record<string, unknown>;
+    if (typeof raw.id === 'string' && raw.id.trim() !== '') worldId = raw.id;
+    if (typeof raw.material === 'string') worldMaterial = raw.material;
+  } catch {
+    // The layer can still render with base/kind appearance defaults.
+  }
+  let layerMaterial: string | null = null;
+  const readmePath = layerId === 'map' ? 'world/README.md' : `${layerId}/README.md`;
+  try {
+    const fm = parseFrontmatter(await store.readFile(readmePath)).frontmatter;
+    layerMaterial = typeof fm?.material === 'string' ? fm.material : null;
+  } catch {
+    // A stub layer/nook has no README and therefore no local material override.
+  }
+  return { worldId, worldMaterial, layerId, layerMaterial };
+}
+
 export function createWorldRouter(
   repoRoot: string,
   lifecycle: AgentLifecycleManager,
@@ -570,12 +601,20 @@ export function createWorldRouter(
         rowByPath.set(row.id, row);
       }
 
+      const context = await appearanceContext(store, nookId);
       const enriched = items.map((it) => {
         const row = rowByPath.get(it.path);
         const { kind, w, h } = storedSizeOf(it, row);
+        const appearance = resolveAppearance({
+          kind,
+          entityPath: it.path,
+          frontmatter: it.frontmatter,
+          context,
+        });
         return {
           ...it,
           kind,
+          appearance,
           x: row ? row.x : SEAT_ANCHOR.x,
           y: row ? row.y : SEAT_ANCHOR.y,
           w,
@@ -713,12 +752,20 @@ export function createWorldRouter(
         rowByPath.set(row.id, row);
       }
 
+      const context = await appearanceContext(store, layer);
       const enriched = items.map((it) => {
         const row = rowByPath.get(it.path);
         const { kind, w, h } = storedSizeOf(it, row);
+        const appearance = resolveAppearance({
+          kind,
+          entityPath: it.path,
+          frontmatter: it.frontmatter,
+          context,
+        });
         return {
           ...it,
           kind,
+          appearance,
           x: row ? row.x : SEAT_ANCHOR.x,
           y: row ? row.y : SEAT_ANCHOR.y,
           // w/h come from the stored row: since F1 those columns are the card's

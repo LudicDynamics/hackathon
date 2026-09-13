@@ -9,6 +9,8 @@
  */
 import type { WorldEvent } from '../schemas/events.js';
 import { entityName, parseFrontmatter, stringifyFrontmatter } from '../schemas/frontmatter.js';
+import { validateAppearanceInput } from '../schemas/appearance.js';
+import { resolveComponentKind } from '../components/registry.js';
 import { cardFormOf } from '../schemas/forms.js';
 import { ActionError } from './errors.js';
 import { scanRefs } from './refs.js';
@@ -170,6 +172,21 @@ export async function editEntity(
     for (const [key, value] of Object.entries(input.frontmatter)) {
       if (value === null) delete merged[key];
       else merged[key] = value;
+    }
+  }
+  // The appearance gate uses the semantic kind of the merged entity; eventKind
+  // above intentionally remains anchored to the pre-edit entity for history.
+  const semanticKind = resolveComponentKind(merged, path.split('/').pop() ?? path);
+
+  if (Object.prototype.hasOwnProperty.call(merged, 'appearance')) {
+    const appearance = validateAppearanceInput(merged.appearance, semanticKind);
+    if (!appearance.ok) {
+      const issue = appearance.issues[0];
+      throw new ActionError({
+        code: 'invalid_argument',
+        message: issue?.message ?? `Invalid appearance for component kind "${semanticKind}".`,
+        details: { issues: appearance.issues },
+      });
     }
   }
   const body = input.body ?? parsed.body;

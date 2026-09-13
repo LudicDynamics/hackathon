@@ -36,6 +36,14 @@
     "./tts-text": {
       "types": "./dist/rules/tts-text.d.ts",
       "import": "./dist/rules/tts-text.js"
+    },
+    "./appearance-registry": {
+      "types": "./dist/components/appearance-registry.d.ts",
+      "import": "./dist/components/appearance-registry.js"
+    },
+    "./appearance-schema": {
+      "types": "./dist/schemas/appearance.d.ts",
+      "import": "./dist/schemas/appearance.js"
     }
   },
   "scripts": {

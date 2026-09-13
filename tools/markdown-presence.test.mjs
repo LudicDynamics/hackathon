@@ -30,7 +30,7 @@ test('every Markdown form renders its interaction widgets exactly once', async (
   // to EntityInteractions and MUST NOT also render them (no double footer);
   // CardRenderer is the only such caller and passes no handlers.
   assert.match(await read('components/narrative/ChalkCard.tsx'), /renderFrontmatterWidgets/);
-  assert.match(await read('components/canvas/CardRenderer.tsx'), /<ChalkCard item=\{item\} \/>/);
+  assert.match(await read('components/canvas/CardRenderer.tsx'), /<ChalkCard item=\{item\}(?: appearance=\{appearance\})? \/>/);
   const code = await read('components/narrative/EntityInteractions.tsx');
   assert.match(code, /JSON.stringify\(item.path\)/);
   assert.match(code, /filePath: item.path/);

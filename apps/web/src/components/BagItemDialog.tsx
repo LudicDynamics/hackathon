@@ -5,11 +5,16 @@ import { renderFrontmatterWidgets } from '../lib/fm.js';
 import { airpGateway } from '../lib/airp-gateway.js';
 import { playFoley } from '../lib/audio.js';
 import { ItemArtwork } from './ItemArtwork.js';
+import type { AppearanceView } from '../lib/appearance-view.js';
 
-export function BagItemDialog({ item, onClose, onPlace, inline = false }: {
+export function BagItemDialog({ item, onClose, onPlace, inline = false, appearance }: {
   item: { path: string; filename: string; body: string; frontmatter: Record<string, any> | null };
   onClose: () => void; onPlace?: (path: string) => Promise<boolean>;
   inline?: boolean;
+  /** The verified view inherited from `.object` (04 §:86): the reading layer consumes the
+   *  same resolution and never re-resolves. Optional so an old/absent resolution keeps
+   *  the default paper-reading paint. */
+  appearance?: AppearanceView | null;
 }) {
   const { t } = useLocale();
   const [busy, setBusy] = useState(false);
@@ -28,7 +33,9 @@ export function BagItemDialog({ item, onClose, onPlace, inline = false }: {
     try { await action(); } catch (e) { setError(String(e)); } finally { setBusy(false); }
   };
   const image = item.frontmatter?.image || item.frontmatter?.cover;
-  return <section ref={paper} data-reading data-no-drag className={`paper-reading${inline ? ' paper-reading--inline' : ' paper-reading--carried'}`} role="region" aria-label={String(item.frontmatter?.title || item.filename)} onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+  // Reading layer reuses the same resolution (04 §:86): attrs go on the dialog, and the
+  // token vars are read by the `.paper-reading` CSS with its own legacy fallbacks.
+  return <section ref={paper} data-reading data-no-drag {...appearance?.attrs} style={appearance?.style} className={`paper-reading${inline ? ' paper-reading--inline' : ' paper-reading--carried'}`} role="region" aria-label={String(item.frontmatter?.title || item.filename)} onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
       <header>
         <h2><button onClick={onClose} title={t('Close')}>{item.frontmatter?.title || item.filename}</button></h2>
         <button autoFocus className="paper-reading__fold" aria-label={t('Close')} onClick={onClose}>↙</button>

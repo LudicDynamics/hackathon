@@ -3,6 +3,7 @@ import { BagItemDialog } from '../BagItemDialog.js';
 import { CardRenderer } from './CardRenderer.js';
 import { highlightLinks } from './LinkLayer.js';
 import { chalkStyleOf } from '@airp/shared/forms';
+import { appearanceViewOf } from '../../lib/appearance-view.js';
 import type { LayerItem } from '../../state/useWorld.js';
 import { UserRound } from 'lucide-react';
 import { EntityInteractions } from '../narrative/EntityInteractions.js';
@@ -184,6 +185,9 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   const kind = item.kind;
   const [reading, setReading] = React.useState(false);
   const pointerStart = React.useRef({ x: 0, y: 0 });
+  // Verified resolution → trusted attrs/vars (docs/components/04 §:79). Memoised in the
+  // adapter, so re-renders cost nothing; a missing resolution simply means legacy defaults.
+  const appearance = item.appearance ? appearanceViewOf(item.appearance) : null;
   const readable = kind !== 'sprite' && kind !== 'gate';
   const [isDragOver, setIsDragOver] = React.useState(false);
   const [isItemDragging, setIsItemDragging] = React.useState(false);
@@ -245,9 +249,12 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
       onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) { setFocused(false); highlight(event.currentTarget, false); } }}
       className={`object ink-form${reading ? ' object--reading' : ''}`}
       data-reading={reading ? '' : undefined}
-      style={shellStyle(item, kind, reading)}
+      // Appearance attrs/vars are additive: `shellStyle` still owns position/width/
+      // zIndex/rotation alone (docs/components/04 §:79). Siblings inherit the vars.
+      {...appearance?.attrs}
+      style={{ ...appearance?.style, ...shellStyle(item, kind, reading) }}
     >
-        {reading ? <BagItemDialog inline item={item} onClose={() => setReading(false)} /> : kind === 'portrait' ? (
+        {reading ? <BagItemDialog inline item={item} appearance={appearance} onClose={() => setReading(false)} /> : kind === 'portrait' ? (
           <PortraitFig
             video={item.frontmatter?.video}
             poster={item.frontmatter?.poster}
@@ -277,6 +284,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
         ) : (
           <CardRenderer
             item={item}
+            appearance={appearance}
             index={index}
             onSelectChoice={onSelectChoice}
             onDiceRolled={onDiceRolled}

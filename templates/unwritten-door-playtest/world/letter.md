@@ -3,6 +3,9 @@ type: letter
 title: The sealed envelope
 visual: envelope
 portable: true
+appearance:
+  preset: parchment-letter
+  motion: calm
 choice:
   - Open the envelope
   - Examine the outside

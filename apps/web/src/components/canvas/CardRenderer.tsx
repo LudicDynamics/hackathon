@@ -5,6 +5,7 @@ import { playFoley } from '../../lib/audio.js';
 import { DoorOpen } from 'lucide-react';
 import { useLocale } from '../../lib/i18n.js';
 import { PropCard } from './PropCard.js';
+import type { AppearanceView } from '../../lib/appearance-view.js';
 
 interface CardRendererProps {
   item: {
@@ -13,6 +14,9 @@ interface CardRendererProps {
     frontmatter: Record<string, any> | null;
     body: string;
   };
+  /** The SAME verified view CanvasObject injected into `.object` (04 §:86): the letter
+   *  overlay and PropCard inspect reuse it instead of resolving a second time. */
+  appearance?: AppearanceView | null;
   /** Ordinal of this gate among the layer's gates (Main computes it). */
   index?: number;
   onSelectChoice?: (path: string, choice: string) => void;
@@ -62,6 +66,7 @@ const GatePin: React.FC = () => (
 export const CardRenderer: React.FC<CardRendererProps> = ({
   item,
   index = 1,
+  appearance,
   onSelectChoice,
   onDiceRolled,
   onEnterGate,
@@ -109,14 +114,14 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
   if (frontmatter?.visual === 'envelope' || frontmatter?.visual === 'phone' || frontmatter?.visual === 'door') {
     return <PropCard visual={frontmatter.visual} title={frontmatter.title || filename} body={body}
       image={typeof frontmatter.image === 'string' ? frontmatter.image : undefined}
-      onEnter={frontmatter.type === 'gate' ? () => onEnterGate?.(frontmatter.target) : undefined} />;
+      onEnter={frontmatter.type === 'gate' ? () => onEnterGate?.(frontmatter.target) : undefined} appearance={appearance} />;
   }
 
   if (frontmatter?.type === 'chalk') {
     // Widgets (choice/status/dice) are owned by EntityInteractions on canvas
     // (CanvasObject), so the inline ChalkCard must not also render them — that
     // double-renders. Keep the canvas entity as the single interaction owner.
-    return <ChalkCard item={item} />;
+    return <ChalkCard item={item} appearance={appearance} />;
   }
 
   // 2. Gate Card (sub-scene portal) — a sub-directory's README, the door that
@@ -217,9 +222,16 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
           >
             <div
               className="w-full max-w-lg p-8 text-ink relative"
+              // The SAME verified resolution as the card face (04 §:86,183): the reading
+              // layer never resolves a second time, and absent tokens keep the cream sheet.
+              {...appearance?.attrs}
               style={{
-                background: 'var(--cream)',
+                ...appearance?.style,
+                background: 'var(--appearance-surface, var(--cream))',
+                color: 'var(--appearance-ink, var(--ink))',
+                borderRadius: 'var(--appearance-radius, 3px)',
                 boxShadow: '0 20px 70px rgba(41,40,32,0.25)',
+                fontFamily: 'var(--appearance-font-family, inherit)',
                 transform: 'rotate(-1deg)',
               }}
               onClick={(e) => e.stopPropagation()}

@@ -1,6 +1,12 @@
 ---
 type: chalk
 title: ベイカー街二二一Ｂ · ワトソンの封書
+appearance:
+  font: hand
+  surface: none
+  accent: rust
+  ornament: underline
+  motion: calm
 choice:
   - ワトソンの封書を開く
   - 青い真鍮の蓋を持ち、依頼を引き受ける

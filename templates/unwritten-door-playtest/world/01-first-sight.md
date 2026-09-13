@@ -1,6 +1,12 @@
 ---
 type: chalk
 title: The Cabin
+appearance:
+  font: hand
+  surface: none
+  accent: ink
+  ornament: underline
+  motion: still
 intent: The letter and phone are the only investigative props. Furniture is atmosphere, not extra puzzles. Do not decide the player identity or supernatural explanation in advance.
 ---
 

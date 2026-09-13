@@ -1,7 +1,7 @@
 import { author } from './common.mjs';
 const p = author('whitechapel', 'ホワイトチャペルの手紙 · 体験版', 'あなたはホームズ。描かれた四件目を、まだ起きていない事件のまま止める。');
-p.scene('world', 'ベイカー街二二一Ｂ · ワトソンの封書', 'あなたはシャーロック・ホームズ。窓に映る自分の姿の横で、ワトソンが封書を置く。\n\n「患者との約束は破りたくない。だが今朝、三枚目と同じ事件が起きた。四枚目が印刷所へ渡るのは正午だ」。守りたい相手のため、彼は今ここであなたに頼んでいる。', ['ワトソンの封書を開く', '青い真鍮の蓋を持ち、依頼を引き受ける'], { bg: 'assets/backgrounds/intro.webp', intent: '封書は患者イーディスの信頼を守って調べてほしいという依頼。受諾時に青い真鍮の蓋を player/ へ移す。正午は場面上の圧力で、実時間で放置罰を課さない。' });
-p.note('world/ワトソンの封書.md', '開封を待つ封書', '封にはワトソンの筆跡。「三件目が絵と一致したら、ホームズにだけ見せてほしい」。中には、まだ発表されていない四枚目の挿絵。', { type: 'letter', visual: 'envelope' });
+p.scene('world', 'ベイカー街二二一Ｂ · ワトソンの封書', 'あなたはシャーロック・ホームズ。窓に映る自分の姿の横で、ワトソンが封書を置く。\n\n「患者との約束は破りたくない。だが今朝、三枚目と同じ事件が起きた。四枚目が印刷所へ渡るのは正午だ」。守りたい相手のため、彼は今ここであなたに頼んでいる。', ['ワトソンの封書を開く', '青い真鍮の蓋を持ち、依頼を引き受ける'], { bg: 'assets/backgrounds/intro.webp', intent: '封書は患者イーディスの信頼を守って調べてほしいという依頼。受諾時に青い真鍮の蓋を player/ へ移す。正午は場面上の圧力で、実時間で放置罰を課さない。', appearance: { font: 'hand', surface: 'none', accent: 'rust', ornament: 'underline', motion: 'calm' } });
+p.note('world/ワトソンの封書.md', '開封を待つ封書', '封にはワトソンの筆跡。「三件目が絵と一致したら、ホームズにだけ見せてほしい」。中には、まだ発表されていない四枚目の挿絵。', { type: 'letter', visual: 'envelope', appearance: { surface: 'parchment', accent: 'rust', ornament: 'seal', motion: 'calm' } });
 p.note('world/青い真鍮の蓋.md', '群青の付いた真鍮の蓋', '絵の筒を閉じていた小さな蓋。縁に乾いた群青が残る。ワトソンが患者から預かった。');
 p.scene('world/ロンドンの地図', 'ロンドン · 四枚目の前', '三件目の現場、印刷所、検視室、存在しない通り。ここでは住所が手がかりになる。ワトソンがあなたの歩調を待つ。', [], { bg: 'assets/backgrounds/map.webp', requires: { items: ['player/青い真鍮の蓋.md'] }, blocked: 'まず二二一Ｂで依頼を引き受け、真鍮の蓋を持とう。' });
 for (const [folder, title, body, file, note, asset] of [

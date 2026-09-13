@@ -12,9 +12,11 @@
  * create the other three kinds with a caller-supplied frontmatter.
  */
 import type { WorldEvent } from '../schemas/events.js';
-import { stringifyFrontmatter } from '../schemas/frontmatter.js';
+import { parseFrontmatter, stringifyFrontmatter } from '../schemas/frontmatter.js';
+import { validateAppearanceInput } from '../schemas/appearance.js';
 import { ActionError } from './errors.js';
 import { eventKindOf } from './delete.js';
+import { resolveComponentKind } from '../components/registry.js';
 import { registerAction } from './service.js';
 import { actorLabel } from './actor.js';
 import type { ActionContext, ActionResult } from './types.js';
@@ -99,18 +101,31 @@ export async function createEntity(
       message: `"${path}" already exists; edit it instead of creating over it.`,
     });
   }
-
-  // 3. Assemble and write. A brand-new file needs no atomic write (01 §3.1);
-  //    `already_exists` above guarantees we never clobber.
-  const frontmatter = input.frontmatter ?? {};
+  // 3. Assemble and derive identity before any write. For the whole-file escape
+  // hatch, parse the supplied content so an embedded appearance declaration is
+  // held to the same strict gate as structured frontmatter.
+  const frontmatter =
+    input.content !== undefined ? parseFrontmatter(input.content).frontmatter ?? {} : input.frontmatter ?? {};
+  const filename = path.split('/').pop() ?? path;
+  const semanticKind = resolveComponentKind(frontmatter, filename);
+  if (Object.prototype.hasOwnProperty.call(frontmatter, 'appearance')) {
+    const appearance = validateAppearanceInput(frontmatter.appearance, semanticKind);
+    if (!appearance.ok) {
+      const issue = appearance.issues[0];
+      throw new ActionError({
+        code: 'invalid_argument',
+        message: issue?.message ?? `Invalid appearance for component kind "${semanticKind}".`,
+        details: { issues: appearance.issues },
+      });
+    }
+  }
   const content =
     input.content !== undefined
       ? input.content
       : stringifyFrontmatter(frontmatter, input.body ?? '');
   await ctx.store.writeFile(path, content);
 
-  // 4. Derive identity AFTER the data is known, from the caller's frontmatter.
-  const filename = path.split('/').pop() ?? path;
+  // 4. Derive event identity from the data that will be visible in the file.
   const name = nameOf(frontmatter, path);
   const kind = eventKindOf(frontmatter, filename);
   const layer = await ctx.store.resolveLayer(path);

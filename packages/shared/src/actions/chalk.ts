@@ -20,6 +20,7 @@ import {
   type RollDice,
   type Status,
 } from '../schemas/frontmatter.js';
+import { validateAppearanceInput } from '../schemas/appearance.js';
 import { ActionError, fail } from './errors.js';
 import { dirname } from './refs.js';
 import { registerAction } from './service.js';
@@ -479,10 +480,19 @@ export async function writeChalk(
   if (shape.kind === 'create' && (await store.statKind(shape.layerDir)) !== 'dir') {
     fail('not_found', `layer directory '${shape.layerDir}' does not exist`);
   }
-
-  // ---- 5–6. frontmatter + file text ----
   const fm = buildFrontmatter(input, parsed?.frontmatter ?? null);
   const body = shape.kind === 'append' ? renderAppend(parsed!.body, rawBody) : rawBody.trim();
+  if (Object.prototype.hasOwnProperty.call(fm, 'appearance')) {
+    const appearance = validateAppearanceInput(fm.appearance, 'chalk');
+    if (!appearance.ok) {
+      const issue = appearance.issues[0];
+      throw new ActionError({
+        code: 'invalid_argument',
+        message: issue?.message ?? 'Invalid appearance for component kind "chalk".',
+        details: { issues: appearance.issues },
+      });
+    }
+  }
   const text = stringifyChalkFile(fm, body);
 
   // ---- 7. write (atomic whenever an existing file is rewritten) ----

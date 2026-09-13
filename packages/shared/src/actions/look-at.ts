@@ -23,6 +23,9 @@ import {
 } from '../store/layers.js';
 import type { LayerConfig } from '../schemas/world.js';
 import { parseFrontmatter } from '../schemas/frontmatter.js';
+import { resolveComponentKind } from '../components/registry.js';
+import { resolveAppearance } from '../appearance/resolver.js';
+import type { AppearanceResolution } from '../schemas/appearance.js';
 import { formatInteractiveText } from '../rules/interactive.js';
 import { fail } from './errors.js';
 import { registerAction } from './service.js';
@@ -46,11 +49,19 @@ export interface LookAtInput {
   path?: string | string[];
 }
 
+export interface AppearanceDisplaySummary {
+  font: string;
+  surface: string;
+  accent: string;
+  ornament: string;
+  motion: string;
+}
+
 export interface LookAtDetails {
   /** Normalized paths actually resolved, in output order. */
   paths: string[];
   /** Which rendering each entry used. */
-  entries: Array<{ path: string; mode: 'entity' | 'directory'; title: string }>;
+  entries: Array<{ path: string; mode: 'entity' | 'directory'; title: string; appearance?: AppearanceDisplaySummary }>;
   /** True when at least one entity body was cut by the body cap (doc-03 §5.4). */
   truncated: boolean;
   /** Total characters of `text` — lets a test assert size without re-measuring. */
@@ -120,6 +131,77 @@ function assertSafePath(path: string): void {
   }
 }
 
+const APPEARANCE_DISPLAY_LABELS: Record<string, string> = {
+  serif: 'Serif',
+  hand: 'Handwritten',
+  mono: 'Monospace',
+  none: 'Bare',
+  paper: 'Paper',
+  parchment: 'Parchment',
+  iron: 'Iron',
+  scroll: 'Scroll',
+  panel: 'Panel',
+  board: 'Board',
+  ink: 'Ink',
+  rust: 'Rust',
+  blue: 'Blue',
+  sage: 'Sage',
+  underline: 'Underline',
+  seal: 'Seal',
+  ribbon: 'Ribbon',
+  etched: 'Etched',
+  'route-marks': 'Route marks',
+  rules: 'Rules',
+  ticks: 'Ticks',
+  grid: 'Grid',
+  still: 'Still',
+  calm: 'Calm',
+};
+
+function appearanceDisplayOf(resolution: AppearanceResolution): AppearanceDisplaySummary {
+  const label = (value: string) => APPEARANCE_DISPLAY_LABELS[value] ?? 'Default';
+  return {
+    font: label(resolution.values.font),
+    surface: label(resolution.values.surface),
+    accent: label(resolution.values.accent),
+    ornament: label(resolution.values.ornament),
+    motion: label(resolution.values.motion),
+  };
+}
+
+async function appearanceForEntity(
+  ctx: ActionContext,
+  entityPath: string,
+  fm: Record<string, any> | null
+): Promise<AppearanceResolution> {
+  const manifest = await ctx.store.getManifest();
+  const resolvedLayer = await ctx.store.resolveLayer(entityPath);
+  const layerId =
+    resolvedLayer ??
+    (entityPath.startsWith('characters/') ? entityPath.split('/').slice(0, 2).join('/') :
+      entityPath.startsWith('player/') ? 'player' : MAP_LAYER);
+  let layerMaterial: string | null = null;
+  const readmePath = layerId === 'map' ? 'world/README.md' : `${layerId}/README.md`;
+  try {
+    const readmeFm = parseFrontmatter(await ctx.store.readFile(readmePath)).frontmatter;
+    layerMaterial = typeof readmeFm?.material === 'string' ? readmeFm.material : null;
+  } catch {
+    // Missing README means no layer-local material override.
+  }
+  const kind = resolveComponentKind(fm, entityPath.split('/').pop() ?? entityPath);
+  return resolveAppearance({
+    kind,
+    entityPath,
+    frontmatter: fm,
+    context: {
+      worldId: manifest.id,
+      worldMaterial: typeof manifest.material === 'string' ? manifest.material : null,
+      layerId,
+      layerMaterial,
+    },
+  });
+}
+
 /** A parsed `.md` file, or `null` when the path is not a readable file. */
 interface LoadedFile {
   fm: Record<string, any> | null;
@@ -176,10 +258,20 @@ async function resolveDefaultLayer(ctx: ActionContext): Promise<string> {
 }
 
 /** The entity block: path, title, body, then 06's interactive text (doc-03 §4.1). */
-async function renderEntity(ctx: ActionContext, path: string): Promise<{ text: string; truncated: boolean }> {
+async function renderEntity(
+  ctx: ActionContext,
+  path: string
+): Promise<{ text: string; truncated: boolean; appearance?: AppearanceDisplaySummary }> {
   const loaded = await loadFile(ctx, path);
   if (!loaded) fail('not_found', `Nothing at "${path}" in this world`);
-  return renderEntityBlock(path, loaded.fm, loaded.body, formatInteractiveText(loaded.fm));
+  const rendered = renderEntityBlock(path, loaded.fm, loaded.body, formatInteractiveText(loaded.fm));
+  if (!loaded.fm || !Object.prototype.hasOwnProperty.call(loaded.fm, 'appearance')) return rendered;
+  const appearance = appearanceDisplayOf(await appearanceForEntity(ctx, path, loaded.fm));
+  return {
+    ...rendered,
+    text: `${rendered.text}\n\nAppearance: font=${appearance.font}; surface=${appearance.surface}; accent=${appearance.accent}; ornament=${appearance.ornament}; motion=${appearance.motion}`,
+    appearance,
+  };
 }
 
 /** The directory block: this layer's files + its direct child doors (doc-03 §4.2). */
@@ -237,28 +329,33 @@ export async function lookAt(ctx: ActionContext, input: LookAtInput): Promise<Ac
   // (doc-03 §3.1 step 1 — the same discipline 10 §3.2 step 1 applies).
   const ordered: string[] = [];
   for (const target of targets) {
-    const path = String(target).replace(/\/+$/, '');
-    assertSafePath(path);
-    if (!ordered.includes(path)) ordered.push(path);
+    const targetPath = String(target).replace(/\/+$/, '');
+    assertSafePath(targetPath);
+    if (!ordered.includes(targetPath)) ordered.push(targetPath);
   }
 
   const blocks: string[] = [];
   const entries: LookAtDetails['entries'] = [];
   let truncated = false;
 
-  for (const path of ordered) {
-    const kind = await ctx.store.statKind(path);
-    if (kind === 'missing') fail('not_found', `Nothing at "${path}" in this world`);
+  for (const targetPath of ordered) {
+    const kind = await ctx.store.statKind(targetPath);
+    if (kind === 'missing') fail('not_found', `Nothing at "${targetPath}" in this world`);
     if (kind === 'dir') {
-      const text = await renderDirectory(ctx, path);
+      const text = await renderDirectory(ctx, targetPath);
       blocks.push(text);
-      entries.push({ path, mode: 'directory', title: text.split('\n')[1] ?? path });
+      entries.push({ path: targetPath, mode: 'directory', title: text.split('\n')[1] ?? targetPath });
       continue;
     }
-    const rendered = await renderEntity(ctx, path);
+    const rendered = await renderEntity(ctx, targetPath);
     if (rendered.truncated) truncated = true;
     blocks.push(rendered.text);
-    entries.push({ path, mode: 'entity', title: rendered.text.split('\n')[1] ?? path });
+    entries.push({
+      path: targetPath,
+      mode: 'entity',
+      title: rendered.text.split('\n')[1] ?? targetPath,
+      ...(rendered.appearance ? { appearance: rendered.appearance } : {}),
+    });
   }
 
   const text = blocks.join('\n\n');

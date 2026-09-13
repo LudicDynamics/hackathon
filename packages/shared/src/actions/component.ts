@@ -7,17 +7,44 @@ import {
   listComponents,
   type ComponentDoc,
 } from '../components/registry.js';
+import {
+  APPEARANCE_DIMENSIONS,
+  APPEARANCE_SCHEMA_VERSION,
+  type AppearanceDimension,
+} from '../schemas/appearance.js';
+import { componentAppearanceDocOf } from '../components/appearance-registry.js';
 import type { FieldDoc } from '../components/types.js';
 
 /** Input shape of `get_component` (doc 10 §2.1). */
 export interface GetComponentInput {
   component?: string | string[];
 }
+export interface AppearanceComponentDetails {
+  kind: string;
+  defaults: Record<AppearanceDimension, string>;
+  allowed: Readonly<Record<AppearanceDimension, readonly string[]>>;
+  presets: readonly string[];
+  labels: {
+    kind: string;
+    dimensions: Record<AppearanceDimension, string>;
+    values: Record<string, string>;
+    presets: Record<string, string>;
+  };
+}
+
+export interface AppearanceQueryDetails {
+  schemaVersion: typeof APPEARANCE_SCHEMA_VERSION;
+  dimensions: readonly { id: AppearanceDimension; label: string }[];
+  components: AppearanceComponentDetails[];
+}
 
 export interface GetComponentDetails {
   mode: 'index' | 'full';
   components: ComponentDoc[];
+  /** Appearance is a query surface; ComponentDoc remains semantic-only. */
+  appearance?: AppearanceQueryDetails;
 }
+
 
 /** Total registered kinds — used in the error copy. */
 const KIND_COUNT = Object.keys(COMPONENT_REGISTRY).length;
@@ -30,7 +57,6 @@ function looksLikePath(value: string): boolean {
 function isOneOf(input: string): boolean {
   return Object.prototype.hasOwnProperty.call(COMPONENT_REGISTRY, input);
 }
-
 /** Index line: `note      core      A sticky sheet… [use_item_on target]`. */
 // Two fixed columns, padded so the longest kind (`instrument`) still leaves a
 // gap — a kind id is followed by at least one space before its pack.
@@ -53,9 +79,68 @@ function fieldLine(field: FieldDoc): string {
   const example = field.example ? `  e.g. ${field.example}` : '';
   return `  ${field.name.padEnd(16)}${field.type.padEnd(9)}${field.required ? 'required' : 'optional'}   ${field.desc}${example}`;
 }
+function displayLabel(value: string): string {
+  return value
+    .split('-')
+    .map((word) => word ? word[0].toUpperCase() + word.slice(1) : word)
+    .join(' ');
+}
 
+function appearanceDetailsOf(kind: string): AppearanceComponentDetails | null {
+  const doc = componentAppearanceDocOf(kind);
+  if (!doc) return null;
+  const dimensions = Object.fromEntries(
+    APPEARANCE_DIMENSIONS.map((dimension) => [dimension, displayLabel(dimension)])
+  ) as Record<AppearanceDimension, string>;
+  const values: Record<string, string> = {};
+  for (const dimension of APPEARANCE_DIMENSIONS) {
+    for (const value of doc.allowed[dimension]) values[`${dimension}:${value}`] = displayLabel(value);
+  }
+  const presets = Object.fromEntries(doc.presets.map((preset) => [preset, displayLabel(preset)]));
+  return {
+    kind: doc.kind,
+    defaults: doc.defaults,
+    allowed: doc.allowed,
+    presets: doc.presets,
+    labels: { kind: displayLabel(kind), dimensions, values, presets },
+  };
+}
+
+function appearanceQueryOf(docs: ComponentDoc[], additionalKinds: string[] = []): AppearanceQueryDetails {
+  return {
+    schemaVersion: APPEARANCE_SCHEMA_VERSION,
+    dimensions: APPEARANCE_DIMENSIONS.map((id) => ({ id, label: displayLabel(id) })),
+    components: [...docs.map((doc) => doc.kind), ...additionalKinds]
+      .map((kind) => appearanceDetailsOf(kind))
+      .filter((entry): entry is AppearanceComponentDetails => entry !== null),
+  };
+}
+
+function appearanceOnlyBlock(kind: string): string {
+  const appearance = appearanceDetailsOf(kind)!;
+  return [
+    `[component: ${kind}]`,
+    'Appearance options (semantic ComponentDoc unavailable for this legacy kind)',
+    `schemaVersion: ${APPEARANCE_SCHEMA_VERSION}`,
+    `preset: ${appearance.presets.length ? appearance.presets.join(', ') : 'none'}`,
+    ...APPEARANCE_DIMENSIONS.map((dimension) => `${dimension}: ${appearance.allowed[dimension].join(', ')}`),
+  ].join('\n');
+}
 /** Full-mode block for one kind (doc 10 §2.1 template). */
 function fullBlock(doc: ComponentDoc): string {
+  const appearance = appearanceDetailsOf(doc.kind);
+  const appearanceLines = appearance
+    ? [
+        '',
+        'appearance options',
+        `  schemaVersion: ${APPEARANCE_SCHEMA_VERSION}`,
+        `  preset: ${appearance.presets.length ? appearance.presets.map((id) => `${id} (${displayLabel(id)})`).join(', ') : 'none'}`,
+        ...APPEARANCE_DIMENSIONS.map(
+          (dimension) =>
+            `  ${dimension}: ${appearance.allowed[dimension].map((id) => `${id} (${displayLabel(id)})`).join(', ')}`
+        ),
+      ]
+    : [];
   const lines = [
     `[component: ${doc.kind}]  pack=${doc.pack}`,
     doc.purpose,
@@ -68,6 +153,7 @@ function fullBlock(doc: ComponentDoc): string {
     ...doc.fields
       .filter((f) => f.name !== 'title' && f.name !== 'component')
       .map((f) => fieldLine(f)),
+    ...appearanceLines,
     '',
     'minimal example',
     doc.example,
@@ -99,13 +185,13 @@ export async function getComponent(
 
   if (raw === undefined || raw === null) {
     const docs = listComponents();
-    return { text: indexText(docs), details: { mode: 'index', components: docs } };
+    return {
+      text: indexText(docs),
+      details: { mode: 'index', components: docs, appearance: appearanceQueryOf(docs, ['chalk']) },
+    };
   }
 
   const requested = Array.isArray(raw) ? raw : [raw];
-
-  // E3: a path is not a kind. Checked before existence so the model gets the
-  // "use look_at" hint rather than a generic unknown-kind message.
   const pathLike = requested.filter((k) => typeof k === 'string' && looksLikePath(k));
   if (pathLike.length === 1 && requested.length === 1) {
     fail(
@@ -114,7 +200,6 @@ export async function getComponent(
     );
   }
 
-  // De-duplicate, preserving order (doc 10 §3.2 step 1).
   const seen = new Set<string>();
   const kinds: string[] = [];
   for (const k of requested) {
@@ -127,7 +212,7 @@ export async function getComponent(
     }
   }
 
-  const unknown = kinds.filter((k) => !isOneOf(k));
+  const unknown = kinds.filter((k) => !isOneOf(k) && !componentAppearanceDocOf(k));
   if (unknown.length === 1 && kinds.length === 1) {
     fail(
       'not_found',
@@ -143,8 +228,15 @@ export async function getComponent(
   }
 
   const docs = kinds.map((k) => componentDocOf(k)).filter((d): d is ComponentDoc => d !== null);
-  const text = docs.map(fullBlock).join('\n\n');
-  return { text, details: { mode: 'full', components: docs } };
+  const appearanceOnly = kinds.filter((kind) => !isOneOf(kind));
+  const text = [
+    ...docs.map(fullBlock),
+    ...appearanceOnly.map(appearanceOnlyBlock),
+  ].join('\n\n');
+  return {
+    text,
+    details: { mode: 'full', components: docs, appearance: appearanceQueryOf(docs, appearanceOnly) },
+  };
 }
 
 registerAction('getComponent', (ctx, input) => getComponent(ctx, input as unknown as GetComponentInput));

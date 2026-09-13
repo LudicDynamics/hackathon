@@ -868,6 +868,67 @@ body:before {
   --chalk-size: 19px; /* chalk base size; a form may inline-override */
 }
 
+/* ---- appearance token IDs (docs/components/04 §:104, 01 §2.4) ----
+   The shared registry hands the adapter controlled IDs (`font-hand`, `ink-rust`,
+   `surface-parchment`, `motion-calm`, …); this block is 04's ONE place that gives
+   those IDs concrete paint. The adapter writes `--appearance-X: var(--<id>)`; an
+   ID with no rule here resolves to the declaration's own legacy fallback, so a
+   resolution that never sets a var paints exactly like the pre-appearance build.
+   These mirror the existing kind rules one-to-one — no new palette is invented. */
+:root {
+  /* font axis → the family stacks already used by .chalk / .chalk--hand */
+  --font-serif: var(--kai);
+  --font-hand: 'Caveat', var(--kai);
+  --font-mono: 'DM Mono', monospace;
+
+  /* accent axis → the ink tones frozen in the v2 palette */
+  --ink-ink: var(--ink);
+  --ink-rust: #a9573b;
+  --ink-blue: #3f606c;
+  --ink-sage: #6d7d6b;
+  --muted-ink: var(--muted);
+  --muted-rust: #a9573b;
+  --muted-blue: #3f606c;
+  --muted-sage: #6d7d6b;
+  --border-ink: var(--line);
+  --contrast-readable: var(--ink); /* registry guarantees a readable fg/bg pair */
+
+  /* surface axis → the paper family (none is emitted as literal transparent) */
+  --surface-paper: var(--paper);
+  --surface-parchment: var(--kraft);
+  --surface-iron: #d9d0bf;
+  --surface-scroll: var(--legal);
+  --surface-panel: var(--cream);
+  --surface-board: var(--wall);
+  --border-paper: var(--hair);
+  --border-parchment: var(--hair);
+  --border-iron: var(--hair);
+  --border-scroll: var(--hair);
+  --border-panel: var(--hair);
+  --border-board: var(--hair);
+  --shadow-paper: var(--shadow-mid);
+  --shadow-none: none;
+  --shadow-parchment: var(--shadow-mid);
+  --shadow-iron: var(--shadow-mid);
+  --shadow-scroll: var(--shadow-mid);
+  --shadow-panel: var(--shadow-far);
+  --shadow-board: var(--shadow-mid);
+  --radius-card: 3px;
+
+  /* motion axis → finite durations only (still is emitted as 0s) */
+  --motion-calm: 0.25s;
+
+  /* ornament axis → the fixed hook each decoration branch reads */
+  --ornament-underline: underline;
+  --ornament-seal: seal;
+  --ornament-ribbon: ribbon;
+  --ornament-etched: etched;
+  --ornament-route-marks: route-marks;
+  --ornament-rules: rules;
+  --ornament-ticks: ticks;
+  --ornament-grid: grid;
+}
+
 .ink-form {
   box-sizing: border-box;
   color: var(--ink);
@@ -876,10 +937,12 @@ body:before {
 /* Base chalk root (prototype `.chalk` L112). CardForms may emit the
    bare root plus modifiers, or the `.chalk--bare` bundle directly. */
 .chalk {
-  font-family: var(--kai);
+  /* appearance axes are opt-in: the var is only present when the author chose it,
+     so the legacy `var(--kai)` / `var(--ink)` stays the default paint. */
+  font-family: var(--appearance-font-family, var(--kai));
   font-size: var(--chalk-size);
   line-height: 1.7;
-  color: var(--ink);
+  color: var(--appearance-ink, var(--ink));
   text-shadow: -1px 1px 0 rgba(255, 252, 240, 0.8);
 }
 /* Large CSS zooms make text-shadow repaint the whole transformed glyph layer.
@@ -896,13 +959,20 @@ body:before {
    lets it survive the grain overlay.
    ============================================================ */
 .chalk--bare {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  font-family: var(--kai);
+  /* Default Chalk is TRUE transparent: with no appearance var the fallback is the
+     bare ink surface (docs/components/00 §4, 04 §:104). An explicit `surface` only
+     replaces it when the resolution actually chose one. */
+  background: var(--appearance-surface, transparent);
+  /* Border rides the inset shadow ring, never `border` — a themed card must not
+     grow the shell's measured box (docs/components/04 §:82, footprint contract). */
+  box-shadow:
+    var(--appearance-shadow, none),
+    inset 0 0 0 1px var(--appearance-border, transparent);
+  border-radius: var(--appearance-radius, 0);
+  font-family: var(--appearance-font-family, var(--kai));
   font-size: var(--chalk-size);
   line-height: 1.7;
-  color: var(--ink);
+  color: var(--appearance-ink, var(--ink));
   text-shadow: -1px 1px 0 rgba(255, 252, 240, 0.8); /* warm paper glow */
   white-space: pre-wrap;
   /* Narration hugs its shell: the shell has no fixed height, so long chalk is
@@ -910,9 +980,25 @@ body:before {
   overflow-wrap: anywhere;
 }
 
-/* latin hand — Caveat first, kai as the CJK fallback (hearth L48) */
-.chalk--hand {
-  font-family: 'Caveat', var(--kai);
+/* Controlled ornament hooks: decoration stays additive and cannot change the
+   card's declared footprint. The data attribute is emitted only from the
+   verified appearance resolution. */
+.chalk[data-appearance-ornament="underline"] .chalk__body,
+.object[data-appearance-ornament="underline"] .chalk__body {
+  text-decoration: underline;
+  text-decoration-color: var(--appearance-ink, currentColor);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.object[data-appearance-ornament="ribbon"] .letter__head {
+  border-bottom: 2px solid var(--appearance-ink, var(--rust));
+  padding-bottom: 4px;
+}
+
+.object[data-appearance-ornament="etched"] {
+  outline: 1px solid var(--appearance-border, var(--hair));
+  outline-offset: -4px;
 }
 
 /* oversized chalk line. Prototype is 64px/.12em; the AIRP canvas runs
@@ -972,12 +1058,17 @@ body:before {
 .gate {
   position: relative; /* anchors .gate__pin / .gate__num (and later children) */
   width: 100%; /* the shell owns the width (form table); the card fills it */
-  background: var(--paper);
-  border: 1px solid var(--hair);
-  border-radius: 3px;
-  box-shadow: var(--shadow-mid);
+  /* appearance axes are opt-in: the var exists only when the author chose the
+     axis, so the legacy paper paint is the untouched fallback (04 §:104). */
+  background: var(--appearance-surface, var(--paper));
+  border: 1px solid var(--appearance-border, var(--hair));
+  border-radius: var(--appearance-radius, 3px);
+  box-shadow: var(--appearance-shadow, var(--shadow-mid));
+  font-family: var(--appearance-font-family, inherit);
   cursor: pointer;
-  transition: box-shadow 0.25s ease, transform 0.25s ease;
+  transition:
+    box-shadow var(--appearance-motion-duration, 0.25s) ease,
+    transform var(--appearance-motion-duration, 0.25s) ease;
 }
 
 .gate:hover {
@@ -1107,19 +1198,19 @@ body:before {
   box-shadow: var(--shadow-far);
 }
 
-/* ============================================================
-   3. note — memo pad (prototype `.note` L119-131)
-   ============================================================ */
 .note {
   position: relative; /* anchors .note__clip */
   width: 100%; /* fills the shell; the form table is the one width source */
   padding: 14px 16px 18px;
-  background: var(--note-yellow);
-  border-radius: 2px;
-  box-shadow: var(--shadow-mid);
+  /* appearance axes are opt-in: the var exists only when the author chose the
+     axis, so the legacy memo-pad paint is the untouched fallback (04 §:104). */
+  background: var(--appearance-surface, var(--note-yellow));
+  border-radius: var(--appearance-radius, 2px);
+  box-shadow: var(--appearance-shadow, var(--shadow-mid));
+  font-family: var(--appearance-font-family, inherit);
   font-size: 13.5px;
   line-height: 1.8;
-  color: var(--ink-2);
+  color: var(--appearance-muted, var(--ink-2));
   /* ruled paper: one hairline every 27px */
   background-image: repeating-linear-gradient(0deg, transparent 0 27px, rgba(43, 33, 23, 0.05) 27px 28px);
 }
@@ -1140,8 +1231,8 @@ body:before {
 
 .note__title {
   font-weight: 700;
-  color: var(--ink);
-  border-bottom: 1px solid #a8362b; /* red pen underline */
+  color: var(--appearance-ink, var(--ink));
+  border-bottom: 1px solid var(--appearance-ink, #a8362b); /* red pen underline */
   padding-bottom: 1px;
 }
 
@@ -1157,12 +1248,17 @@ body:before {
   position: relative;
   width: 100%;
   padding: 16px 18px;
-  background: var(--paper);
-  border: 1px solid var(--hair);
-  border-radius: 2px;
-  box-shadow: var(--shadow-mid);
+  /* appearance axes are opt-in: the var exists only when the author chose the
+     axis, so the legacy paper sheet is the untouched fallback (04 §:104). */
+  background: var(--appearance-surface, var(--paper));
+  border: 1px solid var(--appearance-border, var(--hair));
+  border-radius: var(--appearance-radius, 2px);
+  box-shadow: var(--appearance-shadow, var(--shadow-mid));
+  font-family: var(--appearance-font-family, inherit);
   cursor: pointer;
-  transition: box-shadow 0.25s ease, transform 0.25s ease;
+  transition:
+    box-shadow var(--appearance-motion-duration, 0.25s) ease,
+    transform var(--appearance-motion-duration, 0.25s) ease;
 }
 
 .letter:hover {
@@ -1170,13 +1266,14 @@ body:before {
   transform: translateY(-2px) rotate(0.4deg);
 }
 
-/* wax seal: a rust dot, pressed not printed */
+/* wax seal: a rust dot, pressed not printed. The accent axis recolours it; the
+   `seal` ornament is a separate hook and never changes this element's meaning. */
 .letter__seal {
   flex: none;
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  background: var(--rust);
+  background: var(--appearance-ink, var(--rust));
   box-shadow: inset -1px 1px 2px rgba(43, 33, 23, 0.35);
 }
 
@@ -1184,6 +1281,7 @@ body:before {
   display: flex;
   align-items: center;
   gap: 9px;
+  font-family: var(--appearance-font-family, inherit);
   font-size: 16px;
   letter-spacing: 0.05em;
 }
@@ -1201,9 +1299,9 @@ body:before {
 
 .letter__meta {
   margin-top: 10px;
-  font-family: 'DM Mono', monospace;
+  font-family: var(--appearance-font-family, 'DM Mono', monospace);
   font-size: 10px;
-  color: var(--muted);
+  color: var(--appearance-muted, var(--muted));
 }
 
 /* ============================================================
