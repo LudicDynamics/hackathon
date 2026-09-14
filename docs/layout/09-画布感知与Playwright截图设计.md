@@ -304,14 +304,14 @@ export function useWorld(options?: UseWorldOptions): UseWorldApi; // NEW
 3. 用真实 row x/y/w/h/z 计算全层 overlaps；rowless 进 unplaced，不补坐标。漏掉会把长 Chalk/未落座误报干净。
 4. 返回英文摘要 +完整 snapshot，无文件/DB/history/WS 写入。漏掉会让 Agent 无法区分读与整理成功。
 
-### 6.2 image
+### 6.2 screenshot_canvas
 
 1. 先 summary 得到 snapshot identity，再校验 image 参数/capability；否则无法绑定读窗口或模型看不见图。
 2. 内部 HTTP 请求携带 worldId/layer/snapshotId/viewport/region，route 校验 active world/origin/auth；否则会跨 world/SSRF。
 3. 串行 gate 打开同源 read-only 页面，等 ready/layer/snapshot/geometry；否则截 loading/旧层/未 settle 字体。
 4. 截 Canvas surface、读取 evidence、finally close；否则浏览器/cookie 泄漏或 gate 卡死。
 5. after snapshot 变化：一次重试仍变则返回独立 conflict（HTTP 409/details conflict），不是 failed/cancelled；否则返回 image + identity。
-6. B 写入后必须重新 snapshot；E/复核器对全层 rows 做 AABB。截图仅辅助读图，不能完成安排。
+6. B 写入后必须重新 snapshot；E/服务端对全层 rows 做 AABB。截图仅辅助读图，不能完成安排。
 
 ## 7. 输入输出副作用、资源边界
 

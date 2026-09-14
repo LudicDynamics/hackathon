@@ -335,7 +335,7 @@ export class CanvasArrangerRuntime { // NEW
   constructor(options: CanvasArrangerRuntimeOptions);
   start(request: CanvasArrangeRequest): Promise<CanvasArrangeAccepted>;
   get(operationId: string): CanvasArrangerOperation | null;
-  cancel(operationId: string): Promise<{ operationId: string; accepted: boolean }>;
+  cancel(operationId: string): Promise<{ ok: true; operationId: string; requestId: string; worldId: string; layer: string; stage: 'cancel_requested' | 'already_completed' | 'already_cancelled' }>;
   stopAll(): Promise<void>;
 }
 ```
