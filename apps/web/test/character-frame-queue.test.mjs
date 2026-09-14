@@ -53,15 +53,49 @@ test('idle, error, and abort remain ordered terminal barriers', { skip }, () => 
   assert.deepEqual(q.drainUntil('nanami').map((frame) => frame.type), ['character_idle', 'error', 'turn_aborted']);
 });
 
-test('delivery gaps do not reorder later frames, and duplicate sequence is dropped', { skip }, () => {
+test('delivery gaps emit an observable failure, clear buffered frames, and block silent continuation', { skip }, () => {
   const q = queue();
+  const events = [];
+  q.subscribe((event) => {
+    if (event) events.push(event);
+  });
   q.enqueue(delta('nanami', 'first'), 10);
-  q.enqueue(delta('nanami', 'duplicate'), 10);
-  q.enqueue(message('nanami', 'authoritative'), 12);
-  assert.deepEqual(q.drainUntil('nanami').map((frame) => frame.delta ?? frame.text), ['first', 'authoritative']);
-  // Duplicate suppression survives a drain; a retransmit cannot replay text.
-  q.enqueue(delta('nanami', 'replay'), 10);
+  q.enqueue(delta('nanami', 'missing'), 12);
   assert.deepEqual(q.drainUntil('nanami'), []);
+  assert.equal(q.peek(), null);
+  assert.deepEqual(events.map((event) => event.kind), ['gap']);
+  assert.equal(events[0].expectedSeq, 11);
+  assert.equal(events[0].receivedSeq, 12);
+  // Frames after a gap do not silently append until the integrator resets.
+  q.enqueue(message('nanami', 'authoritative'), 13);
+  assert.deepEqual(q.drainUntil('nanami'), []);
+  q.clear('gap');
+  q.enqueue(message('nanami', 'authoritative'), 1);
+  assert.deepEqual(q.drainUntil('nanami').map((frame) => frame.text), ['authoritative']);
+});
+
+test('unsequenced legacy frames preserve arrival order and report unavailable sequence', { skip }, () => {
+  const q = queue();
+  const events = [];
+  q.subscribe((event) => {
+    if (event) events.push(event);
+  });
+  q.enqueue(delta('nanami', 'a'), null);
+  q.enqueue(delta('nanami', 'b'));
+  assert.deepEqual(q.drainUntil('nanami').map((frame) => frame.delta), ['a', 'b']);
+  assert.equal(events.filter((event) => event.kind === 'sequence-unavailable').length, 1);
+});
+
+test('barrier drain stops at message while legacy character drain remains compatible', { skip }, () => {
+  const q = queue();
+  q.enqueue(delta('nanami', 'a'), 1);
+  q.enqueue(message('nanami', 'a'), 2);
+  q.enqueue(delta('nanami', 'b'), 3);
+  assert.deepEqual(q.drainUntil('character_message').map((frame) => frame.type), [
+    'character_delta',
+    'character_message',
+  ]);
+  assert.equal(q.peek()?.delta, 'b');
 });
 
 test('invalid or unassigned frames never enter the queue', { skip }, () => {
