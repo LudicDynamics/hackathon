@@ -17,7 +17,7 @@
  * - Overlap is resolved per RESOURCE KEY: the two dimming shows share one
  *   veil, so the newest takes over; every other show runs alongside (§3.5).
  */
-import React, { useEffect, useReducer, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useReducer, useRef } from 'react';
 import type { ShowFrame } from '@airp/shared';
 import type { OverlayAdmission } from '../../lib/overlay-admission.js';
 import {
@@ -36,7 +36,7 @@ import { playBurst } from '../canvas/ParticleLayer.js';
 import { hashInt, worldTransform } from '../../lib/camera.js';
 import { useCamera, type CameraApi } from '../../state/useCamera.js';
 import { useStill } from '../../lib/motion.js';
-import { audioDebugState, playFoley, setAmbient } from '../../lib/audio.js';
+import { audioDebugState, beginTransientAmbientCut, playFoley } from '../../lib/audio.js';
 
 /* ============================ module store ============================ */
 
@@ -45,6 +45,7 @@ interface ActiveShow {
   id: number;
   component: string;
   resourceKey: string;
+  epoch: number;
   startedAt: number;
   durationMs: number;
   cleanup: () => void;
@@ -63,10 +64,10 @@ interface ShowCtx {
   /** App-owned admission seam; absent keeps existing callers compatible. */
   admission?: OverlayAdmission;
 }
-
 let active: ActiveShow[] = [];
 const listeners = new Set<() => void>();
 let seq = 0;
+let showEpoch = 0;
 let liveCtx: ShowCtx | null = null;
 
 function notify(): void {
@@ -91,6 +92,7 @@ export function activeShow(): Readonly<ActiveShow[]> {
  * Not a per-show cancel — no performance survives a layer change.
  */
 export function cancelShow(_reason?: string): void {
+  showEpoch += 1;
   for (const s of active) s.cleanup();
   active = [];
   notify();
@@ -142,14 +144,20 @@ function cardCenter(
    (target card off-layer, or a decorator skipped under reduced motion). */
 
 /** Warm beam tints accepted for `spotlight.tone`; anything else → default. */
+/** Tone names map to canonical CSS paint tokens; state/show code does not own
+ * a second visual palette. */
 const BEAM_TONES: Record<string, string> = {
-  warm: 'rgba(235, 205, 140, 0.55)',
-  gold: 'rgba(235, 205, 140, 0.55)',
-  amber: 'rgba(214, 150, 74, 0.55)',
-  cold: 'rgba(180, 205, 225, 0.5)',
-  blue: 'rgba(120, 147, 162, 0.5)',
+  warm: 'var(--ux-color-cream)',
+  gold: 'var(--ux-color-cream)',
+  amber: 'var(--ux-color-rust)',
+  cold: 'var(--ux-color-blue)',
+  blue: 'var(--ux-color-blue)',
 };
-const BEAM_DEFAULT = 'rgba(235, 205, 140, 0.55)';
+const BEAM_DEFAULT = 'var(--ux-color-cream)';
+function fullGateOpen(ctx: ShowCtx): boolean {
+  return !ctx.hidden && ctx.effectsEnabled && !ctx.still;
+}
+
 
 /**
  * `spotlight` — full-canvas dim plus a warm beam over `target` (§3.3).
@@ -159,6 +167,7 @@ const BEAM_DEFAULT = 'rgba(235, 205, 140, 0.55)';
  * only one `'dim'` show alive.
  */
 function showSpotlight(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
+  if (!fullGateOpen(ctx)) return null;
   const params = frame.params ?? {};
   const target = cardCenter(ctx, frame.target);
   if (!target) {
@@ -191,7 +200,8 @@ function showSpotlight(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
  * the card's `className` is React-owned, so a foreign class would be wiped by
  * the next card re-render, and injected children corrupt reconciliation.
  */
-function showLightsOut(frame: ShowFrame, ctx: ShowCtx): () => void {
+function showLightsOut(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
+  if (!fullGateOpen(ctx)) return null;
   const params = frame.params ?? {};
   const veil = makeDiv('show-dim');
   veil.style.setProperty('--show-dim', String(lightsOutDim(numParam(params, 'dim'))));
@@ -210,15 +220,15 @@ function showLightsOut(frame: ShowFrame, ctx: ShowCtx): () => void {
     ctx.root.appendChild(lift);
   }
 
-  // Cut the ambient bed low; restore what was declared before (§4.5). BGM is
-  // owned by App's layer mood — never touched here.
+  // Cut only the ambient owner; the lease restores the same declared ref if
+  // no newer layer/ref has taken ownership.
   const prevAmbient = audioDebugState().ambient;
-  setAmbient(null);
+  const ambientCut = beginTransientAmbientCut(prevAmbient, 0);
 
   return () => {
     veil.remove();
     lift?.remove();
-    setAmbient(prevAmbient);
+    ambientCut.release();
   };
 }
 
@@ -227,14 +237,7 @@ function showLightsOut(frame: ShowFrame, ctx: ShowCtx): () => void {
  * Purely decorative, so it is skipped when effects are off, hidden, or reduced.
  */
 function showFireworks(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
-  if (
-    ctx.still ||
-    ctx.hidden ||
-    !ctx.effectsEnabled ||
-    (typeof document !== 'undefined' && document.hidden)
-  ) {
-    return null;
-  }
+  if (!fullGateOpen(ctx)) return null;
   const params = frame.params ?? {};
   const cancel = playBurst({
     color: strParam(params, 'color'),
@@ -245,7 +248,6 @@ function showFireworks(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
   playFoley('crit-chime');
   return cancel;
 }
-
 /**
  * `evidence_burst` — a temporary thread from each link card to `target`.
  *
@@ -254,9 +256,8 @@ function showFireworks(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
  * written to `canvas.db` — they are performed, not stored (§5, §12.2).
  */
 function showEvidenceBurst(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
+  if (!fullGateOpen(ctx)) return null;
   const params = frame.params ?? {};
-  // Threads are drawn inside the world transform layer, so their endpoints must
-  // be WORLD coords (`cardGeometry`), not the screen px the veil/beam use.
   const targetBox = frame.target ? cardGeometry(frame.target) : null;
   const paths = evidenceLinks(frame);
   if (!targetBox || paths.length === 0) {
@@ -268,7 +269,7 @@ function showEvidenceBurst(frame: ShowFrame, ctx: ShowCtx): (() => void) | null 
   const tx = targetBox.x + targetBox.w / 2;
   const ty = targetBox.y + targetBox.h / 2;
 
-  const color = strParam(params, 'color') ?? 'var(--rust)';
+  const color = strParam(params, 'color') ?? 'var(--ux-color-rust)';
   const stagger = clampStagger(numParam(params, 'staggerMs'));
 
   const layer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -317,9 +318,7 @@ function showEvidenceBurst(frame: ShowFrame, ctx: ShowCtx): (() => void) | null 
  * speed is the shared camera's `LERP_K`, which this layer must not touch.
  */
 function showCameraFocus(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
-  // Reduced motion skips the whole show: a camera flight is a motion stimulus
-  // and `useCamera` has no instant entry (§3.7).
-  if (ctx.still) return null;
+  if (!fullGateOpen(ctx)) return null;
   // flyTo takes WORLD coords (the card's own space), not screen px.
   const target = frame.target ? cardGeometry(frame.target) : null;
   if (!target) {
@@ -342,6 +341,7 @@ function showCameraFocus(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
  * as `lights_out`'s lift).
  */
 function showInkBurst(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
+  if (!fullGateOpen(ctx)) return null;
   const target = cardCenter(ctx, frame.target);
   if (!target) {
     console.warn('[show_frame] ink_burst target not on this layer', frame.target);
@@ -357,9 +357,7 @@ function showInkBurst(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
   const tone = inkToneOf(params);
   if (tone) splash.setAttribute('data-tone', tone);
   ctx.root.appendChild(splash);
-
   playFoley('pen-scratch');
-
   return () => {
     splash.remove();
   };
@@ -371,6 +369,7 @@ function showInkBurst(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
  * (`dice_result`), and this show's schema carries no result (§3.3).
  */
 function showRollCeremony(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
+  if (!fullGateOpen(ctx)) return null;
   const admission = ctx.admission?.request('dice', 'workspace');
   if (admission?.accepted === false) {
     console.warn('[show_frame] roll_ceremony rejected by overlay admission', admission.code);
@@ -442,6 +441,7 @@ export function performShowFrame(
   const ctx = injectedAdmission
     ? { ...liveCtx, admission: injectedAdmission }
     : liveCtx;
+  const epoch = showEpoch;
   const full = f as ShowFrame;
   const key = ruleKeyOf(kind);
 
@@ -449,6 +449,10 @@ export function performShowFrame(
   // resources keep running side by side (§3.5). Render first so a rejected or
   // target-missing frame does not tear down a valid running show.
   const cleanup = SHOW_RENDERERS[kind](full, ctx);
+  if (epoch !== showEpoch) {
+    cleanup?.();
+    return false;
+  }
   if (!cleanup) return false;
   for (const s of active) {
     if (s.resourceKey === key) s.cleanup();
@@ -472,6 +476,7 @@ export function performShowFrame(
       id,
       component: kind,
       resourceKey: key,
+      epoch,
       startedAt: performance.now(),
       durationMs: full.durationMs,
       cleanup: () => {
@@ -487,7 +492,7 @@ export function performShowFrame(
   const delay = Number.isFinite(full.durationMs) ? full.durationMs : 0;
   setTimeout(() => {
     const mine = active.find((s) => s.id === id);
-    if (!mine) return;
+    if (!mine || mine.epoch !== showEpoch) return;
     mine.cleanup();
     active = active.filter((s) => s.id !== id);
     notify();
@@ -532,15 +537,37 @@ export const PerformanceLayer: React.FC<PerformanceLayerProps> = ({
     hidden ?? (typeof document !== 'undefined' && document.hidden);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [, force] = useReducer((n: number) => n + 1, 0);
+  const unmountingRef = useRef(false);
+  const ownerRef = useRef<ShowCtx | null>(null);
 
   useEffect(() => subscribeActiveShow(force), []);
 
-  // Publish the render context for the dispatcher; admission is supplied by
-  // the host rather than stored as another document-level singleton.
+  // Keep the sole DOM listener tied to the stable host, not to changing
+  // projection inputs. Layout cleanup removes it before the context cleanup
+  // can clear a replacement context.
+  useLayoutEffect(() => {
+    unmountingRef.current = false;
+    const onShowFrame = (e: Event) => {
+      performShowFrame((e as CustomEvent).detail);
+    };
+    window.addEventListener('airp:show-frame', onShowFrame);
+    return () => {
+      unmountingRef.current = true;
+      window.removeEventListener('airp:show-frame', onShowFrame);
+      cancelShow('performance-unmount');
+      const owner = ownerRef.current;
+      if (owner && liveCtx === owner) liveCtx = null;
+      if (ownerRef.current === owner) ownerRef.current = null;
+    };
+  }, []);
+
+  // Context replacement is the projection/lifecycle boundary. It cancels
+  // transient DOM, timers, camera subscriptions and temporary audio before
+  // the next stage identity can receive a frame.
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    liveCtx = {
+    const ctx: ShowCtx = {
       root,
       camera,
       still,
@@ -548,23 +575,16 @@ export const PerformanceLayer: React.FC<PerformanceLayerProps> = ({
       effectsEnabled,
       admission,
     };
+    liveCtx = ctx;
+    ownerRef.current = ctx;
     return () => {
-      liveCtx = null;
+      if (unmountingRef.current) return;
+      if (liveCtx !== ctx) return;
+      cancelShow('performance-context-replaced');
+      if (liveCtx === ctx) liveCtx = null;
+      if (ownerRef.current === ctx) ownerRef.current = null;
     };
-  }, [camera, still, hiddenState, effectsEnabled, admission]);
-
-  useEffect(() => {
-    const onShowFrame = (e: Event) => {
-      performShowFrame((e as CustomEvent).detail);
-    };
-    window.addEventListener('airp:show-frame', onShowFrame);
-    return () => {
-      window.removeEventListener('airp:show-frame', onShowFrame);
-      cancelShow();
-    };
-  }, []);
-
-  useEffect(() => () => cancelShow(), [layer, frozen]);
+  }, [camera, still, hiddenState, effectsEnabled, admission, layer, frozen]);
 
   return (
     <div

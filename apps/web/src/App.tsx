@@ -15,6 +15,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExtern
 import { Canvas } from './components/canvas/Canvas.js';
 import { CharacterModal } from './components/overlay/CharacterModal.js';
 import { DiceCeremony } from './components/performance/DiceCeremony.js';
+import { GateThreshold } from './components/performance/GateThreshold.js';
 import { PerformanceLayer } from './components/performance/PerformanceLayer.js';
 import {
   parseDiceFrame,
@@ -45,7 +46,16 @@ import { MuteButton } from './components/chrome/MuteButton.js';
 import { useAudio } from './state/useAudio.js';
 import { useCamera } from './state/useCamera.js';
 import { useWorld } from './state/useWorld.js';
-import type { EnterLayerResult } from './state/useWorld.js';
+import type { EnterLayerOutcome } from './state/useWorld.js';
+import {
+  ActionFeedbackProvider,
+  canonicalActionKey,
+  createActionFeedbackCoordinator,
+  type ActionFeedback,
+  type ActionIntent,
+  type ActionResultLike,
+  type ReconcileReceipt,
+} from './lib/action-feedback.js';
 import { CharacterRail } from './components/sidebar/CharacterRail.js';
 import { usePresence } from './state/usePresence.js';
 import { airpGateway, onWorldUnavailable, AirpRequestError, type AssetMediaKind, type WorldShelf } from './lib/airp-gateway.js';
@@ -58,6 +68,7 @@ import { initialShell, transitionShell } from './lib/ui-shell.mjs';
 import { MarkdownText } from './lib/md.js';
 import { BookOpen, ChevronDown, ChevronUp, Maximize, Minimize, UserRound, Backpack, Sparkles } from 'lucide-react';
 import { preloadAudio } from './lib/audio.js';
+import { mediaReadiness } from './lib/media-readiness.js';
 import { useStill } from './lib/motion.js';
 import { createFocusCoordinator, type FocusOwner } from './lib/focus-coordinator.js';
 import { createOverlayAdmission } from './lib/overlay-admission.js';
@@ -136,6 +147,16 @@ function assetUrl(path?: string, mediaKind: AssetMediaKind = 'image'): string | 
   }
   if (/^(?:https?:|data:|blob:)/.test(path)) return path;
   return airpGateway.assetUrl(path.replace(/^\/+/, ''), undefined, mediaKind);
+}
+function isTextEditingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName.toLowerCase();
+  if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') return true;
+  return target.closest('[contenteditable]:not([contenteditable="false"]),button,a,[role="switch"]') !== null;
+}
+
+function isComposingEscape(event: KeyboardEvent): boolean {
+  return event.isComposing === true || event.keyCode === 229;
 }
 
 function sceneName(manifest: WorldManifest | null, layer: string): string {
@@ -248,10 +269,19 @@ export function App() {
   const frameQueue = useMemo(() => getCharacterFrameQueue(), []);
 
   // Dice ceremony (presentation channel, docs/perform/02): the fullscreen roll
-  // driven by the `dice_result` frame. Module store (lib/dice-ceremony.ts) so
-  // the WS listener need not thread the verdict through React state; App is
-  // only the mount point.
+  // driven by the `dice_result` frame. Module store ... App is only mount.
   const ceremony = useSyncExternalStore(subscribeCeremony, getCeremonySnapshot);
+  useEffect(() => {
+    if (!ceremony && !diceAdmissionRef.current) return;
+    const lease = focusCoordinator.registerSurface({
+      key: 'dice-ceremony',
+      owner: 'workspace',
+      priority: 310,
+      root: null,
+      close: clearAdmittedCeremony,
+    });
+    return () => lease.unregister();
+  }, [ceremony, clearAdmittedCeremony, focusCoordinator]);
 
   const camera = useCamera();
   const { setAmbient, setBGM, setTheme } = useAudio();
@@ -259,6 +289,32 @@ export function App() {
   // Canvas world state (layer payload, WS events, card persistence).
   const world = useWorld();
   const { state, layer, enterLayer, refresh, moveCard, sendToWriter, sendMessage } = world;
+  const actionRequestResolver = useCallback(async <TDetails,>(intent: ActionIntent, signal: AbortSignal): Promise<ActionResultLike<TDetails>> => {
+    try {
+      if (intent.verb === 'present' && intent.item && intent.target) {
+        const details = await airpGateway.useItem(intent.item, intent.target, signal);
+        return { ok: true, ...details } as unknown as ActionResultLike<TDetails>;
+      }
+      if (intent.verb === 'choice' && intent.target && intent.choice !== undefined) {
+        const details = await airpGateway.choose(intent.target, intent.choice, signal);
+        return { ok: true, ...details } as unknown as ActionResultLike<TDetails>;
+      }
+      if ((intent.verb === 'take' || intent.verb === 'drop' || intent.verb === 'move') && intent.from && intent.to) {
+        const details = await airpGateway.move(intent.from, intent.to, signal);
+        return { ok: true, ...details } as unknown as ActionResultLike<TDetails>;
+      }
+      return { ok: false, code: 'invalid_argument', error: 'The action parameters are incomplete.' } as ActionResultLike<TDetails>;
+    } catch (error) {
+      return { ok: false, error } as ActionResultLike<TDetails>;
+    }
+  }, []);
+  // One coordinator belongs to the currently active world. A new manifest
+  // identity gets a fresh context, so late work from the previous world can
+  // never publish into the new projection.
+  const actionCoordinator = useMemo(() => createActionFeedbackCoordinator(actionRequestResolver), [actionRequestResolver, manifest?.id]);
+  useEffect(() => {
+    if (manifest?.id) actionCoordinator.reset(manifest.id);
+  }, [actionCoordinator, manifest?.id]);
   const arrangeControlRef = useRef<CanvasArrangeControlHandle>(null);
   useEffect(() => {
     worldEventToastStore.setProjectId(manifest?.id ?? null);
@@ -274,6 +330,7 @@ export function App() {
     }
   }, [activeCharacter, cameraStack, layer, nookChar]);
   const callerProjectionRef = useRef<ProjectionTarget | null>(null);
+  const projectionTransitionRef = useRef<{ epoch: number; nook: string | null }>({ epoch: 0, nook: null });
   const chromeVisible = !shell.immersive;
   const isDusk = backdropReady;
 
@@ -289,12 +346,31 @@ export function App() {
   const openPrivateSpace = useCallback((characterId: string) => {
     // Dialogue and rail use one App-owned transition. Closing an active
     // dialogue first restores its caller projection, then this transition
-    // pushes the private-space target without asking either child to own
-    // camera, focus, or fetching.
+    // pushes the private-space target without asking either child to own camera.
+    if (!characterId) return;
+    const nextEpoch = projectionTransitionRef.current.epoch + 1;
+    projectionTransitionRef.current = { epoch: nextEpoch, nook: characterId };
     if (activeCharacter) closeCharacterRef.current();
-    const caller: ProjectionTarget = nookChar
+    if (nookChar === characterId) {
+      // Closing dialogue temporarily borrows callerProjectionRef; restore the
+      // Nook's underlying layer caller before leaving this transition.
+      if (!callerProjectionRef.current) callerProjectionRef.current = projectionTarget('layer', layer);
+      return;
+    }
+
+    // Replacing one Nook with another must unwind the old top frame first.
+    // Keeping A→B as nested frames would make closing B restore A and then
+    // unmount the stage, leaving the camera pointed at a non-active root.
+    let caller: ProjectionTarget = nookChar
       ? projectionTarget('nook', nookChar)
       : projectionTarget('layer', layer);
+    if (nookChar) {
+      const frame = cameraStack.popTransition(caller);
+      if (frame) {
+        cameraStack.restoreProjection(frame);
+        caller = frame.caller;
+      }
+    }
     const target = projectionTarget('nook', characterId);
     cameraStack.pushTransition(target);
     cameraStack.restoreTarget(target);
@@ -308,16 +384,20 @@ export function App() {
   }, [activeCharacter, cameraStack, frameQueue, layer, nookChar]);
 
   const closeNook = useCallback(() => {
+    // A stale Back handler from a replaced Nook must not pop a newer camera frame.
+    const transition = projectionTransitionRef.current;
+    if (nookChar === null || transition.nook !== nookChar) return;
+    projectionTransitionRef.current = { epoch: transition.epoch + 1, nook: null };
     const caller = callerProjectionRef.current;
+    callerProjectionRef.current = null;
     if (caller) {
       const frame = cameraStack.popTransition(caller);
       if (frame) cameraStack.restoreProjection(frame);
     }
-    callerProjectionRef.current = null;
     frameQueue.clear('close');
     setNookChar(null);
     void refresh();
-  }, [cameraStack, callerProjectionRef, frameQueue, refresh]);
+  }, [cameraStack, frameQueue, nookChar, refresh]);
   const notify = useCallback((message: string) => {
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
     setToast(message);
@@ -325,19 +405,6 @@ export function App() {
       toastTimer.current = null;
       setToast(null);
     }, 3000);
-  }, []);
-  // Workspace disclosures own their open state, but the App remains the
-  // top-level Escape router. Clicking the disclosure trigger preserves the
-  // component's cleanup and returns focus to the control that opened it.
-  const closeWorkspaceDisclosure = useCallback((): boolean => {
-    const active = document.activeElement as HTMLElement | null;
-    const owner = active?.closest<HTMLElement>('.agent-settings, .agent-activity-log');
-    if (!owner) return false;
-    const trigger = owner.querySelector<HTMLButtonElement>('button[aria-expanded="true"]');
-    if (!trigger) return false;
-    trigger.click();
-    window.requestAnimationFrame(() => trigger.focus());
-    return true;
   }, []);
   useEffect(() => { syncFocus('world-shelf', worldPickerOpen); }, [syncFocus, worldPickerOpen]);
   useEffect(() => { syncFocus('nook', nookChar !== null); }, [nookChar, syncFocus]);
@@ -394,8 +461,9 @@ export function App() {
    * already surfaced by `airp:gate-feedback` / `airp:notice` in `useWorld`.
    */
   const applyFollowFailures = useCallback(
-    (result: EnterLayerResult | null) => {
-      if (!result?.followers?.failures?.length) return;
+    (result: EnterLayerOutcome | null) => {
+      const details = result?.kind === 'accepted' ? result.details : null;
+      if (!details?.followers?.failures?.length) return;
       notify(t('Some of the party could not follow you.'));
     },
     [notify, t]
@@ -551,81 +619,93 @@ export function App() {
     setBGM(null);
     setTheme(LAUNCHER_THEME);
   }, [launcherOpen, setAmbient, setBGM, setTheme]);
-
   useEffect(() => {
     const src = state?.bg?.src;
-    if (!src || loadingWorld) return;
-    const probe = new Image();
-    probe.onload = () => setBackdropReady(true);
-    probe.onerror = () => setBackdropReady(false);
-    probe.src = airpGateway.assetUrl(src, undefined, 'image');
-    return () => {
-      probe.onload = null;
-      probe.onerror = null;
-    };
-  }, [state?.bg?.src, manifest?.id, loadingWorld]);
+    if (!src || loadingWorld) {
+      setBackdropReady(false);
+      return;
+    }
+    const imageUrl = airpGateway.assetUrl(src, undefined, 'image');
+    const sync = () => setBackdropReady(mediaReadiness.snapshot('background', imageUrl).state === 'ready');
+    sync();
+    return mediaReadiness.subscribe(sync);
+  }, [state?.bg?.src, loadingWorld]);
+
+  const dispatchEscape = useCallback((event: KeyboardEvent): boolean => {
+    if (event.key !== 'Escape' || isComposingEscape(event) || event.defaultPrevented) return false;
+
+    if (arrangeControlRef.current?.isFocused() && arrangeControlRef.current.cancel()) {
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    }
+
+    const surface = focusCoordinator.closeTopmostSurface();
+    if (surface) {
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    }
+
+    const topmost = focusCoordinator.peek();
+    if (topmost) {
+      const entry = focusCoordinator.handleEscape();
+      // A closing surface retains its owner until its commit/unmount. Consume
+      // another Escape during that window without falling through to parent.
+      event.preventDefault();
+      event.stopPropagation();
+      if (!entry) return true;
+      if (entry.owner === 'character-dialogue') closeCharacterRef.current();
+      else if (entry.owner === 'nook') closeNook();
+      else if (entry.owner === 'world-shelf') setWorldPickerOpen(false);
+      else if (entry.owner === 'belongings') {
+        if (selectedBagPath !== null) setSelectedBagPath(null);
+        else setBagOpen(false);
+      } else if (entry.owner === 'profile') setProfileOpen(false);
+      else if (entry.owner === 'writer') {
+        writerRef.current?.blur();
+        setAttention('ambient');
+        setIsGodHandOpen(false);
+      } else if (entry.owner === 'journal') {
+        setShell(current => ({ ...current, journal: false }));
+      }
+      return true;
+    }
+
+    if (shell.journal) {
+      event.preventDefault();
+      event.stopPropagation();
+      setShell(current => ({ ...current, journal: false }));
+      return true;
+    }
+    if (shell.header) {
+      event.preventDefault();
+      event.stopPropagation();
+      setShell(current => ({ ...current, header: false }));
+      return true;
+    }
+    if (shell.immersive) {
+      event.preventDefault();
+      event.stopPropagation();
+      setShell(current => ({ ...current, immersive: false }));
+      return true;
+    }
+    if (layer !== 'map') {
+      event.preventDefault();
+      event.stopPropagation();
+      void enterLayer(manifest?.layers?.[layer]?.parent || 'map').then(applyFollowFailures);
+      return true;
+    }
+    return false;
+  }, [enterLayer, focusCoordinator, layer, manifest, selectedBagPath, shell.header, shell.immersive, shell.journal, closeNook]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const typing = target?.closest('input, textarea, select, button, a, [role="switch"], [contenteditable="true"]');
       if (event.key === 'Escape') {
-        if (arrangeControlRef.current?.isFocused() && arrangeControlRef.current.cancel()) {
-          event.preventDefault();
-          event.stopPropagation();
-          return;
-        }
-        if (closeWorkspaceDisclosure()) {
-          event.preventDefault();
-          event.stopPropagation();
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        if (radialState || radialAdmissionRef.current) {
-          setRadialState(null);
-          const token = radialAdmissionRef.current;
-          if (token) overlayAdmission.release(token);
-          radialAdmissionRef.current = null;
-          return;
-        }
-        if (ceremony) {
-          clearAdmittedCeremony();
-          return;
-        }
-        const topmost = focusCoordinator.peek();
-        if (topmost) {
-          focusCoordinator.handleEscape();
-          if (topmost === 'character-dialogue') {
-            closeCharacterRef.current();
-          } else if (topmost === 'nook') {
-            closeNook();
-          } else if (topmost === 'world-shelf') {
-            setWorldPickerOpen(false);
-          } else if (topmost === 'belongings') {
-            if (selectedBagPath !== null) setSelectedBagPath(null);
-            else setBagOpen(false);
-          } else if (topmost === 'profile') {
-            setProfileOpen(false);
-          } else if (topmost === 'writer') {
-            writerRef.current?.blur();
-            setAttention('ambient');
-            setIsGodHandOpen(false);
-          } else if (topmost === 'journal') {
-            setShell(current => ({ ...current, journal: false }));
-          }
-          return;
-        }
-        if (shell.header || shell.journal || shell.immersive) {
-          setShell(initialShell);
-          return;
-        }
-        if (layer !== 'map') {
-          void enterLayer(manifest?.layers?.[layer]?.parent || 'map').then(applyFollowFailures);
-        }
+        dispatchEscape(event);
         return;
       }
-      if (typing || activeCharacter) return;
+      if (isTextEditingTarget(event.target) || activeCharacter) return;
       if (event.shiftKey && event.key.toLowerCase() === 'r') {
         if (focusCoordinator.peek() !== null) return;
         event.preventDefault();
@@ -640,6 +720,7 @@ export function App() {
       if (event.key === 'Tab') {
         event.preventDefault();
         toggleShell('immersion');
+        return;
       }
       if (event.key === 'Enter') {
         event.preventDefault();
@@ -648,9 +729,9 @@ export function App() {
         window.setTimeout(() => writerRef.current?.focus(), 0);
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [activeCharacter, ceremony, clearAdmittedCeremony, closeNook, closeWorkspaceDisclosure, enterLayer, focusCoordinator, layer, manifest, overlayAdmission, radialState, selectedBagPath, shell]);
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [activeCharacter, dispatchEscape, focusCoordinator, shell.immersive]);
 
   const chalks = useMemo(
     () => (state?.items || []).filter((item) => item.frontmatter?.type === 'chalk'),
@@ -715,10 +796,86 @@ export function App() {
     return () => window.removeEventListener('keydown', onBack);
   }, [layer, manifest, activeCharacter, enterLayer]);
 
+  const actionProjection = useCallback((targetLayer = layer): string => {
+    if (nookChar && (targetLayer === layer || targetLayer.startsWith('characters/'))) return `nook:${nookChar}`;
+    return `layer:${targetLayer}`;
+  }, [layer, nookChar]);
+  const reconcileAction = useCallback(async (_details: unknown, signal: AbortSignal, projection: string): Promise<ReconcileReceipt> => {
+    if (signal.aborted) throw new DOMException('Action reconciliation was cancelled.', 'AbortError');
+    await refresh();
+    if (signal.aborted) throw new DOMException('Action reconciliation was cancelled.', 'AbortError');
+    await loadChromeData();
+    return {
+      status: 'confirmed',
+      source: projection.startsWith('nook:') ? 'nook-refresh' : 'layer-refresh',
+      projection,
+    };
+  }, [refresh, loadChromeData]);
+  const executeFeedbackAction = useCallback(async <TDetails,>(
+    intent: ActionIntent,
+    request: (signal: AbortSignal) => Promise<ActionResultLike<TDetails>>,
+    reconcile: (details: TDetails, signal: AbortSignal) => Promise<ReconcileReceipt> = (details, signal) => reconcileAction(details, signal, intent.projection),
+    worldIdOverride?: string,
+  ): Promise<ActionFeedback<TDetails> | null> => {
+    const worldId = worldIdOverride ?? manifest?.id;
+    if (!worldId) {
+      notify(t('Load a world before doing that.'));
+      return null;
+    }
+    const generation = worldLoadGeneration.current;
+    const result = await actionCoordinator.execute({ ...intent, worldId }, request, reconcile);
+    if (generation !== worldLoadGeneration.current) return result;
+    if (result.outcome !== 'accepted' || result.reconcile !== 'confirmed' && result.reconcile !== 'not-required') {
+      notify(result.message);
+    } else if (result.presentation === 'eligible') {
+      notify(result.message);
+    }
+    return result;
+  }, [actionCoordinator, manifest?.id, notify, reconcileAction, t]);
+  const enterGate = useCallback(async (target: string, source: string, worldIdOverride?: string): Promise<ActionFeedback | null> => {
+    const projection = worldIdOverride ? `layer:${target}` : actionProjection();
+    const intent: ActionIntent = {
+      worldId: worldIdOverride ?? manifest?.id ?? '',
+      projection,
+      verb: 'enter',
+      source,
+      target,
+      layer: target,
+    };
+    return executeFeedbackAction(
+      intent,
+      async () => {
+        const outcome = await enterLayer(target);
+        if (outcome.kind === 'accepted') return { ok: true, ...outcome.details };
+        if (outcome.kind === 'same-layer') {
+          return {
+            ok: true,
+            sameLayer: true,
+            layer: target,
+            name: '',
+            first: false,
+            followers: { moved: [], failures: [] },
+          };
+        }
+        return { ok: false, code: outcome.code ?? outcome.kind, error: outcome.message };
+      },
+      async (details: unknown, signal: AbortSignal) => {
+        const sameLayer = details && typeof details === 'object' && 'sameLayer' in details
+          && details.sameLayer === true;
+        if (sameLayer) return { status: 'not-required', source: 'details.event', projection };
+        if (signal.aborted || world.readLayerState()?.layer !== target) {
+          throw new DOMException('The entered scene is no longer current.', 'AbortError');
+        }
+        return { status: 'confirmed', source: 'layer-refresh', projection };
+      },
+      worldIdOverride,
+    );
+  }, [actionProjection, enterLayer, executeFeedbackAction, manifest?.id, reconcileAction]);
   const loadWorld = async (worldPath: string) => {
     preparedSource.current = null;
     if (writerRef.current) writerRef.current.value = '';
     worldLoadGeneration.current++;
+    actionCoordinator.reset('');
     setCharacters([]); setBackpack([]); setPreparedAction('');
     setLoadingWorld(worldPath);
     setWorldPickerOpen(false);
@@ -730,6 +887,8 @@ export function App() {
     frameQueue.clear('world-change');
     cameraStack.clear();
     callerProjectionRef.current = null;
+    setNookChar(null);
+    projectionTransitionRef.current = { epoch: projectionTransitionRef.current.epoch + 1, nook: null };
     try {
       const result = await airpGateway.loadWorld<WorldManifest>(worldPath);
       setManifest(result.manifest);
@@ -744,7 +903,7 @@ export function App() {
       const entryLayer = result.manifest.entry && result.manifest.layers?.[result.manifest.entry]
         ? result.manifest.entry
         : 'map';
-      await enterLayer(entryLayer).then(applyFollowFailures);
+      await enterGate(entryLayer, 'startup', result.manifest.id);
       await loadChromeData();
       setWorldPickerOpen(false);
       setLauncherOpen(false);
@@ -816,44 +975,67 @@ export function App() {
     window.requestAnimationFrame(() => writerRef.current?.focus());
   }, [backpack, notify, t, writerLocked]);
 
-  const handleItemDrop = async (itemPath: string, targetPath: string) => {
-    try {
-      await airpGateway.useItem(itemPath, targetPath);
-      await refresh();
-    } catch (error) {
-      notify(error instanceof Error ? error.message : 'The item could not be used');
+  const reconcileProjection = async (details: unknown, signal: AbortSignal, projection: string, caller?: () => Promise<void>): Promise<ReconcileReceipt> => {
+    if (caller) await caller();
+    if (signal.aborted) throw new DOMException('Action reconciliation was cancelled.', 'AbortError');
+    if (caller && projection.startsWith('nook:')) {
+      await loadChromeData();
+      return { status: 'confirmed', source: 'nook-refresh', projection };
     }
+    return reconcileAction(details, signal, projection);
   };
 
-  const handleReturnItem = async (itemPath: string, targetLayer = layer) => {
+  const handleItemDrop = async (itemPath: string, targetPath: string, reconcile?: () => Promise<void>): Promise<ActionFeedback | null> => {
+    const projection = actionProjection();
+    return executeFeedbackAction(
+      { worldId: manifest?.id ?? '', projection, verb: 'present', source: 'canvas', item: itemPath, target: targetPath },
+      async signal => {
+        const details = await airpGateway.useItem(itemPath, targetPath, signal);
+        return { ok: true, ...details };
+      },
+      reconcile ? (details, signal) => reconcileProjection(details, signal, projection, reconcile) : undefined,
+    );
+  };
+
+  const handleReturnItem = async (itemPath: string, targetLayer = layer, reconcile?: () => Promise<void>): Promise<boolean> => {
     const filename = itemPath.split('/').pop() || 'item.md';
     const destination = targetLayer === 'map' ? `world/${filename}` : `${targetLayer}/${filename}`;
-    try {
-      await airpGateway.move(itemPath, destination);
-      await refresh();
-      await loadChromeData();
-      return true;
-    } catch (error) {
-      notify(error instanceof Error ? error.message : 'The item could not be placed');
-      return false;
-    }
+    const projection = actionProjection(targetLayer);
+    const result = await executeFeedbackAction(
+      { worldId: manifest?.id ?? '', projection, verb: 'drop', source: 'bag', item: itemPath, from: itemPath, to: destination, target: destination },
+      async signal => {
+        const details = await airpGateway.move(itemPath, destination, signal);
+        return { ok: true, ...details };
+      },
+      reconcile ? (details, signal) => reconcileProjection(details, signal, projection, reconcile) : undefined,
+    );
+    return result?.outcome === 'accepted' && (result.reconcile === 'confirmed' || result.reconcile === 'not-required');
   };
 
-  // One move per item at a time: a double-click sent two moves, the second
-  // failing with "destination already exists" while the card still showed.
-  const takingRef = useRef(new Set<string>());
-  const handleTakeItem = async (itemPath: string) => {
-    if (takingRef.current.has(itemPath)) return;
-    takingRef.current.add(itemPath);
-    try {
-      await airpGateway.move(itemPath, `player/${itemPath.split('/').pop()}`);
-      await refresh();
-      await loadChromeData();
-    } catch (error) {
-      notify(error instanceof Error ? error.message : 'The item could not be taken');
-    } finally {
-      takingRef.current.delete(itemPath);
-    }
+  const handleTakeItem = async (itemPath: string, reconcile?: () => Promise<void>): Promise<ActionFeedback | null> => {
+    const destination = `player/${itemPath.split('/').pop() || 'item.md'}`;
+    const projection = actionProjection();
+    const result = await executeFeedbackAction(
+      { worldId: manifest?.id ?? '', projection, verb: 'take', source: 'button', item: itemPath, from: itemPath, to: destination, target: destination },
+      async signal => {
+        const details = await airpGateway.move(itemPath, destination, signal);
+        return { ok: true, ...details };
+      },
+      reconcile ? (details, signal) => reconcileProjection(details, signal, projection, reconcile) : undefined,
+    );
+    return result;
+  };
+
+  const moveCardAction = async (path: string, x: number, y: number, reconcile?: () => Promise<void>): Promise<ActionFeedback | null> => {
+    const projection = actionProjection();
+    return executeFeedbackAction(
+      { worldId: manifest?.id ?? '', projection, verb: 'move', source: 'canvas', cardPath: path, x, y },
+      async signal => {
+        const details = await moveCard(path, x, y, signal);
+        return { ok: true, ...details };
+      },
+      reconcile ? (details, signal) => reconcileProjection(details, signal, projection, reconcile) : undefined,
+    );
   };
 
   const handleToggleFreeze = async () => {
@@ -897,7 +1079,29 @@ export function App() {
     if (token) overlayAdmission.release(token);
     radialAdmissionRef.current = null;
   }, [overlayAdmission]);
+  useEffect(() => {
+    if (!radialState && !radialAdmissionRef.current) return;
+    const lease = focusCoordinator.registerSurface({
+      key: 'radial-menu',
+      owner: 'workspace',
+      priority: 280,
+      root: null,
+      close: closeRadial,
+    });
+    return () => lease.unregister();
+  }, [closeRadial, focusCoordinator, radialState]);
 
+  const prepareChoiceDraft = useCallback((path: string, choice: string) => {
+    if (writerLocked) {
+      notify(t('The writer is already working.'));
+      return;
+    }
+    setWriterDraft(`Regarding world file ${JSON.stringify(path)}, the player selected the choice: ${choice}`);
+    setAttention('authoring');
+    setShell(current => ({ ...current, immersive: false }));
+    notify(t('Choice selected. Review it, then press Send.'));
+    window.requestAnimationFrame(() => writerRef.current?.focus());
+  }, [notify, t, writerLocked]);
   const createAt = async (type: RadialItemType, title: string, content: string, x: number, y: number) => {
     const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `creation-${Date.now()}`;
     const base = layer === 'map' ? 'world' : layer;
@@ -929,7 +1133,8 @@ export function App() {
   closeCharacterRef.current = closeCharacter;
 
   return (
-    <div data-depth-surface="ui" className={`airp-prototype${isDusk ? ' is-dusk' : ''}${shell.immersive ? ' is-immersive' : ''}${shell.journal && !nookChar ? ' is-reading' : ''}${shell.header ? ' has-header' : ''}${attention === 'authoring' ? ' is-authoring' : ''}`}>
+    <ActionFeedbackProvider coordinator={actionCoordinator}>
+      <div data-depth-surface="ui" className={`airp-prototype${isDusk ? ' is-dusk' : ''}${shell.immersive ? ' is-immersive' : ''}${shell.journal && !nookChar ? ' is-reading' : ''}${shell.header ? ' has-header' : ''}${attention === 'authoring' ? ' is-authoring' : ''}`}>
       <main className="prototype-workspace">
         <aside className={`prototype-narrative${shell.journal && !nookChar ? ' is-open' : ''}`} aria-label={t("Story journal")} aria-hidden={!shell.journal || nookChar !== null} inert={!shell.journal || nookChar !== null}>
           <div className="prototype-narrhead">
@@ -963,16 +1168,30 @@ export function App() {
               aria-hidden={activeCharacter !== null || worldPickerOpen}
               inert={activeCharacter !== null || worldPickerOpen}
             >
-              <NookView
+              <NookView key={nookChar}
                 characterId={nookChar!}
                 character={characters.find((item) => item.id === nookChar) ?? { id: nookChar! }}
                 effectsEnabled={effectsEnabled}
+                hidden={!pageVisible}
+                reducedMotion={reducedMotion}
+                allowChalkDrag={allowChalkDrag}
+                resolveAssetUrl={assetUrl}
                 locale={locale === 'ja' ? 'ja' : 'en'}
                 onClose={closeNook}
                 inactive={activeCharacter !== null}
-                onMoveCard={moveCard}
+                onMoveCard={moveCardAction}
                 writerLocked={writerLocked}
-                onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }}
+                onSelectChoice={prepareChoiceDraft}
+                onEntityAction={(prompt) => {
+                  if (writerLocked) {
+                    notify(t('The writer is already working.'));
+                    return;
+                  }
+                  setWriterDraft(prompt);
+                  setAttention('authoring');
+                  setShell(current => ({ ...current, immersive: false }));
+                  notify(t('Action draft ready. Review it, then press Send.'));
+                }}
                 onOpenCharacterModal={(id) => {
                   const character = characters.find((item) => item.id === id);
                   if (character) openCharacter(character);
@@ -995,6 +1214,7 @@ export function App() {
                 key={manifest?.id || 'opening'}
                 effectsEnabled={effectsEnabled}
                 currentLayer={layer}
+                focus={focusCoordinator}
                 hidden={!pageVisible}
                 reducedMotion={reducedMotion}
                 allowChalkDrag={allowChalkDrag}
@@ -1009,16 +1229,25 @@ export function App() {
                 items={canvasItems}
                 links={state?.links || []}
                 bg={(!loadingWorld && state?.bg) || { src: null, tone: 'warm', grain: 'parchment' }}
-                onMoveCard={moveCard}
-                onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }}
-                onEntityAction={(choice) => { void submitWriterText(choice); }}
+                onMoveCard={moveCardAction}
+                onSelectChoice={prepareChoiceDraft}
+                onEntityAction={(choice) => {
+                  if (writerLocked) {
+                    notify(t('The writer is already working.'));
+                    return;
+                  }
+                  setWriterDraft(choice);
+                  setAttention('authoring');
+                  setShell(current => ({ ...current, immersive: false }));
+                  notify(t('Action draft ready. Review it, then press Send.'));
+                }}
                 onOpenCharacterModal={(id) => {
                   const character = characters.find((item) => item.id === id);
                   if (character) openCharacter(character);
                 }}
                 presence={presenceViews}
                 assetUrl={assetUrl}
-                onEnterGate={(target) => void enterLayer(target).then(applyFollowFailures)}
+                onEnterGate={(target) => { void enterGate(target, 'double-click'); }}
                 onDropItemToScene={handleReturnItem}
                 onTakeItem={handleTakeItem}
                 onOpenRadialMenu={(x, y, worldX, worldY) => {
@@ -1032,20 +1261,18 @@ export function App() {
                   setRadialState({ x, y, worldX, worldY });
                 }}
               />
-
-              {/* Performance shows (docs/perform/05) — z-20, below the dice ceremony
-                  (z-50). Cancels its own shows on layer change / freeze. */}
-              <PerformanceLayer
-                layer={layer}
-                frozen={state?.worldFrozen === true}
-                hidden={!pageVisible}
-                effectsEnabled={effectsEnabled}
-                reducedMotion={reducedMotion}
-                admission={overlayAdmission}
-              />
             </div>
           )}
 
+          {/* One stable show owner serves whichever stage projection is active. */}
+          <PerformanceLayer
+            layer={nookChar ? `characters/${nookChar}` : layer}
+            frozen={state?.worldFrozen === true}
+            hidden={!pageVisible}
+            effectsEnabled={effectsEnabled}
+            reducedMotion={reducedMotion}
+            admission={overlayAdmission}
+          />
           <div className="prototype-vignette" aria-hidden="true" />
 
           <header className="prototype-worldtop prototype-chrome" hidden={nookChar !== null} aria-label={t("World header")} inert={!shell.header || shell.immersive || nookChar !== null}>
@@ -1054,7 +1281,7 @@ export function App() {
               {breadcrumbs.map((part) => {
                 const label = part === 'map' ? t('Map') : sceneName(manifest, part);
                 // One line, ellipsised: a wrapped crumb breaks the fixed-height header.
-                return <button key={part} title={label} onClick={() => void enterLayer(part).then(applyFollowFailures)}><span className="prototype-crumb-label">{label}</span></button>;
+                return <button key={part} title={label} onClick={() => { void enterGate(part, 'breadcrumb'); }}><span className="prototype-crumb-label">{label}</span></button>;
               })}
             </nav>
             <div className="prototype-spacer" />
@@ -1239,6 +1466,7 @@ export function App() {
       </main>
 
       {loadingWorld && <div role="status" className="prototype-world-loading">{t(' · opening…')}</div>}
+      <GateThreshold focus={focusCoordinator} />
       {launcherOpen && (
         <WorldLauncher
           shelf={shelf}
@@ -1246,19 +1474,22 @@ export function App() {
           onLoad={path => void loadWorld(path)}
           onClose={manifest ? () => setLauncherOpen(false) : undefined}
           onManageSaves={() => setWorldPickerOpen(true)}
+          focus={focusCoordinator}
         />
       )}
       {worldPickerOpen && (
-        <WorldShelfDialog shelf={shelf} loading={loadingWorld} onLoad={path => void loadWorld(path)} onClose={() => setWorldPickerOpen(false)} onRefresh={async () => { setShelf(await airpGateway.worlds()); }} />
+        <WorldShelfDialog shelf={shelf} loading={loadingWorld} onLoad={path => void loadWorld(path)} onClose={() => setWorldPickerOpen(false)} onRefresh={async () => { setShelf(await airpGateway.worlds()); }} focus={focusCoordinator} />
       )}
 
       {selectedBagItem && (
         <BagItemDialog
           item={selectedBagItem}
           onClose={() => setSelectedBagPath(null)}
+          onChoose={choice => prepareChoiceDraft(selectedBagItem.path, choice)}
           onPlace={handleReturnItem}
           onUse={prepareItemUse}
           useDisabled={writerLocked}
+          focus={focusCoordinator}
         />
       )}
 
@@ -1283,6 +1514,7 @@ export function App() {
           frameQueue={frameQueue}
           worldId={manifest?.id}
           voice={activeCharacter.voice}
+          focus={focusCoordinator}
           onClose={closeCharacter}
           language={manifest?.locale === 'ja' || manifest?.locale === 'en' || manifest?.locale === 'zh-CN' ? manifest.locale : 'en'}
           onOpenNook={() => openPrivateSpace(activeCharacter.id)}
@@ -1296,6 +1528,7 @@ export function App() {
       )}
 
       {toast && <div className="prototype-toast" role="status">{toast}</div>}
-    </div>
+      </div>
+    </ActionFeedbackProvider>
   );
 }

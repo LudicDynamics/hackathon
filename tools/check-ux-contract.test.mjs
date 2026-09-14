@@ -65,14 +65,63 @@ test('forbidden character bypass catches both generic and typed raw listeners', 
   assert.equal(run("window.addEventListener('airp:agent-frame', receive);", r).length, 1);
   assert.equal(run("window.addEventListener('airp:character-frame', receive);", r).length, 1);
 });
+test('visual literal gate has clean and non-empty failure fixtures', () => {
+  const r = rule('visual-literal', 'fixture.css', {
+    canonicalTokenFile: 'tokens.css',
+    tokenPrefix: '--ux-',
+    appearancePrefix: '--appearance-',
+    legacyAliases: ['--canvas-bg'],
+    literalKinds: ['color', 'gradient', 'shadow', 'radius', 'font', 'motion'],
+    exceptionRegistry: 'visualExceptions',
+  });
+  assert.deepEqual(run('.button { color: var(--ux-color-ink); }', r), []);
+  const findings = run('.button { color: #123456; }', r);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].line, 1);
+  assert.match(findings[0].message, /unregistered color literal/);
+});
+
+test('visual exception requires exact selector, property, literal, and expiry', () => {
+  const r = rule('visual-literal', 'fixture.css', {
+    canonicalTokenFile: 'tokens.css',
+    tokenPrefix: '--ux-',
+    appearancePrefix: '--appearance-',
+    legacyAliases: [],
+    literalKinds: ['color'],
+    exceptionRegistry: 'visualExceptions',
+  });
+  const contract = {
+    schemaVersion: 1,
+    docs: [{ path: 'docs.md', anchor: 'x' }],
+    protectedPaths: [],
+    visualExceptions: [{
+      id: 'fixture.paint',
+      target: 'fixture.css',
+      selectorOrSymbol: '.prop',
+      kind: 'illustration',
+      literals: ['#123456'],
+      properties: ['background'],
+      owner: 'fixture',
+      reason: 'bounded paint',
+      expiresAfter: '2099-12-31',
+    }],
+    visual: [r],
+    depth: [],
+    projection: [],
+    fixtures: [],
+  };
+  assert.deepEqual(compare({ sources: new Map([['fixture.css', '.prop { background: #123456; }']]) }, contract), []);
+  const expired = { ...contract, visualExceptions: [{ ...contract.visualExceptions[0], expiresAfter: '2020-01-01' }] };
+  assert.ok(validateContract(expired).length > 0);
+});
 
 test('compare scans source maps and returns findings without side effects', () => {
-  const contract = { schemaVersion: 1, docs: [{ path: 'docs.md', anchor: 'x' }], protectedPaths: [], visual: [rule('unique-call', 'fixture.ts', { name: 'adapt', count: 1 })], depth: [], projection: [], fixtures: [] };
+  const contract = { schemaVersion: 1, docs: [{ path: 'docs.md', anchor: 'x' }], protectedPaths: [], visualExceptions: [], visual: [rule('unique-call', 'fixture.ts', { name: 'adapt', count: 1 })], depth: [], projection: [], fixtures: [] };
   assert.deepEqual(compare({ sources: new Map([['fixture.ts', 'adapt(); adapt();']]) }, contract).map((f) => f.check), ['unique-call']);
 });
 
 test('closed schema rejects malformed JSON shapes, unknown keys/kinds, and unsafe paths', () => {
-  const base = { schemaVersion: 1, docs: [{ path: 'docs.md', anchor: 'x' }], protectedPaths: [], visual: [], depth: [], projection: [], fixtures: [] };
+  const base = { schemaVersion: 1, docs: [{ path: 'docs.md', anchor: 'x' }], protectedPaths: [], visualExceptions: [], visual: [], depth: [], projection: [], fixtures: [] };
   assert.equal(validateContract({ ...base, typo: true }).length, 1);
   assert.equal(validateContract({ ...base, visual: [rule('mystery', 'fixture.ts', {})] }).some((f) => f.message.includes('unknown kind')), true);
   assert.equal(validateContract({ ...base, visual: [rule('exists', '../escape.ts', { sentinel: 'x' })] }).some((f) => f.message.includes('path')), true);
@@ -84,7 +133,7 @@ test('closed schema rejects malformed JSON shapes, unknown keys/kinds, and unsaf
 test('scanRepo fails closed when requested baseline is unavailable', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ux-contract-'));
   fs.writeFileSync(path.join(root, 'fixture.ts'), 'KEEP_ME');
-  const contract = { schemaVersion: 1, docs: [{ path: 'docs.md', anchor: 'x' }], protectedPaths: [{ path: 'fixture.ts', sentinel: 'KEEP_ME' }], visual: [rule('no-delete', 'fixture.ts', { sentinel: 'KEEP_ME' })], depth: [], projection: [], fixtures: [] };
+  const contract = { schemaVersion: 1, docs: [{ path: 'docs.md', anchor: 'x' }], protectedPaths: [{ path: 'fixture.ts', sentinel: 'KEEP_ME' }], visualExceptions: [], visual: [rule('no-delete', 'fixture.ts', { sentinel: 'KEEP_ME' })], depth: [], projection: [], fixtures: [] };
   const result = scanRepo({ repoRoot: root, baseRef: 'definitely-not-a-commit', contract });
   assert.ok(result.findings.some((f) => f.message.includes('baseline')));
   fs.rmSync(root, { recursive: true, force: true });

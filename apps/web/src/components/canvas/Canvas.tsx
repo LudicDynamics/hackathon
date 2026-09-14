@@ -69,7 +69,7 @@ interface CanvasProps {
   /** Copy for the ghost card face (i18n). */
   ghostLabel?: string;
   ghostCopy: GhostCopy;
-  onMoveCard?: (path: string, x: number, y: number, signal?: AbortSignal) => Promise<unknown> | void;
+  onMoveCard?: (path: string, x: number, y: number, reconcile?: () => Promise<void>) => Promise<unknown> | void;
   onSelectChoice?: (path: string, choice: string) => void;
   onEntityAction?: (prompt: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;

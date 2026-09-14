@@ -46,18 +46,26 @@ export interface NookViewProps {
   character: CharacterMediaSnapshot;
   /** Effects toggle controls character motion, never Nook data or presence. */
   effectsEnabled: boolean;
+  /** Host page visibility; keeps the Canvas lifecycle in parity with layer. */
+  hidden?: boolean;
+  /** Host reduced-motion seam; defaults to the live media preference. */
+  reducedMotion?: boolean;
+  /** God-hand permission is shared with the layer Canvas. */
+  allowChalkDrag?: boolean;
+  /** Shared asset resolver used by Canvas presence/media seams. */
+  resolveAssetUrl?: (path: string, kind: AssetMediaKind) => string | undefined;
   /** Close the nook, returning to the layer that was showing. App owns it. */
   onClose: () => void;
   locale: Locale;
   // Forwarded layer callbacks (02 §⑫-2): the nook MUST NOT build its own
-  onMoveCard?: (path: string, x: number, y: number) => Promise<void> | void;
-  onSelectChoice?: (path: string, choice: string) => void;
+  onMoveCard?: (path: string, x: number, y: number, reconcile?: () => Promise<void>) => Promise<unknown> | void;
+  onSelectChoice?: (path: string, choice: string) => Promise<unknown> | void;
   onEntityAction?: (prompt: string, targetLayer?: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
   onOpenCharacterModal?: (characterId: string) => void;
-  onItemDropOnTarget?: (itemPath: string, targetPath: string) => void;
-  onDropItemToScene?: (itemPath: string, targetLayer?: string) => void;
-  onTakeItem?: (path: string) => void;
+  onItemDropOnTarget?: (itemPath: string, targetPath: string, reconcile?: () => Promise<void>) => Promise<unknown> | void;
+  onDropItemToScene?: (itemPath: string, targetLayer: string | undefined, reconcile?: () => Promise<void>) => Promise<unknown> | void;
+  onTakeItem?: (path: string, reconcile?: () => Promise<void>) => Promise<unknown> | void;
   /** True while a CharacterModal owns focus above this projection. */
   inactive?: boolean;
   writerLocked?: boolean;
@@ -151,6 +159,10 @@ export const NookView: React.FC<NookViewProps> = ({
   characterId,
   character,
   effectsEnabled,
+  hidden = false,
+  reducedMotion,
+  allowChalkDrag = false,
+  resolveAssetUrl,
   onClose,
   locale,
   onMoveCard,
@@ -216,7 +228,8 @@ export const NookView: React.FC<NookViewProps> = ({
   const mountedRef = useRef(false);
   const fpRef = useRef<FootprintScheduler | null>(null);
   const fontsSettledRef = useRef(false);
-  const reduceMotion = useStill();
+  const liveReducedMotion = useStill();
+  const effectiveReducedMotion = reducedMotion ?? liveReducedMotion;
 
   // A projection can disappear while /api/nook, a move write, or an
   // initialiser refresh is in flight. Invalidate those continuations at the
@@ -269,6 +282,10 @@ export const NookView: React.FC<NookViewProps> = ({
     window.addEventListener('airp:layer-init', onLayerInit);
     return () => window.removeEventListener('airp:layer-init', onLayerInit);
   }, [characterId, load, copy.nookInitFailed]);
+  const reconcileNook = useCallback(async () => {
+    if (!mountedRef.current) return;
+    await load(characterId);
+  }, [characterId, load]);
 
   const handleMoveCard = useCallback(
     async (path: string, x: number, y: number) => {
@@ -282,20 +299,54 @@ export const NookView: React.FC<NookViewProps> = ({
       setState(next);
       if (!onMoveCard) return;
       try {
-        await onMoveCard(path, x, y);
-        if (!mountedRef.current) return;
-        await load(characterId);
+        await onMoveCard(path, x, y, reconcileNook);
       } catch {
         if (!mountedRef.current) return;
         stateRef.current = previous;
         setState(previous);
       }
     },
-    [characterId, load, onMoveCard],
+    [onMoveCard, reconcileNook],
+  );
+  const handleSelectChoice = useCallback(
+    async (path: string, choice: string) => {
+      try {
+        await onSelectChoice?.(path, choice);
+      } catch (error) {
+        if (mountedRef.current) setNotice(error instanceof Error ? error.message : String(error));
+      }
+    },
+    [onSelectChoice],
+  );
+  const handleItemDropOnTarget = useCallback(
+    async (itemPath: string, targetPath: string) => {
+      try {
+        await onItemDropOnTarget?.(itemPath, targetPath, reconcileNook);
+      } catch (error) {
+        if (mountedRef.current) setNotice(error instanceof Error ? error.message : String(error));
+      }
+    },
+    [onItemDropOnTarget, reconcileNook],
   );
   const handleDropItemToScene = useCallback(
-    (path: string) => onDropItemToScene?.(path, stateRef.current?.layer),
-    [onDropItemToScene],
+    async (path: string) => {
+      try {
+        await onDropItemToScene?.(path, stateRef.current?.layer, reconcileNook);
+      } catch (error) {
+        if (mountedRef.current) setNotice(error instanceof Error ? error.message : String(error));
+      }
+    },
+    [onDropItemToScene, reconcileNook],
+  );
+  const handleTakeItem = useCallback(
+    async (path: string) => {
+      try {
+        await onTakeItem?.(path, reconcileNook);
+      } catch (error) {
+        if (mountedRef.current) setNotice(error instanceof Error ? error.message : String(error));
+      }
+    },
+    [onTakeItem, reconcileNook],
   );
   const handleEntityAction = useCallback(
     (prompt: string) => onEntityAction?.(prompt, stateRef.current?.layer),
@@ -518,27 +569,29 @@ export const NookView: React.FC<NookViewProps> = ({
         )}
 
         {isEmpty ? (
-          /* Empty room (doc-11 §4.1): a room nothing has moved into yet. While an
-             initialiser runs, the ghost card occupies the room instead of the
-             prompt (docs/init/03 §3.5); otherwise the prompt collects the one-line
-             intent — an EMPTY submit is a valid meaning ("leave it blank"). */
+          /* Empty rooms still own one Canvas viewport; the prompt is a lane
+             above that stage rather than a second projection. */
           <div className="h-full w-full">
-            {initializing ? (
-              <Canvas
-                currentLayer={state.layer}
-                items={[]}
-                links={[]}
-                bg={state.bg}
-                ghost={ghostItemFor(state.layer, copy.nookGenerating)}
-                ghostLabel={copy.nookGenerating}
-                ghostCopy={{
-                  reused: copy.ghostReused,
-                  failed: copy.ghostFailed,
-                  unreachable: copy.ghostUnreachable,
-                }}
-                stillPortraits={reduceMotion}
-              />
-            ) : (
+            <Canvas
+              hidden={hidden}
+              effectsEnabled={effectsEnabled}
+              reducedMotion={effectiveReducedMotion}
+              allowChalkDrag={allowChalkDrag}
+              currentLayer={state.layer}
+              items={[]}
+              links={[]}
+              bg={state.bg}
+              ghost={initializing ? ghostItemFor(state.layer, copy.nookGenerating) : null}
+              ghostLabel={copy.nookGenerating}
+              ghostCopy={{
+                reused: copy.ghostReused,
+                failed: copy.ghostFailed,
+                unreachable: copy.ghostUnreachable,
+              }}
+              stillPortraits={effectiveReducedMotion}
+              assetUrl={resolveAssetUrl}
+            />
+            {!initializing && (
               <>
                 <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 flex-col items-center gap-2 px-8 text-center">
                   <div className="font-serif text-lg text-ink/70">{copy.nookEmptyTitle}</div>
@@ -562,9 +615,13 @@ export const NookView: React.FC<NookViewProps> = ({
           </div>
         ) : state ? (
           <Canvas
+            hidden={hidden}
+            effectsEnabled={effectsEnabled}
+            reducedMotion={effectiveReducedMotion}
+            allowChalkDrag={allowChalkDrag}
             currentLayer={state.layer}
             items={state.items}
-            stillPortraits
+            stillPortraits={true}
             links={[]}
             bg={state.bg}
             ghostCopy={{
@@ -573,13 +630,13 @@ export const NookView: React.FC<NookViewProps> = ({
               unreachable: copy.ghostUnreachable,
             }}
             onMoveCard={handleMoveCard}
-            onSelectChoice={onSelectChoice}
+            onSelectChoice={handleSelectChoice}
             onEntityAction={handleEntityAction}
             onDiceRolled={onDiceRolled}
-            onOpenCharacterModal={handleOpenCharacterModal}
+            onOpenCharacterModal={onOpenCharacterModal}
+            onItemDropOnTarget={handleItemDropOnTarget}
             onDropItemToScene={handleDropItemToScene}
-            onItemDropOnTarget={onItemDropOnTarget}
-            onTakeItem={onTakeItem}
+            onTakeItem={handleTakeItem}
           />
         ) : null}
       </main>

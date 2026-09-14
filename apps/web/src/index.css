@@ -27,9 +27,26 @@
   --ux-radius-panel: 18px;
   --ux-radius-toolbar: 24px;
   --ux-radius-avatar: 50%;
+  --ux-radius-pill: 999px;
   --ux-motion-ink: cubic-bezier(0.16, 1, 0.3, 1);
+  --ux-motion-fast: 220ms;
+  --ux-motion-panel: 300ms;
+  --ux-motion-slow: 420ms;
+  --ux-duration-pulse: 1.2s;
+  --ux-duration-spin: 0.9s;
+  --ux-duration-reduced: 1ms;
   --ux-duration-reveal: 1.3s;
-
+  --ux-color-dusk-veil: rgba(16, 12, 24, 0.36);
+  --ux-color-dusk-edge: rgba(16, 12, 24, 0.48);
+  --ux-color-dusk-ink: #d9cbe6;
+  --ux-color-dusk-button: rgba(44, 36, 59, 0.85);
+  --ux-color-dusk-button-soft: rgba(44, 36, 59, 0.78);
+  --ux-color-dusk-line: rgba(177, 156, 195, 0.33);
+  --ux-color-dusk-shadow: rgba(0, 0, 0, 0.8);
+  --ux-color-dusk-glow: rgba(217, 176, 106, 0.2);
+  --ux-color-dusk-shadow-soft: rgba(0, 0, 0, 0.75);
+  --ux-color-dusk-pulse: rgba(201, 111, 76, 0.45);
+  --ux-color-dusk-clear: rgba(201, 111, 76, 0);
   /* v2 aliases retained while existing JSX/CSS consumers migrate. */
   --ink: var(--ux-color-ink);
   --muted: var(--ux-color-muted);

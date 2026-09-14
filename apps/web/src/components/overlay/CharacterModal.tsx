@@ -25,7 +25,8 @@ import {
   type CharacterFrameQueue,
   type CharacterFrameQueueEvent,
 } from '../../lib/character-frame-queue.js';
-
+import type { FocusCoordinator, FocusReturnHandle, FocusSurfaceLease } from '../../lib/focus-coordinator.js';
+const STINGER_VOICE_GRACE_MS = 1200;
 /**
  * CharacterModal — galgame dialogue overlay (wave 2 Task D T3.3; TTS pagination T1/03).
  *
@@ -68,6 +69,8 @@ interface CharacterModalProps {
   voice?: string;
   /** NEW: TTS request-body `language` — the world content language. Defaults to 'en'. */
   language?: string;
+  /** Surface coordinator owned by App; this component never installs an Escape listener. */
+  focus?: FocusCoordinator;
   /**
    * NEW: per-emotion portrait URLs (docs/assets/00 §5.2). Present only when
    * the world ships all six; when set, the stage shows the matching still per
@@ -102,8 +105,6 @@ type StagePage = DialoguePage & { voiceUrl?: string; voiceState: VoiceState; voi
 
 /** Grace window while a page's voice prefetch is still in flight, before the
  *  fallback stinger fires (contract §6.5; value is an inferred initial). */
-const STINGER_VOICE_GRACE_MS = 1200;
-
 export const CharacterModal: React.FC<CharacterModalProps> = ({
   characterId,
   displayName,
@@ -119,6 +120,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   worldId,
   voice,
   language = 'en',
+  focus,
   emotions,
 }) => {
   const { locale: uiLocale, t } = useLocale();
@@ -133,6 +135,11 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const [closing, setClosing] = useState(false);
   const [activitySessionStartedAt, setActivitySessionStartedAt] = useState(() => Date.now());
   const modalRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  if (openerRef.current === null && typeof document !== 'undefined') {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && activeElement !== document.body) openerRef.current = activeElement;
+  }
   useEffect(() => {
     setActivitySessionStartedAt(Date.now());
   }, [characterId]);
@@ -142,6 +149,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 
   const streamTimer = useRef<number | null>(null);
   const closeTimer = useRef<number | null>(null);
+  const leaseRef = useRef<FocusSurfaceLease | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const turnBufferRef = useRef<CharacterTurnBuffer | null>(null); // turn/message aggregation truth
   const pagesRef = useRef<StagePage[]>([]); // 页数组（命令式真相源）
@@ -475,23 +483,60 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     cancelStreamTimer();
     clearWatchdog();
     clearStingerGrace();
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    closeTimer.current = null;
     voiceTurnRef.current += 1; // 作废在途 fetch
     stopVoice();
     streamingRef.current = false;
   }, [cancelStreamTimer, clearWatchdog, clearStingerGrace]);
 
-  /** Widget-free audio: opening the overlay does not go through Canvas, so the
-   *  first pointerdown inside the modal also unlocks the AudioContext. */
-  const handleUnlock = useCallback(() => {
-    void unlock();
-  }, []);
-
   // Close: brief paper-descend + fade (220ms), then unmount.
   const handleClose = useCallback(() => {
     if (closeTimer.current !== null) return;
     setClosing(true);
-    closeTimer.current = window.setTimeout(() => onClose(), 220);
+    closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = null;
+      onClose();
+    }, 220);
   }, [onClose]);
+  const requestClose = useCallback(() => {
+    const lease = leaseRef.current;
+    if (lease && !lease.markClosing()) return;
+    handleClose();
+  }, [handleClose]);
+  const handleCloseRef = useRef(handleClose);
+  handleCloseRef.current = handleClose;
+  useEffect(() => {
+    if (!focus) return;
+    let restored = false;
+    const returnFocus: FocusReturnHandle = {
+      capture: () => {},
+      restore: () => {
+        if (restored) return false;
+        restored = true;
+        const opener = openerRef.current;
+        if (opener && document.contains(opener)) {
+          opener.focus();
+          return true;
+        }
+        return false;
+      },
+    };
+    const lease = focus.registerSurface({
+      key: `character-dialogue:${characterId}`,
+      owner: 'character-dialogue',
+      close: () => handleCloseRef.current(),
+      priority: 500,
+      root: modalRef.current,
+      returnFocus,
+    });
+    leaseRef.current = lease;
+    return () => {
+      if (leaseRef.current === lease) leaseRef.current = null;
+      lease.unregister();
+      window.requestAnimationFrame(() => returnFocus.restore());
+    };
+  }, [characterId, focus]);
 
   // 挂载时复位（幂等）+ seed mock 引导语（contract §6.1 / §7）。
   useEffect(() => {
@@ -776,7 +821,6 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const canAdvance = phase !== 'thinking' && pages.length > 0 && !inputReady;
   const dialogTitleId = `character-modal-title-${characterId.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   const dialogDescriptionId = `character-modal-description-${characterId.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-
   return (
     <div
       ref={modalRef}
@@ -788,7 +832,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
       aria-describedby={dialogDescriptionId}
       tabIndex={-1}
     >
-      <button type="button" className="modal-close" onClick={handleClose} aria-label={t('Close dialog')}>
+      <button type="button" className="modal-close" onClick={requestClose} aria-label={t('Close dialog')}>
         ×
       </button>
 
@@ -838,6 +882,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
             query={{ surface: 'character-modal', agentId: `character:${characterId}`, since: activitySessionStartedAt }}
             className="character-activity-log"
             sessionLabel={displayName || characterId}
+            focus={focus}
           />
         </div>
       </aside>

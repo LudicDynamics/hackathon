@@ -34,6 +34,41 @@
     { "path": "apps/web/src/lib/presence.ts", "sentinel": "export function projectPresence" },
     { "path": "apps/web/test/presence-projection.test.mjs", "sentinel": "presence" }
   ],
+  "visualExceptions": [
+    {
+      "id": "illustration.cabin-envelope-paint",
+      "target": "apps/web/src/components/canvas/prop-card.css",
+      "selectorOrSymbol": ".cabin-prop--envelope",
+      "kind": "illustration",
+      "literals": ["#e9dcc0", "#cbb690", "#907c54", "#f2e6c9", "#59472b", "#735344", "#ffffff18"],
+      "properties": ["background", "border", "border-radius", "filter", "box-shadow"],
+      "owner": "prop-card",
+      "reason": "Envelope paint is a bounded local illustration, not shell/state colour.",
+      "expiresAfter": "2099-12-31"
+    },
+    {
+      "id": "illustration.cabin-phone-paint",
+      "target": "apps/web/src/components/canvas/prop-card.css",
+      "selectorOrSymbol": ".cabin-prop--phone",
+      "kind": "illustration",
+      "literals": ["#2d343b", "#0d1218", "#28292d", "#6d7581", "#050708", "#a3aaba"],
+      "properties": ["background", "border", "border-radius", "box-shadow"],
+      "owner": "prop-card",
+      "reason": "Phone paint is confined to the local illustration shape.",
+      "expiresAfter": "2099-12-31"
+    },
+    {
+      "id": "illustration.cabin-door-paint",
+      "target": "apps/web/src/components/canvas/prop-card.css",
+      "selectorOrSymbol": ".cabin-prop--door",
+      "kind": "illustration",
+      "literals": ["#62462f", "#6d5136", "#453323", "#684b32", "#382a20", "#0007", "#c2b9a3", "#6c6b65", "#0008"],
+      "properties": ["background", "border", "border-radius", "box-shadow"],
+      "owner": "prop-card",
+      "reason": "Door paint is confined to the local illustration shape.",
+      "expiresAfter": "2099-12-31"
+    }
+  ],
   "visual": [
     {
       "id": "appearance.canvas-object-single-adapter",
@@ -154,6 +189,31 @@
       "allow": [],
       "forbid": [],
       "reason": "PerformanceLayer is the only show-frame consumer."
+    },
+    {
+      "id": "visual.global-token-and-literal-policy",
+      "kind": "visual-literal",
+      "doc": { "path": "docs/ux/19-声画门禁与静态检查设计.md", "anchor": "§7.1" },
+      "owner": "UXVisualGrammar01",
+      "scope": "global visual grammar and bounded material/illustration exceptions",
+      "target": [
+        "apps/web/src/components/performance/PerformanceLayer.tsx",
+        "apps/web/src/components/canvas/SceneBackdrop.tsx",
+        "apps/web/src/components/canvas/prop-card.css",
+        "apps/web/src/prototype.css",
+        "apps/web/tailwind.config.js"
+      ],
+      "expect": {
+        "canonicalTokenFile": "apps/web/src/index.css",
+        "tokenPrefix": "--ux-",
+        "appearancePrefix": "--appearance-",
+        "legacyAliases": ["--canvas-bg", "--card-cream", "--ink-secondary", "--rust"],
+        "literalKinds": ["color", "gradient", "shadow", "radius", "font", "motion"],
+        "exceptionRegistry": "visualExceptions"
+      },
+      "allow": ["transparent", "currentColor"],
+      "forbid": ["new global literal source", "legacy consumer"],
+      "reason": "UI/state literals consume canonical tokens; only bounded illustration paint is registered."
     }
   ],
   "depth": [
@@ -262,6 +322,9 @@
     { "id": "presence-projection-second-call", "group": "projection", "status": "failure" },
     { "id": "presence-navigation-memory-write", "group": "projection", "status": "failure" },
     { "id": "depth-registration-clean", "group": "depth", "status": "clean" },
-    { "id": "depth-unregistered-number", "group": "depth", "status": "failure" }
+    { "id": "depth-unregistered-number", "group": "depth", "status": "failure" },
+    { "id": "visual-literal-clean", "group": "visual", "status": "clean" },
+    { "id": "visual-literal-unregistered", "group": "visual", "status": "failure" },
+    { "id": "visual-literal-expired-exception", "group": "visual", "status": "failure" }
   ]
 }

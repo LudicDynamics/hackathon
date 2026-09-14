@@ -3,7 +3,7 @@ import { subscribeParallax } from '../../lib/parallax.js';
 import { materialSkinOf } from '@airp/shared/forms';
 import { airpGateway } from '../../lib/airp-gateway.js';
 import { useStill } from '../../lib/motion.js';
-
+import { mediaReadiness } from '../../lib/media-readiness.js';
 /** The layer backdrop payload from `GET /api/layer` (see LayerState.bg). */
 export interface SceneBackdropBg {
   /** World-relative asset path (`assets/scenes/<layer>/<file>.png`), or null. */
@@ -36,7 +36,8 @@ export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg, effectsEnabled
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const [failedVideo, setFailedVideo] = useState<string | null>(null);
-  const [readySrc, setReadySrc] = useState<string | null>(null);
+  const [, setReadinessVersion] = useState(0);
+  const readinessEpoch = useRef(0);
 
   const bgIsVideo = !!bg.src && /\.(mp4|webm)$/i.test(bg.src);
   const motionUrl = bg.video ? airpGateway.assetUrl(bg.video, undefined, 'video') : null;
@@ -54,15 +55,30 @@ export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg, effectsEnabled
   const src = isVideo ? videoSrc : posterSrc;
   const sourceRef = useRef<string | null>(src);
   sourceRef.current = src;
+  const readiness = src
+    ? mediaReadiness.snapshot('background', src)
+    : { state: 'unrequested' as const };
   const sourceFailed = isVideo ? failedVideo === src : failedSrc === src;
-  const mediaState = (videoSrc && failedVideo === videoSrc) || sourceFailed
+  const mediaState = (readiness.state === 'failed' || sourceFailed)
     ? 'failed'
-    : src && readySrc === src
+    : readiness.state === 'ready'
       ? 'ready'
       : src
         ? 'loading'
         : 'paper';
 
+  useEffect(() => {
+    if (!src) return;
+    const epoch = ++readinessEpoch.current;
+    let disposed = false;
+    void mediaReadiness.request('background', src, epoch).then(() => {
+      if (!disposed && sourceRef.current === src) setReadinessVersion((version) => version + 1);
+    });
+    return () => {
+      disposed = true;
+      mediaReadiness.cancel('background', src, epoch);
+    };
+  }, [src]);
   // Parallax is optional decoration. Effects off and reduced motion both
   // restore the paper to its neutral position without touching the scene fact.
   useEffect(
@@ -74,7 +90,6 @@ export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg, effectsEnabled
       }),
     [motionAllowed, isVideo]
   );
-
   useEffect(() => {
     const root = rootRef.current;
     if (root && (!motionAllowed || isVideo)) {
@@ -84,7 +99,12 @@ export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg, effectsEnabled
     if (!video || !isVideo || !src) return;
     let disposed = false;
     const sync = () => {
-      if (disposed || !motionAllowed || (typeof document !== 'undefined' && document.hidden) || readySrc !== src) {
+      if (
+        disposed ||
+        !motionAllowed ||
+        (typeof document !== 'undefined' && document.hidden) ||
+        readiness.state !== 'ready'
+      ) {
         video.pause();
         return;
       }
@@ -99,13 +119,17 @@ export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg, effectsEnabled
       video.pause();
       document.removeEventListener('visibilitychange', sync);
     };
-  }, [motionAllowed, isVideo, src, readySrc]);
+  }, [motionAllowed, isVideo, src, readiness.state]);
 
   const markReady = (asset: string): void => {
-    if (sourceRef.current === asset) setReadySrc(asset);
+    if (sourceRef.current !== asset) return;
+    mediaReadiness.markReady('background', asset, readinessEpoch.current);
+    setReadinessVersion((version) => version + 1);
   };
   const markFailed = (asset: string, video: boolean): void => {
     if (sourceRef.current !== asset) return;
+    mediaReadiness.markFailed('background', asset, readinessEpoch.current, 'media-error');
+    setReadinessVersion((version) => version + 1);
     if (video) setFailedVideo(asset);
     else setFailedSrc(asset);
   };
@@ -115,8 +139,7 @@ export const SceneBackdrop: React.FC<SceneBackdropProps> = ({ bg, effectsEnabled
       ref={rootRef}
       className={`scene-backdrop ${materialSkinOf(bg.grain)}`}
       data-tone={bg.tone}
-      data-media-state={mediaState}
-      style={{ transform: 'translate3d(0, 0, 0) scale(1.06)', transition: 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)' }}
+      style={{ transform: 'translate3d(0, 0, 0) scale(1.06)', transition: 'transform var(--ux-motion-fast) var(--ux-motion-ink)' }}
     >
       {isVideo && src ? (
         <video

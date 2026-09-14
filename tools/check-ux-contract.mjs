@@ -12,8 +12,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const CONTRACT_PATH = 'tools/ux-contract.json';
-const TOP_KEYS = new Set(['schemaVersion', 'docs', 'protectedPaths', 'visual', 'depth', 'projection', 'fixtures']);
-const KINDS = new Set(['exists', 'no-delete', 'unique-call', 'unique-listener', 'required-source', 'forbidden-source', 'css-declaration', 'depth', 'projection']);
+const TOP_KEYS = new Set(['schemaVersion', 'docs', 'protectedPaths', 'visual', 'visualExceptions', 'depth', 'projection', 'fixtures']);
+const KINDS = new Set(['exists', 'no-delete', 'unique-call', 'unique-listener', 'required-source', 'forbidden-source', 'css-declaration', 'depth', 'projection', 'visual-literal']);
 const COMMON_KEYS = new Set(['id', 'kind', 'doc', 'owner', 'scope', 'target', 'expect', 'allow', 'forbid', 'reason']);
 const EXPECT_KEYS = {
   'exists': new Set(['sentinel']),
@@ -25,6 +25,7 @@ const EXPECT_KEYS = {
   'css-declaration': new Set(['selector', 'property', 'value']),
   'depth': new Set(['registration']),
   'projection': new Set(['ownerLiteral', 'routeLiteral', 'markerLiteral', 'branches']),
+  'visual-literal': new Set(['canonicalTokenFile', 'tokenPrefix', 'appearancePrefix', 'legacyAliases', 'literalKinds', 'exceptionRegistry']),
 };
 const RULE_GROUPS = ['visual', 'depth', 'projection'];
 
@@ -58,13 +59,35 @@ export function validateContract(contract) {
   for (const [index, entry] of (contract.protectedPaths || []).entries()) {
     if (!isObject(entry) || Object.keys(entry).some((k) => !['path', 'sentinel'].includes(k)) || !isRelativePath(entry.path) || typeof entry.sentinel !== 'string' || !entry.sentinel) errors.push(schemaError(`protectedPaths[${index}] requires only path and sentinel`));
   }
-  for (const group of RULE_GROUPS) {
-    if (!Array.isArray(contract[group])) { errors.push(schemaError(`${group} must be an array`)); continue; }
-    for (const [index, rule] of contract[group].entries()) errors.push(...validateRule(rule, `${group}[${index}]`));
+  if (!Array.isArray(contract.visualExceptions)) errors.push(schemaError('visualExceptions must be an array'));
+  else for (const [index, exception] of contract.visualExceptions.entries()) {
+    const allowed = ['id', 'target', 'selectorOrSymbol', 'kind', 'literals', 'assetUrls', 'properties', 'owner', 'reason', 'expiresAfter'];
+    const expiry = new Date(`${exception?.expiresAfter}T23:59:59Z`).getTime();
+    if (
+      !isObject(exception) ||
+      Object.keys(exception).some((key) => !allowed.includes(key)) ||
+      typeof exception.id !== 'string' ||
+      !(isRelativePath(exception.target) || (Array.isArray(exception.target) && exception.target.every(isRelativePath))) ||
+      typeof exception.selectorOrSymbol !== 'string' ||
+      !['material', 'illustration', 'asset'].includes(exception.kind) ||
+      (!Array.isArray(exception.literals) && !Array.isArray(exception.assetUrls)) ||
+      (Array.isArray(exception.literals) && exception.literals.some((literal) => typeof literal !== 'string' || !literal)) ||
+      (Array.isArray(exception.assetUrls) && exception.assetUrls.some((url) => typeof url !== 'string' || !url)) ||
+      !Array.isArray(exception.properties) ||
+      typeof exception.owner !== 'string' ||
+      typeof exception.reason !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(exception.expiresAfter || '') ||
+      !Number.isFinite(expiry) ||
+      expiry < Date.now()
+    ) errors.push(schemaError(`visualExceptions[${index}] has malformed or expired exception fields`));
   }
   if (!Array.isArray(contract.fixtures)) errors.push(schemaError('fixtures must be an array'));
   else for (const [index, fixture] of contract.fixtures.entries()) {
     if (!isObject(fixture) || Object.keys(fixture).some((k) => !['id', 'group', 'status'].includes(k)) || typeof fixture.id !== 'string' || !['visual', 'depth', 'projection', 'protected'].includes(fixture.group) || !['clean', 'failure'].includes(fixture.status)) errors.push(schemaError(`fixtures[${index}] has unknown key or invalid value`));
+  }
+  for (const group of RULE_GROUPS) {
+    if (!Array.isArray(contract[group])) { errors.push(schemaError(`${group} must be an array`)); continue; }
+    for (const [index, rule] of contract[group].entries()) errors.push(...validateRule(rule, `${group}[${index}]`));
   }
   return errors;
 }
@@ -90,18 +113,31 @@ function validateRule(rule, label) {
 function validateExpect(rule, label) {
   const e = rule.expect || {};
   const errors = [];
-  const string = (key) => { if (typeof e[key] !== 'string' || !e[key]) errors.push(schemaError(`${label}.expect.${key} must be a non-empty string`)); };
+  const string = (key) => {
+    if (typeof e[key] !== 'string' || !e[key]) errors.push(schemaError(`${label}.expect.${key} must be a non-empty string`));
+  };
   if (['exists', 'no-delete', 'depth'].includes(rule.kind)) string(rule.kind === 'depth' ? 'registration' : 'sentinel');
   if (['unique-call', 'unique-listener'].includes(rule.kind)) {
     if (typeof e.count !== 'number' || !Number.isInteger(e.count) || e.count < 0) errors.push(schemaError(`${label}.expect.count must be a non-negative integer`));
     if (rule.kind === 'unique-call') string('name');
-    else { string('event'); if (!['event-listener', 'function'].includes(e.mode)) errors.push(schemaError(`${label}.expect.mode must be event-listener or function`)); }
+    else {
+      string('event');
+      if (!['event-listener', 'function'].includes(e.mode)) errors.push(schemaError(`${label}.expect.mode must be event-listener or function`));
+    }
   }
-  if (['required-source', 'forbidden-source'].includes(rule.kind)) if (!Array.isArray(e.literals) || e.literals.some((x) => typeof x !== 'string' || !x)) errors.push(schemaError(`${label}.expect.literals must be an array of strings`));
+  if (['required-source', 'forbidden-source'].includes(rule.kind)) {
+    if (!Array.isArray(e.literals) || e.literals.some((x) => typeof x !== 'string' || !x)) errors.push(schemaError(`${label}.expect.literals must be an array of strings`));
+  }
   if (rule.kind === 'css-declaration') for (const key of ['selector', 'property', 'value']) string(key);
   if (rule.kind === 'projection') {
     for (const key of ['ownerLiteral', 'routeLiteral', 'markerLiteral']) string(key);
     if (!Array.isArray(e.branches) || e.branches.some((x) => typeof x !== 'string' || !x)) errors.push(schemaError(`${label}.expect.branches must be an array of strings`));
+  }
+  if (rule.kind === 'visual-literal') {
+    for (const key of ['canonicalTokenFile', 'tokenPrefix', 'appearancePrefix', 'exceptionRegistry']) string(key);
+    for (const key of ['legacyAliases', 'literalKinds']) {
+      if (!Array.isArray(e[key]) || e[key].some((value) => typeof value !== 'string' || !value)) errors.push(schemaError(`${label}.expect.${key} must be an array of strings`));
+    }
   }
   return errors;
 }
@@ -153,6 +189,58 @@ export function scanSource(text, options = {}) {
         if (new RegExp(`${e.property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:\\s*auto\\b`).test(body)) add(lineOf(source, match.index), `${e.selector} overrides ${e.property} with auto`, 'remove the pointer-event override from the ghost selector');
       }
       if (!good) add(0, `${e.selector} must declare ${e.property}: ${e.value}`, 'restore the canonical CSS declaration');
+    } else if (rule.kind === 'visual-literal') {
+      const canonical = e.canonicalTokenFile;
+      if (file === canonical) continue;
+      const exceptions = options.contract?.visualExceptions || [];
+      const declaration = /([-\w]+)\s*:\s*([^;\n}]+)/g;
+      const allowedValue = (value) => /var\(--(?:ux|appearance)-[\w-]+\)|\b(?:transparent|currentColor|inherit|none)\b/.test(value);
+      const patterns = [
+        ['color', /(?:#[\da-f]{3,8}\b|\b(?:rgba?|hsla?)\s*\(|\b(?:white|black|red|blue|green|gray|grey)\b)/i],
+        ['gradient', /\b(?:repeating-)?(?:linear|radial|conic)-gradient\s*\(/i],
+        ['shadow', /\b(?:inset\s+)?-?\d+(?:\.\d+)?(?:px|rem|em)\b.*\b(?:rgba?|#[\da-f]{3,8})/i],
+        ['radius', /\b\d+(?:\.\d+)?(?:px|rem|em|%)\b/i],
+        ['font', /(?:^|,)\s*[A-Za-z][\w -]*(?:,\s*|$)/],
+        ['motion', /\b\d+(?:\.\d+)?m?s\b|cubic-bezier\s*\(/i],
+      ];
+      const exceptionMatches = (property, value, offset) => exceptions.some((exception) => {
+        const targets = asArray(exception.target);
+        const literalMatch = (exception.literals || []).some((literal) => value.includes(literal));
+        const selectorAt = source.slice(0, offset).lastIndexOf(exception.selectorOrSymbol);
+        const blockStart = selectorAt >= 0 ? source.indexOf('{', selectorAt) : -1;
+        const blockEnd = blockStart >= 0 ? source.indexOf('}', blockStart) : -1;
+        return targets.includes(file) &&
+          selectorAt >= 0 &&
+          blockStart >= 0 &&
+          (blockEnd < 0 || blockEnd >= offset) &&
+          exception.properties.includes(property) &&
+          literalMatch &&
+          new Date(`${exception.expiresAfter}T23:59:59Z`).getTime() >= Date.now();
+      });
+      for (const match of source.matchAll(declaration)) {
+        const property = match[1];
+        const value = match[2].trim();
+        if (property.startsWith(e.tokenPrefix)) {
+          add(lineOf(source, match.index), `canonical token definition \`${property}\` is outside ${canonical}`, `move ${property} into the canonical token file`);
+          continue;
+        }
+        const propertyKind =
+          /(?:gradient)/i.test(value) && /^background(?:-image)?$/i.test(property) ? 'gradient' :
+          /^(?:color|background(?:-color)?|border(?:-[\w-]+)?)$/i.test(property) ? 'color' :
+          /(?:shadow|filter)/i.test(property) ? 'shadow' :
+          property === 'border-radius' ? 'radius' :
+          /^font(?:-|$)/i.test(property) ? 'font' :
+          /^(?:transition|animation(?:-duration|-timing-function)?)$/i.test(property) ? 'motion' :
+          null;
+        if (!propertyKind || allowedValue(value)) continue;
+        const pattern = patterns.find(([kind]) => kind === propertyKind)?.[1];
+        if (!pattern?.test(value)) continue;
+        if (exceptionMatches(property, value, match.index)) continue;
+        add(lineOf(source, match.index), `unregistered ${propertyKind} literal \`${value}\``, `migrate ${property} to a canonical ${e.tokenPrefix} token or add a precise, unexpired material/illustration exception`);
+      }
+      for (const alias of e.legacyAliases) {
+        for (const at of occurrences(source, `var(${alias})`)) add(lineOf(source, at), `legacy visual alias \`${alias}\` is consumed`, `replace ${alias} with a canonical ${e.tokenPrefix} token`);
+      }
     } else if (rule.kind === 'depth') {
       const zRe = /(?:z-index|zIndex)\s*:\s*([^,;}\n]+)/g;
       for (const match of source.matchAll(zRe)) {
@@ -176,9 +264,17 @@ export function compare(actual, contract) {
   if (Array.isArray(actual.findings)) return actual.findings;
   const sources = actual.sources instanceof Map ? [...actual.sources.entries()] : Object.entries(actual.sources || {});
   const out = [];
+  for (const exception of contract.visualExceptions || []) {
+    for (const target of asArray(exception.target)) {
+      const source = sources.find(([file]) => matches(target, file));
+      if (!source) out.push(schemaError(`visual exception target path has no source: ${target}`, target));
+      else if (!source[1].includes(exception.selectorOrSymbol)) out.push(schemaError(`visual exception selector is absent: ${target} :: ${exception.selectorOrSymbol}`, target));
+      else if ((exception.literals || []).length && !(exception.literals || []).some((literal) => source[1].includes(literal))) out.push(schemaError(`visual exception literal is absent: ${target} :: ${exception.id}`, target));
+    }
+  }
   for (const rule of allRules(contract)) for (const target of ruleTargets(rule)) if (!sources.some(([file]) => matches(target, file))) out.push(schemaError(`contract target path has no source: ${target}`, target));
   if (out.length) return out;
-  for (const [file, text] of sources) out.push(...scanSource(text, { file, rules: allRules(contract) }));
+  for (const [file, text] of sources) out.push(...scanSource(text, { file, rules: allRules(contract), contract }));
   return out;
 }
 
