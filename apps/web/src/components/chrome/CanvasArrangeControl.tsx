@@ -171,6 +171,7 @@ export const CanvasArrangeControl = forwardRef<CanvasArrangeControlHandle, Canva
   const pendingOutcomeRef = useRef<string | undefined>();
   const cancelInFlightRef = useRef(false);
   const scopeRef = useRef({ worldId, layer, worldChanging });
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const setLocalPhase = useCallback((next: CanvasArrangePhase, nextMessage: string) => {
     const current = phaseRef.current;
