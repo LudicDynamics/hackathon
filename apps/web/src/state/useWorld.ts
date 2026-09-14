@@ -629,11 +629,15 @@ export function useWorld(): UseWorldApi {
       // (355px → 291px on the same paragraph, contract §3.5).
       if (fontsSettledRef.current) {
         fpRef.current?.notify();
-      } else {
-        console.warn('[footprint] fonts did not settle in time; heights may be off');
+        return;
       }
-      fontsSettledRef.current = true;
-      if (!disposed) fpRef.current?.notify();
+      void whenFontsSettled().then((outcome) => {
+        if (outcome === 'timeout') {
+          console.warn('[footprint] fonts did not settle in time; heights may be off');
+        }
+        fontsSettledRef.current = true;
+        if (!disposed) fpRef.current?.notify();
+      });
     });
     return () => {
       disposed = true;
@@ -886,6 +890,7 @@ export function useWorld(): UseWorldApi {
           // 帧带 layer：不匹配（或缺失）整帧忽略 —— 作家在别的层摆位不该让当前页抖一下。
           if (typeof msg.layer !== 'string' || msg.layer !== layerRef.current) break;
           if (msg.kind === 'links') {
+            if (!Array.isArray(msg.links)) break;
             setState((s) => {
               if (!s) return s;
               const links = mergeLinkPatch(s.links, msg.links as never, msg.action as never);

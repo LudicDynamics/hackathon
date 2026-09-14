@@ -211,3 +211,66 @@ export function characterLaunch(
     }),
   };
 }
+/**
+ * Functional canvas arranger launch spec.
+ *
+ * Unlike the resident Writer/Character clients this is intentionally a fresh
+ * session per operation.  Keep every discovery surface disabled and opt into
+ * only the dedicated extension: a missing preset/extension is a hard launch
+ * error, never an implicit fallback to pi-rp's default or Writer preset.
+ */
+export function canvasArrangerLaunch(
+  repoRoot: string,
+  worldRoot: string,
+  vendorCliPath: string,
+  operationId: string,
+  turnId: string,
+  attempt = 1,
+): LaunchSpec {
+  if (!operationId || !turnId) throw new Error('Canvas arranger operation and turn identities are required.');
+  if (!Number.isInteger(attempt) || attempt < 1) throw new Error('Canvas arranger launch attempt must be a positive integer.');
+
+  const presetPath = path.join(repoRoot, 'presets', 'canvas-arranger.json');
+  const extensionPath = path.join(repoRoot, 'extensions', 'canvas-arranger.ts');
+  if (!fs.statSync(presetPath, { throwIfNoEntry: false })?.isFile()) {
+    throw new Error('Canvas arranger preset is unavailable.');
+  }
+  if (!fs.statSync(extensionPath, { throwIfNoEntry: false })?.isFile()) {
+    throw new Error('Canvas arranger extension is unavailable.');
+  }
+  const presetId = installPreset(worldRoot, presetPath);
+  if (presetId !== 'canvas-arranger') throw new Error('Canvas arranger preset has an invalid id.');
+  const sessionsDir = sessionsDirOf(worldRoot);
+  const session = path.join(sessionsDir, `canvas-arranger-${operationId}-attempt-${attempt}.jsonl`);
+
+  return {
+    cliPath: vendorCliPath,
+    cwd: worldRoot,
+    args: [
+      '--approve',
+      '--preset',
+      presetId,
+      '--session-dir',
+      sessionsDir,
+      '--session',
+      session,
+      ...ISOLATION_ARGS,
+      '--tools',
+      'view_canvas,screenshot_canvas,arrange_canvas',
+      '--extension',
+      extensionPath,
+    ],
+    env: toEnv(
+      airpEnv({
+        role: 'functional:canvas-arranger',
+        extra: {
+          AIRP_AGENT_SCOPE: 'functional-canvas-arranger',
+          AIRP_ARRANGER_OPERATION_ID: operationId,
+          AIRP_ARRANGER_TURN_ID: turnId,
+        },
+      }),
+      agentDirEnv(repoRoot),
+      { PI_CODING_AGENT_SESSION_DIR: sessionsDir },
+    ),
+  };
+}

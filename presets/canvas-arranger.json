@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "canvas-arranger",
+  "name": "Canvas Arranger",
+  "description": "AIRP functional canvas arrangement agent",
+  "tools": {
+    "allow": ["view_canvas", "screenshot_canvas", "arrange_canvas"]
+  },
+  "items": [
+    { "kind": "slot", "id": "canvas-arranger-instruction", "slot": "canvas-arranger-instruction" },
+    { "kind": "slot", "id": "tools", "slot": "tools", "options": { "onlyWithSnippets": true } },
+    {
+      "kind": "slot",
+      "id": "tool-guidelines",
+      "slot": "tool-guidelines",
+      "options": { "includePiDefaultGuidelines": false, "heading": "Guidelines:" }
+    }
+  ]
+}
