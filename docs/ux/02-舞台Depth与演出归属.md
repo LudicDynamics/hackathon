@@ -145,6 +145,8 @@
 
 `system-blocking`（加载等）不是第七个 Depth：它是 `chrome` 的阻断子层，必须在 chrome token registry 中登记。Nook 的 `z800` 不是本篇的 Depth 语义；它是 `docs/nook/00` 所有的 active projection 接缝，不能通过“比 dialogue 更大”来偷换职责。
 
+骰子仪式是 `performance` 的一个**根级阻断子层**：它 portal 到 `<body>`，所以要登记的是一枚独立语义 token `--depth-performance-ceremony`（在 `apps/web/src/index.css` 的 root registry），而不是就地写数值偏移。它的语义是「盖过 `chrome` 的普通阻断对话框（板书里打开的声明动作对话框落在 `--depth-entity-reading`）但不越到 `dialogue`」——即 §6.2 的目标覆盖关系，数值带因此贴近 `chrome` 上沿而仍低于 `dialogue`。
+
 ### 4.2 Depth ownership 矩阵
 
 | 投影者 | Module / Interface | 拥有的 Depth | 不拥有的 Depth | Seam / Adapter |
@@ -168,6 +170,7 @@
 - `tools/check-ux-contract.mjs` 扫描 `apps/web/src/**/*.{tsx,css}` 与 `apps/web/tailwind.config.js` 的 `z-index:`、Tailwind `z-*`、inline `zIndex`，每一处映射到 token 或明确的数据排序例外；
 - 未登记项必须使统一检查失败，不能以“数值很大”“当前看起来没盖住”通过；
 - 检查必须区分不同父 stacking context，不能把 context 内部 `z=1001` 与根级 `z=20` 直接比较；非空 fixture 至少包含 grain、ghost、dialogue+dice 和 Money Shot。
+- 骰子仪式用登记 token `--depth-performance-ceremony`（owner：`DiceCeremony`），而不是 `calc(var(--depth-ui) + N)` 这类未登记表达式；该 token 的覆盖语义见 §6.2，契约扫描必须把它当作已登记项。
 
 ## 5. 行为顺序：进入、退出与相机连续性
 

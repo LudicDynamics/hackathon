@@ -14,7 +14,12 @@ test('reader supports keyboard and ignores drag; save picker closes before loadi
   const object = await fs.readFile('apps/web/src/components/canvas/CanvasObject.tsx', 'utf8');
   assert.match(object, /event\.key === 'Enter'/);
   assert.match(object, /Math\.hypot/);
-  assert.match(object, /BagItemDialog inline/);
+  // The reader contract is "BagItemDialog renders inline"; assert it on the
+  // element body so a multi-line JSX opening tag or attribute reorder cannot
+  // masquerade as a contract break.
+  const bagDialog = object.match(/<BagItemDialog\b[\s\S]*?\/>/);
+  assert.ok(bagDialog, 'reader must render a BagItemDialog');
+  assert.match(bagDialog[0], /\binline\b/);
   assert.doesNotMatch(object, /createPortal/);
   const reader = await fs.readFile('apps/web/src/components/BagItemDialog.tsx', 'utf8');
   assert.doesNotMatch(reader, /aria-modal="true"|cabin-reading/);

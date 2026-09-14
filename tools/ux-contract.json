@@ -168,6 +168,18 @@
       "allow": ["data-order exception registered by the owning seam"],
       "forbid": ["unregistered numeric z-index", "cross-context numeric comparison"],
       "reason": "This entry registers ownership and context without copying numeric depth truth."
+    },
+    {
+      "id": "depth.dice-ceremony-blocking-overlay",
+      "kind": "depth",
+      "doc": { "path": "docs/ux/02-舞台Depth与演出归属.md", "anchor": "§6.2" },
+      "owner": "DiceCeremony",
+      "scope": "root-level blocking dice ceremony overlay",
+      "target": "apps/web/src/components/performance/DiceCeremony.tsx",
+      "expect": { "registration": "token --depth-performance-ceremony (owner DiceCeremony); above chrome blocking dialogs, below dialogue" },
+      "allow": ["the registered --depth-performance-ceremony token"],
+      "forbid": ["inline numeric offset such as calc(var(--depth-ui) + N)"],
+      "reason": "The ceremony portals to <body> and must clear the Chalk-opened declared-action dialog without crossing dialogue."
     }
   ],
   "projection": [

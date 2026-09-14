@@ -106,11 +106,14 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict,
     );
 
   if (!input) return null;
-  // Portal to <body>, above every dialog: opened from a Chalk, the declared-action
-  // dialog is itself a body portal (z 40) and used to cover the rolling dice.
+  // Portal to <body>: opened from a Chalk, the declared-action dialog is itself
+  // a body portal (chrome band) and used to cover the rolling dice rendered
+  // inside the shell's stacking context. The registered
+  // `--depth-performance-ceremony` token sits above that chrome dialog and just
+  // below dialogue (docs/ux/02 §6.2).
   return createPortal(
     <div
-      style={{ zIndex: 'calc(var(--depth-ui) + 10)' }}
+      style={{ zIndex: 'var(--depth-performance-ceremony)' }}
       className="fixed inset-0 bg-[rgba(41,40,32,0.55)] backdrop-blur-sm flex items-center justify-center"
       role="dialog"
       aria-modal="true"

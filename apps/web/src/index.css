@@ -70,6 +70,11 @@
   --depth-performance-root: var(--depth-overlay);
   --depth-performance-fumble: calc(var(--depth-overlay) + 1);
   --depth-overlay-performance: calc(var(--depth-overlay) + 1);
+  /* The blocking dice ceremony is a root-level overlay (ported to <body>): it
+     must cover chrome blocking dialogs — the declared-action dialog opened from
+     a Chalk sits at `--depth-entity-reading` (40) — while staying below
+     `dialogue` (docs/ux/02 §6.2). */
+  --depth-performance-ceremony: calc(var(--depth-modal) - 1);
   --depth-modal-dialogue: calc(var(--depth-modal) + 1);
   --depth-chrome-writer: var(--depth-writer);
   --depth-chrome-stub: calc(var(--depth-writer) + 5);
