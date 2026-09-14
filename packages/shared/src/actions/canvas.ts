@@ -7,6 +7,7 @@
  * `details`, which `event-bridge` maps into a `canvas_patched` frame.
  */
 import type { ActionContext, ActionResult } from './types.js';
+import { FUNCTIONAL_ARRANGER_SCOPE } from './actor.js';
 import type { ArrangeInput, LayoutMode, LinkColor, LinkInput, LinkRecord, LinkStyle } from '../schemas/canvas.js';
 import type {
   ArrangeCanvasLayerInput,
@@ -429,7 +430,9 @@ export async function arrangeCanvas(
   ctx: ActionContext,
   input: ArrangeCanvasLayerInput,
 ): Promise<ActionResult<ArrangeCanvasDetails>> {
-  if (!input || typeof input !== 'object') fail('invalid_argument', 'arrangeCanvas input must be an object.');
+  if (ctx.actor.type !== 'functional' || ctx.actor.id !== 'canvas-arranger' || ctx.agentScope !== FUNCTIONAL_ARRANGER_SCOPE) {
+    fail('unsupported', 'arrangeCanvas requires the functional canvas-arranger scope.');
+  }
   if (typeof input.operationId !== 'string' || input.operationId.trim() === '') {
     fail('invalid_argument', 'operationId must be a non-empty string.');
   }
