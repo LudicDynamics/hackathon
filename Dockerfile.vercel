@@ -1,0 +1,19 @@
+FROM node:24-bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates python3 make g++ && rm -rf /var/lib/apt/lists/*
+RUN npm install --global pnpm@10.17.1
+WORKDIR /app
+COPY . .
+
+# Build the vendored engine from source; local dist and credentials are excluded.
+RUN HUSKY=0 npm ci --prefix vendor/pi-rp
+RUN pnpm install --frozen-lockfile
+# Rehydrate generated catalogs in this layer; overlayfs cannot rename a directory
+# inherited from COPY into the generator's atomic staging directory.
+RUN rm -rf vendor/pi-rp/packages/ai/src/providers/data && pnpm pi build
+RUN pnpm build
+
+ENV NODE_ENV=production
+ENV PORT=80
+EXPOSE 80
+CMD ["node", "tools/start-vercel.mjs"]

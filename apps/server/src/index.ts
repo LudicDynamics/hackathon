@@ -19,7 +19,7 @@ import { createSttRouter } from './routes/stt.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const REPO_ROOT = path.resolve(__dirname, '../../..');
+const REPO_ROOT = process.env.AIRP_REPO_ROOT || path.resolve(__dirname, '../../..');
 const VENDOR_CLI = path.join(REPO_ROOT, 'vendor/pi-rp/packages/coding-agent/dist/cli.js');
 const WEB_DIST = path.join(REPO_ROOT, 'apps/web/dist');
 // Explicit local overrides precede the legacy local file; ambient env still wins.
