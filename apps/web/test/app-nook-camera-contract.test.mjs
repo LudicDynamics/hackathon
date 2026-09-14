@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const nook = await readFile(new URL('../src/components/nook/NookView.tsx', import.meta.url), 'utf8');
+const portrait = await readFile(new URL('../src/components/nook/NookPortrait.tsx', import.meta.url), 'utf8');
 const composer = await readFile(new URL('../src/components/nook/NookNoteComposer.tsx', import.meta.url), 'utf8');
 const media = await readFile(new URL('../src/components/media/CharacterMedia.tsx', import.meta.url), 'utf8');
 const camera = await readFile(new URL('../src/lib/camera.ts', import.meta.url), 'utf8');
@@ -47,14 +48,19 @@ test('Nook note composer posts the top-level gateway path and locks transport', 
   assert.match(composer, /onCreated\?\.\(\)/);
 });
 
-test('Nook projects the character metadata media outside the card canvas', () => {
+test('Nook projects the character metadata media through a draggable portrait outside the card canvas', () => {
   assert.match(nook, /character: CharacterMediaSnapshot/);
   assert.match(nook, /effectsEnabled: boolean/);
   assert.match(nook, /data-nook-zone="character-media"/);
+  assert.match(nook, /<NookPortrait/);
+  assert.match(nook, /worldId=\{worldId\}/);
   assert.match(nook, /video=\{avatarVideo \?\? undefined\}/);
   assert.match(nook, /poster=\{avatar \?\? undefined\}/);
   assert.match(nook, /stillPortraits/);
-  assert.match(nook, /className="nook-character-media__asset"/);
+  assert.match(portrait, /className="nook-character-media__asset"/);
+  assert.match(portrait, /onPointerDown/);
+  assert.match(portrait, /onPointerMove/);
+  assert.match(portrait, /ArrowLeft/);
   assert.doesNotMatch(nook, /sceneFrontmatter\?\.avatar/);
 });
 

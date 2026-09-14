@@ -1,14 +1,28 @@
 .nook-character-media {
   position: absolute;
-  right: clamp(1rem, 12vw, 10rem);
-  bottom: clamp(1.25rem, 8vh, 5rem);
+  left: calc(var(--nook-portrait-x, 0.84) * 100%);
+  top: calc(var(--nook-portrait-y, 0.5) * 100%);
   z-index: var(--depth-entity-base);
-  display: flex;
-  width: min(34vw, 25rem);
-  height: min(70vh, 38rem);
+  /* Slightly larger than one canvas card, not full-height: the portrait is a
+     movable prop in the room, not a second stage backdrop. */
+  width: min(24vw, 12.5rem);
+  height: min(42vh, 16.75rem);
   align-items: flex-end;
   justify-content: center;
-  pointer-events: none;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+  transform: translate(-50%, -50%);
+}
+
+.nook-character-media[data-nook-portrait-dragging='true'] {
+  cursor: grabbing;
+}
+
+.nook-character-media:focus-visible {
+  outline: 2px solid var(--rust);
+  outline-offset: 0.35rem;
 }
 
 .nook-character-media__asset {
@@ -18,12 +32,13 @@
   object-fit: contain;
   object-position: center bottom;
   filter: drop-shadow(0 1rem 1.75rem rgb(45 38 28 / 18%));
+  pointer-events: none;
 }
 
 .nook-character-media__fallback {
   display: grid;
-  width: min(14rem, 48vw);
-  height: min(22rem, 55vh);
+  width: min(9rem, 30vw);
+  height: min(12rem, 40vh);
   place-items: center;
   border: 1px solid var(--line);
   border-radius: var(--ux-radius-panel);
@@ -32,15 +47,13 @@
   font-family: var(--ux-font-human);
   font-size: clamp(2rem, 6vw, 4rem);
   box-shadow: var(--ux-shadow-soft);
+  pointer-events: none;
 }
 
 @media (max-width: 700px) {
   .nook-character-media {
-    right: 50%;
-    bottom: clamp(1rem, 17vh, 7rem);
-    width: min(62vw, 20rem);
-    height: min(50vh, 25rem);
-    transform: translateX(50%);
+    width: min(46vw, 11rem);
+    height: min(34vh, 14.75rem);
   }
 }
 

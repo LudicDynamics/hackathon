@@ -1169,6 +1169,7 @@ export function App() {
               inert={activeCharacter !== null || worldPickerOpen}
             >
               <NookView key={nookChar}
+                worldId={manifest?.id ?? ''}
                 characterId={nookChar!}
                 character={characters.find((item) => item.id === nookChar) ?? { id: nookChar! }}
                 effectsEnabled={effectsEnabled}

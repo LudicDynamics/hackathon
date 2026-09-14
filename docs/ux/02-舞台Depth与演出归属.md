@@ -97,6 +97,7 @@
 | modal 内 portrait / speech / close | `index.css:359-367`、`:464-478`、`:655-675` | `1/2/60` | modal 自身 context 内；close 只需盖过 modal 内容 | `dialogue` 的内部层次 |
 | DiceRoller / DiceCeremony | `DiceRoller.tsx:341-345`、`DiceCeremony.tsx:91-150` | fixed `z-50`；fumble `.fumble-crack z55` | 根级；与 CharacterModal 同值时按 DOM 后者胜出 | `performance` 的 blocking ceremony，需修订优先级 |
 | Nook | `App.tsx:758`、`scene-shell.css:179` | fixed `z-index:800` | 根级独立 projection；不能用本篇数字解释 active projection | 由 Nook 契约拥有；不另造 Depth |
+| Nook portrait | `NookView.tsx` 的 `[data-nook-zone="character-media"]` → `NookPortrait.tsx` | 不新增 Depth；沿用 `--depth-entity-base` | 仅是 Nook active projection 内的可移动 presentation 浮层；位置以 stage anchor 记忆，不参与 Canvas 相机、卡片坐标或世界事实 | UX 21 |
 | loading | `App.tsx:723`、`prototype.css:174` | fixed `z-index:1100` | 根级阻断层 | `chrome` 的系统阻断态 |
 | agent settings | `TtsSettings.tsx:28-30`、`prototype.css:177` | panel `z-index:1200` | header 内 positioned child；相对根级 overlay 的实际次序需浏览器验收 | `chrome` 的局部 dialog |
 | toast / stop | `App.tsx:688-690,765`、`prototype.css:682-700`、`scene-shell.css:185-186` | toast `100`；stop `120` | 根级 fixed，非阻断（stop 可操作） | `chrome` 的回执/行动控制 |

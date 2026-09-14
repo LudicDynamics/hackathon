@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Loader2, Mic, PhoneOff } from 'lucide-react';
-import { CharacterMedia } from '../media/CharacterMedia.js';
+import { NookPortrait } from './NookPortrait.js';
 import { Canvas } from '../canvas/Canvas.js';
 import { WriterBar } from '../chrome/WriterBar.js';
 import { StubPrompt } from '../chrome/StubPrompt.js';
@@ -42,6 +42,8 @@ export interface CharacterMediaSnapshot {
 export interface NookViewProps {
   /** Character id (ASCII kebab-case, supplied by the character rail's nook button). */
   characterId: string;
+  /** Active world identity; used only to isolate local portrait position memory. */
+  worldId: string;
   /** Metadata from the single `/api/characters` chrome request. */
   character: CharacterMediaSnapshot;
   /** Effects toggle controls character motion, never Nook data or presence. */
@@ -156,6 +158,7 @@ async function fetchNook(characterId: string): Promise<FetchResult> {
   }
 }
 export const NookView: React.FC<NookViewProps> = ({
+  worldId,
   characterId,
   character,
   effectsEnabled,
@@ -546,15 +549,17 @@ export const NookView: React.FC<NookViewProps> = ({
       <main data-nook-zone="canvas" className="absolute inset-0" aria-label={`${displayName} canvas`}>
         <div
           data-nook-zone="character-media"
-          className="nook-character-media"
+          className="contents"
           aria-label={`${displayName} portrait`}
         >
-          <CharacterMedia
+          <NookPortrait
+            worldId={worldId}
+            characterId={characterId}
+            displayName={displayName}
             video={avatarVideo ?? undefined}
             poster={avatar ?? undefined}
             enabled={effectsEnabled}
-            name={displayName}
-            className="nook-character-media__asset"
+            hidden={hidden}
             fallback={
               <div className="nook-character-media__fallback" role="img" aria-label={displayName}>
                 {displayName.slice(0, 1)}
@@ -648,7 +653,7 @@ export const NookView: React.FC<NookViewProps> = ({
         data-nook-zone="left-lane"
         className="pointer-events-none depth-surface--writer absolute bottom-0 left-0 flex max-w-[min(30rem,calc(100%_-_1.5rem))] flex-col items-start gap-2"
         style={{
-          paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+          paddingBottom: 'max(1.25rem, calc(env(safe-area-inset-bottom) + 0.5rem))',
           paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
         }}
       >

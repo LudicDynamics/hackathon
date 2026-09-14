@@ -22,7 +22,7 @@ export const NookNoteComposer: React.FC<NookNoteComposerProps> = ({ characterId,
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [narrow, setNarrow] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const imeGuardRef = useRef(createImeGuard());
   // The host owns the lane position. This local media state only controls
   // whether the panel is folded on narrow viewports; it never changes Canvas.
@@ -30,9 +30,7 @@ export const NookNoteComposer: React.FC<NookNoteComposerProps> = ({ characterId,
     if (typeof window.matchMedia !== 'function') return;
     const media = window.matchMedia('(max-width: 700px)');
     const sync = () => {
-      const matches = media.matches;
-      setNarrow(matches);
-      setCollapsed(matches);
+      setNarrow(media.matches);
     };
     sync();
     media.addEventListener?.('change', sync);
@@ -69,18 +67,18 @@ export const NookNoteComposer: React.FC<NookNoteComposerProps> = ({ characterId,
   const toggleLabel = collapsed ? 'Leave a note' : narrow ? 'Hide note form' : 'Fold note form';
 
   return (
-    <section className="w-full rounded-xl border border-ink/10 bg-paper-card/95 p-3 shadow-soft backdrop-blur-md" aria-label="Leave a note">
+    <section className="w-full rounded-2xl border border-ink/10 bg-paper-card/95 p-2 shadow-soft backdrop-blur-md" aria-label="Leave a note">
       <button
         type="button"
         aria-expanded={!collapsed}
         aria-controls="nook-note-form"
         onClick={() => setCollapsed(value => !value)}
-        className="mb-2 flex min-h-8 w-full items-center justify-between gap-2 rounded-lg border border-ink/10 bg-paper-wall/50 px-2 py-1.5 text-left text-xs text-ink transition-colors hover:bg-paper-wall"
+        className="flex min-h-9 w-full items-center justify-between gap-3 rounded-xl border border-ink/10 bg-paper-wall/60 px-3 py-1.5 text-left text-xs text-ink transition-colors hover:bg-paper-wall"
       >
-        <span>{toggleLabel}</span>
-        <span aria-hidden className="font-mono text-[10px] text-ink/50">{collapsed ? '+' : '−'}</span>
+        <span className="italic">{toggleLabel}</span>
+        <span aria-hidden className="font-mono text-[11px] text-ink/50">{collapsed ? '+' : '−'}</span>
       </button>
-      <form id="nook-note-form" hidden={collapsed} onSubmit={submit}>
+      <form id="nook-note-form" hidden={collapsed} onSubmit={submit} className="pt-2">
         <input
           value={title}
           onChange={event => setTitle(event.target.value)}

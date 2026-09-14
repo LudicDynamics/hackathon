@@ -77,6 +77,7 @@
 | Layer scheduler | `apps/web/src/state/useWorld.ts:278-310` 创建 layer scheduler，`:282-304` 读取 layer ref/items；`:315-346` 给全局 `.object[data-path]` 安装 ResizeObserver。 | layer scheduler 仍属于 `useWorld`；A05 不复制 `useWorld`，但必须解决它在 Nook DOM 出现时的待刷包风险。 |
 | 全局测量 / 路径查询 | `footprint.ts:82-93,109-112` 与 `LinkLayer.tsx` 仍有 document-level 默认查询；Nook 自身测量已在 `NookView.tsx:347-411` root-scoped。 | 互斥 Canvas 已降低串扰；若未来保留过渡 DOM，必须先完成 root scope，当前 marker/运行时边界仍要测。 |
 | WS 单入口 | `apps/web/src/state/useWorld.ts:478-485,559-617` 统一处理 writer/world/character 分流；角色只派发 `airp:character-frame`。 | Nook 不调用 `useWorld()` 或创建第二 WebSocket；Nook 只消费已归属事件。 |
+| Nook 立绘拖拽 | `apps/web/src/lib/nook-portrait.ts`（纯几何/持久化）+ `NookPortrait.tsx`（pointer/rAF）+ `nook-character-media.css`。锚点为 stage 归一化坐标，key `airp:nook-portrait:v1:<worldId>:<characterId>`。 | 只改 presentation transform，不碰相机栈与卡片坐标；契约见 `docs/ux/21`，测试 `apps/web/test/nook-portrait.test.mjs`。 |
 
 ## 4. Active projection 契约
 

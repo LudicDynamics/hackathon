@@ -634,6 +634,10 @@
   top: 68px;
   right: 24px;
 }
+.prototype-player-orb[hidden],
+.prototype-companion-orb[hidden] {
+  display: none;
+}
 
 .prototype-companion-orb i {
   position: absolute;
