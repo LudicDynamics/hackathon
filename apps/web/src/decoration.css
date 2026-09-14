@@ -79,12 +79,15 @@
 .settings-panel button { padding: 8px 13px; border: 1px solid #cdbda455; border-radius: 8px; background: #483956; color: #f0e5d4; font: inherit; cursor: pointer; }
 .settings-panel button:hover { background: #5b476b; }
 .settings-panel button:disabled { opacity: .5; cursor: not-allowed; }
-.settings-panel input[type='url'], .settings-panel input[type='password'] {
+.settings-panel input[type='url'], .settings-panel input[type='password'], .settings-panel input[type='text'], .settings-panel input[type='number'] {
   box-sizing: border-box; display: block; width: 100%; min-width: 0; margin-top: 6px;
   padding: 10px; border: 1px solid #cdbda455; border-radius: 8px;
   color: #f0e5d4; background: #393142; font: 13px/1.5 system-ui, sans-serif;
 }
 .settings-panel input::placeholder { color: #b6aabd; }
+.connection-settings, .nanami-tts-settings { margin-top: 24px; padding-top: 2px; border-top: 1px solid #cdbda433; }
+.connection-settings fieldset, .nanami-tts-settings fieldset { display: grid; gap: 8px; margin: 16px 0; }
+.nanami-tts-settings form > button { margin-top: 2px; }
 .settings-master-muted { display:flex; align-items:center; justify-content:space-between; gap:14px; margin:0 0 16px; padding:12px 14px; border:1px solid #d4b36a66; border-radius:10px; background:#6b4f2538; color:#f5dfb5; }
 .settings-master-muted span { line-height:1.5; }
 .settings-master-muted button { flex:none; background:#70542d; border-color:#e0bf7a88; }

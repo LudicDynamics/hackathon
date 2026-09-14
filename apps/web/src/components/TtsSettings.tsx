@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ConnectionSettings } from './ConnectionSettings.js';
+import { NanamiTtsSettings } from './NanamiTtsSettings.js';
 import { readTtsConfig, setTtsEnabled, ttsEnabled, type TtsConfig } from '../lib/tts-readiness.js';
 import { setPlayHintsEnabled, usePlayHintsEnabled } from '../lib/play-hints.js';
 import { useLocale } from '../lib/i18n.js';
@@ -15,15 +16,15 @@ export function TtsSettings() {
   const [notice, setNotice] = useState(false);
   const [enabled, setEnabled] = useState(ttsEnabled);
   const [config, setConfig] = useState<TtsConfig | null>(null);
-  const [error, setError] = useState('');
+  const [hasError, setHasError] = useState(false);
   const [volumes, setVolumes] = useState(() => ({ music: getChannelVolume('music'), voice: getChannelVolume('voice') }));
   const changeVolume = (channel: VolumeChannel, value: number) => {
     setChannelVolume(channel, value);
     setVolumes(previous => ({ ...previous, [channel]: value }));
   };
   const refresh = async () => {
-    try { setConfig(await readTtsConfig(true)); setError(''); }
-    catch { setError('Voice service is unavailable. Text dialogue still works.'); }
+    try { setConfig(await readTtsConfig(true)); setHasError(false); }
+    catch { setHasError(true); }
   };
   useEffect(() => {
     const warn = () => setNotice(true);
@@ -33,9 +34,9 @@ export function TtsSettings() {
   return <>
     <button type="button" onClick={() => { setOpen(true); void refresh(); }}>{t('Sound & settings')}</button>
     {notice && !open && createPortal(<aside className="tts-notice" role="status">
-      Voice is unavailable. Check TTS configuration; text dialogue still works.
-      <button onClick={() => { setOpen(true); setNotice(false); void refresh(); }}>Settings</button>
-      <button aria-label="Dismiss voice notice" onClick={() => setNotice(false)}>×</button>
+      {t('Voice is unavailable. Check voice settings; text dialogue still works.')}
+      <button onClick={() => { setOpen(true); setNotice(false); void refresh(); }}>{t('Sound & settings')}</button>
+      <button aria-label={t('Dismiss voice notice')} onClick={() => setNotice(false)}>×</button>
     </aside>, document.body)}
     {open && createPortal(<div className="settings-backdrop" onClick={() => setOpen(false)}>
       <section className="settings-panel" role="dialog" aria-modal="true" aria-label={t('Sound & settings')} onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); } }}>
@@ -53,12 +54,17 @@ export function TtsSettings() {
         <h2>{t('Play assistance')}</h2>
         <label><input type="checkbox" role="switch" checked={hintsEnabled} onChange={event => setPlayHintsEnabled(event.target.checked)} /> {t('Show Continue / next-step hints')}</label>
         <p>{t('Off hides the Continue button. Saved on this browser; your game progress is unchanged.')}</p>
-        <h2>Character voice</h2>
-        <label><input type="checkbox" checked={enabled} onChange={e => { setEnabled(e.target.checked); setTtsEnabled(e.target.checked); }} /> Enable character voice on this browser</label>
-        <p role="status">{error || (config ? config.configured ? 'Configured · availability is checked when speaking' : 'TTS is not configured. Text dialogue remains available.' : 'Checking configuration…')}</p>
-        {config && <><p>Model: {config.model}</p><p>Default voice: {config.defaultVoice} (characters may override it)</p></>}
-        {config && !config.configured && <p>Add your DashScope API key below. Text dialogue remains available.</p>}
-        <button onClick={() => { void refresh(); }}>Recheck configuration</button>
+        <h2>{t('Character voice')}</h2>
+        <label><input type="checkbox" checked={enabled} onChange={event => { setEnabled(event.target.checked); setTtsEnabled(event.target.checked); }} /> {t('Enable character voice on this browser')}</label>
+        <p role="status">{hasError
+          ? t('Voice service is unavailable. Text dialogue still works.')
+          : config
+            ? t(config.configured ? 'Configured · availability is checked when speaking' : 'TTS is not configured. Text dialogue remains available.')
+            : t('Checking configuration…')}</p>
+        {config && <><p>{t('Online model')}: {config.model}</p><p>{t('Online fallback voice')}: {config.defaultVoice} · {t('Characters may override it')}</p></>}
+        {config && !config.configured && <p>{t('Add a DashScope API key below, or configure Nanami local voice. Text dialogue remains available.')}</p>}
+        <button onClick={() => { void refresh(); }}>{t('Recheck voice configuration')}</button>
+        <NanamiTtsSettings onSaved={() => { void refresh(); }} />
         <ConnectionSettings onSaved={() => { void refresh(); }} />
       </section>
     </div>, document.body)}
