@@ -83,12 +83,14 @@ export function readerOfActor(actor: Actor): string | null {
 
 /** 'player' | 'god' | 'writer' | 'watson' — log / history-panel label. */
 export function actorLabel(actor: Actor): string {
+  if (actor.type === 'functional') return actor.id ?? 'canvas-arranger';
   if (actor.type === 'character') return actor.id ?? 'character';
   return actor.type;
 }
 
 /** 'player' | 'character:watson' — the compact form for detail fields that need it. */
 export function actorRef(actor: Actor): string {
+  if (actor.type === 'functional') return `functional:${actor.id ?? 'canvas-arranger'}`;
   if (actor.type === 'character') {
     return actor.id ? `${CHARACTER_ROLE_PREFIX}${actor.id}` : CHARACTER_ROLE_PREFIX;
   }
