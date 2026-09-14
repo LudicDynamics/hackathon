@@ -35,7 +35,6 @@ import { generateImageTool } from './toolkit/generate-image.js';   // doc-tools/
 import { createCharTool } from './toolkit/create-char.js';      // create-char
 import { editCharacterConfigTool } from './toolkit/edit-character-config.js'; // nook configuration gate
 import { registerTurnTracking } from './toolkit/turn.js';          // doc-tools/12
-import { registerWriterBeatGuard } from './toolkit/writer-beat-guard.js';
 import { registerInitCommand } from './toolkit/init-command.js';   // docs/init/00
 import { registerWriterToolCallGuard } from './toolkit/writer-beat-guard.js'; // docs/ux/14
 /**
@@ -83,7 +82,6 @@ export default function registerAirpTools(pi: ExtensionAPI): void {
   // Initialization execution kernel (docs/init/00 §2.2). Registered here — the
   // same `initialize` as the tools — so presets and command share one entry point.
   registerInitCommand(pi);
-  registerWriterBeatGuard(pi);
 
 
   for (const { name, tool } of AIRP_TOOLS) {

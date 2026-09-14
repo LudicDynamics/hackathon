@@ -30,6 +30,8 @@
 | `overlay/CharacterModal.tsx` | 取 main 版，`/api/tts` 请求体丢了 `characterId`/`emotion` | 补回两键和本机回落告警 | `check:bodies` 5 键契约；本机音色路由依赖 `characterId` |
 | `routes/tts.ts` | 混合后保留 main 的清洗与步骤编号，丢了 niko 的 `local-tts` import 与「七海本机优先」分支，`readLocalTtsConfig` 引用悬空，server 编译失败 | 在 main 版上补回 import 与本机分支（放在缓存查找之前） | 8 项本机 TTS 测试在 niko 侧通过、合并后失败 |
 | `routes/connection-settings.ts` | 字段表取 main 那一行，丢了 niko 的 4 个 `AIRP_TTS_LOCAL_*` 字段，七海本机配置存不进去 | 补回 4 个字段 | `local-tts-settings` 测试在 niko 侧通过、合并后失败 |
+| `extensions/tools.ts` | `writer-beat-guard.ts` 整份取 main（只导出 `registerWriterToolCallGuard`），但 `tools.ts` 两侧的 import 与调用都保留，作家加载扩展即报错、反复重启，`/api/agent-settings` 返回 503 | 删除 niko 的 `registerWriterBeatGuard` import 与调用，只保留 main 的工具调用上限 | 引擎以 main 为准（niko 裁定）；main 文件头写明有意去掉「一轮一张 Chalk」等限制，因为会挡住场景初始化。浏览器冒烟时发现，单元测试不加载扩展所以没抓到 |
+| `apps/web/src/prototype.css` | main `ed71622` 给 Canvas 包了一层 `data-airp-projection`，`.prototype-world > .relative:first-child` 不再命中，包装层高度为 0，画布整块被裁掉 | 同一条规则加上 `> [data-airp-projection]` | main 侧已有的缺陷，不是本次合并引入；浏览器冒烟时 A/B 验证 |
 | `TtsSettings.tsx` | 取 main 版，`NanamiTtsSettings` 不再挂载；`refresh` 残留 niko 的 `setHasError` | 挂回七海面板；`refresh` 用 main 的 `setError` | 组件还在、消费端没了，是合丢了一半 |
 | `lib/messages.json` | 冲突解决丢了 niko 独有的 68 个键 | 补回现有代码仍在用的 37 键，加上 stash 里七海角色音色在途的 8 键；其余 31 键所属 UI 已被 main 替换，不补 | `check:i18n` 两个父提交都绿、合并后变红 |
 | App、WriterBar、ChalkCard、NookView、phantom-seat、DiceCeremony、Canvas、BagItemDialog、`dice-preview.tsx` | 混合时丢了声明或 import，web 有 31 个 TS 错误 | 逐个补回来源侧的声明；Canvas 补回 niko 的悬停聚焦肖像 | 机械 |

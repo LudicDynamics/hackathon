@@ -39,7 +39,10 @@
   background: var(--ux-surface-stage);
 }
 
-.prototype-world > .relative:first-child {
+.prototype-world > .relative:first-child,
+.prototype-world > [data-airp-projection] {
+  /* The canvas mounts inside a projection wrapper (ed71622); without this the
+     wrapper has no height and the h-full canvas collapses to zero. */
   position: absolute;
   inset: 0;
 }
