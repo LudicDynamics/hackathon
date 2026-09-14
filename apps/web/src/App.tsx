@@ -974,7 +974,9 @@ export function App() {
             <span className="prototype-brand">World<span>lines</span></span>
             <nav className="prototype-crumbs" aria-label={t("Scene path")}>
               {breadcrumbs.map((part) => {
-                return <button key={part} onClick={() => void enterLayer(part).then(applyFollowFailures)}>{part === 'map' ? t('Map') : sceneName(manifest, part)}</button>;
+                const label = part === 'map' ? t('Map') : sceneName(manifest, part);
+                // One line, ellipsised: a wrapped crumb breaks the fixed-height header.
+                return <button key={part} title={label} onClick={() => void enterLayer(part).then(applyFollowFailures)}><span className="prototype-crumb-label">{label}</span></button>;
               })}
             </nav>
             <div className="prototype-spacer" />
