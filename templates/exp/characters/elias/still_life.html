@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Still Life - 17:42</title>
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #e8e4dc;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+  }
+  svg {
+    width: 800px;
+    height: 600px;
+    background: #fdfbf7;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    border: 1px solid #d1ccc4;
+  }
+  .caption {
+    font-family: "Times New Roman", serif;
+    font-style: italic;
+    fill: #7a756f;
+    font-size: 12px;
+    text-anchor: end;
+  }
+</style>
+</head>
+<body>
+
+<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 木质桌面纹理渐变 -->
+    <linearGradient id="desk" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e6d3b3"/>
+      <stop offset="100%" stop-color="#d9c29e"/>
+    </linearGradient>
+    <linearGradient id="shadow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="rgba(0,0,0,0.15)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+    </linearGradient>
+    <filter id="blur">
+      <feGaussianBlur stdDeviation="3"/>
+    </filter>
+  </defs>
+
+  <!-- 桌面 -->
+  <rect x="0" y="300" width="800" height="300" fill="url(#desk)"/>
+
+  <!-- 1. 保温杯 (最右侧，半透明磨砂质感) -->
+  <g transform="translate(660, 220)">
+    <!-- 影子 -->
+    <ellipse cx="0" cy="118" rx="40" ry="10" fill="#b09f88" opacity="0.5" filter="url(#blur)"/>
+    <!-- 杯身 -->
+    <rect x="-25" y="10" width="50" height="110" rx="8" fill="#f4f2ee" stroke="#dcd8d1" stroke-width="1.5"/>
+    <!-- 杯盖 -->
+    <rect x="-20" y="0" width="40" height="12 rx="4" fill="#8c857a"/>
+    <!-- 杯中透出的微暖光线（红茶） -->
+    <rect x="-18" y="15" width="36" height="95" rx="4" fill="#c48b58" opacity="0.2"/>
+  </g>
+
+  <!-- 2. 瑞幸咖啡 (外带纸杯，放在保温杯斜前方) -->
+  <g transform="translate(560, 320)">
+    <ellipse cx="0" cy="105" rx="45" ry="12" fill="#a5927d" opacity="0.6" filter="url(#blur)"/>
+    <!-- 杯身 -->
+    <path d="M -30 10 L -22 100 L 22 100 L 30 10 Z" fill="#f8f6f2" stroke="#dcd7cf" stroke-width="1"/>
+    <!-- 杯盖 -->
+    <rect x="-28" y="-2" width="56" height="12 rx="6" fill="#ffffff" stroke="#e0dcd5" stroke-width="1"/>
+    <!-- 杯套 (褐色) -->
+    <path d="M -26 30 L -24 80 L 24 80 L 26 30 Z" fill="#a4876c"/>
+    <!-- 杯套上的鹿头Logo (抽象极简) -->
+    <circle cx="0" cy="55" r="18" fill="#f8f6f2"/>
+    <path d="M -5 60 L 0 45 L 5 60 M -2 55 L -4 60 M 2 55 L 4 60" stroke="#a4876c" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- 透出的一点点喝完的浅褐色在杯口边缘 -->
+    <ellipse cx="-15" cy="4" rx="8" ry="2" fill="#d4c4b0" opacity="0.8"/>
+  </g>
+
+  <!-- 3. 黄色笑脸马克杯 (画面主体，中间的) -->
+  <g transform="translate(380, 260)">
+    <!-- 影子 -->
+    <ellipse cx="-15" cy="145" rx="60" ry="14" fill="#a68d76" opacity="0.6" filter="url(#blur)"/>
+    <!-- 杯身 -->
+    <rect x="-45" y="20" width="90" height="120" rx="12" fill="#f2c94c" stroke="#ddb231" stroke-width="1.5"/>
+    <!-- 杯口内部 -->
+    <ellipse cx="0" cy="20" rx="45" ry="12" fill="#e3ba38"/>
+    <!-- 杯内余留的一点红茶底 -->
+    <ellipse cx="0" cy="20" rx="38" ry="9" fill="#b55a2c" opacity="0.85"/>
+    <!-- 把手 -->
+    <path d="M 45 50 C 80 50, 80 110, 45 110" fill="none" stroke="#f2c94c" stroke-width="12" stroke-linecap="round"/>
+    <!-- 笑脸图案 -->
+    <g transform="translate(-5, 75)">
+      <circle cx="-12" cy="0" r="4" fill="#5c4b3a"/> <!-- 左眼 -->
+      <circle cx="12" cy="0" r="4" fill="#5c4b3a"/> <!-- 右眼 -->
+      <!-- 嘴巴 -->
+      <path d="M -15 10 Q -5 20, 15 10" stroke="#5c4b3a" stroke-width="4" fill="none" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <!-- 4. 茶包与长长的棉线 (从马克杯中垂下来，落在桌子上) -->
+  <g transform="translate(380, 260)">
+    <!-- 棉线 -->
+    <path d="M -20 20 C -40 40, -90 80, -80 130 C -70 180, -40 190, -20 180" fill="none" stroke="#e0e0e0" stroke-width="1.5"/>
+    <!-- 挂在桌边的茶包纸片 -->
+    <g transform="translate(-20, 180) rotate(15)">
+      <rect x="-15" y="0" width="30" height="35" fill="#fdfbf9" stroke="#dcdad5" stroke-width="1"/>
+      <rect x="-15" y="0" width="30" height="5" fill="#e84b3c"/> <!-- 红茶品牌的那种红色横条 -->
+      <text x="0" y="25" font-size="10" fill="#7a7a7a" text-anchor="middle" font-family="sans-serif">LIPTON</text> <!-- 假装有个标签 -->
+    </g>
+  </g>
+
+  <!-- 5. 乐事薯片袋 (原味，明黄色，长尾夹封口，放在马克杯左前方) -->
+  <g transform="translate(200, 360) skewX(-10)">
+    <!-- 影子 -->
+    <ellipse cx="10" cy="105" rx="55" ry="15" fill="#937d6b" opacity="0.5" filter="url(#blur)"/>
+    <!-- 袋身 -->
+    <path d="M -40 20 L 40 20 L 45 100 L -45 100 Z" fill="#fbc02d" stroke="#f9a825" stroke-width="2" stroke-linejoin="round"/>
+    <!-- 被压出的褶皱痕迹 -->
+    <path d="M -30 30 L 20 40 M -10 60 L 30 90 M -40 70 L 10 90" stroke="#fbc02d" stroke-width="2" opacity="0.5"/>
+    <path d="M -30 30 L 20 40 M -10 60 L 30 90 M -40 70 L 10 90" stroke="#d49306" stroke-width="1" opacity="0.4"/>
+    <!-- 品牌Logo区域 -->
+    <circle cx="0" cy="60" r="18" fill="#f44336" opacity="0.9"/>
+    <text x="0" y="65" font-size="14" fill="#ffffff" text-anchor="middle" font-weight="bold" font-family="sans-serif">Lay's</text>
+    <!-- 6. 长尾夹 (黑色，封口) -->
+    <g transform="translate(0, 20)">
+      <rect x="-15" y="-5" width="30" height="10" fill="#3d3d3d" rx="2"/>
+      <path d="M -10 5 L -18 25 L -5 25 L 0 5 Z" fill="none" stroke="#3d3d3d" stroke-width="2"/>
+      <path d="M 10 5 L 18 25 L 5 25 L 0 5 Z" fill="none" stroke="#3d3d3d" stroke-width="2"/>
+    </g>
+  </g>
+
+  <!-- 7. 小云朵挂件 (挂在马克杯的把手上，只露出一半) -->
+  <g transform="translate(450, 330) rotate(10)">
+    <!-- 影子投在杯身上 -->
+    <ellipse cx="-5" cy="5" rx="15" ry="8" fill="#d1a93b" opacity="0.7"/>
+    <!-- 云朵形状 -->
+    <path d="M -20 10 Q 0 -5 15 10 Q 30 20, 20 30 Q 10 35, 0 30 Q -20 35, -25 25 Z" fill="#ffffff" stroke="#dcdad5" stroke-width="1"/>
+    <!-- 云朵的豆豆眼 -->
+    <circle cx="-5" cy="20" r="1.5" fill="#5c5c5c"/>
+    <circle cx="5" cy="20" r="1.5" fill="#5c5c5c"/>
+    <!-- 腮红 -->
+    <ellipse cx="-10" cy="24" rx="2" fill="#ffb6c1" opacity="0.6"/>
+    <ellipse cx="10" cy="24" rx="2" fill="#ffb6c1" opacity="0.6"/>
+    <!-- 挂绳 -->
+    <path d="M 0 0 L -15 -20" stroke="#a39a91" stroke-width="2"/>
+  </g>
+
+  <!-- 极简布局上的说明文字 -->
+  <text x="760" y="570" class="caption">Still Life. 17:42 PM.</text>
+
+</svg>
+
+</body>
+</html>

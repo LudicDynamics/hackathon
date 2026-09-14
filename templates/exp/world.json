@@ -1,0 +1,24 @@
+{
+  "id": "exp",
+  "name": "Exp · Elias",
+  "description": "Experimental sandbox: one independent character (Elias) carrying his own pi-memory database onto the infinite canvas. The city of Yangdu, September 2020.",
+  "author": "AIRP",
+  "genre": "Sandbox",
+  "locale": "zh-CN",
+  "cover": "assets/cover.jpg",
+  "exp": true,
+  "material": "parchment",
+  "characters": [
+    {
+      "id": "elias",
+      "name": "Elias",
+      "home": "world/stellar-cloud-campus/tower-bc/frontier-lab",
+      "role": "npc",
+      "avatar": "assets/motion/seedance/characters/elias-transparent.webp",
+      "avatarVideo": "assets/motion/seedance/characters/elias-transparent.webm",
+      "description": "埃利亚斯·索恩。前沿隐私架构实验室负责人，前奇点无限创始人。带着自己的记忆库活在画布上。"
+    }
+  ],
+  "createdAt": "2026-09-15T00:00:00Z",
+  "updatedAt": "2026-09-15T00:00:00Z"
+}

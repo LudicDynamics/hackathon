@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rough Cloud (Reforged)</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;1,400&family=Noto+Serif+SC:wght@300;400&display=swap" rel="stylesheet">
+
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(ellipse at 50% 30%, #d8e3e5 0%, #b8c7cb 60%, #91a3a8 100%);
+    font-family: 'Noto Serif SC', serif;
+    color: #384245;
+    overflow-x: hidden;
+    padding: 30px 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .gallery-stage {
+    perspective: 2000px;
+    padding: 10px;
+  }
+
+  .art-frame-outer {
+    position: relative;
+    padding: 24px;
+    background: linear-gradient(145deg, #f7fafb 0%, #e1e9ec 100%);
+    border-radius: 4px;
+    box-shadow: 
+      0 42px 85px -20px rgba(25, 40, 45, 0.3),
+      0 20px 35px -10px rgba(0, 0, 0, 0.1),
+      0 0 0 1px rgba(255, 255, 255, 0.85) inset,
+      0 0 0 1px rgba(60, 80, 85, 0.14),
+      inset 0 0 45px rgba(160, 180, 185, 0.2);
+  }
+
+  .art-frame-inner {
+    position: relative;
+    width: 800px;
+    height: 600px;
+    background: #f7fafb;
+    border-radius: 2px;
+    overflow: hidden;
+    box-shadow: 
+      inset 3px 3px 12px rgba(30, 45, 50, 0.2),
+      inset -1px -1px 4px rgba(255, 255, 255, 0.85),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  }
+
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* 云朵呼吸脉动 */
+  @keyframes cloudBreathe {
+    0%, 100% { transform: scale(1) translateY(0); }
+    50% { transform: scale(1.025, 0.98) translateY(-4px); }
+  }
+
+  .cloud-breathing {
+    animation: cloudBreathe 6.5s ease-in-out infinite;
+    transform-origin: 400px 320px;
+  }
+
+  /* 腮红微光发亮 */
+  @keyframes blushGlow {
+    0%, 100% { opacity: 0.65; }
+    50% { opacity: 0.9; }
+  }
+
+  .blush-glow {
+    animation: blushGlow 4.2s ease-in-out infinite;
+  }
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-tilt/1.8.1/vanilla-tilt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+</head>
+<body>
+
+<div class="gallery-stage">
+  <div class="art-frame-outer" data-tilt data-tilt-max="2.5" data-tilt-speed="1000">
+    <div class="art-frame-inner">
+      <svg id="cloud-svg" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 水彩冷感棉纸质感 -->
+          <filter id="cool-paper" x="0%" y="0%" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="4" result="noise" />
+            <feDiffuseLighting in="noise" lighting-color="#f2f7f8" surfaceScale="1.2" result="light">
+              <feDistantLight azimuth="45" elevation="65" />
+            </feDiffuseLighting>
+            <feBlend mode="multiply" in="SourceGraphic" in2="light" />
+          </filter>
+
+          <filter id="blur-subtle"><feGaussianBlur stdDeviation="3"/></filter>
+          <filter id="blur-glow"><feGaussianBlur stdDeviation="8"/></filter>
+
+          <!-- 背景：阳都细雨霏霏的冷蓝天空 -->
+          <linearGradient id="rainy-sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#edf4f5"/>
+            <stop offset="50%" stop-color="#dce7e9"/>
+            <stop offset="100%" stop-color="#c5d5d8"/>
+          </linearGradient>
+
+          <!-- 云朵内部的水彩水墨感蓝蒸气 -->
+          <linearGradient id="cloud-wash" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="60%" stop-color="#dcf0f2"/>
+            <stop offset="100%" stop-color="#b5e0e5"/>
+          </linearGradient>
+
+          <linearGradient id="string-metallic" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#80756b"/>
+            <stop offset="50%" stop-color="#a89a8f"/>
+            <stop offset="100%" stop-color="#6e645a"/>
+          </linearGradient>
+        </defs>
+
+        <g filter="url(#cool-paper)">
+          <!-- 雨天天空背景 -->
+          <rect x="0" y="0" width="800" height="600" fill="url(#rainy-sky)"/>
+
+          <!-- 飘落的细雨丝 (微光感) -->
+          <g id="rain-lines" stroke="#ffffff" stroke-width="1.2" opacity="0.45" stroke-linecap="round">
+            <line x1="120" y1="40" x2="100" y2="140"/>
+            <line x1="280" y1="20" x2="260" y2="120"/>
+            <line x1="450" y1="10" x2="430" y2="110"/>
+            <line x1="620" y1="50" x2="600" y2="150"/>
+            <line x1="730" y1="30" x2="710" y2="130"/>
+
+            <line x1="180" y1="220" x2="160" y2="320"/>
+            <line x1="680" y1="240" x2="660" y2="340"/>
+
+            <line x1="220" y1="420" x2="200" y2="520"/>
+            <line x1="390" y1="450" x2="370" y2="550"/>
+            <line x1="580" y1="430" x2="560" y2="530"/>
+          </g>
+
+          <!-- 云朵在背后的软阴影 -->
+          <ellipse cx="400" cy="350" rx="170" ry="80" fill="#889da2" opacity="0.3" filter="url(#blur-glow)"/>
+
+          <!-- 挂绳 / 别针线 (上端延伸到画面上方) -->
+          <g id="pin-string-group">
+            <path id="pin-string" d="M 400 0 C 402 80, 398 160, 410 230" 
+                  stroke="url(#string-metallic)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <!-- 别针小扣环 -->
+            <circle cx="410" cy="230" r="4.5" fill="#a89a8f" stroke="#524941" stroke-width="1"/>
+          </g>
+
+          <!-- 云朵本体 (带呼吸感) -->
+          <g class="cloud-breathing">
+            <!-- 软云轮廓：水彩渗透边缘 -->
+            <path d="M 230 310 C 210 250, 280 190, 350 220 C 390 170, 480 180, 500 230 C 560 210, 600 270, 580 320 C 610 380, 540 430, 470 410 C 420 440, 320 430, 290 390 C 220 390, 200 340, 230 310 Z" 
+                  fill="url(#cloud-wash)" stroke="#4a5f63" stroke-width="2.2" stroke-linejoin="round"/>
+
+            <!-- 内部水彩纹理层 (深一层柔蓝) -->
+            <path d="M 260 320 C 250 280, 300 230, 360 250 C 390 210, 460 220, 480 250 C 520 240, 550 280, 540 320 Q 400 390 260 320 Z" 
+                  fill="#bfe1e6" opacity="0.4" filter="url(#blur-subtle)"/>
+
+            <!-- 眼睛 -->
+            <circle cx="340" cy="305" r="5" fill="#2b3638"/>
+            <circle cx="440" cy="305" r="5" fill="#2b3638"/>
+            <!-- 眼睛高光 -->
+            <circle cx="338" cy="303" r="1.5" fill="#ffffff"/>
+            <circle cx="438" cy="303" r="1.5" fill="#ffffff"/>
+
+            <!-- 腮红 (带呼吸微光) -->
+            <g class="blush-glow">
+              <ellipse cx="310" cy="328" rx="16" ry="9" fill="#ffb0b3" opacity="0.8"/>
+              <ellipse cx="470" cy="328" rx="16" ry="9" fill="#ffb0b3" opacity="0.8"/>
+            </g>
+
+            <!-- 淡淡的小嘴巴 (含蓄微笑) -->
+            <path d="M 382 320 Q 390 328, 398 320" stroke="#2b3638" stroke-width="2" fill="none" stroke-linecap="round"/>
+          </g>
+
+          <!-- 落款 -->
+          <g transform="translate(765, 572)">
+            <text x="0" y="0" text-anchor="end" font-family="'Cormorant Garamond', serif" font-size="14" font-style="italic" fill="#58686c" letter-spacing="1">
+              Rough Cloud (Reforged). — <tspan font-family="'Noto Serif SC', serif" font-size="11.5" font-style="normal" font-weight="300">别住的云。</tspan>
+            </text>
+          </g>
+
+        </g>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // 1. 雨丝缓缓下落
+    const rainLines = document.querySelectorAll("#rain-lines line");
+    rainLines.forEach((line, i) => {
+      gsap.to(line, {
+        y: 60 + Math.random() * 40,
+        x: -15,
+        opacity: Math.random() * 0.5 + 0.2,
+        duration: 1.8 + Math.random() * 1.2,
+        yoyo: true,
+        repeat: -1,
+        ease: "none",
+        delay: i * 0.15
+      });
+    });
+
+    // 2. 挂绳极轻微晃动
+    gsap.to("#pin-string", {
+      svgOrigin: "400 0",
+      rotation: 0.8,
+      duration: 4.5,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut"
+    });
+  });
+</script>
+
+</body>
+</html>

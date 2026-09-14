@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Balcony - 空位</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;1,400&family=Noto+Serif+SC:wght@300;400&display=swap" rel="stylesheet">
+
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --bg-base: #dfdad0;
+    --matting-white: #fdfbf7;
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(ellipse at 50% 25%, #ece7de 0%, #d4ccbd 65%, #b9b09f 100%);
+    font-family: 'Noto Serif SC', -apple-system, serif;
+    color: #4a453e;
+    overflow-x: hidden;
+    padding: 30px 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .gallery-stage {
+    perspective: 2000px;
+    padding: 10px;
+  }
+
+  .art-frame-outer {
+    position: relative;
+    padding: 24px;
+    background: linear-gradient(145deg, #fefdfb 0%, #f3ece0 100%);
+    border-radius: 4px;
+    box-shadow: 
+      0 42px 85px -20px rgba(35, 28, 20, 0.35),
+      0 20px 35px -10px rgba(0, 0, 0, 0.12),
+      0 0 0 1px rgba(255, 255, 255, 0.85) inset,
+      0 0 0 1px rgba(78, 68, 56, 0.14),
+      inset 0 0 45px rgba(184, 168, 145, 0.15);
+    transform-style: preserve-3d;
+  }
+
+  .art-frame-inner {
+    position: relative;
+    width: 900px;
+    height: 640px;
+    background: var(--matting-white);
+    border-radius: 2px;
+    overflow: hidden;
+    box-shadow: 
+      inset 3px 3px 12px rgba(45, 38, 30, 0.24),
+      inset -1px -1px 4px rgba(255, 255, 255, 0.85),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  }
+
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    transform: translateZ(0);
+  }
+
+  #scene-svg g, #scene-svg path {
+    transform-box: view-box;
+  }
+
+  /* 阴天从帘缝漏出来的漫射光，轻微呼吸感 */
+  @keyframes etherealPulse {
+    0%, 100% { opacity: 0.82; transform: scale(1) translateY(0); }
+    50% { opacity: 0.58; transform: scale(1.015, 0.985) translateY(-2px); }
+  }
+  .light-beam-breathe {
+    animation: etherealPulse 11s ease-in-out infinite;
+    transform-origin: 220px 380px;
+  }
+
+  /* 虚线的空位，极缓慢的微光流动 */
+  @keyframes dashFloat {
+    to { stroke-dashoffset: -48; }
+  }
+  .dash-float {
+    animation: dashFloat 22s linear infinite;
+  }
+
+  .art-frame-outer::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 60%);
+    border-radius: 4px;
+  }
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-tilt/1.8.1/vanilla-tilt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+</head>
+<body>
+
+<div class="gallery-stage">
+  <div class="art-frame-outer" data-tilt data-tilt-max="2.5" data-tilt-speed="1000" data-tilt-perspective="1800" data-tilt-glare data-tilt-max-glare="0.06">
+    <div class="art-frame-inner">
+      <svg id="scene-svg" viewBox="0 0 900 640" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 水彩纸底纹与边缘渗色滤镜 -->
+          <filter id="pure-cotton-paper" x="0%" y="0%" width="100%" height="100%" filterUnits="objectBoundingBox">
+            <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="5" result="grain" />
+            <feDiffuseLighting in="grain" lighting-color="#fffcf5" surfaceScale="1.3" result="paperLight">
+              <feDistantLight azimuth="60" elevation="65" />
+            </feDiffuseLighting>
+            <feComponentTransfer>
+              <feFuncR type="linear" slope="0.97" intercept="0.02"/>
+              <feFuncG type="linear" slope="0.96" intercept="0.02"/>
+              <feFuncB type="linear" slope="0.93" intercept="0.02"/>
+            </feComponentTransfer>
+            <feBlend mode="multiply" in="SourceGraphic" in2="paperLight" />
+          </filter>
+
+          <filter id="watercolor-wash" x="-10%" y="-10%" width="120%" height="120%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.025" numOctaves="3" result="washNoise"/>
+            <feDisplacementMap in="SourceGraphic" in2="washNoise" scale="3" xChannelSelector="R" yChannelSelector="G"/>
+          </filter>
+
+          <filter id="blur-deep" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="16"/></filter>
+          <filter id="blur-mid" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="6"/></filter>
+          <filter id="blur-subtle" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="2"/></filter>
+
+          <!-- 阳台与天空渐变 -->
+          <linearGradient id="wall-shading" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#b0a89a"/>
+            <stop offset="85%" stop-color="#c9c2b4"/>
+            <stop offset="100%" stop-color="#ddd7ca"/>
+          </linearGradient>
+
+          <!-- 阴天的天光：灰白，微冷透气 -->
+          <linearGradient id="sky-dawn" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#ece8df"/>
+            <stop offset="35%" stop-color="#ded8cc"/>
+            <stop offset="80%" stop-color="#cec6b8"/>
+            <stop offset="100%" stop-color="#beb4a4"/>
+          </linearGradient>
+
+          <!-- 地面微水泥 -->
+          <linearGradient id="balcony-floor" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#b4ac9d"/>
+            <stop offset="4%" stop-color="#cac2b3"/>
+            <stop offset="35%" stop-color="#bcb4a4"/>
+            <stop offset="100%" stop-color="#9a9080"/>
+          </linearGradient>
+
+          <linearGradient id="parapet-top" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#dfd9cd"/>
+            <stop offset="45%" stop-color="#cbc4b6"/>
+            <stop offset="100%" stop-color="#aaa294"/>
+          </linearGradient>
+
+          <!-- 缝隙漏进来的软光 -->
+          <linearGradient id="tyndall-ray" x1="0.1" y1="0" x2="0.6" y2="1">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.85"/>
+            <stop offset="30%" stop-color="#fefdf4" stop-opacity="0.5"/>
+            <stop offset="70%" stop-color="#f4eee0" stop-opacity="0.18"/>
+            <stop offset="100%" stop-color="#e8e1cf" stop-opacity="0"/>
+          </linearGradient>
+
+          <!-- 麻布窗帘 -->
+          <linearGradient id="linen-drape" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#cac1b2"/>
+            <stop offset="30%" stop-color="#ded7c9"/>
+            <stop offset="60%" stop-color="#f2eee3"/>
+            <stop offset="85%" stop-color="#ddd6c7"/>
+            <stop offset="100%" stop-color="#c4bbaa"/>
+          </linearGradient>
+
+          <!-- 红陶盆 -->
+          <linearGradient id="terracotta-clay" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#804428"/>
+            <stop offset="18%" stop-color="#af633f"/>
+            <stop offset="55%" stop-color="#c87953"/>
+            <stop offset="85%" stop-color="#b86c47"/>
+            <stop offset="100%" stop-color="#70381e"/>
+          </linearGradient>
+
+          <!-- 绿萝的油绿色 -->
+          <linearGradient id="leaf-primary" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#93bc7b"/>
+            <stop offset="60%" stop-color="#5a8246"/>
+            <stop offset="100%" stop-color="#3d5e2e"/>
+          </linearGradient>
+          
+          <linearGradient id="leaf-sunlit" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#bce39a"/>
+            <stop offset="70%" stop-color="#7ca85f"/>
+            <stop offset="100%" stop-color="#4f7537"/>
+          </linearGradient>
+
+          <clipPath id="exterior-clip">
+            <polygon points="120,0 900,0 900,340 120,340"/>
+          </clipPath>
+        </defs>
+
+        <g filter="url(#pure-cotton-paper)">
+
+          <!-- ===== 阳台结构与外景 ===== -->
+          <g id="balcony-architecture">
+            <!-- 阴天的天光 -->
+            <rect x="0" y="0" width="900" height="340" fill="url(#sky-dawn)"/>
+
+            <g clip-path="url(#exterior-clip)">
+              <!-- 远景模糊的树影和楼影剪影 -->
+              <path d="M 120 305 Q 220 280 360 295 T 620 285 T 820 292 L 900 290 L 900 340 L 120 340 Z" 
+                    fill="#b0a89a" opacity="0.38" filter="url(#blur-mid)"/>
+              
+              <g fill="#9c9586" opacity="0.22">
+                <rect x="280" y="220" width="45" height="100"/>
+                <rect x="340" y="200" width="60" height="120"/>
+                <rect x="420" y="235" width="50" height="85"/>
+                <rect x="620" y="190" width="75" height="130"/>
+                <rect x="730" y="240" width="55" height="80"/>
+                <line x1="370" y1="180" x2="370" y2="200" stroke="#9c9586" stroke-width="1"/>
+                <line x1="660" y1="170" x2="660" y2="190" stroke="#9c9586" stroke-width="1"/>
+              </g>
+
+              <path d="M 480 325 C 510 300, 540 302, 570 326 C 585 315, 610 316, 620 330 Z" 
+                    fill="#878d7e" opacity="0.3" filter="url(#blur-subtle)"/>
+
+              <!-- 封闭阳台的栏杆与框 -->
+              <g id="balcony-exterior-railing" opacity="0.6">
+                <line x1="120" y1="230" x2="900" y2="230" stroke="#686154" stroke-width="3"/>
+                <line x1="120" y1="280" x2="900" y2="280" stroke-width="1.8" stroke="#7e7769"/>
+                
+                <g stroke="#6e675b" stroke-width="1.6">
+                  <line x1="200" y1="230" x2="200" y2="335"/>
+                  <line x1="260" y1="230" x2="260" y2="335"/>
+                  <line x1="320" y1="230" x2="320" y2="335"/>
+                  <line x1="380" y1="230" x2="380" y2="335"/>
+                  <line x1="440" y1="230" x2="440" y2="335"/>
+                  <line x1="500" y1="230" x2="500" y2="335"/>
+                  <line x1="560" y1="230" x2="560" y2="335"/>
+                  <line x1="620" y1="230" x2="620" y2="335"/>
+                  <line x1="680" y1="230" x2="680" y2="335"/>
+                  <line x1="740" y1="230" x2="740" y2="335"/>
+                  <line x1="800" y1="230" x2="800" y2="335"/>
+                  <line x1="860" y1="230" x2="860" y2="335"/>
+                </g>
+              </g>
+
+              <!-- 玻璃幕墙的反光 -->
+              <polygon points="260,0 410,0 230,340 80,340" fill="#ffffff" opacity="0.08"/>
+              <polygon points="600,0 730,0 550,340 420,340" fill="#ffffff" opacity="0.05"/>
+            </g>
+
+            <!-- 阳台矮墙 -->
+            <g id="parapet-ledge">
+              <polygon points="120,335 900,335 900,346 120,346" fill="url(#parapet-top)"/>
+              <line x1="120" y1="335" x2="900" y2="335" stroke="#f2ece0" stroke-width="1.5"/>
+              <line x1="120" y1="346" x2="900" y2="346" stroke="#7a7265" stroke-width="1.5"/>
+              
+              <rect x="120" y="346" width="780" height="24" fill="#a69f91"/>
+              <line x1="120" y1="370" x2="900" y2="370" stroke="#756d5f" stroke-width="1.2"/>
+              <rect x="120" y="346" width="780" height="4" fill="#383227" opacity="0.25"/>
+            </g>
+
+            <!-- 左侧承重侧墙 -->
+            <g id="balcony-side-wall">
+              <polygon points="0,0 125,0 125,372 0,390" fill="url(#wall-shading)"/>
+              <line x1="125" y1="0" x2="125" y2="372" stroke="#f6f2e8" stroke-width="2"/>
+              <line x1="124" y1="0" x2="124" y2="372" stroke="#8c8475" stroke-width="1" opacity="0.6"/>
+            </g>
+
+            <!-- 顶梁与窗框立柱 -->
+            <g id="upper-structure">
+              <rect x="125" y="0" width="775" height="16" fill="#9f988b"/>
+              <line x1="125" y1="16" x2="900" y2="16" stroke="#736c60" stroke-width="1.5"/>
+              <g transform="translate(830, 16)">
+                <rect x="0" y="0" width="16" height="330" fill="#a49d90"/>
+                <line x1="1.5" y1="0" x2="1.5" y2="330" stroke="#ded8cd" stroke-width="2"/>
+                <line x1="15" y1="0" x2="15" y2="330" stroke="#6b6457" stroke-width="2"/>
+              </g>
+              <g transform="translate(520, 16)">
+                <rect x="0" y="0" width="10" height="330" fill="#a49d90"/>
+                <line x1="1" y1="0" x2="1" y2="330" stroke="#ded8cd" stroke-width="1.5"/>
+                <line x1="9" y1="0" x2="9" y2="330" stroke="#6b6457" stroke-width="1.5"/>
+              </g>
+            </g>
+          </g>
+
+          <!-- ===== 阳台地面 ===== -->
+          <g id="balcony-ground-system">
+            <rect x="0" y="370" width="900" height="270" fill="url(#balcony-floor)"/>
+
+            <g id="floor-threshold">
+              <rect x="0" y="370" width="900" height="5" fill="#888172"/>
+              <line x1="0" y1="370" x2="900" y2="370" stroke="#eae4d7" stroke-width="1.2"/>
+              <rect x="0" y="375" width="900" height="3" fill="#524c40"/>
+              <line x1="0" y1="378" x2="900" y2="378" stroke="#bdb5a6" stroke-width="0.8"/>
+              <rect x="0" y="378" width="900" height="18" fill="#2d271c" opacity="0.2" filter="url(#blur-subtle)"/>
+            </g>
+
+            <!-- 地面砖缝，几道浅线 -->
+            <path d="M 0 460 L 900 450" stroke="#9a9182" stroke-width="1.2" opacity="0.45"/>
+            <path d="M 0 550 L 900 540" stroke="#8d8474" stroke-width="1.5" opacity="0.4"/>
+            <path d="M 280 378 L 240 640" stroke="#9a9182" stroke-width="1" opacity="0.25"/>
+            <path d="M 580 378 L 610 640" stroke="#9a9182" stroke-width="1" opacity="0.25"/>
+          </g>
+
+          <!-- ===== 遮光帘：拉开一半收在左边，以及缝里漏进来的光 ===== -->
+          <ellipse cx="90" cy="386" rx="95" ry="15" fill="#363026" opacity="0.35" filter="url(#blur-mid)"/>
+          
+          <g id="curtain-group" filter="url(#watercolor-wash)">
+            <path d="M 0 0 L 0 380 C 26 386, 50 376, 84 383 C 115 387, 138 376, 158 381 C 140 240, 146 120, 132 0 Z" 
+                  fill="url(#linen-drape)" stroke="#b2aa9d" stroke-width="1.2"/>
+            
+            <path d="M 35 0 Q 50 190 46 382" stroke="#9d9587" stroke-width="5" fill="none" opacity="0.4" filter="url(#blur-subtle)"/>
+            <path d="M 32 0 Q 47 190 43 382" stroke="#fffff8" stroke-width="2.2" fill="none" opacity="0.7"/>
+            
+            <path d="M 92 0 Q 106 200 100 384" stroke="#9d9587" stroke-width="4.5" fill="none" opacity="0.38" filter="url(#blur-subtle)"/>
+            <path d="M 89 0 Q 103 200 97 384" stroke="#fffff8" stroke-width="2" fill="none" opacity="0.75"/>
+
+            <path d="M 136 0 Q 148 190 158 381" stroke="#8e8677" stroke-width="2" fill="none" opacity="0.6"/>
+          </g>
+
+          <!-- 缝隙漏进来的光，落在地上，边缘是软的 -->
+          <g class="light-beam-breathe" style="mix-blend-mode: screen;">
+            <polygon points="150,370 380,370 520,640 100,640" fill="url(#tyndall-ray)" opacity="0.82"/>
+            <polygon points="130,368 450,368 640,640 40,640" fill="url(#tyndall-ray)" opacity="0.4" filter="url(#blur-deep)"/>
+          </g>
+
+          <!-- 光里浮着的灰尘微粒 -->
+          <g id="air-motes" opacity="0.75">
+            <circle cx="220" cy="430" r="1.6" fill="#fffef8"/>
+            <circle cx="300" cy="470" r="1.3" fill="#fffef8"/>
+            <circle cx="350" cy="410" r="1.9" fill="#fffef8"/>
+            <circle cx="250" cy="510" r="1.4" fill="#fffef8"/>
+            <circle cx="410" cy="490" r="1.8" fill="#fffef8"/>
+            <circle cx="180" cy="460" r="1.2" fill="#fffef8"/>
+            <circle cx="460" cy="530" r="1.5" fill="#fffef8"/>
+          </g>
+
+          <!-- ===== 左：绿萝。酒店配的，油亮，规矩。周六之后归我。 ===== -->
+          <g id="ivy-pot-ensemble">
+            <!-- 影子很淡，阴天没有硬影子 -->
+            <ellipse cx="258" cy="515" rx="92" ry="18" fill="#302a20" opacity="0.26" filter="url(#blur-mid)"/>
+            <ellipse cx="256" cy="509" rx="68" ry="8" fill="#18140f" opacity="0.68" filter="url(#blur-subtle)"/>
+
+            <!-- 陶盆托盘与盆体 -->
+            <ellipse cx="256" cy="506" rx="72" ry="12" fill="#8f5032" stroke="#65351c" stroke-width="1.5"/>
+            <ellipse cx="256" cy="504" rx="66" ry="10" fill="#753b21"/>
+
+            <path d="M 190 398 C 186 476, 198 503, 256 504 C 314 503, 326 476, 322 398 Z" 
+                  fill="url(#terracotta-clay)" stroke="#5d2f18" stroke-width="1.8"/>
+            <ellipse cx="256" cy="398" rx="68" ry="15" fill="#b56c48" stroke="#68341c" stroke-width="1.6"/>
+            <!-- 盆内深黑营养土 -->
+            <ellipse cx="256" cy="399" rx="60" ry="11" fill="#30241b"/>
+            <ellipse cx="256" cy="400" rx="56" ry="9" fill="#1e150f" opacity="0.85"/>
+
+            <!-- 盆面粉笔笑脸。2007年的习惯，戒不掉，也不想戒 -->
+            <g transform="translate(252, 446)" opacity="0.9">
+              <ellipse cx="-12" cy="-4" rx="2.8" ry="3.2" fill="#fffbf3"/>
+              <ellipse cx="12" cy="-4" rx="2.8" ry="3.2" fill="#fffbf3"/>
+              <path d="M -14 6 Q 0 20, 15 6" stroke="#fffbf3" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+            </g>
+
+            <!-- 绿萝各枝蔓：GSAP 动画严格绑定每个生根点 -->
+
+            <!-- 向左下垂的叶子 (生根点: 236, 400) -->
+            <g id="ivy-branch-left">
+              <path d="M 236 400 C 200 392, 172 382, 156 362" stroke="#3b5d2e" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+              <g id="leaf-tip-left">
+                <path d="M 156 362 C 133 364, 116 338, 136 324 C 154 313, 174 330, 166 351 C 163 359, 158 362, 156 362 Z" 
+                      fill="url(#leaf-primary)" stroke="#2d4a21" stroke-width="1.2"/>
+                <path d="M 155 358 Q 147 342 140 329" stroke="#cefab1" stroke-width="1.2" fill="none" opacity="0.8"/>
+              </g>
+              <path d="M 188 384 C 176 386, 170 372, 180 366 C 190 360, 198 370, 192 380 Z" fill="#527c3e" stroke="#2d4a21" stroke-width="0.8"/>
+            </g>
+
+            <!-- 后侧左枝 (生根点: 245, 400) -->
+            <g id="ivy-branch-backleft">
+              <path d="M 245 400 Q 215 350 190 300" stroke="#3b5d2e" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+              <path d="M 190 300 C 162 294, 156 262, 182 254 C 202 248, 217 267, 206 289 C 199 299, 193 301, 190 300 Z" fill="#3a5a2d"/>
+            </g>
+
+            <!-- 向上的几支，油亮的心形大叶 (生根点: 256, 400) -->
+            <g id="ivy-branch-center">
+              <path d="M 256 400 Q 262 340 258 280" stroke="#416633" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+              <g id="leaf-tip-center">
+                <path d="M 258 280 C 231 268, 227 236, 256 228 C 281 221, 294 245, 280 267 C 272 278, 264 281, 258 280 Z" 
+                      fill="url(#leaf-sunlit)" stroke="#2f4b22" stroke-width="1.2"/>
+                <path d="M 258 277 Q 258 252 262 233" stroke="#ddf8c4" stroke-width="1.4" fill="none" opacity="0.85"/>
+                <path d="M 259 242 Q 270 245 276 253" stroke="#ddf8c4" stroke-width="1.1" fill="none" opacity="0.65"/>
+              </g>
+            </g>
+
+            <!-- 后侧右枝 (生根点: 268, 400) -->
+            <g id="ivy-branch-backright">
+              <path d="M 268 400 Q 296 346 328 298" stroke="#466c36" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+              <path d="M 328 298 C 355 290, 360 260, 335 254 C 316 250, 305 268, 314 288 C 319 296, 324 298, 328 298 Z" fill="#436535"/>
+            </g>
+
+            <!-- 右侧横展枝 (生根点: 275, 401) -->
+            <g id="ivy-branch-right">
+              <path d="M 275 401 Q 328 378 362 372" stroke="#4b7138" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+              <path d="M 362 372 C 388 367, 400 341, 381 330 C 361 321, 346 343, 353 361 C 355 369, 360 372, 362 372 Z" 
+                    fill="url(#leaf-primary)" stroke="#2d4a21" stroke-width="1.2"/>
+              <path d="M 362 369 Q 371 352 376 337" stroke="#cefab1" stroke-width="1.2" fill="none" opacity="0.8"/>
+            </g>
+
+            <!-- 垂下来的一支长藤，越过地面，往右边去 -->
+            <g id="creeping-vine-ensemble">
+              <!-- 藤蔓贴地阴影 -->
+              <path d="M 274 408 C 318 440, 392 482, 466 499 C 530 514, 592 516, 646 505" 
+                    stroke="#2b251d" stroke-width="3" fill="none" opacity="0.26" filter="url(#blur-subtle)"/>
+              
+              <!-- 藤身 -->
+              <path d="M 272 404 C 314 436, 388 477, 462 494 C 526 509, 588 511, 642 500" 
+                    stroke="#4c763c" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+
+              <!-- 沿途的小叶子 -->
+              <g id="creeping-sprouts">
+                <g id="creeping-leaf-1">
+                  <path d="M 380 473 C 371 490, 353 492, 344 479 C 338 468, 351 457, 366 462 Z" 
+                        fill="#5b8947" stroke="#385e29" stroke-width="1"/>
+                  <path d="M 367 466 Q 358 480 351 484" stroke="#cbf5ad" stroke-width="0.9" fill="none" opacity="0.7"/>
+                </g>
+
+                <g id="creeping-leaf-2">
+                  <path d="M 466 494 C 461 512, 441 518, 432 505 C 423 495, 434 480, 450 485 Z" 
+                        fill="#7caf5e" stroke="#457130" stroke-width="1"/>
+                </g>
+                
+                <!-- 长藤尽头的小芽，差一点点就够到盆沿 -->
+                <g id="creeping-tendril">
+                  <path d="M 642 500 C 651 496, 664 498, 660 509 C 655 516, 644 511, 642 500 Z" 
+                        fill="#8ecc6c" stroke="#487531" stroke-width="0.9"/>
+                  <path d="M 659 506 Q 672 508 676 498 Q 680 488 673 487" 
+                        stroke="#8ecc6c" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+                </g>
+              </g>
+            </g>
+          </g>
+
+          <!-- ===== 右：空位。周六之后填上。虚线的盆，虚线的薄荷。 ===== -->
+          <g id="waiting-mint-sanctuary" opacity="0.85">
+            <!-- 空位预留的地面浅影 -->
+            <ellipse cx="710" cy="515" rx="58" ry="13" fill="#8d8575" opacity="0.25" filter="url(#blur-subtle)"/>
+            <ellipse cx="710" cy="515" rx="55" ry="11" fill="none" stroke="#7b7466" stroke-width="1.2" stroke-dasharray="3 5" opacity="0.45"/>
+
+            <g class="waiting-spirit">
+              <!-- 空盆：虚线勾的，还原透明描线，还不存在的东西只能这么画 -->
+              <path class="dash-float" d="M 650 422 C 648 488, 656 510, 710 512 C 764 510, 772 488, 770 422 Z" 
+                    fill="none" stroke="#6e8a73" stroke-width="1.8" stroke-dasharray="5 5"/>
+              <ellipse class="dash-float" cx="710" cy="422" rx="60" ry="14" 
+                       fill="none" stroke="#6e8a73" stroke-width="1.8" stroke-dasharray="5 5"/>
+              <ellipse cx="710" cy="422" rx="51" ry="10" fill="none" stroke="#6e8a73" stroke-width="1.2" stroke-dasharray="3 4" opacity="0.5"/>
+
+              <!-- 虚线的粉笔笑脸：先替它画好，等周六它来了再描实 -->
+              <g stroke="#6e8a73" stroke-width="1.4" stroke-dasharray="3 3" fill="none" opacity="0.85">
+                <circle cx="696" cy="448" r="1.6"/>
+                <circle cx="724" cy="448" r="1.6"/>
+                <path d="M 694 458 Q 710 470 726 458" stroke-linecap="round"/>
+              </g>
+
+              <!-- 虚线的薄荷：一小丛，比绿萝矮，叶子对生，全透明简笔线稿 -->
+              <g stroke="#6e8a73" stroke-width="1.8" stroke-dasharray="4 4" fill="none" stroke-linecap="round">
+                <path d="M 710 340 L 710 340"/>
+                <path d="M 710 420 L 710 340"/>
+                <path d="M 690 421 Q 680 388 668 356"/>
+                <path d="M 730 421 Q 740 388 752 359"/>
+              </g>
+
+              <g stroke="#6e8a73" stroke-width="1.4" stroke-dasharray="3.5 3.5" fill="none">
+                <path d="M 710 340 C 696 335, 694 316, 708 312 C 719 308, 728 320, 721 333 Z"/>
+                <path d="M 710 340 C 724 335, 726 316, 712 312 C 701 308, 692 320, 699 333 Z"/>
+                
+                <path d="M 668 356 C 652 349, 650 333, 664 329 C 675 325, 684 338, 677 349 Z"/>
+                <path d="M 752 359 C 768 352, 770 334, 756 330 C 745 326, 736 339, 743 350 Z"/>
+
+                <path d="M 682 385 C 662 380, 660 360, 678 356 C 691 352, 700 368, 692 381 Z"/>
+                <path d="M 738 385 C 758 380, 760 360, 742 356 C 729 352, 720 368, 728 381 Z"/>
+              </g>
+            </g>
+
+            <!-- 简单居中的“待认领” -->
+            <text x="710" y="546" font-size="11.5" fill="#8a867f" text-anchor="middle" font-family="'Noto Serif SC', serif" opacity="0.85" letter-spacing="3">待认领</text>
+          </g>
+
+          <!-- 落款 -->
+          <g transform="translate(865, 614)">
+            <text x="0" y="0" text-anchor="end" font-family="'Cormorant Garamond', serif" font-size="14.5" font-style="italic" fill="#787265" letter-spacing="1.2">
+              Balcony. 1806. Overcast — <tspan font-family="'Noto Serif SC', serif" font-size="12" font-style="normal" font-weight="300" letter-spacing="2">空位保留，等周六。</tspan>
+            </text>
+          </g>
+
+        </g>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // 绿萝枝叶微摆
+    
+    // 左垂枝 (生根点: 236, 400)
+    gsap.to("#ivy-branch-left", {
+      svgOrigin: "236 400",
+      rotation: 2.2,
+      duration: 5.4,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut"
+    });
+    // 左叶尖
+    gsap.to("#leaf-tip-left", {
+      svgOrigin: "156 362",
+      rotation: -3.5,
+      duration: 4.8,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut",
+      delay: 0.4
+    });
+
+    // 后景左枝 (生根点: 245, 400)
+    gsap.to("#ivy-branch-backleft", {
+      svgOrigin: "245 400",
+      rotation: -1.6,
+      duration: 6.2,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut",
+      delay: 0.3
+    });
+
+    // 中间最高的一支 (生根点: 256, 400)
+    gsap.to("#ivy-branch-center", {
+      svgOrigin: "256 400",
+      rotation: 1.4,
+      duration: 6.8,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut",
+      delay: 0.5
+    });
+    // 主叶尖
+    gsap.to("#leaf-tip-center", {
+      svgOrigin: "258 280",
+      rotation: -2.0,
+      duration: 5.5,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut",
+      delay: 0.8
+    });
+
+    // 后景右枝 (生根点: 268, 400)
+    gsap.to("#ivy-branch-backright", {
+      svgOrigin: "268 400",
+      rotation: 1.8,
+      duration: 5.8,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut",
+      delay: 0.7
+    });
+
+    // 右展枝 (生根点: 275, 401)
+    gsap.to("#ivy-branch-right", {
+      svgOrigin: "275 401",
+      rotation: -2.0,
+      duration: 5.1,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut",
+      delay: 0.2
+    });
+
+    // 探向右边空位的长藤蔓 (生根点: 272, 404)：极轻微起伏
+    gsap.to("#creeping-vine-ensemble", {
+      svgOrigin: "272 404",
+      rotation: 0.6,
+      duration: 7.2,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut",
+      delay: 0.4
+    });
+
+    // 藤上的幼芽微动
+    gsap.to("#creeping-leaf-1", {
+      svgOrigin: "380 473",
+      rotation: 3.2,
+      duration: 4.5,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut",
+      delay: 0.2
+    });
+
+    gsap.to("#creeping-leaf-2", {
+      svgOrigin: "466 494",
+      rotation: -3.0,
+      duration: 5.0,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut",
+      delay: 0.6
+    });
+
+    gsap.to("#creeping-tendril", {
+      svgOrigin: "642 500",
+      rotation: 4.8,
+      duration: 3.8,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut",
+      delay: 0.9
+    });
+
+    // 丁达尔光束里的浮尘微动
+    const motes = document.querySelectorAll("#air-motes circle");
+    motes.forEach((mote, i) => {
+      gsap.to(mote, {
+        y: -30 - Math.random() * 24,
+        x: (Math.random() - 0.5) * 20,
+        opacity: Math.random() * 0.75 + 0.25,
+        duration: 4.5 + Math.random() * 4.5,
+        yoyo: true,
+        repeat: -1,
+        ease: "power1.inOut",
+        delay: i * 0.35
+      });
+    });
+
+    // 虚线薄荷的轻微浮动
+    gsap.to(".waiting-spirit", {
+      y: -3.5,
+      duration: 4.6,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut"
+    });
+  });
+</script>
+
+</body>
+</html>

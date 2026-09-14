@@ -1,0 +1,35 @@
+---
+type: readme
+name: 埃利亚斯独立办公室
+ambient: office-night
+title: 埃利亚斯独立办公室
+intent: 走廊尽头那间单人玻璃办公室，刷卡门禁，百叶帘半开。里面极简、克制，没有任何私人装饰：白板漆的墙上留着推导，桌面居中一台 MacBook 和显示器，矮柜上一台胶囊咖啡机，茶几上摊着做了批注的英文论文。谁进来都能看见，但你不会在这里多待。
+choice:
+  options:
+    - id: action-1
+      label: 看一眼茶几上摊开的论文
+    - id: action-2
+      label: 拉开墙边那组通顶储物柜
+    - id: action-3
+      label: 退回走廊
+choice_actions:
+  action-1:
+    kind: read
+    paths:
+      - world/stellar-cloud-campus/tower-bc/frontier-lab/elias-office/preprint-a4.md
+  action-2:
+    kind: read
+    paths:
+      - world/stellar-cloud-campus/tower-bc/frontier-lab/elias-office/cabinet-lock.md
+  action-3:
+    kind: enter
+    target: world/stellar-cloud-campus/tower-bc/frontier-lab
+---
+
+走廊走到头，就是埃利亚斯的办公室。单人玻璃间，门上挂着刷卡和刷脸的电子门禁，朝向开放办公区的那面玻璃墙装着一排百叶帘，常年半开——从外面能看见桌面，看不清细节。
+
+里面是极简到近乎冷淡的一套：矩阵式升降办公桌配一把黑色赫曼米勒椅；侧面承重墙涂满白板漆，上面是没擦的算法推导，白板下方金属托槽里并排着几支白板笔和一块沾了微量墨迹的板擦。桌面正中间是办公 MacBook 和一台高阶外接显示器，线都收在理线槽里；右边一个深色哑光马克杯，把手习惯性地朝着右侧四十五度。桌旁一个带锁的低矮抽屉柜，桌下一个黑色金属废纸篓，里面是几张揉皱的、写满公式的草稿纸。
+
+靠落地窗那侧是会客区：黑色双人皮沙发、单人扶手椅、钢化玻璃茶几，靠墙一组通顶储物柜。柜子左边挂着两套备用深色西装，右边底层整齐码着几瓶圣培露苏打水。玻璃茶几上叠着几本外文技术书，最上面摊着一份做了批注的英文预印本。
+
+墙上的中央空调面板显示 22 度。角落那株大型绿萝是行政部统一配的。你站在门口看了两眼就够了。

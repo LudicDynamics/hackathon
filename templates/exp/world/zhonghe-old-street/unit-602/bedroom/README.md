@@ -1,0 +1,43 @@
+---
+type: readme
+name: 卧室
+ambient: city-night
+title: 卧室
+intent: 602 内侧的卧室，一张 1.5 米木板床，床铺有点凌乱，被子只卷了一半。窗式空调挂在墙上，一扇带防盗网的铝合金窗配着绿色布窗帘。白色床头柜上放台灯、静音闹钟和一只黄色笑脸马克杯，柜里是积灰的 Wii 手柄和一台 3DS。角落是简易衣柜和一把堆着 T 恤的木椅子。往回到客厅。
+choice:
+  options:
+    - id: action-1
+      label: 拿起 Kindle
+    - id: action-2
+      label: 看床头柜上的马克杯
+    - id: action-3
+      label: 打开床头柜柜门
+    - id: action-4
+      label: 回客厅
+choice_actions:
+  action-1:
+    kind: read
+    paths:
+      - world/zhonghe-old-street/unit-602/bedroom/kindle-paperwhite.md
+  action-2:
+    kind: read
+    paths:
+      - world/zhonghe-old-street/unit-602/bedroom/smiley-mug.md
+  action-3:
+    kind: read
+    paths:
+      - world/zhonghe-old-street/unit-602/bedroom/nightstand.md
+  action-4:
+    kind: enter
+    target: world/zhonghe-old-street/unit-602
+---
+
+卧室在客厅内侧，隔着一道门。窗式空调挂在墙上，制冷的时候带着明显的轰鸣，是这间屋子夏天的主要背景音。一扇带防盗网的铝合金窗，配着遮光效果一般的绿色布窗帘，早上光会漏进来。
+
+房间正中是一张 1.5 米宽的木板床，铺着独立弹簧乳胶床垫，奶茶咖色的丝质床笠。被子是黑白双面的四季被，只卷了一半，黑面朝上——早上起得急，没来得及叠好。凑近能闻到淡淡的小苍兰香，是洗衣液留下来的味道。
+
+白色床头柜立在床边，插座上插着多头充电器。台面上有一盏台灯、一个静音闹钟，还有一只带笑脸图案的黄色马克杯。靠枕头的位置放着一台 Kindle Paperwhite 3。柜门里是积了点灰的 Wii 手柄和鸡腿副手柄，还有一台 3DS。
+
+墙角是一组简易衣柜，旁边一把普通木椅子，上面堆着几件洗干净、还没来得及收进去的 T 恤。床底深处塞着一个 27 寸的布艺行李箱。
+
+南北两头各有一台老式壁挂空调，卧室这一台，和客厅那台一起管着这五十平的温度。

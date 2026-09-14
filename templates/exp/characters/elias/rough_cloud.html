@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Rough Cloud</title>
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f4f1ea;
+  }
+  svg {
+    width: 600px;
+    height: 600px;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+    border-radius: 8px;
+  }
+</style>
+<!-- 1. 修正 CDN 链接：包名是 roughjs，无需横杠 -->
+<script src="https://unpkg.com/roughjs@4.6.6/bundled/rough.js"></script>
+</head>
+<body>
+
+<!-- 2. 准备一个 svg 容器 -->
+<svg id="svgCanvas" viewBox="0 0 600 600"></svg>
+
+<script>
+const svgEl = document.getElementById('svgCanvas');
+// 3. 将 svg 元素传入 rough.svg
+const rc = rough.svg(svgEl);
+
+// 挂绳（先画绳子，让它压在云朵下方）
+const string = rc.line(340, 150, 380, 250, { 
+  stroke: '#8c7d70', 
+  strokeWidth: 2, 
+  roughness: 1.2 
+});
+svgEl.appendChild(string);
+
+// 云朵本体
+const cloud = rc.path('M 200 300 Q 250 200 350 250 Q 450 200 480 300 Q 500 380 400 380 L 300 380 Q 180 380 200 300 Z', {
+  fill: '#bce6eb',
+  stroke: '#4a4238',
+  strokeWidth: 2,
+  roughness: 1.5,
+  fillStyle: 'zigzag',
+  fillWeight: 2,
+  hachureAngle: -45
+});
+svgEl.appendChild(cloud);
+
+// 腮红
+const blushL = rc.ellipse(275, 335, 24, 14, { 
+  fill: '#ffb6b9', 
+  stroke: 'none', 
+  roughness: 1, 
+  fillStyle: 'solid' 
+});
+const blushR = rc.ellipse(405, 335, 24, 14, { 
+  fill: '#ffb6b9', 
+  stroke: 'none', 
+  roughness: 1, 
+  fillStyle: 'solid' 
+});
+svgEl.appendChild(blushL);
+svgEl.appendChild(blushR);
+
+// 豆豆眼
+const eyeL = rc.circle(305, 315, 8, { fill: '#333333', stroke: 'none', fillStyle: 'solid', roughness: 0.3 });
+const eyeR = rc.circle(375, 315, 8, { fill: '#333333', stroke: 'none', fillStyle: 'solid', roughness: 0.3 });
+svgEl.appendChild(eyeL);
+svgEl.appendChild(eyeR);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Still Life - 17:42 (Reforged)</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;1,400&family=Noto+Serif+SC:wght@300;400&display=swap" rel="stylesheet">
+
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(ellipse at 50% 30%, #e2ded4 0%, #c8c2b5 60%, #a8a192 100%);
+    font-family: 'Noto Serif SC', serif;
+    color: #4a453e;
+    overflow-x: hidden;
+    padding: 30px 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .gallery-stage {
+    perspective: 2000px;
+    padding: 10px;
+  }
+
+  .art-frame-outer {
+    position: relative;
+    padding: 24px;
+    background: linear-gradient(145deg, #fdfbf7 0%, #ede6d8 100%);
+    border-radius: 4px;
+    box-shadow: 
+      0 42px 85px -20px rgba(35, 28, 20, 0.35),
+      0 20px 35px -10px rgba(0, 0, 0, 0.12),
+      0 0 0 1px rgba(255, 255, 255, 0.85) inset,
+      0 0 0 1px rgba(78, 68, 56, 0.14),
+      inset 0 0 45px rgba(184, 168, 145, 0.15);
+  }
+
+  .art-frame-inner {
+    position: relative;
+    width: 900px;
+    height: 640px;
+    background: #fdfbf7;
+    border-radius: 2px;
+    overflow: hidden;
+    box-shadow: 
+      inset 3px 3px 12px rgba(45, 38, 30, 0.24),
+      inset -1px -1px 4px rgba(255, 255, 255, 0.85),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  }
+
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* 蒸气与微光动画 */
+  @keyframes steamFloat {
+    0% { opacity: 0; transform: translateY(0) scaleX(1); }
+    30% { opacity: 0.45; }
+    80% { opacity: 0.15; transform: translateY(-35px) scaleX(1.4); }
+    100% { opacity: 0; transform: translateY(-50px) scaleX(1.8); }
+  }
+
+  .steam-line-1 { animation: steamFloat 4.2s ease-out infinite; }
+  .steam-line-2 { animation: steamFloat 5.0s ease-out infinite 1.6s; }
+  .steam-line-3 { animation: steamFloat 4.6s ease-out infinite 2.8s; }
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-tilt/1.8.1/vanilla-tilt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+</head>
+<body>
+
+<div class="gallery-stage">
+  <div class="art-frame-outer" data-tilt data-tilt-max="2" data-tilt-speed="1000" data-tilt-perspective="1800">
+    <div class="art-frame-inner">
+      <svg id="still-life-svg" viewBox="0 0 900 640" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 水彩棉纸质感 -->
+          <filter id="paper-texture" x="0%" y="0%" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="4" result="noise" />
+            <feDiffuseLighting in="noise" lighting-color="#fffdf8" surfaceScale="1.2" result="light">
+              <feDistantLight azimuth="50" elevation="60" />
+            </feDiffuseLighting>
+            <feBlend mode="multiply" in="SourceGraphic" in2="light" />
+          </filter>
+
+          <filter id="blur-soft"><feGaussianBlur stdDeviation="5"/></filter>
+          <filter id="blur-shadow"><feGaussianBlur stdDeviation="7"/></filter>
+          <filter id="blur-contact"><feGaussianBlur stdDeviation="2"/></filter>
+
+          <!-- 桌面渐变：17:42 的室内木光，右侧有落日斜阳偏温暖 -->
+          <linearGradient id="desk-wood" x1="0" y1="0" x2="1" y2="0.3">
+            <stop offset="0%" stop-color="#ccb89d"/>
+            <stop offset="50%" stop-color="#dfcbaf"/>
+            <stop offset="100%" stop-color="#edd2a9"/>
+          </linearGradient>
+
+          <!-- 墙面阴影：斜阳照射出的渐变背景 -->
+          <linearGradient id="wall-dusk" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ebe5d8"/>
+            <stop offset="65%" stop-color="#e3dac9"/>
+            <stop offset="100%" stop-color="#f2e2c2"/>
+          </linearGradient>
+
+          <!-- 17:42 的斜阳光束 -->
+          <linearGradient id="sunset-ray" x1="1" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#fff5db" stop-opacity="0.5"/>
+            <stop offset="50%" stop-color="#ffe8bd" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#ebd1b0" stop-opacity="0"/>
+          </linearGradient>
+
+          <!-- 马克杯陶瓷陶瓷渐变 -->
+          <linearGradient id="mug-ceramic" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#d9a826"/>
+            <stop offset="25%" stop-color="#f7cf43"/>
+            <stop offset="70%" stop-color="#ffd858"/>
+            <stop offset="100%" stop-color="#cca021"/>
+          </linearGradient>
+
+          <!-- 铝箔薯片袋立体高光 -->
+          <linearGradient id="chips-foil" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ffe24d"/>
+            <stop offset="40%" stop-color="#f9b813"/>
+            <stop offset="70%" stop-color="#e39c00"/>
+            <stop offset="100%" stop-color="#a66e00"/>
+          </linearGradient>
+        </defs>
+
+        <g filter="url(#paper-texture)">
+          <!-- 实验室背景墙与 17:42 斜光 -->
+          <rect x="0" y="0" width="900" height="340" fill="url(#wall-dusk)"/>
+          
+          <!-- 17:42 倾斜进来的温暖阳光 -->
+          <polygon points="400,0 900,0 900,640 150,640" fill="url(#sunset-ray)" style="mix-blend-mode: overlay;"/>
+
+          <!-- 木质桌面 -->
+          <rect x="0" y="340" width="900" height="300" fill="url(#desk-wood)"/>
+          <line x1="0" y1="340" x2="900" y2="340" stroke="#b09f87" stroke-width="1.5"/>
+          <!-- 木纹浅印 -->
+          <path d="M 0 420 Q 450 430 900 415" stroke="#bead93" stroke-width="0.8" opacity="0.4" fill="none"/>
+          <path d="M 0 520 Q 450 510 900 525" stroke="#bead93" stroke-width="1" opacity="0.35" fill="none"/>
+
+          <!-- 全局物影（从右上方照射过来的阴影） -->
+          <g opacity="0.25" filter="url(#blur-shadow)">
+            <!-- 薯片袋影 -->
+            <ellipse cx="205" cy="505" rx="58" ry="15" fill="#4a3b2c"/>
+            <!-- 马克杯影 -->
+            <ellipse cx="435" cy="482" rx="72" ry="17" fill="#4a3b2c"/>
+            <ellipse cx="370" cy="505" rx="16" ry="6" fill="#4a3b2c"/>
+            <!-- 瑞幸杯影 -->
+            <ellipse cx="616" cy="485" rx="42" ry="12" fill="#4a3b2c"/>
+            <!-- 保温杯影 -->
+            <ellipse cx="725" cy="445" rx="34" ry="10" fill="#4a3b2c"/>
+          </g>
+
+          <g opacity="0.42" filter="url(#blur-contact)">
+            <ellipse cx="218" cy="500" rx="44" ry="4.5" fill="#2b1f14"/>
+            <ellipse cx="448" cy="475" rx="50" ry="6" fill="#2b1f14"/>
+            <ellipse cx="623" cy="479" rx="25" ry="4" fill="#2b1f14"/>
+            <ellipse cx="730" cy="440" rx="26" ry="4.5" fill="#2b1f14"/>
+          </g>
+
+          <!-- ===== 1. 保温杯 (最右侧，保温杯淡磨砂质感) ===== -->
+          <g id="thermos-group" transform="translate(730, 265)">
+            <!-- 杯身 -->
+            <rect x="-26" y="0" width="52" height="175" rx="8" fill="#f4f2eb" stroke="#d3cecb" stroke-width="1.2"/>
+            <rect x="-26" y="0" width="14" height="175" rx="7" fill="#ffffff" opacity="0.6"/> <!-- 高光 -->
+            <!-- 杯盖 -->
+            <rect x="-23" y="-12" width="46" height="15" rx="4" fill="#7a736a" stroke="#5c5650" stroke-width="1"/>
+            <rect x="-21" y="2" width="42" height="3" fill="#a39c93"/>
+            <!-- 红茶微光透出 -->
+            <rect x="-19" y="16" width="38" height="148" rx="4" fill="#c48a55" opacity="0.08"/>
+          </g>
+
+          <!-- ===== 2. 瑞幸咖啡 (焦糖拿铁，外带纸杯) ===== -->
+          <g id="luckin-group" transform="translate(625, 315)">
+            <!-- 杯身线稿与填充 -->
+            <path d="M -32 10 L -23 164 Q 0 168 23 164 L 32 10 Z" fill="#fdfbf7" stroke="#d5cfc7" stroke-width="1.2"/>
+            <!-- 杯盖 -->
+            <path d="M -34 10 C -34 2, 34 2, 34 10 Z" fill="#ffffff" stroke="#d0c9c0" stroke-width="1.2"/>
+            <rect x="-36" y="7" width="72" height="5" rx="2" fill="#eae4dc"/>
+            <!-- 褐色杯套 -->
+            <path d="M -28 48 L -25 120 L 25 120 L 28 48 Z" fill="#9c7a63" stroke="#7e5f49" stroke-width="1"/>
+            <!-- 鹿头 Logo (精致极简线条) -->
+            <circle cx="0" cy="84" r="20" fill="#fdfbf7" stroke="#9c7a63" stroke-width="1"/>
+            <g stroke="#9c7a63" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M -6 91 L 0 71 L 6 91 M -3 85 L -6 92 M 3 85 L 6 92"/>
+              <path d="M 0 71 Q -8 61 -12 64 M 0 71 Q 8 61 12 64"/>
+            </g>
+            <!-- 杯口残余的浅褐色焦糖奶泡痕迹 -->
+            <ellipse cx="-16" cy="8" rx="6" ry="2.2" fill="#b08a68" opacity="0.75"/>
+          </g>
+
+          <!-- ===== 3. 黄色笑脸马克杯 (主景居中) ===== -->
+          <g id="mug-main-group" transform="translate(450, 305)">
+            <!-- 杯手把 -->
+            <path d="M 45 42 C 92 42, 92 125, 45 125" fill="none" stroke="#d9a826" stroke-width="14" stroke-linecap="round"/>
+            <path d="M 45 42 C 92 42, 92 125, 45 125" fill="none" stroke="#f7cf43" stroke-width="9" stroke-linecap="round"/>
+
+            <!-- 杯身 -->
+            <path d="M -52 20 L -52 154 C -52 173, 52 173, 52 154 L 52 20 Z" fill="url(#mug-ceramic)" stroke="#c2941b" stroke-width="1.8"/>
+            <!-- 左侧反光柔和高光 -->
+            <path d="M -41 28 L -41 150" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.45"/>
+
+            <!-- 杯口内沿与残茶 -->
+            <ellipse cx="0" cy="20" rx="52" ry="15" fill="#e3b42b" stroke="#c2941b" stroke-width="1.5"/>
+            <ellipse cx="0" cy="22" rx="44" ry="11" fill="#8f3e1b"/> <!-- 浓郁红茶液体 -->
+            <ellipse cx="2" cy="23" rx="38" ry="8" fill="#aa4e23" opacity="0.85"/>
+
+            <!-- 升腾的红茶热气 -->
+            <g transform="translate(0, -6)" stroke="#ffffff" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.5" filter="url(#blur-soft)">
+              <path class="steam-line-1" d="M -15 8 Q -25 -15 -10 -35 T -20 -58"/>
+              <path class="steam-line-2" d="M 0 8 Q 10 -15 0 -35 T 8 -58"/>
+              <path class="steam-line-3" d="M 15 8 Q 5 -15 20 -35 T 7 -58"/>
+            </g>
+
+            <!-- 笑脸图案 (深咖色，温和) -->
+            <g transform="translate(0, 95)">
+              <circle cx="-16" cy="-6" r="4.5" fill="#423221"/>
+              <circle cx="16" cy="-6" r="4.5" fill="#423221"/>
+              <path d="M -20 7 Q 0 24, 20 7" stroke="#423221" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+            </g>
+
+            <!-- 茶包长线垂在桌上 -->
+            <g id="tea-string-group">
+              <path id="tea-string" d="M -24 22 C -46 45, -95 105, -88 155 C -84 185, -82 195, -78 196" 
+                    fill="none" stroke="#f0ece1" stroke-width="1.8" filter="drop-shadow(1px 2px 2px rgba(0,0,0,0.18))"/>
+              
+              <!-- 垂在桌边的立顿茶包小标签 -->
+              <g id="tea-tag" transform="translate(-78, 178) rotate(14)">
+                <rect x="-14" y="0" width="28" height="34" rx="2" fill="#fffefb" stroke="#d1ccc3" stroke-width="1"/>
+                <rect x="-14" y="0" width="28" height="5" fill="#e03e2e"/>
+                <text x="0" y="20" font-size="6.2" fill="#e03e2e" text-anchor="middle" font-family="sans-serif" font-weight="bold" letter-spacing="0.3">LIPTON</text>
+              </g>
+            </g>
+
+            <!-- 挂在把手上的小云朵挂件 -->
+            <g id="cloud-pendant" transform="translate(70, 75)">
+              <path d="M -2 -12 L 0 8" stroke="#948b81" stroke-width="1.5" stroke-dasharray="2,1"/> <!-- 挂绳 -->
+              <g id="cloud-body" transform="translate(0, 16)">
+                <path d="M -20 -6 Q -6 -20 9 -6 Q 24 0 17 14 Q 8 22 -5 18 Q -20 22 -24 10 Q -26 0 -20 -6 Z" 
+                      fill="#ffffff" stroke="#c7c1b5" stroke-width="1.2" filter="drop-shadow(1px 2px 3px rgba(0,0,0,0.14))"/>
+                <!-- 豆豆眼 & 腮红 -->
+                <circle cx="-5" cy="4" r="1.6" fill="#4a4238"/>
+                <circle cx="5" cy="4" r="1.6" fill="#4a4238"/>
+                <ellipse cx="-10" cy="7" rx="2.5" ry="1.5" fill="#ff9e9e" opacity="0.75"/>
+                <ellipse cx="10" cy="7" rx="2.5" ry="1.5" fill="#ff9e9e" opacity="0.75"/>
+              </g>
+            </g>
+          </g>
+
+          <!-- ===== 4. 乐事薯片袋 (原味，亮黄，铝箔折痕，黑色长尾夹) ===== -->
+          <g id="lays-group" transform="translate(225, 380) rotate(-6)">
+            <!-- 袋身铝箔质感 -->
+            <path d="M -48 15 L 48 15 L 53 120 L -53 120 Z" fill="url(#chips-foil)" stroke="#d98e00" stroke-width="1.5"/>
+            <!-- 褶皱铝箔立体高光与阴影 -->
+            <path d="M -35 25 L 25 40 M -15 65 L 35 102 M -45 80 L 10 102" stroke="#fffae0" stroke-width="2.5" opacity="0.6" stroke-linecap="round"/>
+            <path d="M -33 28 L 27 43 M -13 68 L 37 105 M -43 83 L 12 105" stroke="#8c5200" stroke-width="1.5" opacity="0.35" stroke-linecap="round"/>
+
+            <!-- Lay's 红色圆形 Logo -->
+            <circle cx="0" cy="72" r="21" fill="#e52d27" stroke="#ffffff" stroke-width="1.5"/>
+            <path d="M -17 72 Q 0 62 17 72 Q 0 82 -17 72 Z" fill="#ffcb05" opacity="0.85"/>
+            <text x="0" y="77" font-size="14" fill="#ffffff" text-anchor="middle" font-weight="bold" font-family="'Helvetica Neue', sans-serif" font-style="italic">Lay's</text>
+
+            <!-- 黑色弹簧长尾夹 (夹在顶部封口处) -->
+            <g transform="translate(0, 15)">
+              <rect x="-18" y="-6" width="36" height="12" fill="#2b2b2b" rx="2" stroke="#121212" stroke-width="1"/>
+              <!-- 银色钢丝扣 -->
+              <path d="M -12 6 L -20 28 L -6 28 L 0 6 Z" fill="none" stroke="#d6d6d6" stroke-width="1.8" stroke-linejoin="round"/>
+              <path d="M 12 6 L 20 28 L 6 28 L 0 6 Z" fill="none" stroke="#d6d6d6" stroke-width="1.8" stroke-linejoin="round"/>
+            </g>
+          </g>
+
+          <!-- 右下角落款 -->
+          <g transform="translate(865, 612)">
+            <text x="0" y="0" text-anchor="end" font-family="'Cormorant Garamond', serif" font-size="14" font-style="italic" fill="#787063" letter-spacing="1">
+              Still Life. 17:42 PM. — <tspan font-family="'Noto Serif SC', serif" font-size="11.5" font-style="normal" font-weight="300">实验室傍晚。</tspan>
+            </text>
+          </g>
+
+        </g>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // 1. 小云朵挂件在茶水热气中的极轻微晃动
+    gsap.to("#cloud-body", {
+      transformOrigin: "50% 0%",
+      rotation: 4,
+      duration: 3.2,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut"
+    });
+
+    // 2. 茶包棉线垂落的微弱晃动
+    gsap.to("#tea-tag", {
+      transformOrigin: "50% 0%",
+      rotation: 18,
+      duration: 3.8,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut"
+    });
+
+    // 3. 薯片袋极其微小的摆放倾角呼吸感
+    gsap.to("#lays-group", {
+      transformOrigin: "0 120px",
+      rotation: -4.8,
+      duration: 5,
+      yoyo: true,
+      repeat: -1,
+      ease: "sine.inOut"
+    });
+  });
+</script>
+
+</body>
+</html>
