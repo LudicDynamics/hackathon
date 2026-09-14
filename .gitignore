@@ -102,3 +102,5 @@ video/remotion/public/scenes/
 video/remotion/public/portraits/
 video/remotion/public/sfx/
 video/remotion/public/footage/
+# Placeholder score renders (the mp3 is kept; the 25MB wav is a local intermediate).
+video/remotion/public/music/*.wav
