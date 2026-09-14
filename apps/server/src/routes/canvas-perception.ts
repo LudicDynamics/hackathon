@@ -27,6 +27,7 @@ type Capability = {
   layer: string;
   snapshotId: string;
   turnId: string;
+  store: LocalWorldStore;
   expiresAt: number;
 };
 
@@ -83,9 +84,9 @@ function validateViewport(value: unknown): value is { width: number; height: num
     Number(viewport.height) >= VIEWPORT_MIN.height && Number(viewport.height) <= VIEWPORT_MAX.height;
 }
 
-function capabilityFor(token: string): Capability | null {
+function capabilityFor(token: string, store: LocalWorldStore): Capability | null {
   const capability = capabilities.get(token);
-  if (!capability) return null;
+  if (!capability || capability.store !== store) return null;
   if (capability.expiresAt <= Date.now()) {
     capabilities.delete(token);
     return null;
@@ -93,7 +94,7 @@ function capabilityFor(token: string): Capability | null {
   return capability;
 }
 
-function issueCapability(input: Capability): string {
+function issueCapability(input: Omit<Capability, 'store'>, store: LocalWorldStore): string {
   for (const [token, capability] of capabilities) {
     if (capability.expiresAt <= Date.now()) capabilities.delete(token);
   }
@@ -103,7 +104,7 @@ function issueCapability(input: Capability): string {
     capabilities.delete(oldest);
   }
   const token = randomBytes(24).toString('base64url');
-  capabilities.set(token, input);
+  capabilities.set(token, { ...input, store });
   return token;
 }
 
@@ -151,7 +152,7 @@ export function createCanvasPerceptionRouter(getActiveStore: () => LocalWorldSto
       const snapshot = await readCanvasSnapshot(store, { layer });
       if (snapshot.identity.snapshotId !== snapshotId) return res.status(409).json(conflictResponse(snapshot, snapshotId).body);
       const expiresAt = Date.now() + CAPABILITY_TTL_MS;
-      const captureCapability = issueCapability({ worldId, layer: snapshot.layer.id, snapshotId, turnId, expiresAt });
+      const captureCapability = issueCapability({ worldId, layer: snapshot.layer.id, snapshotId, turnId, expiresAt }, store);
       return res.json({ ok: true, captureCapability, expiresAt, worldId, layer: snapshot.layer.id, snapshotId });
     } catch (error) {
       return res.status(500).json({ ok: false, code: 'internal', error: error instanceof Error ? error.message : 'Could not issue screenshot capability.', details: { reason: 'capability_issue_failed' } });
@@ -172,10 +173,10 @@ export function createCanvasPerceptionRouter(getActiveStore: () => LocalWorldSto
     if (!validateViewport(viewportValue)) return res.status(400).json(invalid('viewport must be an integer width/height within 320x240 to 2560x1600.').body);
     const viewport = viewportValue;
     if (body.region !== undefined && !validateRect(body.region)) return res.status(400).json(invalid('region must contain finite x, y, w, h with w/h >= 50.').body);
-    const capability = capabilityFor(captureCapability);
-    if (!capability || capability.worldId !== worldId || capability.layer !== layer || capability.snapshotId !== snapshotId) return res.status(501).json(unavailable('the current user\'s canvas identity is unavailable.').body);
     const store = getActiveStore();
     if (!store) return res.status(409).json({ ok: false, code: 'conflict', error: 'The active world changed while capturing the canvas.', details: { reason: 'no_active_world' } });
+    const capability = capabilityFor(captureCapability, store);
+    if (!capability || capability.worldId !== worldId || capability.layer !== layer || capability.snapshotId !== snapshotId) return res.status(501).json(unavailable('the current user\'s canvas identity is unavailable.').body);
     try {
       const manifest = await store.getManifest();
       if (manifest.id !== worldId) return res.status(409).json({ ok: false, code: 'conflict', error: 'The active world changed while capturing the canvas.', details: { reason: 'world_changed' } });
