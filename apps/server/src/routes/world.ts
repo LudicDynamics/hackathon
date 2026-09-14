@@ -92,6 +92,60 @@ async function reply(
   }
 }
 
+/**
+ * World-write guard (docs/ui/前端改造计划.md §3 T0.6).
+ *
+ * `revision` is the world's event high-water mark (`store.getMaxSeq()`) — the
+ * ONE monotonic number the world already publishes, so the guard introduces no
+ * second state namespace (00 §2.4): the world files stay the truth, this is a
+ * veto, not a shadow copy.
+ *
+ * A request MAY carry `expectedRevision`. When it does and the world has moved
+ * on since, the write is REFUSED with 409 `stale` and the current revision is
+ * handed back so the caller can align and retry. A request WITHOUT it is an
+ * unconditional write (the agent paths and legacy clients).
+ *
+ * Both the revision read and the write run INSIDE `serialDeclared`, so two
+ * concurrent requests can never observe the same revision and then both append:
+ * the "one key opens two locks" replay (docs/tools/08 §6, T0.6's motivating bug)
+ * is closed here rather than in the tools, which own no concurrency state.
+ *
+ * Every error still goes through `reply` — this only adds the veto and the
+ * post-write revision; the ONE status table (docs/tools/01 §7.1) stays there.
+ */
+async function worldWrite(
+  res: Response,
+  store: LocalWorldStore,
+  expected: unknown,
+  run: () => Promise<{ details: Record<string, unknown> }>
+): Promise<void> {
+  if (expected !== undefined && (!Number.isInteger(expected) || (expected as number) < 0)) {
+    res.status(400).json({ ok: false, code: 'invalid_argument', error: 'expectedRevision must be a non-negative integer' });
+    return;
+  }
+  let current: number | null = null;
+  const applied = await serialDeclared(store.worldRoot, async () => {
+    const revision = await store.getMaxSeq();
+    if (expected !== undefined && expected !== revision) {
+      current = revision;
+      return false;
+    }
+    await reply(res, async () => {
+      const result = await run();
+      return { details: { ...result.details, revision: await store.getMaxSeq() } };
+    });
+    return true;
+  });
+  if (!applied) {
+    res.status(409).json({
+      ok: false,
+      code: 'stale',
+      error: `The world moved on: expected revision ${String(expected)}, current ${String(current)}. Re-read and retry.`,
+      revision: current,
+    });
+  }
+}
+
 /** Deterministic pseudorandom hash (doc-04 §4) - mirror of the frontend lib/camera hashInt. */
 function hashInt(s: string): number {
   let h = 0;
@@ -707,7 +761,7 @@ export function createWorldRouter(
     }
 
     const service = serviceFor(store, { type: 'player' });
-    await reply(res, async () => {
+    await worldWrite(res, store, req.body?.expectedRevision, async () => {
       const result = await writeNookNote(service.ctx, parsed.data);
       const details = NookNoteOutcomeSchema.parse({
         path: result.details.path,
@@ -1010,7 +1064,7 @@ export function createWorldRouter(
     if (typeof following !== 'boolean') {
       return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'following must be a boolean' });
     }
-    await reply(res, () =>
+    await worldWrite(res, store, req.body?.expectedRevision, () =>
       serviceFor(store, { type: 'player' }).setFollowing({ character, following })
     );
   });
@@ -1029,7 +1083,7 @@ export function createWorldRouter(
     if (typeof to !== 'string' || to === '') {
       return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'to must be a non-empty world-relative path' });
     }
-    await reply(res, () =>
+    await worldWrite(res, store, req.body?.expectedRevision, () =>
       serviceFor(store, { type: 'player' }).moveEntity({
         from,
         to,
@@ -1044,8 +1098,9 @@ export function createWorldRouter(
    * The state write goes through `arrangeCards({ place })` (09 §8.3: one action
    * semantics), but the frame is `card_position` — NOT `canvas_patched`, which is
    * reserved for the tool path (docs/tools/12 §6.5). Broadcasting has to happen
-   * after the action succeeded, so this route cannot use `reply` (which swallows
-   * the error).
+   * after the action succeeded, so this route goes through `worldWrite` (which
+   * serializes, guards the revision and maps errors) rather than the plain
+   * `reply`, which swallows the error.
    */
   router.post('/card/position', async (req, res) => {
     const store = getActiveStore();
@@ -1060,17 +1115,11 @@ export function createWorldRouter(
     ) {
       return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'x and y must be finite numbers' });
     }
-    try {
+    await worldWrite(res, store, req.body?.expectedRevision, async () => {
       const r = await serviceFor(store, { type: 'player' }).arrangeCards({ place: { path: cardPath, x, y } });
       eventBridge.broadcast({ type: 'card_position', path: cardPath, x, y });
-      res.json({ ok: true, ...r.details });
-    } catch (err) {
-      if (err instanceof ActionError) {
-        const h = err.toHttp();
-        return res.status(h.status).json(h.body);
-      }
-      res.status(500).json({ ok: false, code: 'internal', error: err instanceof Error ? err.message : String(err) });
-    }
+      return r;
+    });
   });
 
   /**
@@ -1144,7 +1193,7 @@ export function createWorldRouter(
         return res.status(400).json({ ok: false, code: 'invalid_argument', error: `boxes[${i}].h must be a finite positive number` });
       }
     }
-    await reply(res, async () => ({
+    await worldWrite(res, store, req.body?.expectedRevision, async () => ({
       details: await store.writeFootprints(layer, boxes as Array<{ path: string; w: number; h: number }>),
     }));
   });
@@ -1165,8 +1214,8 @@ export function createWorldRouter(
     }
     // Only a forged score is a god action; a plain click is the player's (07 §5.2).
     const actor: Actor = typeof forcedResult === 'number' ? { type: 'god' } : { type: 'player' };
-    await reply(res, () => serialDeclared(store.worldRoot, () =>
-      runDeclaredRoll(serviceFor(store, actor), dicePath, typeof forcedResult === 'number' ? forcedResult : undefined)));
+    await worldWrite(res, store, req.body?.expectedRevision, () =>
+      runDeclaredRoll(serviceFor(store, actor), dicePath, typeof forcedResult === 'number' ? forcedResult : undefined));
   });
 
   // Use item on target (point-and-click puzzle). No bare frame: the event goes
@@ -1181,7 +1230,7 @@ export function createWorldRouter(
     if (typeof target !== 'string' || target === '') {
       return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'target must be a non-empty world-relative path' });
     }
-    await reply(res, () => serviceFor(store, { type: 'player' }).useItemOn({ item, target }));
+    await worldWrite(res, store, req.body?.expectedRevision, () => serviceFor(store, { type: 'player' }).useItemOn({ item, target }));
   });
 
   // Player picks one of the public options an entity declares (06 §2.5).
@@ -1191,7 +1240,7 @@ export function createWorldRouter(
     // A panel opened before a world switch must not submit into the new world.
     if (req.body?.world !== store.worldRoot) return res.status(409).json({ error: 'The active world changed. Reopen the materials panel.' });
     // Flat `{ ok, ...details }` per docs/wiring/00 §6; actionDetailsOf reads both shapes.
-    await reply(res, () => serialDeclared(store.worldRoot, () => prepareMaterialReview(serviceFor(store, { type: 'player' }), req.body)));
+    await worldWrite(res, store, req.body?.expectedRevision, () => prepareMaterialReview(serviceFor(store, { type: 'player' }), req.body));
   });
 
   router.post('/choice', async (req, res) => {
@@ -1204,7 +1253,7 @@ export function createWorldRouter(
     if (!((typeof choice === 'string' && choice !== '') || (typeof choice === 'number' && Number.isFinite(choice)))) {
       return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'choice must be a string label or a 1-based number' });
     }
-    await reply(res, () => serialDeclared(store.worldRoot, async () => {
+    await worldWrite(res, store, req.body?.expectedRevision, async () => {
       const declared = await runDeclaredChoice(serviceFor(store, { type: 'player' }), choicePath, choice);
       if (declared) {
         Object.assign(declared.details.action, { world: store.worldRoot });
@@ -1218,7 +1267,7 @@ export function createWorldRouter(
         dispatch(store, `[Player Event] ${JSON.stringify(result.details.event)}\nRead ${JSON.stringify(choicePath)} and the world skill. Resolve this choice, update the source file, and write a chalk response. Do not record the choice a second time.`);
       }
       return result;
-    }));
+    });
   });
 
   // Player walks through a door into another layer (05 §3.6.2 / 12 §2.4).
@@ -1282,7 +1331,7 @@ export function createWorldRouter(
     // `dispatch` that used to live here was a second, contract-violating path
     // (doc-21 §5.5: an event landing never starts a turn) that also bypassed
     // the brief, the emptiness check and the fallback.
-    await reply(res, async () => {
+    await worldWrite(res, store, req.body?.expectedRevision, async () => {
       const layers = (await store.getManifest()).layers;
       if (!layers[layer]) throw new ActionError({ code: 'not_found', message: 'Scene does not exist.' });
       return serviceFor(store, { type: 'player' }).enterLayer({ layer });
@@ -1318,7 +1367,7 @@ export function createWorldRouter(
     const reason = typeof body.reason === 'string' && body.reason.trim() !== ''
       ? body.reason.trim()
       : 'manual snapshot';
-    await reply(res, () => serviceFor(store, { type: 'god' }).snapshotWorld({ reason }));
+    await worldWrite(res, store, req.body?.expectedRevision, () => serviceFor(store, { type: 'god' }).snapshotWorld({ reason }));
   });
 
   /**
@@ -1333,7 +1382,7 @@ export function createWorldRouter(
     if (typeof body.snapshot !== 'string' || body.snapshot.trim() === '') {
       return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'snapshot must be a non-empty id' });
     }
-    await reply(res, () => serviceFor(store, { type: 'engine' }).rollbackWorld({ snapshot: body.snapshot }));
+    await worldWrite(res, store, req.body?.expectedRevision, () => serviceFor(store, { type: 'engine' }).rollbackWorld({ snapshot: body.snapshot }));
   });
   // God mode toggle freeze — a presentation toggle, not an action: it writes no
   // event and broadcasts a演出 frame directly (docs/tools/12 §2.4).
@@ -1361,6 +1410,7 @@ export function createWorldRouter(
       frontmatter?: unknown;
       body?: unknown;
       content?: unknown;
+      expectedRevision?: unknown;
     };
     const action = body.action;
     if (action !== 'create' && action !== 'update' && action !== 'delete') {
@@ -1383,11 +1433,11 @@ export function createWorldRouter(
 
     const svc = serviceFor(store, { type: 'god' });
     if (action === 'delete') {
-      await reply(res, () => svc.removeEntity({ path: targetPath }));
+      await worldWrite(res, store, body.expectedRevision, () => svc.removeEntity({ path: targetPath }));
       return;
     }
     if (action === 'create') {
-      await reply(res, () =>
+      await worldWrite(res, store, body.expectedRevision, () =>
         svc.createEntity({
           path: targetPath,
           body: content ?? '',
@@ -1396,7 +1446,7 @@ export function createWorldRouter(
       );
       return;
     }
-    await reply(res, () =>
+    await worldWrite(res, store, body.expectedRevision, () =>
       svc.editEntity({
         path: targetPath,
         ...(frontmatter ? { frontmatter } : {}),
