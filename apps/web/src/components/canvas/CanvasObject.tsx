@@ -1,4 +1,5 @@
 import React from 'react';
+import type { FocusCoordinator } from '../../lib/focus-coordinator.js';
 import { BagItemDialog } from '../BagItemDialog.js';
 import { PhotoDetailDialog } from '../photo/PhotoDetailDialog.js';
 import { CardRenderer } from './CardRenderer.js';
@@ -142,12 +143,12 @@ const PortraitFig: React.FC<PortraitProps> = ({ video, poster, caption, title, s
     </div>
   );
 };
-
 export interface CanvasObjectProps {
   item: LayerItem;
   /** true = this card never mounts <video> (L1 cap / L3 reduced motion, nook 03 §③-6). */
   still?: boolean;
   index?: number;
+  focus?: FocusCoordinator;
   onSelectChoice?: (path: string, choice: string) => void;
   onEntityAction?: (prompt: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
@@ -182,6 +183,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   item,
   still = false,
   index,
+  focus,
   onSelectChoice,
   onEntityAction,
   onDiceRolled,
@@ -312,20 +314,22 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
       {...appearance?.attrs}
       style={{ ...appearance?.style, ...shellStyle(item, kind, reading) }}
     >
-        {reading && isPhoto ? (
-          <PhotoDetailDialog
-            item={item}
-            appearance={appearance}
-            dialogId={photoDialogId}
-            onClose={() => setReading(false)}
-            returnFocusRef={objectRef}
-          />
-        ) : reading ? (
-          <BagItemDialog
+      {reading && isPhoto ? (
+        <PhotoDetailDialog
+          item={item}
+          appearance={appearance}
+          dialogId={photoDialogId}
+          onClose={() => setReading(false)}
+          returnFocusRef={objectRef}
+          focus={focus}
+        />
+      ) : reading ? (
+        <BagItemDialog
             inline
             item={{ ...item, body: readerBody }}
             onClose={() => setReading(false)}
             onChoose={choice => { setReading(false); setPendingChoice(choice); }}
+            focus={focus}
           />
         ) : kind === 'portrait' ? (
           <PortraitFig
@@ -366,7 +370,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             onItemDropOnTarget={onItemDropOnTarget}
           />
         )}
-        {!reading && <EntityInteractions item={item} active={hovered || focused || inspected} onChoice={onEntityAction} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate ? requestEnter : undefined} onOpenCharacter={onOpenCharacterModal} pendingChoice={pendingChoice} onPendingChoiceHandled={() => setPendingChoice(null)} />}
+        {!reading && <EntityInteractions item={item} active={hovered || focused || inspected} focus={focus} onChoice={onEntityAction} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate ? requestEnter : undefined} onOpenCharacter={onOpenCharacterModal} pendingChoice={pendingChoice} onPendingChoiceHandled={() => setPendingChoice(null)} />}
     </div>
   );
 };

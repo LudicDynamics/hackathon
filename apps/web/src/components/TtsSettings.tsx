@@ -5,7 +5,7 @@ import { NanamiTtsSettings } from './NanamiTtsSettings.js';
 import { getChannelVolume, setChannelVolume, type VolumeChannel } from '../lib/audio.js';
 import { useLocale } from '../lib/i18n.js';
 import { readTtsConfig, setTtsEnabled, ttsEnabled, type TtsConfig } from '../lib/tts-readiness.js';
-import type { FocusCoordinator } from '../lib/focus-coordinator.js';
+import type { FocusCoordinator, FocusSurfaceLease } from '../lib/focus-coordinator.js';
 
 const clampPercent = (value: number): number => (
   Number.isNaN(value) ? 0 : Math.min(100, Math.max(0, Math.round(value)))
@@ -36,20 +36,48 @@ export function TtsSettings({ focus }: { focus?: FocusCoordinator } = {}) {
   const [config, setConfig] = useState<TtsConfig | null>(null);
   const [error, setError] = useState('');
   const [volumes, setVolumes] = useState<Record<VolumeChannel, number>>(readVolumes);
-  const focusTokenRef = useRef<string | null>(null);
-  const setOpenState = (next: boolean): void => {
-    setOpen(next);
-    const token = focusTokenRef.current;
-    if (next && focus && !token) focusTokenRef.current = focus.acquire('workspace');
-    if (!next && token && focus) {
-      focus.release(token);
-      focusTokenRef.current = null;
-    }
-  };
-  useEffect(() => () => {
-    const token = focusTokenRef.current;
-    if (token && focus) focus.release(token);
-  }, [focus]);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const leaseRef = useRef<FocusSurfaceLease | null>(null);
+  const setOpenState = (next: boolean): void => setOpen(next);
+  useEffect(() => {
+    if (!open || !focus) return;
+    let previous: HTMLElement | null = null;
+    let restored = false;
+    const lease = focus.registerSurface({
+      key: 'tts-settings',
+      owner: 'workspace',
+      priority: 320,
+      root: panelRef.current,
+      close: () => setOpenState(false),
+      returnFocus: {
+        capture: () => {
+          if (previous) return;
+          const active = document.activeElement;
+          if (active instanceof HTMLElement && active !== document.body) previous = active;
+        },
+        restore: () => {
+          if (restored) return false;
+          restored = true;
+          if (previous && document.contains(previous)) {
+            previous.focus();
+            return true;
+          }
+          return false;
+        },
+      },
+    });
+    leaseRef.current = lease;
+    return () => {
+      if (leaseRef.current === lease) leaseRef.current = null;
+      lease.unregister();
+      window.requestAnimationFrame(() => {
+        if (!restored && previous && document.contains(previous)) {
+          restored = true;
+          previous.focus();
+        }
+      });
+    };
+  }, [focus, open]);
   const refresh = async () => {
     try { setConfig(await readTtsConfig(true)); setError(''); }
     catch { setError(t('Voice service is unavailable. Text dialogue still works.')); }
@@ -64,6 +92,11 @@ export function TtsSettings({ focus }: { focus?: FocusCoordinator } = {}) {
     setVolumes(previous => ({ ...previous, [channel]: percent }));
     setChannelVolume(channel, percent / 100);
   };
+  const requestClose = () => {
+    const lease = leaseRef.current;
+    if (lease && !lease.markClosing()) return;
+    setOpenState(false);
+  };
   useEffect(() => {
     const warn = () => setNotice(true);
     window.addEventListener('airp:tts-unavailable', warn);
@@ -76,9 +109,9 @@ export function TtsSettings({ focus }: { focus?: FocusCoordinator } = {}) {
       <button type="button" onClick={() => { setNotice(false); openSettings(); }}>{t('Settings')}</button>
       <button type="button" aria-label={t('Dismiss voice notice')} onClick={() => setNotice(false)}>×</button>
     </aside>, document.body)}
-    {open && createPortal(<div className="prototype-dialog-backdrop" onClick={() => setOpenState(false)}>
-      <section className="prototype-world-picker settings-panel" role="dialog" aria-modal="true" aria-label={t('Voice settings')} data-focus-owner="workspace" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpenState(false); } }}>
-        <button type="button" onClick={() => setOpenState(false)} aria-label={t('Close voice settings')} autoFocus>{t('Close')}</button>
+    {open && createPortal(<div className="prototype-dialog-backdrop" onClick={requestClose}>
+      <section ref={panelRef} className="prototype-world-picker settings-panel" role="dialog" aria-modal="true" aria-label={t('Voice settings')} data-focus-owner="workspace" onClick={e => e.stopPropagation()}>
+        <button type="button" onClick={requestClose} aria-label={t('Close voice settings')} autoFocus>{t('Close')}</button>
         <h2>{t('Character voice')}</h2>
         <fieldset aria-labelledby="audio-levels-heading">
           <legend id="audio-levels-heading">{t('Audio levels')}</legend>

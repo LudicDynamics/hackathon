@@ -1,8 +1,8 @@
 .cabin-prop{width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;border:0;background:none;color:inherit;cursor:pointer;padding:12px;text-align:center}
-.cabin-prop img{width:100%;height:auto;max-height:250px;object-fit:contain;border-radius:8px}
-.cabin-prop__label{font-family:Georgia,serif;font-size:21px;letter-spacing:.03em}
-.cabin-prop__hint{font:9px monospace;letter-spacing:.22em;opacity:.65}
-.cabin-prop__shape{position:relative;display:block;width:100%;filter:drop-shadow(0 12px 18px #0005);transition:transform .25s}
+.cabin-prop img{width:100%;height:auto;max-height:250px;object-fit:contain;border-radius:var(--ux-radius-touch)}
+.cabin-prop__label{font-family:var(--ux-font-human);font-size:21px;letter-spacing:.03em}
+.cabin-prop__hint{font:9px var(--ux-font-machine);letter-spacing:.22em;opacity:.65}
+.cabin-prop__shape{position:relative;display:block;width:100%;filter:drop-shadow(0 12px 18px #0005);transition:transform var(--ux-motion-fast)}
 .cabin-prop:hover .cabin-prop__shape{transform:translateY(-4px)}
 .cabin-prop--envelope .cabin-prop__shape{aspect-ratio:1.65;background:linear-gradient(145deg,#e9dcc0,#cbb690);border:1px solid #907c54;border-radius:3px}
 .cabin-prop--envelope .cabin-prop__shape:before{content:'';position:absolute;inset:0;background:#f2e6c9;clip-path:polygon(0 0,100% 0,50% 62%);filter:drop-shadow(0 2px 1px #59472b)}

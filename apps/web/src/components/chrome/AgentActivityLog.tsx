@@ -8,7 +8,7 @@ import {
   type TFn,
 } from '../../lib/agent-activity.js';
 import { useLocale } from '../../lib/i18n.js';
-import type { FocusCoordinator } from '../../lib/focus-coordinator.js';
+import type { FocusCoordinator, FocusSurfaceLease } from '../../lib/focus-coordinator.js';
 import { useAgentActivityLog } from '../../state/useAgentActivity.js';
 
 export interface AgentActivityLogProps {
@@ -37,36 +37,66 @@ export const AgentActivityLog: React.FC<AgentActivityLogProps> = ({ query, sessi
   const panelId = useId();
   const toggleRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
-  const focusTokenRef = useRef<string | null>(null);
+  const leaseRef = useRef<FocusSurfaceLease | null>(null);
   const wasOpenRef = useRef(false);
   const setOpenState = useCallback((next: boolean): void => {
     setOpen(next);
-    const token = focusTokenRef.current;
-    if (next && focus && !token) focusTokenRef.current = focus.acquire('workspace');
-    if (!next && token && focus) {
-      focusTokenRef.current = null;
-      focus.release(token);
-    }
-  }, [focus]);
+  }, []);
+  const requestClose = useCallback((): void => {
+    const lease = leaseRef.current;
+    if (lease && !lease.markClosing()) return;
+    setOpenState(false);
+  }, [setOpenState]);
+  useEffect(() => {
+    if (!open || !focus) return;
+    let previous: HTMLElement | null = null;
+    let restored = false;
+    const lease = focus.registerSurface({
+      key: `activity-details:${query.agentId ?? query.surface ?? 'default'}`,
+      owner: 'workspace',
+      priority: 330,
+      root: panelRef.current,
+      close: () => setOpenState(false),
+      returnFocus: {
+        capture: () => {
+          if (previous) return;
+          const active = document.activeElement;
+          if (active instanceof HTMLElement && active !== document.body) previous = active;
+        },
+        restore: () => {
+          if (restored) return false;
+          restored = true;
+          if (previous && document.contains(previous)) {
+            previous.focus();
+            return true;
+          }
+          return false;
+        },
+      },
+    });
+    leaseRef.current = lease;
+    return () => {
+      if (leaseRef.current === lease) leaseRef.current = null;
+      lease.unregister();
+      window.requestAnimationFrame(() => {
+        if (!restored && previous && document.contains(previous)) {
+          restored = true;
+          previous.focus();
+        }
+      });
+    };
+  }, [focus, open, query.agentId, query.surface, setOpenState]);
   useEffect(() => {
     if (open) {
       // Move focus into the detail surface after it has mounted so keyboard
-      // users can reach Escape/close without traversing the canvas chrome.
+      // users can reach the close control without traversing the canvas chrome.
       panelRef.current?.focus();
     } else if (wasOpenRef.current) {
-      // Closing by Escape or the explicit close control returns to the
-      // disclosure that opened this surface, rather than losing the user.
+      // Closing by the explicit close control returns to the disclosure.
       toggleRef.current?.focus();
     }
     wasOpenRef.current = open;
   }, [open]);
-  useEffect(() => () => {
-    const token = focusTokenRef.current;
-    if (token && focus) {
-      focus.release(token);
-      focusTokenRef.current = null;
-    }
-  }, [focus]);
   useEffect(() => {
     if (entryCount === 0 && open) setOpenState(false);
   }, [entryCount, open, setOpenState]);
@@ -101,13 +131,6 @@ export const AgentActivityLog: React.FC<AgentActivityLogProps> = ({ query, sessi
         aria-controls={panelId}
         aria-label={t('Activity details')}
         onClick={toggleOpen}
-        onKeyDown={event => {
-          if (event.key === 'Escape' && open) {
-            event.preventDefault();
-            event.stopPropagation();
-            setOpenState(false);
-          }
-        }}
       >
         <span className="agent-activity-log__toggle-mark" aria-hidden="true">≡</span>
         <span>{t('Activity details')}</span>
@@ -121,20 +144,13 @@ export const AgentActivityLog: React.FC<AgentActivityLogProps> = ({ query, sessi
           className="agent-activity-log__panel"
           tabIndex={-1}
           aria-label={sessionLabel ? t('Activity details for {name}', { name: sessionLabel }) : t('Activity details')}
-          onKeyDown={event => {
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              event.stopPropagation();
-              setOpenState(false);
-            }
-          }}
         >
           <header className="agent-activity-log__header">
             <strong>{sessionLabel ?? t('Activity details')}</strong>
             <div className="agent-activity-log__actions">
               <button type="button" onClick={expandAll}>{t('Expand all activity turns')}</button>
               <button type="button" onClick={collapseAll}>{t('Collapse all activity turns')}</button>
-              <button type="button" onClick={() => setOpenState(false)} aria-label={t('Close activity details')}>×</button>
+              <button type="button" onClick={requestClose} aria-label={t('Close activity details')}>×</button>
             </div>
           </header>
           <ul className="agent-activity-log__turns">

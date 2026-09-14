@@ -3,6 +3,7 @@ import type { WorldShelf } from '../lib/airp-gateway.js';
 import { withBase } from '../lib/base-path.js';
 import { useLocale } from '../lib/i18n.js';
 import { useStill } from '../lib/motion.js';
+import type { FocusCoordinator, FocusSurfaceLease } from '../lib/focus-coordinator.js';
 import {
   brickGeometry,
   brickWorld,
@@ -121,13 +122,14 @@ const Brick = memo(function Brick({ brickKey, world, index, left, top, width, he
  * the arrow keys to wander; the wall leans with the pointer. Every session starts
  * here and every world returns here.
  */
-export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves }: {
+export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves, focus }: {
   shelf: WorldShelf;
   loading: string | null;
   onLoad: (path: string) => void;
   /** Present while a world is open: go back into it. */
   onClose?: () => void;
   onManageSaves: () => void;
+  focus?: FocusCoordinator;
 }) {
   const { t, locale, setLocale } = useLocale();
   const still = useStill();
@@ -154,7 +156,53 @@ export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves }
   const frames = useRef({ tilt: 0, glide: 0, ease: 0 });
   const loadRef = useRef(onLoad);
   loadRef.current = onLoad;
+  const closeHandler = useRef(onClose);
+  closeHandler.current = onClose;
+  const openedRef = useRef<string | null>(null);
+  openedRef.current = opened;
+  const leaseRef = useRef<FocusSurfaceLease | null>(null);
+  const requestClose = useCallback(() => {
+    const lease = leaseRef.current;
+    if (lease && !lease.markClosing()) return;
+    if (openedRef.current) setOpened(null);
+    else closeHandler.current?.();
+  }, []);
   const active = opened ?? hovered;
+  useEffect(() => {
+    if (!focus) return;
+    let opener: HTMLElement | null = null;
+    let restored = false;
+    const returnFocus = {
+      capture: () => {
+        if (opener) return;
+        const activeElement = document.activeElement;
+        if (activeElement instanceof HTMLElement && activeElement !== document.body) opener = activeElement;
+      },
+      restore: () => {
+        if (restored) return false;
+        restored = true;
+        if (opener && document.contains(opener)) {
+          opener.focus();
+          return true;
+        }
+        return false;
+      },
+    };
+    const lease = focus.registerSurface({
+      key: 'world-launcher',
+      owner: 'workspace',
+      priority: 400,
+      root: root.current,
+      close: requestClose,
+      returnFocus,
+    });
+    leaseRef.current = lease;
+    return () => {
+      if (leaseRef.current === lease) leaseRef.current = null;
+      lease.unregister();
+      window.requestAnimationFrame(() => returnFocus.restore());
+    };
+  }, [focus, requestClose]);
 
   useEffect(() => {
     const element = stage.current;
@@ -256,22 +304,16 @@ export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves }
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const step = { ArrowLeft: [-cellW * 0.6, 0], ArrowRight: [cellW * 0.6, 0], ArrowUp: [0, -cellH * 0.6], ArrowDown: [0, cellH * 0.6] }[event.key];
-      if (step && !(event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement)) {
-        event.preventDefault();
-        scrollBy(step[0], step[1]);
-      } else if (event.key === 'Escape') {
-        if (opened) setOpened(null);
-        else if (onClose) onClose();
-        else return;
-      } else {
-        return;
-      }
-      // The world underneath has its own Escape and arrow keys.
+      if (!step || (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement)) return;
+      event.preventDefault();
+      scrollBy(step[0], step[1]);
+      // Arrow navigation is local launcher behavior; Escape belongs only to
+      // App's document-capture transaction.
       event.stopPropagation();
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [cellW, cellH, onClose, opened, scrollBy]);
+  }, [cellW, cellH, scrollBy]);
 
   // Lean is written to a CSS variable pair read only by the wall's transform:
   // the bricks themselves never repaint when the pointer moves.
@@ -381,7 +423,7 @@ export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves }
         </div>
         <nav aria-label={t('World launcher')}>
           <button type="button" className="world-launcher__pill" onClick={onManageSaves}>{t('Saved games')}</button>
-          {onClose && <button type="button" className="world-launcher__pill" onClick={onClose}>{t('Continue this story')}</button>}
+          {onClose && <button type="button" className="world-launcher__pill" onClick={requestClose}>{t('Continue this story')}</button>}
         </nav>
       </header>
       <div

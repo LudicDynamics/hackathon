@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { airpGateway, type WorldShelf as Shelf } from '../lib/airp-gateway.js';
 import { useLocale } from '../lib/i18n.js';
+import type { FocusCoordinator, FocusSurfaceLease } from '../lib/focus-coordinator.js';
 
-export function WorldShelf({ shelf, loading, onLoad, onClose, onRefresh }: {
+export function WorldShelf({ shelf, loading, onLoad, onClose, onRefresh, focus }: {
   shelf: Shelf; loading: string | null; onLoad: (path: string) => void;
-  onClose: () => void; onRefresh: () => Promise<void>;
+  onClose: () => void; onRefresh: () => Promise<void>; focus?: FocusCoordinator;
 }) {
   const { t, locale } = useLocale();
   const [selected, setSelected] = useState<string | null>(null);
@@ -12,11 +13,58 @@ export function WorldShelf({ shelf, loading, onLoad, onClose, onRefresh }: {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const panel = useRef<HTMLElement>(null);
+  const leaseRef = useRef<FocusSurfaceLease | null>(null);
+  const closeHandler = useRef(onClose);
+  closeHandler.current = onClose;
+  const requestClose = () => {
+    const lease = leaseRef.current;
+    if (lease && !lease.markClosing()) return;
+    closeHandler.current();
+  };
   useEffect(() => {
-    const outside = (e: PointerEvent) => { if (!busy && !panel.current?.contains(e.target as Node)) onClose(); };
+    if (!focus) return;
+    let previous: HTMLElement | null = null;
+    let restored = false;
+    const lease = focus.registerSurface({
+      key: 'world-shelf',
+      owner: 'world-shelf',
+      priority: 390,
+      root: panel.current,
+      close: () => closeHandler.current(),
+      returnFocus: {
+        capture: () => {
+          if (previous) return;
+          const active = document.activeElement;
+          if (active instanceof HTMLElement && active !== document.body) previous = active;
+        },
+        restore: () => {
+          if (restored) return false;
+          restored = true;
+          if (previous && document.contains(previous)) {
+            previous.focus();
+            return true;
+          }
+          return false;
+        },
+      },
+    });
+    leaseRef.current = lease;
+    return () => {
+      if (leaseRef.current === lease) leaseRef.current = null;
+      lease.unregister();
+      window.requestAnimationFrame(() => {
+        if (!restored && previous && document.contains(previous)) {
+          restored = true;
+          previous.focus();
+        }
+      });
+    };
+  }, [focus]);
+  useEffect(() => {
+    const outside = (e: PointerEvent) => { if (!busy && !panel.current?.contains(e.target as Node)) requestClose(); };
     window.addEventListener('pointerdown', outside, true);
     return () => window.removeEventListener('pointerdown', outside, true);
-  }, [busy, onClose]);
+  }, [busy]);
   const group = shelf.groups?.find(g => g.id === selected);
   const remove = async (savePath: string) => {
     setBusy(true); setMessage('');
@@ -29,7 +77,7 @@ export function WorldShelf({ shelf, loading, onLoad, onClose, onRefresh }: {
     finally { setBusy(false); }
   };
   return <section ref={panel} className="prototype-world-picker world-directory" role="dialog" aria-modal="false" aria-label={t(group ? 'Saved games' : 'Choose a world')}>
-      <header className="world-directory__header"><span>{t('WORLD SHELF')}</span><button autoFocus disabled={busy} onClick={onClose} aria-label={t('Close')}>×</button></header>
+      <header className="world-directory__header"><span>{t('WORLD SHELF')}</span><button autoFocus disabled={busy} onClick={requestClose} aria-label={t('Close')}>×</button></header>
       <h2>{group?.name || t('Choose a world')}</h2>
       {!group ? (shelf.groups || []).map((entry, index) => <button className="world-directory__entry" key={entry.id} onClick={() => { setSelected(entry.id); setMessage(''); }}>
         <small aria-hidden="true">{String(index + 1).padStart(2, '0')}</small><div><b>{entry.name}</b><span>{t('{count} saves', { count: entry.saves.length })}</span></div><span aria-hidden="true">↗</span>
@@ -52,6 +100,6 @@ export function WorldShelf({ shelf, loading, onLoad, onClose, onRefresh }: {
         </article>)}
       </>}
       {message && <p role="status">{message}</p>}
-      <button className="prototype-close" disabled={busy} onClick={onClose}>{t('Continue this story')}</button>
+      <button className="prototype-close" disabled={busy} onClick={requestClose}>{t('Continue this story')}</button>
     </section>;
 }

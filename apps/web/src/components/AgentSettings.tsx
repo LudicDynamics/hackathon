@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { FocusCoordinator } from '../lib/focus-coordinator.js';
+import type { FocusCoordinator, FocusSurfaceLease } from '../lib/focus-coordinator.js';
 import type { AutoWrite, WorldSettings } from '@airp/shared/world-settings';
 import { useWriterState } from '../lib/writer-state.js';
 import { useLocale } from '../lib/i18n.js';
@@ -12,20 +12,48 @@ export function AgentSettings({ settings, onSaveSettings, focus }: {
 }) {
   const { t } = useLocale();
   const [open, setOpen] = useState(false);
-  const focusTokenRef = useRef<string | null>(null);
-  const setOpenState = (next: boolean): void => {
-    setOpen(next);
-    const token = focusTokenRef.current;
-    if (next && focus && !token) focusTokenRef.current = focus.acquire('workspace');
-    if (!next && token && focus) {
-      focus.release(token);
-      focusTokenRef.current = null;
-    }
-  };
-  useEffect(() => () => {
-    const token = focusTokenRef.current;
-    if (token && focus) focus.release(token);
-  }, [focus]);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const leaseRef = useRef<FocusSurfaceLease | null>(null);
+  const setOpenState = (next: boolean): void => setOpen(next);
+  useEffect(() => {
+    if (!open || !focus) return;
+    let previous: HTMLElement | null = null;
+    let restored = false;
+    const lease = focus.registerSurface({
+      key: 'agent-settings',
+      owner: 'workspace',
+      priority: 320,
+      root: panelRef.current,
+      close: () => setOpenState(false),
+      returnFocus: {
+        capture: () => {
+          if (previous) return;
+          const active = document.activeElement;
+          if (active instanceof HTMLElement && active !== document.body) previous = active;
+        },
+        restore: () => {
+          if (restored) return false;
+          restored = true;
+          if (previous && document.contains(previous)) {
+            previous.focus();
+            return true;
+          }
+          return false;
+        },
+      },
+    });
+    leaseRef.current = lease;
+    return () => {
+      if (leaseRef.current === lease) leaseRef.current = null;
+      lease.unregister();
+      window.requestAnimationFrame(() => {
+        if (!restored && previous && document.contains(previous)) {
+          restored = true;
+          previous.focus();
+        }
+      });
+    };
+  }, [focus, open]);
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -73,13 +101,7 @@ export function AgentSettings({ settings, onSaveSettings, focus }: {
     : t('Ready');
   return <div className="agent-settings" data-focus-owner={open ? 'workspace' : undefined}>
     <button onClick={() => setOpenState(!open)} aria-expanded={open}>{t('Agents · {summary}', { summary })}</button>
-    {open && <section className="agent-settings-panel" aria-label={t('Agent models and progress')} onKeyDown={event => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        setOpenState(false);
-      }
-    }}>
+    {open && <section ref={panelRef} className="agent-settings-panel" aria-label={t('Agent models and progress')}>
       <p role="status">
         {!status ? t('Connecting to the engine') : writing ? writer.stage ?? t('Preparing the response') : t('Ready for your next action')}
         {writer.stopRequested ? t(' · Stop requested') : ''}
