@@ -119,6 +119,7 @@ export class CanvasArrangerRuntime {
   private readonly opts: CanvasArrangerRuntimeOptions;
   private readonly operations = new Map<string, CanvasArrangerOperation>();
   private readonly inFlightByWorld = new Map<string, string>();
+  private readonly operationByRequest = new Map<string, string>();
   private readonly runs = new Map<string, Promise<void>>();
   private readonly clients = new Map<string, RpcClient>();
   private readonly stores = new Map<string, LocalWorldStore>();
@@ -127,14 +128,21 @@ export class CanvasArrangerRuntime {
 
   async start(request: CanvasArrangeRequest): Promise<CanvasArrangeAccepted> {
     this.validateRequest(request);
-    const activeStore = this.opts.getActiveStore();
-    if (!activeStore) throw new Error('No active world is available.');
+    const requestKey = `${request.worldId}\u0000${request.requestId}`;
+    const previousId = this.operationByRequest.get(requestKey);
+    if (previousId) {
+      const previous = this.operations.get(previousId)!;
+      if (!sameRequest(previous, request)) throw new Error('Canvas arrangement requestId was reused with different input.');
+      return this.accepted(previous);
+    }
     const existingId = this.inFlightByWorld.get(request.worldId);
     if (existingId) {
       const existing = this.operations.get(existingId)!;
       if (!sameRequest(existing, request)) throw new Error('Canvas arrangement is already in progress for this world.');
       return this.accepted(existing);
     }
+    const activeStore = this.opts.getActiveStore();
+    if (!activeStore) throw new Error('No active world is available.');
     const operationId = randomUUID();
     const turnId = `functional:canvas-arranger:${randomUUID()}` as `functional:canvas-arranger:${string}`;
     const operation: CanvasArrangerOperation = {
@@ -142,7 +150,7 @@ export class CanvasArrangerRuntime {
       cancelRequested: false, committed: false, terminal: false,
     };
     this.operations.set(operationId, operation);
-    this.stores.set(operationId, activeStore);
+    this.operationByRequest.set(requestKey, operationId);
     this.inFlightByWorld.set(request.worldId, operationId);
     const run = this.run(operation);
     this.runs.set(operationId, run);
