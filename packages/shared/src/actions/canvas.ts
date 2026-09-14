@@ -20,6 +20,7 @@ import { ActionError, fail } from './errors.js';
 import { registerAction } from './service.js';
 import type { CardRecord, SeatFile } from '../store/world-store.js';
 import { SEAT_ANCHOR, SEAT_PAD, SEAT_STEP, arrangeCanvasLayer as arrangeCanvasLayerKernel } from '../store/local-store.js';
+import { readCanvasSnapshot } from '../render/canvas-snapshot.js';
 import { characterIdOfPath, nookCardPaths, nookIdOf } from '../rules/characters.js';
 
 const MAX_COORD = 4000;
@@ -515,8 +516,8 @@ export async function arrangeCards(
       );
     }
 
-    // Row-creating path: seat at DECLARED first so the row is never the schema
-    // DEFAULT (contract §5.5); `placeCard` below only moves it.
+    // Preserve legacy explicit placement semantics; versioned writes are owned
+    // by LocalWorldStore.placeCard and layout uses the strict kernel below.
     await seatDeclaredRows(store, layer, [place.path]);
     const card = await store.placeCard(layer, place.path, box);
     return {

@@ -1448,6 +1448,8 @@ export class LocalWorldStore implements WorldStore {
           message: `Cannot arrange cards with invalid footprints on "${input.layer}".`,
         });
       }
+      const targets = targetIds.map((id) => byId.get(id)!);
+      const boxes = targets.map((row) => ({ id: row.id, w: row.w, h: row.h }));
       const obstacles = allRows
         .filter((row) => !targetIds.includes(row.id))
         .filter((row) => row.w > 0 && row.h > 0)

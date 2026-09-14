@@ -267,24 +267,28 @@ function canvasRevisionOfState(state: DbCanvasState, rows: CanvasSnapshotRow[]):
         z: row.z,
         footprintSource: row.footprintSource,
       })),
-    links: state.links.map((link) => ({
-      id: link.id,
-      layer: link.layer,
-      from: link.from,
-      to: link.to,
-      style: link.style,
-      color: link.color,
-      directed: link.directed,
-      z: link.z,
-      label: link.label,
-    })),
-    presence: state.presence.map((person) => ({
-      characterId: person.characterId,
-      layer: person.layer,
-      x: person.x,
-      y: person.y,
-      following: person.following,
-    })),
+    links: [...state.links]
+      .sort((a, b) => a.z - b.z || compareAscii(a.id, b.id))
+      .map((link) => ({
+        id: link.id,
+        layer: link.layer,
+        from: link.from,
+        to: link.to,
+        style: link.style,
+        color: link.color,
+        directed: link.directed,
+        z: link.z,
+        label: link.label,
+      })),
+    presence: [...state.presence]
+      .sort((a, b) => compareAscii(a.characterId, b.characterId))
+      .map((person) => ({
+        characterId: person.characterId,
+        layer: person.layer,
+        x: person.x,
+        y: person.y,
+        following: person.following,
+      })),
     viewpoint: state.viewpoint,
   };
   return sha256(canonicalJson(revisionInput));
