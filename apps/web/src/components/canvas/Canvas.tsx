@@ -15,6 +15,7 @@ import { elementBox, invalidateMeasures } from '../../lib/measure.js';
 import { setParallax } from '../../lib/parallax.js';
 import { portraitPlayStateOf } from '../../lib/motion.js';
 import { PresenceLayer } from './PresenceLayer.js';
+import { AgentCursorLayer } from './AgentCursorLayer.js';
 import { PRESENCE_NODE_ATTR } from '../../lib/presence-node.js';
 import { depthClassFor } from '../../lib/depth-surface.js';
 import { useStill } from '../../lib/motion.js';
@@ -635,6 +636,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             </div>
           )}
           <PhantomLayer currentLayer={currentLayer} bgSrc={bg.src} copy={ghostCopy} />
+          <AgentCursorLayer camera={camera} currentLayer={currentLayer} items={items} presence={presence} />
         </div>
       </div>
 

@@ -17,6 +17,7 @@ import { phantomSeatFor, publishSeatItems } from '../lib/phantom-seat.js';
 import { mergeItemPatch, mergeLinkPatch } from '../lib/canvas-patch.js';
 import { acceptWriterFrame, beginWriterPrompt, getWriterState, resetForReconnect as resetWriter, type WriterPromptAcceptance } from '../lib/writer-state.js';
 import { agentActivityStore } from '../lib/agent-activity-store.js';
+import { agentCursorStore } from '../lib/agent-cursor.js';
 import { worldEventToastStore } from '../lib/world-event-toast.js';
 import { playFoley, playCharge, endCharge, setAmbient } from '../lib/audio.js';
 import { ghostSizeFor, stageText, GHOST_WAIT_AMBIENT } from '../lib/ghost.js';
@@ -549,8 +550,11 @@ export function useWorld(): UseWorldApi {
           agentActivityStore.ingest(msg);
           break;
         case 'tool_start':
+          // The writer's pointer moves onto the md / folder this call touches.
+          agentCursorStore.toolStart(msg);
           break;
         case 'tool_end': {
+          agentCursorStore.toolEnd(msg);
           const failedToolCallId = msg.isError === true && typeof msg.toolCallId === 'string'
             ? msg.toolCallId
             : undefined;
@@ -588,6 +592,7 @@ export function useWorld(): UseWorldApi {
             break;
           }
           window.dispatchEvent(new CustomEvent('airp:character-frame', { detail: msg }));
+          if (msg.type === 'character_idle') agentCursorStore.idle(`character:${msg.characterId}`);
           break;
         }
         case 'error':
@@ -600,12 +605,14 @@ export function useWorld(): UseWorldApi {
             isValidCharacterId(msg.characterId) &&
             typeof msg.message === 'string'
           ) {
+            agentCursorStore.idle(`character:${msg.characterId}`);
             window.dispatchEvent(new CustomEvent('airp:character-frame', { detail: msg }));
           } else if (msg.source === 'character') {
             window.dispatchEvent(new CustomEvent('airp:notice', {
               detail: 'Character error dropped: missing or invalid character id.',
             }));
           } else {
+            agentCursorStore.idle('writer');
             window.dispatchEvent(new CustomEvent('airp:notice', { detail: msg.message ?? 'The writer could not finish this turn.' }));
           }
           break;
@@ -615,8 +622,10 @@ export function useWorld(): UseWorldApi {
             typeof msg.characterId === 'string' &&
             isValidCharacterId(msg.characterId)
           ) {
+            agentCursorStore.idle(`character:${msg.characterId}`);
             window.dispatchEvent(new CustomEvent('airp:character-frame', { detail: msg }));
           } else {
+            agentCursorStore.idle('writer');
             window.dispatchEvent(new CustomEvent('airp:notice', { detail: msg.message ?? 'The writer could not finish this turn.' }));
           }
           break;
@@ -670,6 +679,7 @@ export function useWorld(): UseWorldApi {
         }
         case 'writer_idle': {
           if (msg.source !== 'writer') break;
+          agentCursorStore.idle('writer');
           break;
         }
         case 'dice_result': {
@@ -772,6 +782,7 @@ export function useWorld(): UseWorldApi {
         // A dropped socket never delivers terminal frames, so clear activity
         // immediately rather than waiting for its stale sweep.
         agentActivityStore.clearAll();
+        agentCursorStore.clearAll();
         if (!stopped) retryTimer = window.setTimeout(connect, 1200);
       };
     };

@@ -36,6 +36,7 @@ import { useWriterState, requestWriterStop, resetForReconnect, retryWriterPrompt
 import { buildItemActionPrompt, appendItemAction } from './lib/item-action-draft.js';
 import { PLAY_HINT_REQUEST } from './lib/play-hints.js';
 import { agentActivityStore } from './lib/agent-activity-store.js';
+import { agentCursorStore } from './lib/agent-cursor.js';
 import { worldEventToastStore } from './lib/world-event-toast.js';
 import { GodModeToolbar } from './components/god/GodModeToolbar.js';
 import { RadialMenu, type RadialItemType } from './components/god/RadialMenu.js';
@@ -298,6 +299,8 @@ export function App() {
   useEffect(() => { syncFocus('world-shelf', worldPickerOpen); }, [syncFocus, worldPickerOpen]);
   useEffect(() => { syncFocus('nook', nookChar !== null); }, [nookChar, syncFocus]);
   useEffect(() => { syncFocus('character-dialogue', activeCharacter !== null); }, [activeCharacter, syncFocus]);
+  // The dialogue dims the canvas: the character's pointer records, then replays on close.
+  useEffect(() => { agentCursorStore.setDialogue(activeCharacter?.id ?? null); }, [activeCharacter?.id]);
   useEffect(() => { syncFocus('belongings', bagOpen || selectedBagItem !== undefined); }, [bagOpen, selectedBagItem, syncFocus]);
   useEffect(() => { syncFocus('profile', profileOpen); }, [profileOpen, syncFocus]);
   useEffect(() => { syncFocus('writer', attention === 'authoring' && !shell.immersive); }, [attention, shell.immersive, syncFocus]);
