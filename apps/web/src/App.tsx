@@ -45,7 +45,7 @@ import { useWorld } from './state/useWorld.js';
 import type { EnterLayerResult } from './state/useWorld.js';
 import { usePresence } from './state/usePresence.js';
 import { CharacterRail } from './components/sidebar/CharacterRail.js';
-import { airpGateway, type AssetMediaKind, type WorldShelf } from './lib/airp-gateway.js';
+import { airpGateway, onWorldUnavailable, AirpRequestError, type AssetMediaKind, type WorldShelf } from './lib/airp-gateway.js';
 import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
 import { BagItemDialog } from './components/BagItemDialog.js';
 import { initialShell, transitionShell, splitCharacters } from './lib/ui-shell.mjs';
@@ -308,10 +308,16 @@ export function App() {
       setCharacters(nextCharacters.characters);
       setShelf(nextShelf);
     } catch (error) {
-      // The character rail's ONLY data source: a silent empty rail would read
-      // as "nobody is here" (docs/presence/00 §6, global MUST NOT 6).
-      notify(t('Could not load the world data. Please retry.'));
-      console.warn('Could not load AIRP chrome data:', error);
+      // `no_active_world` is not a data failure: the world shelf is already
+      // opening (see the `onWorldUnavailable` effect) and telling the player to
+      // "retry" would be false. Only genuine load errors get the toast.
+      const unavailable = error instanceof AirpRequestError && error.payload?.code === 'no_active_world';
+      if (!unavailable) {
+        // The character rail's ONLY data source: a silent empty rail would read
+        // as "nobody is here" (docs/presence/00 §6, global MUST NOT 6).
+        notify(t('Could not load the world data. Please retry.'));
+        console.warn('Could not load AIRP chrome data:', error);
+      }
     }
   };
   useEffect(() => {
@@ -330,8 +336,11 @@ export function App() {
       frameQueue.clear('disconnect');
       void airpGateway.worlds().then(setShelf).catch(() => notify('Could not load the world shelf. Please retry.'));
     };
-    window.addEventListener('airp:world-unavailable', unavailable);
-    return () => window.removeEventListener('airp:world-unavailable', unavailable);
+    // Replayed subscription, not a one-shot `airp:world-unavailable` listener:
+    // the first `no_active_world` can land before this effect registers, and a
+    // missed signal would leave the player on a blank canvas with no way to pick
+    // a world (docs/ux/03 §6).
+    return onWorldUnavailable(unavailable);
   }, []);
 
   useEffect(() => {
