@@ -7,9 +7,9 @@
 
 ## 1. 一句话定位
 
-只给 `AIRP_AGENT_ROLE=writer` 且由 `writerLaunch` 启动的顶层进程加一条可配置的单轮工具调用总量上限：默认 24 次；每个 engine `turn_start` 清零；第 N+1 次在执行前被阻断，并把简短原因作为模型可见的 tool error 返回。它不是世界规则、事件记录器、Chalk 质量审查器或初始化策略。
+只给 `AIRP_AGENT_ROLE=writer` 且由 `writerLaunch` 启动的顶层进程加一条可配置的单轮工具调用总量上限：默认 24 次；每个 engine `agent_start` 清零；第 N+1 次在执行前被阻断，并把简短原因作为模型可见的 tool error 返回。它不是世界规则、事件记录器、Chalk 质量审查器或初始化策略。
 
-本设计的“单轮”采用 pi-rp extension API 的 engine turn 口径：一次 `turn_start` 到对应 `turn_end`，即一次 assistant 响应及其工具调用批次；不是整个 agent run、session、玩家动作，也不是 `tool_execution_start` 到 `tool_execution_end` 的耗时窗口。
+本设计的“单轮”采用 pi-rp 的 agent run 口径：一次 `agent_start` 到对应 `agent_end`，即一次玩家请求及其全部工具循环；不是其中某个 `turn_start` 到 `turn_end` 的单次 assistant 响应，也不是整个 session 或玩家动作历史。
 
 ## 2. 输入与签名
 
@@ -20,7 +20,7 @@
 | `AIRP_AGENT_ROLE` | `airpEnv({ role: 'writer' })` | 身份门禁；必须逐字等于 `writer` |
 | `AIRP_AGENT_SCOPE` | `writerLaunch` | 顶层深度门禁；必须为 `writer-top-level` |
 | `AIRP_WRITER_MAX_TOOL_CALLS` | server 环境，经 `airpEnv` 传入 agent | 上限配置；只有严格正整数覆盖默认值 |
-| `turn_start` | Extension API | engine turn 的唯一清零边界 |
+| `turn_start` | Extension API | 观测到工具循环中的续接请求；**不清零**，因为 pi-rp 会在同一 agent run 内重复发出 |
 | `tool_call` | Extension API | 已通过工具解析/校验、即将执行的一次工具调用；每个事件计一次 |
 
 `AIRP_AGENT_ROLE` 不通过 `agentActor()` 间接判断。共享 actor 解析对未设置或未知值有 writer fallback（`packages/shared/src/actions/actor.ts`），将其用于本守卫会把未知进程误纳入 Writer；本守卫只认原始环境变量。`AIRP_AGENT_SCOPE` 是已有 launch 级深度标记，不由模型输入提供。
@@ -77,14 +77,14 @@ export function registerWriterToolCallGuard(
 
 **漏接后果：** 只判断 `AIRP_AGENT_ROLE` 会把继承 Writer role 的 initializer 误判为顶层 Writer；只判断 `agentActor().type` 会把 unset/unknown fallback 纳入；按工具名过滤会恢复 niko 原版额外黑名单。
 
-### 3.3 在 engine turn 开始清零
+### 3.3 在 agent run 开始清零
 
-1. 监听 `pi.on('agent_start', ...)`，把计数设为 0，作为新 agent run 的防御性起点。
-2. 监听 `pi.on('turn_start', ...)`，把计数设为 0；这是每个 engine turn 的权威边界。`turnIndex` 只用于观测/测试，不作为跨 session 的计数键。
-3. 不在 `turn_end` 做业务动作；下一次 `turn_start` 会重新清零。
-4. 第一个 `tool_call` 若发生在正常首个 `turn_start` 前，使用闭包初始化的 0 计数；这类异常顺序不应被扩展伪造为一个成功 turn。
+1. 监听 `pi.on('agent_start', ...)`，把计数设为 0；这是每个玩家请求 / agent run 的边界。
+2. **不监听 `turn_start` 做清零。** pi-rp 的 `runLoop` 在每次工具调用后再次请求模型时会发 `turn_start`；若在此清零，单个工具调用就能绕过总量上限并无限循环。
+3. 不在 `turn_end` 做业务动作；同一 run 的 `turn_end` 不是 run 终点，下一次 `agent_start` 才重新清零。
+4. 第一个 `tool_call` 若发生在正常首个 `agent_start` 前，使用闭包初始化的 0 计数；这类异常顺序不应被扩展伪造为一个成功 run。
 
-**漏接后果：** 只在 `agent_start` 清零会把工具循环中的后续 engine turn 继续累计，违反单轮语义；只在 `turn_end` 清零会在中断/异常时残留；按时间窗口清零无法对应引擎 turn。
+**漏接后果：** 只在 `turn_start` 清零会把工具循环中的每次续接都伪装成新预算，正是本次“重复 Chalk 四五十次”的根因；只在 `turn_end` 清零会在异常时残留。
 
 ### 3.4 预执行计数与阻断
 
@@ -126,7 +126,7 @@ export function registerWriterToolCallGuard(
 
 ## 5. 状态、事件生命周期与落账
 
-状态只有一个闭包字段 `toolCallsThisTurn: number`（以及固定 `maxToolCalls` 与身份结果）；不创建第二个 Writer state、事件 store、activity store 或按 tool id 的世界状态。
+状态只有一个闭包字段 `toolCallsThisRun: number`（以及固定 `maxToolCalls` 与身份结果）；不创建第二个 Writer state、事件 store、activity store 或按 tool id 的世界状态。
 
 生命周期如下：
 
@@ -134,12 +134,13 @@ export function registerWriterToolCallGuard(
 extension load
   → parse env once / decide writer-top-level
   → agent_start: count = 0
-  → turn_start(i): count = 0
+  → turn_start(i): observe only; do not reset
   → tool_call #1..#N: count++, execute normally
   → tool_call #N+1..: count++, block + model-visible error
   → tool_execution_end / tool_result:由 pi-rp 正常发出；守卫不监听、不改写
-  → turn_end(i): no write / no reset side effect
-  → turn_start(i+1): count = 0
+  → turn_end(i): no reset; the agent run may continue
+  → agent_end: run ends
+  → next agent_start: count = 0
 ```
 
 ### 5.1 事件边界
@@ -152,6 +153,26 @@ extension load
 ### 5.2 与唯一事实源的关系
 
 守卫只决定“是否允许调用工具”。允许调用后的文件与事件仍由既有动作层和 native write/edit hook 决定；失败调用遵守“失败不落世界事件”的上位契约。前端若看到 tool error，只能把它当运行时失败/活动结果，不能把它渲染为世界已变化。
+
+### 5.3 已知遗留：guard 上游的 Writer 自激循环（实测记录）
+
+本节记录一个**不由本 guard 根治**的上游问题，供 Agent / context 设计接手者使用；guard 只负责在问题发生后熔断，不能替代循环原因修复。
+
+**复现步骤（最小化）：**
+
+1. 让 Writer 收到一个会产生 `choice_selected` 的玩家动作，并让 provider 第一次返回一个合法 `chalk` tool call。
+2. 观察 pi-rp 工具循环：`tool_result → turn_end → turn_start → 下一次 provider 请求`。`agent-loop.ts:173-224` 的内层循环对每次工具调用后的续接请求都会再次发出 `turn_start`。
+3. 在同一 `agent_start` 内让 provider 连续返回单个 `chalk` 调用。旧 guard（在 `turn_start` 清零）下，`AIRP_WRITER_MAX_TOOL_CALLS=2` 的 50 次模拟结果为 `allowed=50 / blocked=0`；改为仅在 `agent_start` 清零后，结果为 `allowed=2 / blocked=48`。这证明 guard 的 reset bug 能放大而不能产生模型循环。
+
+**自激链条：**
+
+- `extensions/context.ts:125-151` 在 `agent_start` 只计算并缓存一次状态块；其中 `next_step` 对玩家动作仍是“尚未被叙述”。
+- `extensions/context.ts:165-193` 在每次 `context` 请求把同一块追加到消息尾部；`registerCustomType` 又在 `:119-123` 声明 `llmRole: 'user'`。
+- pi-rp 的 `transformContext` 在每次 provider 请求前运行（`agent-loop.ts:288-312`），`messages.ts:268-293` 将该临时 custom 消息转换为新的 `user` 消息。因此模型在成功的 `chalk tool_result` 后，立即再次看到一条新的 user 状态消息和同一条“Answer that choice this turn”祈使句。
+- Writer 自己产生的事件被 next-step 的 `actor.type !== 'writer'` 过滤；同一 agent run 内缓存不更新，所以这条祈使句不会因刚落地的 Chalk 而消失。**[待上位 context 设计批次重新评审]**
+- 若重复调用没有显式 `path`，`packages/shared/src/actions/chalk.ts:437-445` 会按 ordinal 生成新的文件；因此一次模型误判会落成多张真实板书，而不是单个文件重绘。
+
+这说明“每次 provider 请求注入同一 `user` 状态块”与“状态块在整个 agent run 内缓存不变”存在组合风险。context 的注入位置、消息角色以及 `next_step` 在工具续接请求中的呈现方式，必须由上位契约设计批次重新确定；本 guard 设计不擅自修改 `extensions/context.ts`、`docs/hooks/**` 或提示词。当前 `probe` provider 与 pi-rp 版本的既有接线不兼容，未作为本问题的引擎改动处理。
 
 ## 6. 前后端接线（含 WS 边界）
 
@@ -209,7 +230,7 @@ for AIRP_TOOLS: pi.registerTool(tool)
 ### 8.3 实现顺序
 
 1. 先落纯配置解析和身份判定；
-2. 再接 `agent_start`/`turn_start` 清零和 `tool_call` block；
+2. 再接 `agent_start` 清零和 `tool_call` block；`turn_start` 只作为引擎观测边界，不清零；
 3. 再接 `tools.ts` 与 env passthrough；
 4. 用单元测试和真实 Writer 探针验证后，回写本设计中的任何签名或事件差异；
 5. 本设计阶段不执行 formatter、lint、全量测试、全量构建或项目级验证命令。
@@ -233,9 +254,7 @@ for AIRP_TOOLS: pi.registerTool(tool)
 
 ### 9.3 本设计的迁移差异
 
-| 维度 | niko 原版 | 新版裁决 |
-|---|---|---|
-| 计数边界 | `agent_start` | `turn_start`，并以 agent_start 仅作防御性初始清零 |
+| 计数边界 | `agent_start` | `agent_start`（覆盖同一 agent run 的全部工具循环） |
 | 上限 | 写死 24 | 默认 24；正整数 env 可覆盖；非法回退 |
 | 拦截时机 | `tool_call` | `tool_call` |
 | 超限反馈 | `ctx.abort()` + 部分 reason | block + 模型可见 reason + terminate；不 abort |
@@ -263,7 +282,7 @@ for AIRP_TOOLS: pi.registerTool(tool)
 1. **默认与合法配置**：缺失、`undefined`、`24`、`1`、`100` 分别得到 24/24/24/1/100；`0`、`-1`、`1.5`、`1e2`、`0x10`、空串、空白和超 safe integer 回退 24。
 2. **唯一非空预算断言**：旧实现（固定 24）在 raw env `AIRP_WRITER_MAX_TOOL_CALLS=2` 时会错误放行第 3 次；新实现第 3 次必须返回 `block=true`、`isError` tool result 原因包含上限 2。该用例证明配置功能不是假绿。
 3. **边界**：1–N 次 `tool_call` 返回 undefined；第 N+1 次 block；每次 block 的 reason 非空；fake tool execute 没有被调用。
-4. **turn reset**：同一注册实例在 turn 0 消耗 N 次后，调用 `turn_start({ turnIndex: 1, timestamp })`，下一次调用再次放行。旧 niko 实现没有 `turn_start` handler，该断言在旧实现中失败。
+4. **agent-run reset**：同一注册实例在一次 `agent_start` 后消耗 N 次，调用若干 `turn_start` 续接事件，下一次调用仍被阻断；再次调用 `agent_start` 后才重新放行。旧实现的 `turn_start` 清零会在此失败。
 5. **失败调用仍计数**：允许的工具之后模拟工具执行失败（通过独立 engine fixture 或只验证 preflight），下一 `tool_call` 仍按序占用预算；守卫不能从 `tool_result` 猜成功后才计数。
 6. **身份矩阵**：writer + writer-top-level 受限；character、functional、initializer scope、未知、空 role 不受限。不要把 actor fallback 当成通过条件。
 7. **所有工具同一口径**：在 N 次中混合 `chalk`、重复 `chalk`、不同 path、`write`、`edit`、`read` 和任意自定义工具；均只受数量影响。
@@ -279,8 +298,7 @@ for AIRP_TOOLS: pi.registerTool(tool)
 - **重复/相同内容 Chalk 应允许**：相同 path 或相同正文再次调用不被 guard 拦截。旧重复扫描会失败。
 - **native write/edit 不因 Chalk 身份被拦截**：写入/编辑含 Chalk frontmatter 的 Markdown，只要在总量内可进入工具执行。旧 raw write/edit 规则会失败。
 - **长内容不由 guard 拒绝**：超过 1000 字符或多段内容仅由底层工具/动作契约决定，不由本 guard block。旧长度检查会失败。
-- **超限是可见失败而非 abort 假象**：第 N+1 次有 `block` 和 reason，fake context 的 `abort` 调用数保持 0。旧 `ctx.abort()` 规则会失败。
-- **turn 而非 agent run 计数**：同一 agent run 的两个 `turn_start` 各有完整 N 次预算。旧只监听 agent_start 的实现会失败。
+- **agent run 而非 engine turn 计数**：同一 agent run 内的两个 `turn_start` 续接事件共享同一预算；只有下一次 `agent_start` 才清零。旧实现会错误地给每次续接重新发预算。
 
 ### 10.3 真实 Writer 探针
 

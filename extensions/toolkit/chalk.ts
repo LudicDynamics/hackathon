@@ -67,8 +67,12 @@ export const chalkTool = defineTool({
     'Use append_to when you are continuing the same beat, rather than starting a new chalk file.',
     'Never write chalk files with write or bash: they bypass the filename convention and the world event log.',
   ],
-  async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+  async execute(_toolCallId, params, signal, _onUpdate, ctx) {
     try {
+      // Honour engine cancellation before any world lookup or write. The action
+      // layer is intentionally transport-free, so the tool shell owns this
+      // cancellation boundary.
+      signal?.throwIfAborted();
       const result = await getActionService(ctx).writeChalk({
         body: params.content,
         title: deriveTitle(params.content),
@@ -78,6 +82,9 @@ export const chalkTool = defineTool({
         linkTo: params.link_to,
         // No `frontmatter`: interactive fields arrive in Phase ② via `edit` (02 §2.7).
       });
+      // Abort can race the final event/write. Do not report a successful tool
+      // result after cancellation; the engine will record an aborted tool turn.
+      signal?.throwIfAborted();
       return ok(result as { text: string; details: WriteChalkDetails });
     } catch (err) {
       return fail(err);

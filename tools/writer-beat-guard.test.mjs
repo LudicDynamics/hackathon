@@ -64,16 +64,20 @@ test('environment configuration is read once and blocks exactly N+1', () => {
   });
 });
 
-test('agent start and each turn start reset the budget', () => {
+test('agent run budget spans engine turns and resets only at the next agent start', () => {
   const { pi, handlers } = fakePi();
   guard.registerWriterToolCallGuard(pi, { maxToolCalls: 2, role: 'writer', scope: 'writer-top-level' });
+  handlers.get('agent_start')({ type: 'agent_start' });
   assert.equal(toolCall(handlers), undefined);
   assert.equal(toolCall(handlers), undefined);
-  assert.equal(toolCall(handlers).block, true);
-  handlers.get('turn_start')({ type: 'turn_start', turnIndex: 1, timestamp: Date.now() });
-  assert.equal(toolCall(handlers), undefined);
-  assert.equal(toolCall(handlers), undefined);
-  assert.equal(toolCall(handlers).block, true);
+  // pi-rp emits turn_start again for the next tool-loop provider request.
+  // It is not a new player run, so the accumulated budget must remain spent.
+  handlers.get('turn_start')?.({ type: 'turn_start', turnIndex: 1, timestamp: Date.now() });
+  const blocked = toolCall(handlers);
+  assert.equal(blocked.block, true);
+  assert.equal(blocked.terminate, true);
+  assert.match(blocked.reason, /limit \(2\)/);
+  // A genuinely new prompt emits agent_start and receives a fresh budget.
   handlers.get('agent_start')({ type: 'agent_start' });
   assert.equal(toolCall(handlers), undefined);
 });

@@ -35,11 +35,11 @@ export interface WriterToolCallGuardOptions {
 }
 
 /**
- * Register the pre-execution hook and engine-turn reset hooks.
+ * Register the pre-execution hook and the agent-run reset hook.
  *
- * Production registration intentionally reads the raw environment once. The
- * identity check uses the raw role, not agentActor(), because actor resolution
- * falls back unknown/unset values to Writer. Scope is an explicit launch gate.
+ * The guard spans one `agent_start` → `agent_end` run. pi-rp emits another
+ * `turn_start` for each provider request inside a tool loop, so `turn_start`
+ * is deliberately not a reset boundary here.
  */
 export function registerWriterToolCallGuard(
   pi: ExtensionAPI,
@@ -56,22 +56,20 @@ export function registerWriterToolCallGuard(
       ? configuredMaxToolCalls
       : DEFAULT_WRITER_MAX_TOOL_CALLS;
 
-  let toolCallsThisTurn = 0;
+  let toolCallsThisRun = 0;
 
-  // agent_start is only a defensive initial boundary. turn_start is authoritative.
+  // agent_start is the player-request boundary. A tool loop emits additional
+  // turn_start events, but those are continuation requests in this same run.
   pi.on('agent_start', () => {
-    toolCallsThisTurn = 0;
-  });
-  pi.on('turn_start', () => {
-    toolCallsThisTurn = 0;
+    toolCallsThisRun = 0;
   });
   pi.on('tool_call', () => {
-    toolCallsThisTurn += 1;
-    if (toolCallsThisTurn <= maxToolCalls) return;
+    toolCallsThisRun += 1;
+    if (toolCallsThisRun <= maxToolCalls) return;
 
     return {
       block: true,
-      reason: `Writer tool-call limit (${maxToolCalls}) reached for this engine turn. Stop using tools and return a concise response; the player can continue on the next turn.`,
+      reason: `Writer tool-call limit (${maxToolCalls}) reached for this agent run. Stop using tools and return a concise response; the player can continue on the next turn.`,
       terminate: true,
     };
   });
