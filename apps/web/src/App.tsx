@@ -50,7 +50,7 @@ import { airpGateway, onWorldUnavailable, AirpRequestError, type AssetMediaKind,
 import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
 import { BagItemDialog } from './components/BagItemDialog.js';
 import { guardImeKey } from './lib/ime.js';
-import { initialShell, transitionShell, splitCharacters } from './lib/ui-shell.mjs';
+import { initialShell, transitionShell } from './lib/ui-shell.mjs';
 import { MarkdownText } from './lib/md.js';
 import { BookOpen, ChevronDown, ChevronUp, Maximize, Minimize, UserRound, Backpack, Sparkles } from 'lucide-react';
 import { preloadAudio } from './lib/audio.js';
@@ -145,7 +145,6 @@ export function App() {
   const [isGodHandOpen, setIsGodHandOpen] = useState(false);
   const allowChalkDrag = isGodHandOpen;
   const [shell, setShell] = useState(initialShell);
-  const [encounters, setEncounters] = useState<Record<string, string[]>>({});
   const [bagOpen, setBagOpen] = useState(false);
   const [selectedBagPath, setSelectedBagPath] = useState<string | null>(null);
   const selectedBagItem = backpack.find(item => item.path === selectedBagPath);
@@ -384,7 +383,6 @@ export function App() {
       setManifest(null);
       setBackpack([]);
       setCharacters([]);
-      setEncounters({});
       setNookChar(null);
       setActiveCharacter(null);
       callerProjectionRef.current = null;
@@ -603,10 +601,6 @@ export function App() {
       setRadialState(null);
     }
   }, [clearAdmittedCeremony, overlayAdmission, worldReady]);
-  // `encounters` is browser-memory only ("characters you have opened"), NOT
-  // presence: it never decides who is in this scene (docs/presence/00 §2.1).
-  const encounteredIds = encounters[manifest?.id || ''] || [];
-  const { encountered } = splitCharacters(characters, encounteredIds);
   const handItems = backpack.filter((item) => item.filename.toLowerCase() !== 'readme.md');
   useViewpointReport({ camera, layer, bagCount: handItems.length, enabled: nookChar === null });
   const canvasItems = (state?.items || []).filter((item) => item.path !== readme?.path);
@@ -787,7 +781,6 @@ export function App() {
       ? projectionTarget('nook', nookChar)
       : projectionTarget('layer', layer);
     const target = projectionTarget('dialogue', character.id, caller.slot);
-    setEncounters(current => ({ ...current, [worldId]: [...new Set([...(current[worldId] || []), character.id])] }));
     cameraStack.pushTransition(target);
     cameraStack.restoreTarget(target);
     callerProjectionRef.current = caller;
@@ -1008,22 +1001,6 @@ export function App() {
             <button onClick={() => cameraStack.restoreTarget(projectionTarget('layer', layer))} title={t("Return to scene")}>⌖</button>
           </div>
 
-          <div className="prototype-hand-tray prototype-chrome" aria-label={t("Encountered characters")}>
-            <span className="prototype-tray-label">{t("PEOPLE YOU KNOW")}</span>
-            {encountered.length === 0 && <span className="prototype-tray-empty">{t("Every stranger has a story.")}</span>}
-            {encountered.map((character) => (
-              <button
-                key={character.id}
-                className="prototype-hand-orb"
-                onClick={() => openCharacter(character)}
-                title={t('Talk to {name}', { name: character.name || character.id })}
-                style={assetUrl(character.avatar, 'image') ? { backgroundImage: `url("${assetUrl(character.avatar, 'image')}")` } : undefined}
-              >
-                {!assetUrl(character.avatar, 'image') && <span>{character.id.charAt(0).toUpperCase()}</span>}
-                <small>{character.name || labelOf(character.id)}</small>
-              </button>
-            ))}
-          </div>
           <div className="prototype-belongings prototype-chrome" aria-label={t("Belongings")}>
             <button className="prototype-bag-toggle" onClick={() => setBagOpen(open => !open)} aria-label={t("Open belongings")} aria-expanded={bagOpen}><Backpack size={19} /><span>{handItems.length}</span></button>
             {bagOpen && <div className="prototype-bag-content"><div className="inventory-heading"><span>{t("BELONGINGS")}</span><button type="button" onClick={() => setBagOpen(false)} aria-label={t('Close')}>×</button></div>{handItems.length === 0 && <p>{t("Nothing carried yet.")}</p>}{handItems.map((item) => {

@@ -51,7 +51,8 @@
 .prototype-immersion-toggle:hover,.prototype-immersion-toggle:focus-visible { opacity: 1; }
 .prototype-world-meta,.is-reading .prototype-world-meta { top: 24px; right: 80px; left: auto; max-width: 350px; text-align: right; }
 .has-header .prototype-world-meta { top: 84px; }
-.prototype-world-meta h1 { font-size: 18px; letter-spacing: .015em; line-height: 1.5; }
+/* One line: a long place name ellipsizes instead of wrapping and shifting the header. */
+.prototype-world-meta h1 { font-size: 18px; letter-spacing: .015em; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .prototype-world-meta p { font: 10px/1.6 var(--ux-font-machine); letter-spacing: .05em; }
 .prototype-world-meta .prototype-eyebrow { font-size: 9px; letter-spacing: .22em; margin-bottom: 4px; }
 .prototype-world-meta .writer-result { position:static; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; max-width:100%; }
