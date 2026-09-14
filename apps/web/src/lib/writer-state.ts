@@ -91,26 +91,6 @@ export function beginWriterPrompt(prompt: string): boolean {
   return start('turn', normalized);
 }
 
-/** Legacy chalk/turn adapter retained for the existing useWriterPhase API. */
-export function beginTurn(reason: 'turn' | 'chalk'): void {
-  start(reason);
-}
-
-/** Explicit terminal adapter retained for callers that already use it. */
-export function endTurn(): void {
-  if (state.phase !== 'writing') return;
-  set({
-    ...state,
-    phase: 'idle',
-    reason: null,
-    stopRequested: false,
-    stage: READY_STAGE,
-    startedAt: null,
-    toolCount: 0,
-    completionSeq: state.completionSeq + 1,
-  });
-}
-
 /**
  * Request cancellation without pretending the turn has ended. Repeated Stop
  * clicks are intentionally idempotent.
@@ -151,8 +131,7 @@ export function resetForReconnect(reason: 'socket_open' | 'socket_close' | 'worl
     lastMessage: null,
   });
 }
-
-/** Backwards-compatible reset name used by the websocket adapter and tests. */
+/** Public reset seam for a fresh connection. */
 export function reset(): void {
   resetForReconnect('socket_open');
 }

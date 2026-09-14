@@ -994,5 +994,13 @@
   "Could not load the world data. Please retry.": {
     "zh-CN": "无法加载世界数据，请重试。",
     "ja": "ワールドデータを読み込めませんでした。再試行してください。"
+  },
+  "Waiting for the writer…": {
+    "zh-CN": "作家等待中…",
+    "ja": "作家を待っています…"
+  },
+  "Ready for your next action": {
+    "zh-CN": "可以进行下一步行动",
+    "ja": "次の行動に進めます"
   }
 }

@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import {
   activityAriaText,
   activityLabel,
@@ -8,12 +8,14 @@ import {
   type TFn,
 } from '../../lib/agent-activity.js';
 import { useLocale } from '../../lib/i18n.js';
+import type { FocusCoordinator } from '../../lib/focus-coordinator.js';
 import { useAgentActivityLog } from '../../state/useAgentActivity.js';
 
 export interface AgentActivityLogProps {
   query: ActivityLogQuery;
   sessionLabel?: string;
   className?: string;
+  focus?: FocusCoordinator;
 }
 
 function turnKey(turn: AgentActivityLogTurn): string {
@@ -27,12 +29,26 @@ function statusLabel(turn: AgentActivityLogTurn, t: TFn): string {
   return turn.state === 'error' ? t('Not completed') : t('Completed');
 }
 
-export const AgentActivityLog: React.FC<AgentActivityLogProps> = ({ query, sessionLabel, className }) => {
+export const AgentActivityLog: React.FC<AgentActivityLogProps> = ({ query, sessionLabel, className, focus }) => {
   const { turns, entryCount, aria } = useAgentActivityLog(query);
   const { t } = useLocale();
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const panelId = useId();
+  const focusTokenRef = useRef<string | null>(null);
+  const setOpenState = (next: boolean): void => {
+    setOpen(next);
+    const token = focusTokenRef.current;
+    if (next && focus && !token) focusTokenRef.current = focus.acquire('workspace');
+    if (!next && token && focus) {
+      focus.release(token);
+      focusTokenRef.current = null;
+    }
+  };
+  useEffect(() => () => {
+    const token = focusTokenRef.current;
+    if (token && focus) focus.release(token);
+  }, [focus]);
 
   if (entryCount === 0) return null;
 
@@ -41,7 +57,7 @@ export const AgentActivityLog: React.FC<AgentActivityLogProps> = ({ query, sessi
       const first = turns[0];
       setExpanded(first ? new Set([turnKey(first)]) : new Set());
     }
-    setOpen((value) => !value);
+    setOpenState(!open);
   };
   const toggleTurn = (key: string) => {
     setExpanded((current) => {
@@ -55,7 +71,7 @@ export const AgentActivityLog: React.FC<AgentActivityLogProps> = ({ query, sessi
   const collapseAll = () => setExpanded(new Set());
 
   return (
-    <div className={`agent-activity-log${className ? ` ${className}` : ''}`}>
+    <div className={`agent-activity-log${className ? ` ${className}` : ''}`} data-focus-owner={open ? 'workspace' : undefined}>
       <p className="sr-only" aria-live="off">{aria}</p>
       <button
         type="button"
@@ -71,13 +87,19 @@ export const AgentActivityLog: React.FC<AgentActivityLogProps> = ({ query, sessi
       </button>
 
       {open && (
-        <section id={panelId} className="agent-activity-log__panel" aria-label={sessionLabel ? t('Activity details for {name}', { name: sessionLabel }) : t('Activity details')}>
+        <section id={panelId} className="agent-activity-log__panel" aria-label={sessionLabel ? t('Activity details for {name}', { name: sessionLabel }) : t('Activity details')} onKeyDown={event => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpenState(false);
+          }
+        }}>
           <header className="agent-activity-log__header">
             <strong>{sessionLabel ?? t('Activity details')}</strong>
             <div className="agent-activity-log__actions">
               <button type="button" onClick={expandAll}>{t('Expand all activity turns')}</button>
               <button type="button" onClick={collapseAll}>{t('Collapse all activity turns')}</button>
-              <button type="button" onClick={() => setOpen(false)} aria-label={t('Close activity details')}>×</button>
+              <button type="button" onClick={() => setOpenState(false)} aria-label={t('Close activity details')}>×</button>
             </div>
           </header>
           <ul className="agent-activity-log__turns">

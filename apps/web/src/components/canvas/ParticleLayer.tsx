@@ -3,12 +3,18 @@ import { getParallax } from '../../lib/parallax.js';
 
 export interface ParticleLayerProps {
   tone?: string;
-  /**
-   * Ambient dust/rain (pure decoration). Show bursts (`playBurst`) draw on this
-   * same canvas and MUST keep working when ambient is off (docs/perform/05
-   * §4.4), so this only gates the mote field — never the canvas itself.
-   */
+  /** Keep the existing ambient switch compatible with Canvas callers. */
   ambient?: boolean;
+  /** Shared lifecycle gate for both particle surfaces. */
+  effectsEnabled?: boolean;
+  hidden?: boolean;
+  reducedMotion?: boolean;
+}
+
+export interface ParticleLifecycle {
+  effectsEnabled: boolean;
+  hidden: boolean;
+  reducedMotion: boolean;
 }
 
 interface Particle {
@@ -52,22 +58,19 @@ function makeGlowSprite(): HTMLCanvasElement {
 }
 
 let glowSprite: HTMLCanvasElement | null = null;
-/* ---- Show fireworks: a short-lived burst channel on the SAME canvas ----
-   docs/perform/05 §4.4. Opening a second full-screen canvas costs half a
-   frame budget (AGENTS §7.6-1: an empty full-screen canvas alone drops
-   57→34fps). This canvas already pays that cost, so a burst is just N extra
-   `drawImage` calls through the loop's existing 30fps cap and parallax read.
-   Particles are drawn from a per-color pre-rendered sprite, exactly like the
-   ambient motes, so no gradient is allocated per frame. */
 
-/** One burst group: `bursts × 12` particles (≤ 96, docs/perform/05 §4.4). */
+/**
+ * Ambient and burst are separate observable surfaces in one module. Bursts
+ * use bounded DOM sprites rather than another full-screen canvas, while the
+ * ambient canvas keeps the existing low-frequency drawing budget.
+ */
 interface BurstGroup {
   particles: BurstParticle[];
-  sprite: HTMLCanvasElement;
+  color: string;
   startedAt: number;
   durationMs: number;
-  /** Ratios expand to pixels on the first draw, once the canvas size is known. */
   seeded: boolean;
+  nodes: HTMLSpanElement[];
 }
 
 interface BurstParticle {
@@ -76,46 +79,18 @@ interface BurstParticle {
   vx: number;
   vy: number;
   size: number;
-  maxLife: number;
 }
 
 export interface BurstSpec {
-  color?: string; // CSS color; default warm gold (matches the ambient sprite)
-  bursts?: number; // burst clusters (show-geometry clamps to 8)
-  origin?: string; // screen ratio "<0..1>,<0..1>"; default "0.5,0.2"
-  durationMs: number; // frame value, never clamped here
+  color?: string;
+  bursts?: number;
+  origin?: string;
+  durationMs: number;
 }
 
 /** Particles per cluster — 8 clusters × 12 = the frozen 96-particle ceiling. */
 const BURST_PER_CLUSTER = 12;
 
-const burstSpriteCache = new Map<string, HTMLCanvasElement>();
-
-/** Pre-render one burst sprite per color (same rationale as `makeGlowSprite`). */
-function makeBurstSprite(color: string): HTMLCanvasElement {
-  const c = document.createElement('canvas');
-  c.width = c.height = GLOW_SPRITE_PX;
-  const g = c.getContext('2d')!;
-  const r = GLOW_SPRITE_PX / 2;
-  const grad = g.createRadialGradient(r, r, 0, r, r, r);
-  grad.addColorStop(0, color);
-  grad.addColorStop(0.45, color);
-  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, GLOW_SPRITE_PX, GLOW_SPRITE_PX);
-  return c;
-}
-
-function burstSpriteFor(color: string): HTMLCanvasElement {
-  let s = burstSpriteCache.get(color);
-  if (!s) {
-    s = makeBurstSprite(color);
-    burstSpriteCache.set(color, s);
-  }
-  return s;
-}
-
-/** Parse the frozen `origin` format: two ratios in [0,1], else the default. */
 function parseOrigin(origin?: string): { x: number; y: number } {
   const m = (origin ?? '').split(',');
   if (m.length !== 2) return { x: 0.5, y: 0.2 };
@@ -128,23 +103,56 @@ function parseOrigin(origin?: string): { x: number; y: number } {
 }
 
 let burstGroups: BurstGroup[] = [];
+let burstHost: HTMLElement | null = null;
+let burstLifecycle: ParticleLifecycle = {
+  effectsEnabled: true,
+  hidden: false,
+  reducedMotion: false,
+};
+let wakeParticleLoop: (() => void) | null = null;
+
+function removeBurstNodes(group: BurstGroup): void {
+  for (const node of group.nodes) node.remove();
+  group.nodes = [];
+}
+
+function mountBurstNodes(group: BurstGroup, host: HTMLElement): void {
+  if (group.nodes.length || typeof document === 'undefined') return;
+  for (const particle of group.particles) {
+    const node = document.createElement('span');
+    node.setAttribute('aria-hidden', 'true');
+    node.style.position = 'absolute';
+    node.style.borderRadius = '50%';
+    node.style.pointerEvents = 'none';
+    node.style.background = `radial-gradient(circle, ${group.color} 0 35%, transparent 72%)`;
+    node.style.willChange = 'transform, opacity';
+    host.appendChild(node);
+    group.nodes.push(node);
+    // The bounded surface owns the origin; animation supplies pixel transforms.
+    node.style.left = '0px';
+    node.style.top = '0px';
+  }
+}
 
 /**
- * Play one fireworks burst (docs/perform/05 §4.4). Returns a cancel that drops
- * this group immediately. A later call replaces any running burst — the show
- * resource key is a single `'fireworks'` lane, so the newest intent wins.
+ * Play one fireworks burst. The optional host keeps existing callers working;
+ * a mounted ParticleLayer registers its bounded burst surface automatically.
  */
-export function playBurst(spec: BurstSpec): () => void {
+export function playBurst(spec: BurstSpec, host?: HTMLElement): () => void {
+  if (
+    burstLifecycle.hidden ||
+    !burstLifecycle.effectsEnabled ||
+    burstLifecycle.reducedMotion
+  ) {
+    return () => {};
+  }
+
   const color = typeof spec.color === 'string' && spec.color ? spec.color : 'rgb(235, 205, 140)';
   const clusters = Math.max(1, Math.min(8, Math.floor(spec.bursts ?? 5)));
-  const durationMs = Number.isFinite(spec.durationMs) ? spec.durationMs : 3000;
-  const sprite = burstSpriteFor(color);
+  const durationMs = Number.isFinite(spec.durationMs) ? Math.max(0, spec.durationMs) : 3000;
+  const origin = parseOrigin(spec.origin);
   const particles: BurstParticle[] = [];
 
-  // Ratios expand to pixels on the first draw (the canvas size is known in the
-  // render loop, not here). Each cluster gets a small random offset so the
-  // bursts read as separate blooms rather than one ring.
-  const origin = parseOrigin(spec.origin);
   for (let c = 0; c < clusters; c++) {
     const ox = origin.x + (Math.random() - 0.5) * 0.18;
     const oy = origin.y + (Math.random() - 0.5) * 0.12;
@@ -157,49 +165,70 @@ export function playBurst(spec: BurstSpec): () => void {
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         size: 3 + Math.random() * 4,
-        maxLife: durationMs,
       });
     }
   }
-  const group: BurstGroup = { particles, sprite, startedAt: performance.now(), durationMs, seeded: false };
-  burstGroups = [group]; // latest intent takes the lane
+
+  const group: BurstGroup = {
+    particles,
+    color,
+    startedAt: performance.now(),
+    durationMs,
+    seeded: false,
+    nodes: [],
+  };
+  burstGroups = [group]; // latest intent takes the fireworks resource lane
+  const surface = host ?? burstHost;
+  if (surface) mountBurstNodes(group, surface);
+  wakeParticleLoop?.();
+
   return () => {
+    removeBurstNodes(group);
     burstGroups = burstGroups.filter((g) => g !== group);
   };
 }
 
-export const ParticleLayer: React.FC<ParticleLayerProps> = ({ tone = 'warm', ambient = true }) => {
+export const ParticleLayer: React.FC<ParticleLayerProps> = ({
+  tone = 'warm',
+  ambient = true,
+  effectsEnabled = true,
+  hidden = false,
+  reducedMotion = false,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const burstRef = useRef<HTMLDivElement | null>(null);
 
   const toneRef = useRef(tone);
   toneRef.current = tone;
-  // Read imperatively in the render loop so toggling ambient never re-runs the
-  // effect (which would reset the particle field and drop live bursts).
   const ambientRef = useRef(ambient);
   ambientRef.current = ambient;
+  const lifecycleRef = useRef<ParticleLifecycle>({ effectsEnabled, hidden, reducedMotion });
+  lifecycleRef.current = { effectsEnabled, hidden, reducedMotion };
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const burstSurface = burstRef.current;
+    if (!canvas || !burstSurface) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     if (!glowSprite) glowSprite = makeGlowSprite();
 
+    burstHost = burstSurface;
+    burstLifecycle = lifecycleRef.current;
+    for (const group of burstGroups) mountBurstNodes(group, burstSurface);
+
     let animId = 0;
     let width = (canvas.width = window.innerWidth);
     let height = (canvas.height = window.innerHeight);
-
     const onResize = () => {
       width = canvas.width = window.innerWidth;
       height = canvas.height = window.innerHeight;
     };
     window.addEventListener('resize', onResize);
 
-    const count = 48; // Lightweight particle budget (< 1% CPU)
+    const count = 48;
     const particles: Particle[] = [];
-
     const isRain = toneRef.current.includes('rain');
-
     for (let i = 0; i < count; i++) {
       particles.push({
         x: Math.random() * width,
@@ -218,38 +247,41 @@ export const ParticleLayer: React.FC<ParticleLayerProps> = ({ tone = 'warm', amb
       });
     }
 
-    // Ambient drift is slow (wobble ~0.01–0.03, rain vy ~9–17px/frame); drawing
-    // it at 30fps is visually indistinguishable from 60fps but halves the
-    // cost of the full-screen layer this canvas forces the compositor to
-    // re-raster every frame — the measured dominant cost on this app.
     const FRAME_MS = 1000 / 30;
     let time = 0;
     let lastDraw = 0;
+    const isPaused = () => {
+      const state = lifecycleRef.current;
+      return document.hidden || state.hidden || !state.effectsEnabled || state.reducedMotion;
+    };
+    const hasWork = () => ambientRef.current || burstGroups.length > 0;
+    const schedule = () => {
+      if (!animId && !isPaused() && hasWork()) animId = requestAnimationFrame(render);
+    };
+    const stop = () => {
+      if (animId) cancelAnimationFrame(animId);
+      animId = 0;
+    };
     const render = (now: number) => {
-      animId = requestAnimationFrame(render);
-      // Ambient motion is pure decoration: also skip work while the tab is
-      // hidden (the old loop kept compositing a full-screen canvas in
-      // background tabs).
-      if (document.hidden || now - lastDraw < FRAME_MS) return;
+      animId = 0;
+      // Do not keep a RAF chain alive in hidden/reduced/effects-off states.
+      if (isPaused() || !hasWork()) return;
+      if (now - lastDraw < FRAME_MS) {
+        schedule();
+        return;
+      }
       lastDraw = now;
-
       time += 1;
       ctx.clearRect(0, 0, width, height);
 
       const isCurrentRain = toneRef.current.includes('rain');
-      // Parallax foreground shift factor 1.35x — read imperatively from the
-      // module store, so pointer motion never re-renders this component.
       const p = getParallax();
       const shiftX = -p.x * 24;
       const shiftY = -p.y * 24;
 
-      // Ambient motes are decoration and gated; show bursts below are not.
       if (ambientRef.current) {
-        for (let i = 0; i < particles.length; i++) {
-          const part = particles[i];
-
+        for (const part of particles) {
           if (isCurrentRain) {
-            // Rain streaks
             part.x += part.vx;
             part.y += part.vy;
             if (part.y > height) {
@@ -257,10 +289,8 @@ export const ParticleLayer: React.FC<ParticleLayerProps> = ({ tone = 'warm', amb
               part.x = Math.random() * (width + 100);
             }
             if (part.x < -20) part.x = width + 20;
-
             const drawX = part.x + shiftX;
             const drawY = part.y + shiftY;
-
             ctx.beginPath();
             ctx.strokeStyle = `rgba(180, 205, 225, ${part.alpha * 0.4})`;
             ctx.lineWidth = 1.2;
@@ -268,20 +298,16 @@ export const ParticleLayer: React.FC<ParticleLayerProps> = ({ tone = 'warm', amb
             ctx.lineTo(drawX + part.vx * 3, drawY + part.vy * 3);
             ctx.stroke();
           } else {
-            // Warm floating motes / dust
             part.baseY += part.vy;
             if (part.baseY < -20) {
               part.baseY = height + 20;
               part.baseX = Math.random() * width;
             }
-
             const wobble =
               Math.sin(time * part.wobbleSpeed + part.pulseOffset) * part.wobbleRadius;
             const currentAlpha =
               (Math.sin(time * part.pulseSpeed + part.pulseOffset) * 0.5 + 0.5) * part.maxAlpha;
-
-            // Glowing dust mote — one pre-rendered sprite, scaled and faded.
-            const d = part.size * 4.4; // sprite diameter in CSS px
+            const d = part.size * 4.4;
             ctx.globalAlpha = currentAlpha;
             ctx.drawImage(
               glowSprite!,
@@ -294,45 +320,74 @@ export const ParticleLayer: React.FC<ParticleLayerProps> = ({ tone = 'warm', amb
         }
       }
 
-      // ---- Show fireworks bursts (docs/perform/05 §4.4) ----
-      // Drawn on the SAME canvas/loop: N `drawImage` calls, no second
-      // full-screen composite. `now` drives aging so a burst expires even if
-      // its cancel timer fires late.
-      if (burstGroups.length) {
-        for (const group of burstGroups) {
-          const age = now - group.startedAt;
-          const fade = Math.max(0, 1 - age / group.durationMs);
-          for (const bp of group.particles) {
-            if (!group.seeded) {
-              bp.x *= width;
-              bp.y *= height;
-            }
-            bp.x += bp.vx;
-            bp.y += bp.vy + 0.06; // gravity
-            const d = bp.size * 3;
-            ctx.globalAlpha = fade;
-            ctx.drawImage(group.sprite, bp.x - d / 2, bp.y - d / 2 + shiftY, d, d);
+      for (const group of burstGroups) {
+        mountBurstNodes(group, burstSurface);
+        const age = now - group.startedAt;
+        const fade = Math.max(0, 1 - age / Math.max(1, group.durationMs));
+        for (let i = 0; i < group.particles.length; i++) {
+          const bp = group.particles[i];
+          if (!group.seeded) {
+            bp.x *= width;
+            bp.y *= height;
           }
-          group.seeded = true;
+          bp.x += bp.vx;
+          bp.y += bp.vy + 0.06;
+          const d = bp.size * 3;
+          const node = group.nodes[i];
+          node.style.width = `${d}px`;
+          node.style.height = `${d}px`;
+          node.style.opacity = String(fade);
+          node.style.transform = `translate3d(${bp.x + shiftX - d / 2}px, ${bp.y + shiftY - d / 2}px, 0)`;
         }
-        // Reap finished groups so the array never grows unbounded.
-        burstGroups = burstGroups.filter((g) => now - g.startedAt < g.durationMs);
+        group.seeded = true;
+        if (age >= group.durationMs) removeBurstNodes(group);
       }
+      burstGroups = burstGroups.filter((group) => now - group.startedAt < group.durationMs);
       ctx.globalAlpha = 1;
+      schedule();
     };
-
-    animId = requestAnimationFrame(render);
+    const onVisibility = () => {
+      if (isPaused()) stop();
+      else schedule();
+    };
+    wakeParticleLoop = schedule;
+    document.addEventListener('visibilitychange', onVisibility);
+    schedule();
 
     return () => {
-      cancelAnimationFrame(animId);
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('resize', onResize);
+      if (wakeParticleLoop === schedule) wakeParticleLoop = null;
+      if (burstHost === burstSurface) burstHost = null;
+      for (const group of burstGroups) removeBurstNodes(group);
+      burstGroups = [];
     };
   }, []);
 
+  useEffect(() => {
+    burstLifecycle = lifecycleRef.current;
+    if (!burstLifecycle.effectsEnabled || burstLifecycle.hidden || burstLifecycle.reducedMotion) {
+      for (const group of burstGroups) removeBurstNodes(group);
+      burstGroups = [];
+    }
+    wakeParticleLoop?.();
+  }, [effectsEnabled, hidden, reducedMotion, ambient]);
+
   return (
-    <canvas
-      ref={canvasRef}
-      className="absolute inset-0 pointer-events-none z-10 w-full h-full"
-    />
+    <div className="absolute inset-0 pointer-events-none" data-particle-module="true">
+      <canvas
+        className="particle-surface particle-surface--ambient absolute inset-0 pointer-events-none z-10 w-full h-full"
+        data-particle-surface="ambient"
+        data-depth="background"
+        aria-hidden="true"
+      />
+      <div
+        ref={burstRef}
+        className="particle-surface particle-surface--burst absolute inset-0 pointer-events-none overflow-hidden z-20"
+        data-particle-surface="burst"
+        data-depth="performance"
+      />
+    </div>
   );
 };

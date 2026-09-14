@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { createJiti } from '../../../vendor/pi-rp/node_modules/jiti/lib/jiti.mjs';
+
 
 const jiti = createJiti(import.meta.url);
-const {
-  ActionFeedbackStore,
+
+[docs/ux/06-Agent演出状态与角色剧场.md#0882]
   actionDetailsOf,
   classifyActionResult,
   runAction,
@@ -16,6 +16,25 @@ test('domain details classify a handled refusal as conflict, not HTTP success', 
   const result = { ok: true, item: 'player/key.md', target: 'world/lock.md', handled: false, reason: 'wrong_item', event: { id: 'evt-3' } };
   assert.equal(classifyActionResult('present', result), 'conflict');
   assert.deepEqual(actionDetailsOf(result), { item: 'player/key.md', target: 'world/lock.md', handled: false, reason: 'wrong_item', event: { id: 'evt-3' } });
+});
+
+test('present handled:false stays a conflict even when HTTP returned details', async () => {
+  const store = new ActionFeedbackStore();
+  const result = await runAction(
+    store,
+    { key: 'present:key:lock', verb: 'present', target: 'world/lock.md' },
+    async () => ({
+      ok: true,
+      item: 'player/key.md',
+      target: 'world/lock.md',
+      handled: false,
+      reason: 'wrong_item',
+      presentation: { foley: 'paper-slide', burst: 'none' },
+    }),
+  );
+  assert.equal(result.outcome, 'conflict');
+  assert.equal(result.phase, 'conflict');
+  assert.equal(result.details.handled, false);
 });
 
 test('a failed dice check is still an accepted persisted fact', () => {
@@ -63,4 +82,24 @@ test('action UI keeps domain choices out of the Writer prompt callback', async (
   assert.match(entity, /runGatewayAction\('choice'/);
   assert.doesNotMatch(entity, /Look closer[\s\S]{0,300}send\(/);
   assert.match(dialog, /runAction\(/);
+});
+test('gate pointer semantics reserve single click for inspect and one second click for enter', async () => {
+  const card = await readFile(new URL('../src/components/canvas/CardRenderer.tsx', import.meta.url), 'utf8');
+  const prop = await readFile(new URL('../src/components/canvas/PropCard.tsx', import.meta.url), 'utf8');
+  const canvas = await readFile(new URL('../src/components/canvas/CanvasObject.tsx', import.meta.url), 'utf8');
+  assert.match(card, /onClick=\{handleGateClick\}/);
+  assert.match(card, /setGateInspected\(true\)/);
+  assert.match(card, /onEnterGate\?\.\(gateTarget\)/);
+  assert.match(prop, /clickTimer/);
+  assert.match(canvas, /onEnterGate=\{onEnterGate \? requestEnter : undefined\}/);
+  assert.match(prop, /onEnter\?\.\(\)/);
+  assert.match(canvas, /if \(isGate\) \{\s*requestEnter\(gateTarget\)/);
+});
+
+test('target drops do not perform success-only unlock presentation before authority', async () => {
+  const card = await readFile(new URL('../src/components/canvas/CardRenderer.tsx', import.meta.url), 'utf8');
+  const canvas = await readFile(new URL('../src/components/canvas/CanvasObject.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(card, /playFoley\(['"]unlock['"]\)/);
+  assert.doesNotMatch(canvas, /puzzle-unlock-burst/);
+  assert.doesNotMatch(canvas, /setIsUnlockedEffect/);
 });

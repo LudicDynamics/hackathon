@@ -1,13 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { FocusCoordinator } from '../lib/focus-coordinator.js';
 import type { AutoWrite, WorldSettings } from '@airp/shared/world-settings';
 import { useWriterState } from '../lib/writer-state.js';
 type Model = { provider: string; id: string; name?: string };
 type Status = { world: string; active: string[]; models: Model[]; writer: { model: Model | null; thinking: string }; characters: { id: string; model: Model | null; thinking: string }[]; preferences: Partial<Record<'writer' | 'character', { provider: string; model: string; thinking: string }>> };
-export function AgentSettings({ settings, onSaveSettings }: {
+export function AgentSettings({ settings, onSaveSettings, focus }: {
   settings: WorldSettings;
   onSaveSettings: (next: WorldSettings) => Promise<void>;
+  focus?: FocusCoordinator;
 }) {
   const [open, setOpen] = useState(false);
+  const focusTokenRef = useRef<string | null>(null);
+  const setOpenState = (next: boolean): void => {
+    setOpen(next);
+    const token = focusTokenRef.current;
+    if (next && focus && !token) focusTokenRef.current = focus.acquire('workspace');
+    if (!next && token && focus) {
+      focus.release(token);
+      focusTokenRef.current = null;
+    }
+  };
+  useEffect(() => () => {
+    const token = focusTokenRef.current;
+    if (token && focus) focus.release(token);
+  }, [focus]);
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -52,11 +68,16 @@ export function AgentSettings({ settings, onSaveSettings }: {
       ? 'Attention'
       : writing
         ? `${seconds}s`
-        : 'Ready';
-  return <div className="agent-settings">
-    <button onClick={() => setOpen(!open)} aria-expanded={open}>Agents · {summary}</button>
-    {open && <section className="agent-settings-panel" aria-label="Agent models and progress">
-      <div><strong>Agents</strong><button onClick={() => setOpen(false)} aria-label="Close agent settings">×</button></div>
+    : 'Ready';
+  return <div className="agent-settings" data-focus-owner={open ? 'workspace' : undefined}>
+    <button onClick={() => setOpenState(!open)} aria-expanded={open}>Agents · {summary}</button>
+    {open && <section className="agent-settings-panel" aria-label="Agent models and progress" onKeyDown={event => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpenState(false);
+      }
+    }}>
       <p role="status">
         {!status ? 'Connecting to the engine' : writing ? writer.stage ?? 'Preparing the response' : 'Ready for your next action'}
         {writer.stopRequested ? ' · Stop requested' : ''}

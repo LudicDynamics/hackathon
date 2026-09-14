@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ConnectionSettings } from './ConnectionSettings.js';
 import { getChannelVolume, setChannelVolume, type VolumeChannel } from '../lib/audio.js';
 import { useLocale } from '../lib/i18n.js';
 import { readTtsConfig, setTtsEnabled, ttsEnabled, type TtsConfig } from '../lib/tts-readiness.js';
+import type { FocusCoordinator } from '../lib/focus-coordinator.js';
 
 const clampPercent = (value: number): number => (
   Number.isNaN(value) ? 0 : Math.min(100, Math.max(0, Math.round(value)))
@@ -26,7 +27,7 @@ function readVolumes(): Record<VolumeChannel, number> {
   return { music: readVolume('music'), voice: readVolume('voice') };
 }
 
-export function TtsSettings() {
+export function TtsSettings({ focus }: { focus?: FocusCoordinator } = {}) {
   const { t } = useLocale();
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState(false);
@@ -34,13 +35,27 @@ export function TtsSettings() {
   const [config, setConfig] = useState<TtsConfig | null>(null);
   const [error, setError] = useState('');
   const [volumes, setVolumes] = useState<Record<VolumeChannel, number>>(readVolumes);
+  const focusTokenRef = useRef<string | null>(null);
+  const setOpenState = (next: boolean): void => {
+    setOpen(next);
+    const token = focusTokenRef.current;
+    if (next && focus && !token) focusTokenRef.current = focus.acquire('workspace');
+    if (!next && token && focus) {
+      focus.release(token);
+      focusTokenRef.current = null;
+    }
+  };
+  useEffect(() => () => {
+    const token = focusTokenRef.current;
+    if (token && focus) focus.release(token);
+  }, [focus]);
   const refresh = async () => {
     try { setConfig(await readTtsConfig(true)); setError(''); }
     catch { setError('Voice service is unavailable. Text dialogue still works.'); }
   };
   const openSettings = () => {
     setVolumes(readVolumes());
-    setOpen(true);
+    setOpenState(true);
     void refresh();
   };
   const onVolumeInput = (channel: VolumeChannel, rawValue: string) => {
@@ -57,12 +72,12 @@ export function TtsSettings() {
     <button type="button" onClick={openSettings}>Voice & connections</button>
     {notice && !open && createPortal(<aside className="tts-notice" role="status">
       Voice is unavailable. Check TTS configuration; text dialogue still works.
-      <button type="button" onClick={() => { setOpen(true); setNotice(false); setVolumes(readVolumes()); void refresh(); }}>Settings</button>
+      <button type="button" onClick={() => { setNotice(false); openSettings(); }}>Settings</button>
       <button type="button" aria-label="Dismiss voice notice" onClick={() => setNotice(false)}>×</button>
     </aside>, document.body)}
-    {open && createPortal(<div className="prototype-dialog-backdrop" onClick={() => setOpen(false)}>
-      <section className="prototype-world-picker settings-panel" role="dialog" aria-modal="true" aria-label="Voice settings" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); } }}>
-        <button type="button" onClick={() => setOpen(false)} aria-label="Close voice settings" autoFocus>Close</button>
+    {open && createPortal(<div className="prototype-dialog-backdrop" onClick={() => setOpenState(false)}>
+      <section className="prototype-world-picker settings-panel" role="dialog" aria-modal="true" aria-label="Voice settings" data-focus-owner="workspace" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpenState(false); } }}>
+        <button type="button" onClick={() => setOpenState(false)} aria-label="Close voice settings" autoFocus>Close</button>
         <h2>Character voice</h2>
         <fieldset aria-labelledby="audio-levels-heading">
           <legend id="audio-levels-heading">{t('Audio levels')}</legend>

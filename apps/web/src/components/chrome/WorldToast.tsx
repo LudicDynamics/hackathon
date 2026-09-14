@@ -30,6 +30,7 @@ export const WorldToastRegion: React.FC<WorldToastRegionProps> = ({ entries, onD
   return (
     <section
       className={`world-toast-region${className ? ` ${className}` : ''}`}
+      data-depth-surface="ui"
       aria-live="polite"
       aria-relevant="additions text"
       aria-atomic="false"

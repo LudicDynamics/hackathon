@@ -90,7 +90,7 @@ export function WriterResult({
     }
   };
   return (
-    <div key={visibleSeq} className="writer-result" role="status" aria-live="polite">
+    <div key={visibleSeq} data-depth-surface="ui" className="writer-result" role="status" aria-live="polite">
       <span>{text}</span>
       {onContinue && (
         <button

@@ -53,16 +53,35 @@ test('owned stacking declarations consume semantic depth tokens', () => {
   }
 });
 
-test('depth token bands preserve the existing local stacking order', () => {
+test('depth registry bands preserve semantic stacking order', () => {
   const expected = {
-    '--depth-background-scene': '0',
-    '--depth-entity-base': '4',
-    '--depth-performance-root': '20',
-    '--depth-dialogue-root': '50',
-    '--depth-dialogue-close': '60',
-    '--depth-chrome-gate-threshold': '240',
+    '--depth-background': '0',
+    '--depth-world': '10',
+    '--depth-entity': '20',
+    '--depth-overlay': '30',
+    '--depth-writer': '40',
+    '--depth-modal': '50',
+    '--depth-ui': '60',
   };
   for (const [token, value] of Object.entries(expected)) {
     assert.match(indexCss, new RegExp(`${token}\\s*:\\s*${value}\\s*;`), `${token} must stay registered`);
   }
+  for (const alias of [
+    '--depth-background-scene',
+    '--depth-entity-base',
+    '--depth-performance-root',
+    '--depth-chrome-writer',
+    '--depth-dialogue-root',
+  ]) {
+    assert.match(indexCss, new RegExp(`${alias}\\s*:\\s*var\\(--depth-`), `${alias} must use the registry`);
+  }
+});
+
+test('Canvas depth markers keep semantic data values and mapper-owned classes', () => {
+  for (const kind of ['background', 'world', 'entity', 'overlay']) {
+    assert.match(canvasSource, new RegExp(`data-depth-surface=\\{DEPTH_KIND\\.${kind}\\}`));
+    assert.match(canvasSource, new RegExp(`DEPTH_MARKER\\('${kind}'\\)`));
+  }
+  assert.match(canvasSource, /depthClassFor\(DEPTH_KIND\[kind\]\)/);
+  assert.doesNotMatch(canvasSource, /data-depth-surface=\{DEPTH_MARKER/);
 });

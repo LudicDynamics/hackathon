@@ -14,10 +14,8 @@ export function WorldShelf({ shelf, loading, onLoad, onClose, onRefresh }: {
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {
     const outside = (e: PointerEvent) => { if (!busy && !panel.current?.contains(e.target as Node)) onClose(); };
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); if (!busy) onClose(); } };
     window.addEventListener('pointerdown', outside, true);
-    window.addEventListener('keydown', key, true);
-    return () => { window.removeEventListener('pointerdown', outside, true); window.removeEventListener('keydown', key, true); };
+    return () => window.removeEventListener('pointerdown', outside, true);
   }, [busy, onClose]);
   const group = shelf.groups?.find(g => g.id === selected);
   const remove = async (savePath: string) => {

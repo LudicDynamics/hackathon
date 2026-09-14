@@ -3,57 +3,96 @@
 @tailwind utilities;
 
 :root {
-  /* v2 ink-canvas tokens — authoritative values from hearth.html L14 (doc-04 §10.2) */
-  --ink: #292820;
-  --muted: #777468;
-  --paper: #f4f0e8;
-  --cream: #fbf8f1;
-  --wall: #d9d0bf;
-  --rust: #c96f4c;
-  --sage: #899b87;
-  --blue: #7893a2;
-  --line: rgba(41, 40, 32, 0.15);
+  /* A01 visual grammar — the single global source for shell and default surfaces. */
+  --ux-color-wall: #d9d0bf;
+  --ux-color-paper: #f4f0e8;
+  --ux-color-cream: #fbf8f1;
+  --ux-color-ink: #292820;
+  --ux-color-muted: #777468;
+  --ux-color-line: rgba(41, 40, 32, 0.15);
+  --ux-color-rust: #c96f4c;
+  --ux-color-sage: #899b87;
+  --ux-color-blue: #7893a2;
+  --ux-surface-stage: radial-gradient(ellipse at 35% 35%, color-mix(in srgb, var(--ux-color-paper) 72%, transparent), transparent 55%), var(--ux-color-wall);
+  --ux-surface-transparent-ink: transparent;
+  --ux-surface-paper: var(--ux-color-paper);
+  --ux-font-human: 'LXGW WenKai', 'Kaiti SC', 'KaiTi', serif;
+  --ux-font-hand: 'Caveat', 'LXGW WenKai', 'Kaiti SC', 'KaiTi', serif;
+  --ux-font-ui: 'Manrope', system-ui, -apple-system, sans-serif;
+  --ux-font-machine: 'DM Mono', ui-monospace, monospace;
+  --ux-shadow-soft: 0 8px 30px rgba(45, 38, 28, 0.13);
+  --ux-shadow-halo: 0 14px 40px rgba(45, 38, 28, 0.18);
+  --ux-shadow-deep: 0 22px 50px rgba(35, 28, 20, 0.32);
+  --ux-radius-touch: 14px;
+  --ux-radius-panel: 18px;
+  --ux-radius-toolbar: 24px;
+  --ux-radius-avatar: 50%;
+  --ux-motion-ink: cubic-bezier(0.16, 1, 0.3, 1);
+  --ux-duration-reveal: 1.3s;
+
+  /* v2 aliases retained while existing JSX/CSS consumers migrate. */
+  --ink: var(--ux-color-ink);
+  --muted: var(--ux-color-muted);
+  --paper: var(--ux-color-paper);
+  --cream: var(--ux-color-cream);
+  --wall: var(--ux-color-wall);
+  --rust: var(--ux-color-rust);
+  --sage: var(--ux-color-sage);
+  --blue: var(--ux-color-blue);
+  --line: var(--ux-color-line);
 
   /* legacy compat names — values synced to v2 (keep until JSX waves migrate) */
-  --canvas-bg: #d9d0bf; /* == --wall */
-  --card-cream: #fbf8f1; /* == --cream */
-  --ink-secondary: #777468; /* == --muted */
+  --canvas-bg: var(--ux-color-wall);
+  --card-cream: var(--ux-color-cream);
+  --ink-secondary: var(--ux-color-muted);
 
-  /* Semantic depth tokens. Values stay local to the owning stacking context;
-     consumers must reference the token instead of introducing numeric z-index
-     literals (docs/ux/02 §4.3). */
-  --depth-entity-base: 4;
-  --depth-entity-focus: 30;
-  --depth-entity-drag: 40;
-  --depth-background-grain: 10;
-  --depth-dialogue-root: 50;
-  --depth-dialogue-portrait: 1;
-  --depth-dialogue-speech: 2;
-  --depth-dialogue-close: 60;
-  --depth-performance-fumble: 55;
-  --depth-entity-inspect: 20;
-  --depth-dialogue-media-back: 0;
-  --depth-dialogue-media-front: 1;
-  --depth-dialogue-caption: 2;
-  --depth-entity-control: 2;
-  --depth-background-scene: 0;
-  --depth-chrome-minimap: 50;
-  --depth-chrome-writer: 40;
-  --depth-chrome-stub: 45;
-  --depth-chrome-hint: 50;
-  --depth-chrome-badge: 50;
-  --depth-performance-root: 20;
-  --depth-chrome-carried-reader: 90;
-  --depth-entity-reading: 100;
-  --depth-chrome-gate-threshold: 240;
+  /* Depth registry — the only global stacking vocabulary. Surface kinds map to
+     these seven bands; the aliases below preserve legacy selectors while
+     keeping every declaration on this registry (docs/ux/02 §4.3). */
+  --depth-background: 0;
+  --depth-world: 10;
+  --depth-entity: 20;
+  --depth-overlay: 30;
+  --depth-writer: 40;
+  --depth-modal: 50;
+  --depth-ui: 60;
+
+  /* Legacy aliases. Local offsets remain finite and semantic; they do not
+     introduce another global z-index scale. */
+  --depth-background-scene: var(--depth-background);
+  --depth-background-grain: var(--depth-world);
+  --depth-entity-base: var(--depth-entity);
+  --depth-entity-inspect: calc(var(--depth-entity) + 1);
+  --depth-entity-control: calc(var(--depth-entity) + 2);
+  --depth-entity-focus: calc(var(--depth-entity) + 10);
+  --depth-entity-drag: calc(var(--depth-entity) + 20);
+  --depth-entity-reading: var(--depth-writer);
+  --depth-performance-root: var(--depth-overlay);
+  --depth-performance-fumble: calc(var(--depth-overlay) + 1);
+  --depth-overlay-performance: calc(var(--depth-overlay) + 1);
+  --depth-modal-dialogue: calc(var(--depth-modal) + 1);
+  --depth-chrome-writer: var(--depth-writer);
+  --depth-chrome-stub: calc(var(--depth-writer) + 5);
+  --depth-chrome-hint: calc(var(--depth-writer) + 10);
+  --depth-chrome-minimap: calc(var(--depth-writer) + 10);
+  --depth-chrome-badge: calc(var(--depth-writer) + 10);
+  --depth-chrome-carried-reader: var(--depth-writer);
+  --depth-chrome-gate-threshold: calc(var(--depth-writer) + 8);
+  --depth-dialogue-root: var(--depth-modal);
+  --depth-dialogue-media-back: var(--depth-modal);
+  --depth-dialogue-portrait: var(--depth-modal);
+  --depth-dialogue-media-front: calc(var(--depth-modal) + 1);
+  --depth-dialogue-caption: calc(var(--depth-modal) + 2);
+  --depth-dialogue-speech: calc(var(--depth-modal) + 2);
+  --depth-dialogue-close: calc(var(--depth-modal) + 10);
 }
 
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
-  background-color: var(--wall);
-  color: var(--ink);
+  font-family: var(--ux-font-ui);
+  background-color: var(--ux-color-wall);
+  color: var(--ux-color-ink);
   user-select: none;
   overflow: hidden;
 }
@@ -69,14 +108,14 @@ body {
   top: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(41, 40, 32, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(41, 40, 32, 0.035) 1px, transparent 1px);
+    linear-gradient(color-mix(in srgb, var(--ux-color-line) 23%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--ux-color-line) 23%, transparent) 1px, transparent 1px);
   background-size: 80px 80px, 80px 80px;
 }
 
 /* Smooth physics transition */
 .ease-ink {
-  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  transition-timing-function: var(--ux-motion-ink);
 }
 
 /* 3D Dice Cube Styles */
@@ -907,17 +946,17 @@ body:before {
    hearth L14-15) — nothing invented. --paper/--ink/--line/--rust/
    --sage/--blue/--muted/--cream already exist and are reused as-is. */
 :root {
-  --kai: 'LXGW WenKai', 'Kaiti SC', 'KaiTi', serif; /* hearth --kai */
-  --ink-2: #5f5142; /* prototype --ink-2: soft ink (no pure black) */
-  --pencil: #a39882; /* prototype --pencil: pencil grey */
-  --red: #a8362b; /* prototype --red: red pen, the one accent */
-  --hair: rgba(41, 40, 32, 0.15); /* prototype --hair == --line */
-  --legal: #faf0c6; /* prototype --legal: legal paper */
-  --kraft: #e2d3b4; /* prototype --kraft: kraft paper */
-  --note-yellow: #fbf3cf; /* prototype --note-yellow: memo pad */
-  --shadow-far: -1px 1px 3px rgba(43, 33, 23, 0.1);
-  --shadow-mid: -2px 3px 6px rgba(43, 33, 23, 0.14), -4px 7px 14px rgba(43, 33, 23, 0.09);
-  --shadow-near: -3px 5px 9px rgba(43, 33, 23, 0.18), -8px 13px 26px rgba(43, 33, 23, 0.12);
+  --kai: var(--ux-font-human);
+  --ink-2: var(--ux-color-ink);
+  --pencil: var(--ux-color-muted);
+  --red: var(--ux-color-rust);
+  --hair: var(--ux-color-line);
+  --legal: var(--ux-color-paper);
+  --kraft: var(--ux-color-paper);
+  --note-yellow: var(--ux-color-cream);
+  --shadow-far: var(--ux-shadow-soft);
+  --shadow-mid: var(--ux-shadow-halo);
+  --shadow-near: var(--ux-shadow-deep);
   --chalk-size: 19px; /* chalk base size; a form may inline-override */
 }
 
@@ -1012,16 +1051,12 @@ body:before {
    lets it survive the grain overlay.
    ============================================================ */
 .chalk--bare {
-  /* Default Chalk is TRUE transparent: with no appearance var the fallback is the
-     bare ink surface (docs/components/00 §4, 04 §:104). An explicit `surface` only
-     replaces it when the resolution actually chose one. */
-  background: var(--appearance-surface, transparent);
-  /* Border rides the inset shadow ring, never `border` — a themed card must not
-     grow the shell's measured box (docs/components/04 §:82, footprint contract). */
-  box-shadow:
-    var(--appearance-shadow, none),
-    inset 0 0 0 1px var(--appearance-border, transparent);
-  border-radius: var(--appearance-radius, 0);
+  /* Bare Chalk is a first-class transparent surface; paper belongs to
+     `.chalk--card` or an explicit reading/dialogue surface. */
+  background: var(--ux-surface-transparent-ink);
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
   font-family: var(--appearance-font-family, var(--kai));
   font-size: var(--chalk-size);
   line-height: 1.7;
@@ -1539,6 +1574,7 @@ body:before {
   z-index: var(--depth-background-scene);
   overflow: hidden;
   pointer-events: none;
+  background: var(--ux-surface-stage);
 }
 
 .scene-backdrop__img {

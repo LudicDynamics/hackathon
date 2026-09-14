@@ -1,8 +1,27 @@
 # A03 Chrome / attention / writer public state
 
-> 状态：设计阶段冻结稿（不实现代码）  
+> 状态：**核心已落地 / 部分接线 / 仍有缺口**（2026-09-14）。
 > 归属：AIRP UX 舞台统一批次 A03  
 > 一句话定位：把所有外壳、注意力、作家忙闲、停止请求与错误回退收敛到一条可见且可恢复的状态链；停止入口独立常驻，writer dock 内不再有第二个 Stop writing。
+
+### 当前状态
+
+#### 已落地
+
+| 范围 | 当前实现与证据 | 验收证据 |
+|---|---|---|
+| Writer public state | `apps/web/src/lib/writer-state.ts:13-31,139-220` 已提供 phase、stop、stage、toolCount、error、回执与订阅；App 以 `writerState` 派生锁定（`apps/web/src/App.tsx:191-244`）。 | `apps/web/test/writer-state.test.mjs:20-84` 覆盖 busy、terminal、retry、reconnect。 |
+| 唯一 WS ingress / 角色分流 | `apps/web/src/state/useWorld.ts:478-485,559-617` 将 writer 帧交给 canonical state，并只向 typed character relay 派发角色帧；`App.tsx:401-420` 做身份路由。 | `apps/web/test/character-frame-queue.test.mjs:26-109` 覆盖 FIFO、缺序、缺 ID/非法帧。 |
+| Stop、焦点与 overlay admission | `apps/web/src/App.tsx:498-570,1074-1085` 提供 topmost Escape、唯一独立 Stop 与 Retry；`apps/web/src/lib/focus-coordinator.ts:1-90`、`overlay-admission.ts:21-75` 提供统一接缝。 | `apps/web/test/overlay-admission.test.mjs:16-80`、`apps/web/test/app-nook-camera-contract.test.mjs:28-39` 覆盖 topmost、拒绝、Stop 唯一性。 |
+
+#### 尚未闭环
+
+| 缺口 | 当前证据与下一步 |
+|---|---|
+| 动作反馈尚未贯通 App 全部入口 | `apps/web/src/lib/action-feedback.ts:98-233` 与 `EntityInteractions.tsx:127-193`、`BagItemDialog.tsx:43-54` 已使用分类 store；但 `apps/web/src/App.tsx:726-733` 的 present 仍直接 gateway + 固定成功通知，需接入真实 details/reconcile。 |
+| 组件内 Escape 未统一到 focus coordinator | `DeclaredActionDialog.tsx:126-151`、`PhotoDetailDialog.tsx:47-89`、`GateThreshold.tsx:10-20` 各自监听/清理 Escape；App 的 topmost 事务尚未覆盖这三个组件，需避免一次按键跨层关闭。[推断：当前无对应统一 focus owner 接线。] |
+| Nook 演出与 Chrome 仍有投影边界 | `apps/web/src/components/nook/NookView.tsx:549-567` 只挂 Canvas；Nook 没有 `PerformanceLayer`，且 projection marker/inert 的覆盖仍需浏览器核验（见 A05）。 |
+
 
 ## 1. 权威契约与边界
 
@@ -32,45 +51,44 @@
 | Scene metadata / WriterResult | `App.tsx:613-619` | WriterResult 嵌在 `world-meta`，按 doc-06 需在 `writer_idle` 后显示一条，随 chrome 一起隐藏。|
 | hand tray、belongings、player profile、residents | `App.tsx:627-685` | 是 Canvas 上的纸面 chrome；背包内容由 App 状态控制，profile 有独立展开状态；行动入口切 `attention=authoring`。|
 | authoring panel / God Hand | `App.tsx:713-718` | 和 writer action 共用 `attention=authoring` 的可见区域，但拖 Chalk 的真实许可是独立 `isGodHandOpen`（`App.tsx:110-111`）。|
-| writer action toggle | `App.tsx:686` | 既是行动入口又是 attention 切换器；忙时展示 App 自己的 `writerWorking`，形成第二份 busy 事实。|
-| independent Stop writing | `App.tsx:688-690`；`scene-shell.css:185-186` | 正确地脱离 `.prototype-chrome`，所以沉浸和 dock 隐藏时仍可见；但它由 App `writerWorking` 驱动，且只设置本地 `writerStopRequested`。|
-| writer dock | `App.tsx:691-711`；`.prototype-dock` `prototype.css:460-517` | 只在 `.is-authoring` 显示（`prototype.css:110-115`）；dock 内当前又有一个 `Stop writing`（`App.tsx:699`），与独立入口重复。|
+| writer action toggle | `apps/web/src/App.tsx:1063-1073` | 行动入口切 `attention`；忙态文字从 `writerState.phase` 派生，不再另存进度镜像。 |
+| independent Stop writing | `apps/web/src/App.tsx:1074-1078`；样式 `apps/web/src/scene-shell.css:185-186` | 已脱离 `.prototype-chrome`，并以 `writerState.stopRequested` 做幂等 pending；当前页面仅此一个 App Stop。 |
+| writer dock | `apps/web/src/App.tsx:1087-1122`；`WriterBar.tsx:84-129` | dock 复用 `WriterBar`，无内嵌 Stop；Nook 空态仍可用 disabled `WriterBar`。 |
 | toast / world loading | `App.tsx:723-765` | toast `role=status`，错误常以字符串显示；世界加载是 screen-fixed，层级高于普通 chrome。|
 
 ### 2.2 `components/chrome/*`、RightSidebar 与 WriterBar
 
-- `WriterBar` 的职责是可复用的非空单行输入：`WriterBar.tsx:15-24` 的 props，`WriterBar.tsx:33-42` 本地 text，`WriterBar.tsx:34-35` 读取 `useWriterPhase()` 并锁输入。它目前不是 App 主 dock 的实现；唯一现有调用是 `NookView.tsx:410` 的禁用回退 `[推断：全仓调用搜索未发现其它 JSX 调用]`。两个输入实现因此会产生不同 busy / submit 行为。
-- `RightSidebar` 的组件实现仍是独立的旧 Adapter：`RightSidebar.tsx:6-25` 定义背包、人物与四类 callback，`RightSidebar.tsx:38-66` 持有 tab，`RightSidebar.tsx:69-109` 渲染拖拽背包，`RightSidebar.tsx:113-187` 渲染 Navigate / Chat / Follow / Nook。它未在 `App.tsx` JSX 中出现 `[推断：全仓搜索只找到声明文件与文档引用]`；App 现在用 `prototype-hand-tray`、`prototype-belongings`、`prototype-residents` 直接投影（`App.tsx:627-685`）。这不是两份世界数据，但确实是两套 Chrome 入口 Adapter，后续必须删除未挂载的旧 Adapter，而不是让它继续漂移。
-- `WorldShelf` 不是 inline shelf：`WorldShelf.tsx:5-8` 从 App 接受 `shelf/loading` 与 callback，`WorldShelf.tsx:15-21` 自己安装 outside/Escape listener，`WorldShelf.tsx:23-31` 自己持有删除 `busy/message`，`WorldShelf.tsx:33-58` 是 modal-like directory。App 的 `worldPickerOpen` 在 `App.tsx:125-130` 持有，并于 `App.tsx:724-726` 挂载。
+- `WriterBar` 的职责是可复用的非空单行输入：`apps/web/src/components/chrome/WriterBar.tsx:13-31,49-81` 读取 canonical `writer-state` 并锁输入；主 dock 在 `App.tsx:1095-1120` 调用，Nook 空态在 `NookView.tsx:532-544` 使用 disabled 回退。它们共享 busy 读源，但 Nook 回退不是第三个作家入口。
+- `RightSidebar` 是未挂载的旧 Adapter（其 tab/入口实现仍在 `apps/web/src/components/sidebar/RightSidebar.tsx:6-187`）；当前 App 直接挂载 CharacterRail 与 belongings（`App.tsx:1049-1062,1010-1035`），仓库源码搜索未发现 production import。[推断：仍需按 presence 决策清理死代码。]
+- `WorldShelf` 的删除 busy/message 仍是局部状态（`apps/web/src/components/WorldShelf.tsx:10-31`），outside pointer listener 仍在 `:15-19`；Escape 由 App topmost coordinator 处理，不能把组件内 outside listener 误当成统一 Escape owner。
 - `StubPrompt` 明确不是 `WriterBar`：其约束见 `StubPrompt.tsx:4-8`，因为空提交是初始化语义；A03 不把它并入作家 dock。
 - `Minimap`、`HintBar`、`LayerBadge`、`CompassRose` 属于 chrome 视觉零件，但本篇只规定其可见性由同一 `shell.immersive` 投影，不能单独另造 attention。
 
 ### 2.3 Agents / Voice / Effects
 
-- `AgentSettings` 每次轮询 `/api/agent-settings`（`AgentSettings.tsx:16-31`），目前把 `data.progress.writer` 再合成为 `airp:agent-frame`（`:20-25`）；这会绕过唯一 WS ingress，必须删除。面板的模型选择、保存与忙时禁止切换仍保留（`:38-64`），但其 `status.busy` 只能作为服务端设置响应，不再成为公开作家 busy 的事实源。
+- `AgentSettings` 轮询 `/api/agent-settings` 并只更新模型/配置数据（`apps/web/src/components/AgentSettings.tsx:33-60`）；公开 writer 摘要读 `useWriterState`（`:62-87`），已不再合成 `airp:agent-frame`。TTS/Mute/Effects 仍由各自 owner 持有（`:70-72` 与 App `:151-180`）。
 - `TtsSettings` 是 Voice 与连接的局部 dialog：`TtsSettings.tsx:6-20` 持有 open/notice/config/error，并监听 `airp:tts-unavailable`；`:21-40` 通过 portal 投影设置与可见 unavailable notice。文本对话必须不依赖 Voice 可用；Voice 错误不改变 writer phase。
 - `MuteButton` 通过 `useAudio` 单例读写静音（`MuteButton.tsx:10-23`；`useAudio.ts:19-68`），不应复制到 Agents 或 Writer state。
 - Effects 由 `App.tsx:117-122` 持久化为 `airp:effects`；Canvas 把它传给背景、粒子、parallax（`Canvas.tsx:88-113,531-584`），`SceneBackdrop` 在关闭或 `document.hidden` 时暂停视频（`SceneBackdrop.tsx:56-67`）。A03 只规定它是用户偏好 owner，不让 writer busy 或 attention 改写它；最终演出优先级仍取 `docs/ux/00 §4.7` 更保守者。
 
 ### 2.4 多份 busy 的问题清单
 
-现在至少存在四个可被 UI 解释为“作家忙”的地方：
+当前 UI 已收敛为一个 canonical writer projection；仍需注意的是 App 的 `writerWorking` 只是 `writerState.phase` 的派生值，不是第二份事实：
 
-1. App `writerWorking`（`App.tsx:132-155`），并监听 `airp:agent-frame`；
-2. `writer-state` module（`writer-state.ts:13-54`），`WriterBar` 直接读；
-3. `useWorld` `writerToolsInFlight`（`useWorld.ts:143-146,411-427`），footprint scheduler 读 `isBusy`（`:300-303`）；
-4. AgentSettings 的 `status.busy` 与自造 `agent_progress`（`AgentSettings.tsx:20-27,50-63`）。
+1. `apps/web/src/lib/writer-state.ts:139-203` 处理 writer frame、终止、toolCount 与 completion；
+2. `apps/web/src/App.tsx:191-244` 只读取快照并派生 input lock；
+3. `apps/web/src/components/AgentSettings.tsx:62-87` 与 `WriterBar.tsx:49-72` 只读同一快照；
+4. `apps/web/src/state/useWorld.ts:478-481` 是唯一 writer ingress。
 
-这四者**不再允许并存为四个事实**。设计保留一个 `writer-state` 公开投影；tool count 是同一投影内给 footprint 的派生维度，不是第二个 writer busy。AgentSettings 只能显示该 projection 的 phase/stage；App 不再有 `writerWorking` / `writerStopRequested` / `writerStage` / `writerElapsed` state；WriterResult 不再自行监听帧。
+因此，原先 App raw listener、AgentSettings synthetic frame、WriterResult raw listener 与独立 `writerToolsInFlight` 的“多事实”问题已不再由当前源码维持；`writerWorking` 这个变量名仍存在但只表示派生 UI 值（`App.tsx:192`）。保留这一差异说明，避免把派生值误报成重复 busy owner。
 
 ## 3. 统一 Module / Interface / Ownership
 
 ### 3.1 唯一公开投影
 
-**Module：`apps/web/src/lib/writer-state.ts`（既有模块，A03 owner）。** 在不改变 WS 载荷的前提下，扩展为唯一的 `WriterPublicState` projection。以下是内部接口形状，不是新 WS 帧：
+**Module：`apps/web/src/lib/writer-state.ts`（A03 owner）。** 当前已是唯一 `WriterState`/`WriterPublicState` projection；形状仍是内部快照，不是新 WS 帧：
 
 ```ts
-// NEW internal projection; not sent over WS.
 interface WriterPublicState {
   phase: 'idle' | 'writing';
   reason: 'turn' | 'chalk' | null;
@@ -94,7 +112,7 @@ interface WriterStateAdapter {
   subscribeWriterState(listener: () => void): () => void;
 }
 
-`getWriterPublicState` / `subscribeWriterState` 是 WriterBar、action toggle、Stop control、Agents summary、WriterResult 的唯一读取面。`resetForReconnect` 是 perform/01 `ws.onopen` 与断线清理可调用的唯一 reset seam；现有 `beginTurn/endTurn/reset`（`writer-state.ts:29-39`）不得再作为模块外的第二套写入入口。它们只能在 UX03 adapter 内部收束逻辑中被调用，调用方不能各自 set 一个 busy。
+`getWriterPublicState()` / `subscribeWriterState()` 是 WriterBar、action toggle、Stop control、Agents summary、WriterResult 的唯一读取面；当前实现的公开写入口是 `acceptWriterFrame`、`beginWriterPrompt`、`requestWriterStop`、`resetForReconnect`（`apps/web/src/lib/writer-state.ts:88-140`），而不是组件各自 set busy。
 
 `toolCount > 0` 仅用于 footprint 的稳定窗口；`phase` 仍从已接受的 writer turn 到 `writer_idle`（或明确错误/断线）表达公开 busy。这样 `tool_start` 间有空窗时 UI 不会误报 idle，tool count 也不会被解释成另一个“作家状态”。
 
@@ -322,27 +340,25 @@ interface OverlayAdmission {
 
 | 文件 / 符号 | 设计动作 | 所属 |
 |---|---|---|
-| `apps/web/src/lib/writer-state.ts` `WriterPhase`、`beginTurn/endTurn/reset` | 收敛为 `WriterPublicState` 唯一 projection；旧函数改为模块私有收束 helper，不再导出为第二套入口；新增 signatures 见 §3.1 | A03 |
-| `apps/web/src/state/useWorld.ts` `onMessage`、`tool_start/tool_end`、`connect` | 唯一 ingest；移除独立 `writerToolsInFlight`，footprint 改读同 projection 的 toolCount；重连/错误进入 canonical reset | A03 与 perform/01 seam |
-| `apps/web/src/App.tsx` state `writerWorking` 等、`submitWriter`、`onEntityAction`、writer action/Stop/dock JSX、Escape effect | 删除重复 writer state；submit/action 经过唯一 send seam；保留独立 Stop、删除 dock Stop；接入 focus coordinator；保持 `isGodHandOpen` 独立 | A03 |
-| `apps/web/src/components/chrome/WriterBar.tsx` `useWriterPhase` / submit | 只读 canonical projection；保留非空输入语义，不新增 Stop | A03 |
-| `apps/web/src/components/WriterResult.tsx` effect | 删除 raw `airp:agent-frame` listener，改读 projection 的 `lastMessage + completionSeq` | A03 |
-| `apps/web/src/components/AgentSettings.tsx` poll effect | 删除 synthetic `airp:agent-frame` dispatch；busy/stage 读 projection，REST 只供模型/配置 | A03 |
-| `apps/web/src/components/WorldShelf.tsx` document listeners | 交给 App focus stack；保留 dialog-local delete busy，不重复关闭 layer | A03 |
-| `apps/web/src/components/sidebar/RightSidebar.tsx` 整个未挂载 Adapter | 删除或明确迁移到 App inline Chrome；不再保留第二套 backpack/character/Nook入口 | A03 / cleanup |
-| `apps/web/src/components/narrative/EntityInteractions.tsx` `run` / callbacks | 保持局部 HTTP busy，writer 请求经过 App → useWorld seam | 与动作语义篇 Seam |
-| `apps/web/src/lib/ui-shell.mjs` `transitionShell` | 复用现有 shell transition；不得新增同义 shell reducer | A03 |
-| `apps/web/src/scene-shell.css` / `prototype.css` Stop、dock、responsive rules | 实现期只校准 visibility/focus/desktop/mobile，不在设计阶段写 CSS | A03 + visual grammar |
+| `apps/web/src/lib/writer-state.ts` `WriterPhase`、`acceptWriterFrame`、`beginWriterPrompt`、`requestWriterStop`、`resetForReconnect` | 已收敛为 `WriterState` 唯一 projection；当前实现落点见 `writer-state.ts:13-31,88-140` | A03 |
+| `apps/web/src/state/useWorld.ts` `onMessage`、writer/character cases | 唯一 ingress；writer frame 进入 canonical state，角色帧进入 typed relay（`useWorld.ts:478-481,559-617`） | A03 与 perform/01 seam |
+| `apps/web/src/App.tsx` writer action/Stop/dock JSX、Escape effect | 读取 canonical state；保留独立 Stop、移除 dock 内 Stop；焦点栈已接线，动作反馈仍有 App 直连缺口 | A03 |
+| `apps/web/src/components/chrome/WriterBar.tsx` | 读取 canonical projection、保留非空输入语义；`onStop` 仅是可选宿主 prop，App dock 未传入 | A03 |
+| `apps/web/src/components/WriterResult.tsx` / `AgentSettings.tsx` | 已改为 canonical writer snapshot 消费；AgentSettings REST 只负责配置/模型，见 `AgentSettings.tsx:33-87` | A03 |
+| `apps/web/src/components/WorldShelf.tsx` document listeners | outside pointer 仍是局部 listener（`:15-19`）；Escape 由 App topmost 处理，但其它组件内 Escape 尚未统一 | A03 |
+| `apps/web/src/components/sidebar/RightSidebar.tsx` 未挂载 Adapter | 当前 App 使用 CharacterRail + belongings；RightSidebar 仍是待清理死代码，不得复活成双 tab | A03 / cleanup |
+| `apps/web/src/components/narrative/EntityInteractions.tsx` `run` / callbacks | 局部 HTTP busy 已隔离；其动作结果可经 `action-feedback`，App-level present/choice 尚未全量收口 | 与动作语义篇 Seam |
+| `apps/web/src/lib/ui-shell.mjs` `transitionShell` | 继续复用现有 shell transition，不新增同义 reducer | A03 |
+| `apps/web/src/scene-shell.css` / `prototype.css` Stop、dock、responsive rules | Stop/dock 现已有实现；最终 visibility/focus/desktop/mobile 仍需浏览器矩阵 | A03 + visual grammar |
 
 ## 10. 发现的冲突 / 需要修订上位文档
 
-1. `docs/ux/00-共同上下文.md:128-133` 要求公开 Agent frame 单一投影，但现状 App、WriterResult、AgentSettings 均直接监听/派发 `airp:agent-frame`（`App.tsx:143-158`、`WriterResult.tsx:7-29`、`AgentSettings.tsx:20-25`）。本篇建议由 `useWorld → writer-state` 统一；主 agent 在评审后回写该路径与其它 UX 篇，不能由 A03 私自改 00。
-2. `docs/perform/00-共同上下文.md:185-186` 与 footprint/perform 子文档已按 UX03 回写：`writerToolsInFlight` 只保留现状证据，toolCount/phase 是唯一 projection；实现前仍需删除源码第二 ref。
-3. `docs/agent-awareness/03-前端感知演出设计.md:5,344` 已回写：activity rail 与 writer progress 可并存，但都消费 UX03 canonical projection；不得拥有第二 busy/stop/stage/elapsed 事实。
-4. `docs/doc-06-演出与交互设计.md:7` 要求独立 Stop 且保留重试；现状 `App.tsx:699` 又在 dock 内重复 Stop。A03 认领删除 dock 入口，保留唯一独立 Stop；doc-06 无需改变语义，但应回写“dock 不含 Stop”。
-5. `docs/layout/00-共同上下文.md:61` 与 `docs/layout/03-Chalk交互锁与上帝模式.md:13,72` 已指出 attention 不是 God Hand 权限；A03 保持这一边界。若任意后续设计用 `attention` 计算 `allowChalkDrag`，需退回评审。
-6. `docs/nook/00-共同上下文.md:123-126` 要求单 active projection；现状 App 仍让 Nook 作为 fixed overlay 挂在 Canvas 外（`App.tsx:758`），而其空态可能渲染自己的 Canvas（`NookView.tsx:379-391`）。这不是 A03 重做 Nook，但截图验收必须证明同一时刻只有 Nook active projection 可交互，且 Stop 仍走全局 projection。
-
+1. `docs/ux/00-共同上下文.md:128-133` 的单一路径要求已由 `useWorld.ts:478-481,559-617`、`App.tsx:401-420` 接线；`CharacterModal`/`WriterResult` 不再监听 raw `airp:agent-frame`。剩余验收重点是队列与浏览器路由，而不是继续保留旧双消费描述。
+2. `docs/perform/00-共同上下文.md:185-186` 关于 toolCount/phase 的单一 projection 已有源码实现；`writer-state.ts:160-166` 仍需与 footprint 的实际消费做运行时回放，不能只凭 source grep 宣称全链路。
+3. `docs/agent-awareness/03-前端感知演出设计.md:5,344` 与当前 AgentSettings canonical snapshot 消费一致；配置 REST 的 stale/error 文案仍是本篇 §11 的待拍板项。
+4. `docs/doc-06-演出与交互设计.md:7` 的独立 Stop 语义已在 `App.tsx:1074-1085` 接线，dock 由 `WriterBar` 负责输入且未传 `onStop`；doc-06 的“dock 不含 Stop”文字仍应回写以消除旧示意。
+5. `docs/layout/00-共同上下文.md:61` 与 `docs/layout/03-Chalk交互锁与上帝模式.md:13,72` 的 attention/God Hand 边界仍被 `App.tsx:143-145` 保持；无冲突。
+6. `docs/nook/00-共同上下文.md:123-126` 的单 active projection 现由 App 互斥分支（`App.tsx:856-890`）和 Nook root（`NookView.tsx:423-432`）部分接线；Nook 未挂 `PerformanceLayer` 且 marker 覆盖边界仍需浏览器验证，见 A05。
 ## 11. 仍未知待拍板
 
 1. `writer-state` 的 error 是否在 toast、独立 Stop 区域或两者同时显示；本篇要求至少独立 Stop / Retry 与 `role=alert` 可见，具体视觉合并由 visual grammar 评审。
@@ -356,8 +372,7 @@ interface OverlayAdmission {
 ## 12. 完成判据
 
 - 独立 Stop 在 busy、immersive、dock hidden、mobile 四种场景都唯一可见；dock 内 Stop DOM 计数为零。
-- `writer-state` 是唯一公开 writer phase / stop / error / `lastMessage` / `completionSeq` owner；App `writerWorking`、`writerStopRequested`、`writerStage`、`writerElapsed` 与 useWorld 独立 busy ref、AgentSettings synthetic frame、WriterResult raw listener 均删除。
 - useWorld 仍是唯一 WS ingress；WS payload 与既有 phantom、world event、Nook、EntityInteractions 形状不变。
-- `writer_idle` 之前不 fake idle；abort 失败、error、断线均有可见且可重试路径；成功回执只在公开终止顺序后出现。
+- `writer-state` 是唯一公开 writer phase / stop / error / `lastMessage` / `completionSeq` owner；App `writerWorking` 仍存在但只是 `writerState.phase` 的派生变量（`apps/web/src/App.tsx:191-192`），旧 raw listener/synthetic frame/独立 busy ref 已移除。
 - EntityInteractions 局部 HTTP busy 不触发 Stop；God Hand 许可不由 attention 推导；Nook 不开启第二 WS / writer projection。
 - 1440×960、1180×960、390×844 的截图与键盘/读屏矩阵通过；Reduced motion、Effects off、页面隐藏不抹掉关键事实反馈。

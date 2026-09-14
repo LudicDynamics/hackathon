@@ -68,6 +68,26 @@ let musicBus: GainNode | null = null;
 let voiceBus: GainNode | null = null;
 let mutedState = false;
 
+// One-shot requests are tied to the visibility epoch. A request that crosses
+// a hidden transition is stale even if the tab becomes visible before decode
+// completes; this prevents an old stinger/voice from landing off-beat.
+let visibilityEpoch = 0;
+let visibilityListenerAttached = false;
+function pageIsHidden(): boolean {
+  return typeof document !== 'undefined' && document.hidden;
+}
+function ensureVisibilityGate(): void {
+  if (
+    visibilityListenerAttached ||
+    typeof document === 'undefined' ||
+    typeof document.addEventListener !== 'function'
+  ) return;
+  document.addEventListener('visibilitychange', () => {
+    visibilityEpoch += 1;
+    if (document.hidden) stopVoice();
+  });
+  visibilityListenerAttached = true;
+}
 export type VolumeChannel = 'music' | 'voice';
 function readVolume(channel: VolumeChannel): number {
   try {
@@ -889,8 +909,10 @@ const canvasFoley: Record<FoleyName, [string, number]> = {
 };
 const foleyBusyUntil = new Map<FoleyName, number>();
 export function playFoley(name: FoleyName, intensity = 1): void {
-  if (!initAudio() || !master || ctx?.state !== 'running' || mutedState || document.hidden) return;
+  ensureVisibilityGate();
+  if (pageIsHidden() || !initAudio() || !master || ctx?.state !== 'running' || mutedState) return;
   const now = performance.now();
+  const requestEpoch = visibilityEpoch;
   if (now < (foleyBusyUntil.get(name) ?? 0)) return;
   foleyBusyUntil.set(name, now + 500);
   const k = clamp01(intensity);
@@ -901,7 +923,13 @@ export function playFoley(name: FoleyName, intensity = 1): void {
     return;
   }
   void loadSample(url).then((buf) => {
-    if (performance.now() - now > 500 || mutedState || document.hidden || ctx?.state !== 'running') return;
+    if (
+      requestEpoch !== visibilityEpoch ||
+      performance.now() - now > 500 ||
+      mutedState ||
+      pageIsHidden() ||
+      ctx?.state !== 'running'
+    ) return;
     if (buf) {
       if (!master) return;
       foleyBusyUntil.set(name, performance.now() + Math.max(500, buf.duration * 1000));
@@ -913,18 +941,29 @@ export function playFoley(name: FoleyName, intensity = 1): void {
 }
 
 /** Instant emotional sting (<1.5s), orthogonal to the main tracks: fully
- *  additive, never touches ambient/bgm/theme gain. Drops (no queueing) unless
- *  the context is already running — replaying after unlock would land off-beat. */
+ *  additive, never touches ambient/bgm/theme gain. Requests are dropped when
+ * hidden, muted, or superseded by a visibility transition. */
 export function playStinger(emo: Emotion): void {
+  ensureVisibilityGate();
+  if (pageIsHidden() || mutedState) return;
   const c = initAudio();
   if (!c || !master) return;
   if (c.state !== 'running') return; // drop, don't queue
+  const requestEpoch = visibilityEpoch;
   const url = `/api/audio?path=stinger%2F${emo}.mp3`;
   void loadSample(url).then((buf) => {
-    if (!buf || !master) return; // material absent → silent no-op
+    if (
+      requestEpoch !== visibilityEpoch ||
+      pageIsHidden() ||
+      mutedState ||
+      c.state !== 'running' ||
+      !buf ||
+      !master
+    ) return; // material absent → silent no-op
     playClip(master, buf, false, STINGER_SAMPLE_LEVEL);
   });
 }
+
 
 /** Warm the sample cache ahead of playback. Never rejects: a failed URL is
  *  recorded in failCached and resolves quietly. */
@@ -965,20 +1004,28 @@ let voiceToken = 0; // async-race guard (same discipline as tracks[id].token)
 let voiceUrl: string | null = null; // declared ref verbatim (debug/test truth)
 
 /** Play one TTS line. A new call interrupts the previous one. Silently drops
- *  when there is no context, when the context is not running (autoplay policy:
- *  drop, don't queue — replaying after unlock would land the wrong line), or
- *  when the sample fails to load. Never throws. */
+ *  when hidden, muted, without a context, when the context is not running
+ *  (autoplay policy), or when the sample fails to load. Never queues a line:
+ *  a request crossing a visibility transition is stale rather than replayed. */
 export function playVoice(url: string): void {
-  stopVoice(); // interrupt the previous line first
+  ensureVisibilityGate();
+  stopVoice(); // interrupt the previous line first, including while hidden
   voiceUrl = url; // record the declared ref even when we go silent
 
+  if (pageIsHidden() || mutedState) return;
   const c = initAudio();
   if (!c || !master) return; // no Web Audio → silent no-op
   if (c.state !== 'running') return; // drop, don't queue
 
   const token = voiceToken; // token taken after stopVoice's bump
+  const requestEpoch = visibilityEpoch;
   void loadSample(url).then((buf) => {
-    if (token !== voiceToken) return; // superseded by a newer call / stop
+    if (
+      token !== voiceToken ||
+      requestEpoch !== visibilityEpoch ||
+      pageIsHidden() ||
+      mutedState
+    ) return; // superseded by a newer call / stop / hidden transition
     if (!buf || !master || !ctx) return; // load failed → silence (no fallback)
     if (ctx.state !== 'running') return; // suspended again during decode → drop
     const nodes = playClip(voiceBus!, buf, /* loop */ false, VOICE_SAMPLE_LEVEL);

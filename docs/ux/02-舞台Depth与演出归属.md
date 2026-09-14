@@ -1,9 +1,29 @@
 # A02：舞台 Depth 与演出归属
 
 > Module owner：`UXTheatreDepth02`；本篇只拥有 Theatre Depth 与演出 surface owner，不拥有 Chrome 状态机、layout geometry 或动作结果。
-> 状态：设计冻结稿，尚未进入实现。日期：2026-09-13。  
+> 状态：**核心已落地 / 部分接线 / 仍有缺口**（2026-09-14）。Depth surface registry、Particle ambient/burst 分面、PerformanceLayer 生命周期与 overlay admission 已有代码和聚焦测试；全量 marker/数字声明迁移、Nook 演出层和浏览器覆盖仍未闭环。
 > 适用范围：`background / stage / entity / performance / chrome / dialogue` 的语义 Depth、Canvas 内外的 stacking context、幻影与演出归属、角色对话特写和骰子仪式。  
 > 本篇不改 `flowColumns`、footprint、phantom seat 形状，不设计 Chrome 状态机，不实现代码。
+
+### 当前状态
+
+#### 已落地
+
+| 范围 | 当前实现与证据 | 验收证据 |
+|---|---|---|
+| Depth registry / surface class | `apps/web/src/lib/depth-surface.ts:1-63` 提供受限 surface kind、token、class 与顺序；`apps/web/src/index.css:49-87`、`apps/web/src/scene-shell.css:5-17` 提供注册值与局部别名。 | `apps/web/test/depth-surface.test.mjs:24-70` 覆盖 kind、单调顺序与 CSS registry 消费。 |
+| Particle owner 分面 | `apps/web/src/components/canvas/ParticleLayer.tsx:191-197,253-375,377-390` 将 ambient/burst 分开并按 Effects/hidden/reduced 停止 rAF。 | `apps/web/test/depth-performance.test.mjs:8-24` 覆盖两个 surface、单 canvas 与生命周期门禁。 |
+| show 生命周期 / admission | `apps/web/src/components/performance/PerformanceLayer.tsx:422-493,520-577` 统一分发、资源接管、清理并接收 hidden/effects/reduced/admission；`apps/web/src/lib/overlay-admission.ts:21-75` 负责冲突拒绝。 | `apps/web/test/depth-performance.test.mjs:26-39`、`apps/web/test/overlay-admission.test.mjs:38-80` 覆盖接缝与幂等释放。 |
+
+#### 尚未闭环
+
+| 缺口 | 当前证据与下一步 |
+|---|---|
+| 静态 checker 未覆盖所有 depth marker | `tools/ux-contract.json:159-171` 目前只有一个 `depth.registration` 声明，且 `apps/web/src/prototype.css:75-76,165-166` 仍保留数字 z-index；需扩充同一 checker 的 marker/父 context 覆盖，不能以当前 clean 输出宣称全量扫描。 |
+| App/Canvas marker 覆盖边界 | `apps/web/src/App.tsx:857-888` 的 layer/Nook 分支分别设置 marker/inert，`NookView.tsx:423-432` 仍在 root 上固定写 active marker；`CharacterModal.tsx:784-791` 没有 projection marker。需用浏览器验证 dialogue/Nook 过渡时恰好一个 active marker。[推断] |
+| Nook 无 PerformanceLayer | `apps/web/src/components/nook/NookView.tsx:549-567` 只挂 Canvas，未挂 `PerformanceLayer`；Nook 的 show/演出覆盖尚不能宣称与 layer 同构，需由 Nook/演出 owner 补接且不新增 WS。 |
+| dialogue 内 Escape 归属 | `apps/web/src/components/narrative/DeclaredActionDialog.tsx:126-151`、`apps/web/src/components/photo/PhotoDetailDialog.tsx:47-89`、`apps/web/src/components/performance/GateThreshold.tsx:10-20` 各自处理 Escape，尚未纳入同一 focus/overlay admission 事务。 |
+
 
 ## 1. 一句话定位
 
@@ -89,16 +109,16 @@
 - fixed modal、fixed dice、fixed radial 处在同一个根 context；同值时 DOM 后出现者胜出，不是语义裁决。当前 App 中 CharacterModal 在 RadialMenu 后、DiceCeremony 在 CharacterModal 后（`App.tsx:730-763`）。
 - `backdrop-filter`、`transform`、`perspective` 都会改变绘制边界；不能用一张“全局 z 数字表”替代 context 矩阵。
 
-### 3.4 现状差异（实现前必须认领）
+### 3.4 现状差异与剩余认领
 
 | 目标合同 | 当前实现 | 差异与影响 |
 |---|---|---|
-| 六类 Depth 由 registry 统一映射，跨 context 的父层先于子层裁决 | CSS literal、Tailwind `z-*`、inline `zIndex` 并存（见 §3.2、§11 C3） | 当前数字不可作为统一语义；必须先补 registry/checker，否则新增层会继续靠猜数值。 |
-| ambient 属 background，fireworks 属 performance，二者可独立验收 | `ParticleLayer` 当前用一张 `z-10` canvas 同时绘制两者（`ParticleLayer.tsx:297-336`） | 目标裁决改为一个 `ParticleLayer` Module 内的两个渲染 surface/owner：ambient surface 归 background，burst surface 归 performance；详见 §11 C1 的已裁决方案。 |
-| dialogue 永远高于 blocking performance，overlay admission 明确裁决 | CharacterModal 与 DiceCeremony 都是 fixed `z-50`，Dice 在 DOM 后面（`App.tsx:732-763`） | 同时存在时由 DOM 顺序而非语义裁决，见 §11 C2。 |
-| grain 归 background，且不压正文 | 根级 `body:before z10` 与 Canvas/Particle context 的关系未冻结（`index.css:190-205`） | 必须用 computed style 和截图确认实际绘制顺序，见 §11 C4。 |
-| dialogue 进入时底层 Canvas 必须 inert、只保留一个 focus projection | `CharacterModal` 目前作为 App 兄弟 fixed overlay 渲染（`App.tsx:732-756`），没有在该分支看到对 Canvas 的 `inert` 标记 | 可视上 modal 会盖住 Canvas，但语义 focus/键盘禁用仍需按 A05 补齐；不能用 z800 或 DOM 顺序代替 active marker。 |
-| 玩家与 writer 的骰子必须共享 `DiceCeremonyInput`，且只演一套 ceremony | writer 当前由 `App.tsx:262-278` 的 `airp:dice-frame` 驱动 `DiceCeremony`；玩家 `DiceRoller.tsx:341-397` 自己挂载 fixed `z-50` overlay，`onRollComplete` 只传 `(result, passed)`（`DiceRoller.tsx:28-36`） | 当前两条路径的输入/渲染分裂；目标是统一输入 Adapter，不能等待不存在的 writer frame，也不能重复播放。 |
+| 六类 Depth 由 registry 统一映射，跨 context 的父层先于子层裁决 | `depth-surface.ts` 与 root aliases 已落地（§当前状态）；但 `apps/web/src/prototype.css:75-76,165-166`、组件 Tailwind/inline 仍有数字声明 | registry 已成为主要接缝，剩余声明与父 context 需要 checker + 浏览器核对，当前数字仍不可单独当统一语义。 |
+| ambient 属 background，fireworks 属 performance，二者可独立验收 | `ParticleLayer.tsx:191-197,253-375,377-390` 已拆 ambient/burst surface，共享一个 Module 与 canvas | 分面与生命周期已落地；Nook 未挂 PerformanceLayer，Nook 演出仍不完整（见当前状态表）。 |
+| dialogue 永远高于 blocking performance，overlay admission 明确裁决 | `overlay-admission.ts:21-75` 已提供 dialogue/radial/dice admission；`App.tsx:1149-1179` 的 DOM 顺序仍只是实现事实 | 入口接缝已落地，但组件直接挂载/固定 Tailwind z 仍需浏览器 adversarial 验收。 |
+| grain 归 background，且不压正文 | `apps/web/src/index.css:258-267` 仍是根级 `body:before`，Particle 也有 background surface | 父 stacking context 及正文覆盖关系尚未由静态 checker 完整证明，需 computed style + screenshot。 |
+| dialogue 进入时底层 Canvas 必须 inert、只保留一个 focus projection | `apps/web/src/App.tsx:884-888` 在 active character 时把 layer wrapper 设 `aria-hidden/inert`；CharacterModal 在 `:784-791` 提供 dialog | 底层可达性已接线；projection marker 的覆盖边界仍需浏览器核验，不能用 inert 代替 active marker。 |
+| 玩家与 writer 的骰子必须共享 `DiceCeremonyInput`，且只演一套 ceremony | `DiceRoller.tsx:53-74` 在 HTTP 2xx 后 `ingestPlayerRoll`；`dice-ceremony.ts:203-247` 统一 player/writer input；App `:427-460` 过滤 WS | 输入归一化与 authority gate 已落地，仍需真实浏览器两来源回放证明不重复播放。 |
 
 以上是代码与目标的差异登记，不是对上位契约的改写；未标 `[推断]` 的行均由当前文件/符号直接观察得到。
 
@@ -328,39 +348,25 @@ A02 不新增数据文件、事件 `type`、WS 帧名或持久字段。文件真
 
 ## 11. 发现的冲突 / 需要修订的上位文档
 
-### C1（已裁决）：ParticleLayer 拆分 ambient / burst surface
+### C1（已部分落地）：ParticleLayer 拆分 ambient / burst surface
 
-现状 `ParticleLayer.tsx:297-320` 在一张 full-screen canvas 同时画 ambient dust 与 fireworks；这与 `docs/ux/00 §4.2` 的 background/performance 语义分裂。A02 现冻结**拆分渲染 surface 与 owner**：仍保留一个 `ParticleLayer` Module、一个共享 resize/parallax Adapter，但其内部必须有：
+原先一张 full-screen canvas 同时画 ambient dust 与 fireworks；当前 `apps/web/src/components/canvas/ParticleLayer.tsx:377-390` 已拆为 ambient/burst 两个可识别 surface，`apps/web/test/depth-performance.test.mjs:8-24` 已覆盖单 Module、单 canvas 与生命周期门禁。上位 `docs/perform/00 §4.4`、`docs/perform/05 §4.4` 仍需确认“同一 Module 内允许两个可验证 surface”的文字回写；测试通过不等于整批音画验收完成。
 
-1. `ambient` surface：Depth=`background`，只画环境粒子，Effects off/hidden/reduced 时停止或不挂载，不盖实体正文；
-2. `burst` surface：Depth=`performance`，只由 `playBurst`/`fireworks` 使用，遵守 show 生命周期、Reduced motion 门禁，结束时清空；
-3. 两个 surface 各自可被 registry 检查，不能共用一个无法解释的 `z-10`。这不是新增第二份 `useWorld`、WS、相机或几何；只拆开同一 Module 的绘制归属。
+### C2：CharacterModal 与 DiceCeremony 的覆盖需由 admission 而非 DOM 偶然顺序裁决
 
-**必须回写的上位文档：** `docs/perform/00 §4.4` 与 `docs/perform/05 §4.4` 当前冻结“fireworks 复用同一 canvas、不得新开全屏 canvas”。该条需修订为“不得新增第二个 full-screen composite；同一 ParticleLayer Module 内允许 ambient/burst 两个可验证 surface”。在上位回写完成前，不得实现或宣称 C1 已落地。
-### C2：CharacterModal 与 DiceCeremony 同为 fixed `z-50`
+`apps/web/src/lib/overlay-admission.ts:41-59` 已拒绝 dialogue 期间的 dice/radial，`apps/web/test/overlay-admission.test.mjs:38-80` 已覆盖拒绝与幂等释放；但 `apps/web/src/App.tsx:1149-1179` 的组件挂载顺序仍是实现事实，固定 Tailwind `z-50` 的组件也仍存在。必须继续用浏览器回放证明不兼容请求不会覆盖 dialogue；不能把 admission 单测当作跨 stacking context 证据。
 
+### C3：Depth token 尚未成为所有 CSS/JSX marker 的唯一可机械来源
 
-`index.css:332-340` 与 `DiceCeremony.tsx:91-94` 都使用 `z-50`，`App.tsx:732-763` 中 DiceCeremony 在 CharacterModal 后渲染，因此同时存在时骰子覆盖角色对话。A02 的目标顺序是 `dialogue > blocking dice performance`，现状实现却由 DOM 顺序裁决。
-
-**建议上位修订：** `03-Chrome与公开状态.md` 与 `04-动作语义与事实反馈.md` 必须共同登记 overlay admission/cancel 规则；实现阶段把不兼容请求串行化或分配不同 token。若产品要允许骰子压过对话，需反向修订本篇 §7.3、`docs/doc-06 §3`。
-
-### C3：Depth token 尚未成为 CSS 的唯一 z 来源
-
-当前有 `z-index` literal（`index.css`、`prototype.css`、`scene-shell.css`）、Tailwind `z-*`（`DiceCeremony`、`RadialMenu`、`RightSidebar` 等）和数据 inline z（`CanvasObject`、`PhantomLayer`、ghost）。`docs/ux/00 §7.1` 已冻结统一 `tools/check-ux-contract.mjs` + `tools/ux-contract.json`，负责 visual/depth/projection 三组登记并扫描不同父 context。
-
-**实现前门禁：** 同一 checker 必须有非空 fixture，且至少证明新增未登记 z-index、ghost pointer 覆盖、第二 active projection 和 appearance geometry 泄漏会失败；不得把检查拆成两个互不求 diff 的脚本。
+当前 root registry 与 surface class 已落地（见当前状态表），但 `tools/ux-contract.json:159-171` 仍只有一个泛化 `depth.registration` 规则，`apps/web/src/prototype.css:75-76,165-166` 仍存在数字 z-index，组件内还有 Tailwind/inline 例外。统一 checker 虽可 clean，尚未覆盖所有 depth marker 与父 stacking context；必须扩展非空检查后再宣称全量登记。
 
 ### C4：grain `body:before` 与 root layer 的 context 未冻结
 
-`index.css:190-205` 的注释说 grain `z10` 覆盖 canvas/card 并低于 modal/toast，但 `body:before` 是根级 fixed pseudo，Canvas 的 `perspective`、world transform 和 `.prototype-world` 的父 context 使实际绘制次序不能只按数字推导。`ParticleLayer` 也为 `z10`，进一步增加同值跨 context 的歧义。
+`apps/web/src/index.css:258-267` 仍是根级 fixed grain，Particle 的 background surface 则在 `ParticleLayer.tsx:379-384`；实际绘制次序不能只按数字推导。A01 已登记 grain 的 token 接缝，但仍需 computed style + screenshot 证明正文、modal、toast 的可读性。
 
-**建议上位修订：** `docs/ux/01-全局视觉语法.md` 登记 grain 的 owner/context；A02 的检查用浏览器 computed style + screenshot 证明“grain 可见但不压正文、modal/toast 仍清晰”。
+### C5：Nook projection 不应被误读成 Depth
 
-### C5：Nook 的 `z800` 被误读成 Depth
-
-`scene-shell.css:179` 以 `z-index:800` 实现 Nook fixed surface，但 `docs/nook/00` 与 `docs/ux/00 §4.5` 定义的是单 active projection 和相机连续性，不是无限加 z。若直接把 Nook 写成“高于 dialogue”，会让 active projection 与 Depth ownership 同时拥有覆盖权。
-
-**建议上位修订：** `docs/ux/05-Nook投影与相机连续性.md` 明确 Nook root 是 projection switch，进入时收束旧 projection 的 pointer/WS/UI，而不是以 z800 与 CharacterModal 竞争。
+`apps/web/src/scene-shell.css:179` 当前是固定 stage surface（不再是旧 dark-purple literal），而 `App.tsx:857-888` / `NookView.tsx:423-432` 以 projection marker/inert 表达切换。`z-index` 仍不是 active projection 语义；marker 覆盖边界与 dialogue/Nook 过渡必须以浏览器不变量继续验收。
 
 ### C6：现状文档关于 modal 底色的来源分裂
 
@@ -374,9 +380,9 @@ A02 不新增数据文件、事件 `type`、WS 帧名或持久字段。文件真
 **A02 裁决：** §6.1.1 与 §12 的 Money Shot fixture 是固定验收标准；实现必须通过音频 owner 的已登记音频 Adapter 提供钟鸣与 BGM，不能在 A02 里私造字符串或由 click 推断。`docs/perform/05 §4.5`、`docs/ux/07-声画偏好与性能接缝.md` 必须回写对应 owner、资源登记、进入/退出恢复和无资源时的可见降级；缺音频不能使视觉/持久事实消失，但该 fixture 不得以“仅视觉”通过。
 
 
-## 12. 测试与浏览器截图矩阵
+## 12. 测试与浏览器截图矩阵（已落地证据 + 剩余验收）
 
-### 12.1 机械检查（实现阶段必须落地）
+### 12.1 机械检查（已有聚焦覆盖，仍缺全量 marker）
 
 | 检查 | 断言 | 修复前非空性 |
 |---|---|---|

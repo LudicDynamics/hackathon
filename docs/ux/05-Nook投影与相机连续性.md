@@ -1,10 +1,32 @@
 # A05 — Nook 投影与相机连续性
 
-> 状态：设计稿，**不实现代码**。owner：UX 舞台批次 A05。
-> 
+> 状态：**核心已落地 / 部分接线 / 仍有缺口**（2026-09-14）。App 的 layer/Nook 互斥分支、Nook root scope、CameraMemoryStack 与动作回调透传已有实现；active marker 覆盖、Nook PerformanceLayer、组件 Escape 与完整浏览器回放仍未闭环。owner：UX 舞台批次 A05。
+
 > 本文只负责 Nook 与 layer/dialogue 之间的 active projection、相机记忆、互动接缝及验收；不重新定义 Nook API、`flowColumns`、footprint schema 或布局权限。
 > 
-> 现状行号按 2026-09-13 工作树复核；实现或合并后若行号漂移，必须按符号重定位并回写本文。
+> 右侧形态遵守 `docs/presence/00 §4.2.1` 的冻结上下布局：`CharacterRail` 在上、Bag 在下；本文不使用或恢复右侧双 tab。
+
+> 现状行号按 2026-09-14 工作树复核；实现或合并后若行号漂移，必须按符号重定位并回写本文。
+
+### 当前状态
+
+#### 已落地
+
+| 范围 | 当前实现与证据 | 验收证据 |
+|---|---|---|
+| 互斥 layer/Nook 分支 | `apps/web/src/App.tsx:856-890` 以 `nookChar` 分支挂 Nook，否则挂 layer Canvas；Nook 不调用 `useWorld`/新 WebSocket。 | `apps/web/test/active-projection.test.mjs:9-26`、`apps/web/test/app-nook-camera-contract.test.mjs:10-17` 覆盖分支与 root-scoped measurement。 |
+| Nook 取数/测量 | `NookView.tsx:217-236` 有 request sequence guard；`:347-378,380-411` 只在 Nook root 测量并等 fonts/ResizeObserver。 | `apps/web/test/app-nook-camera-contract.test.mjs:19-26,41-48` 覆盖事件重取与 note composer 接缝。 |
+| 相机记忆与动作透传 | `apps/web/src/lib/camera.ts:128-181` 提供 stack；`App.tsx:251-273,766-826` 编排 Nook/dialogue；`NookView.tsx:549-567` 透传 Canvas 动作回调。 | `apps/web/test/camera-memory-stack.test.mjs:19-65` 覆盖 layer/Nook/dialogue 嵌套恢复。 |
+
+#### 尚未闭环
+
+| 缺口 | 当前证据与下一步 |
+|---|---|
+| App/Canvas marker 覆盖边界 | `App.tsx:857-888`、`NookView.tsx:423-432` 各有 marker/inert，但 layer wrapper 的 active 属性与 dialogue modal（`CharacterModal.tsx:784-791`）没有统一的 active marker 事务；需浏览器断言恰好一个 active projection。[推断] |
+| Nook 无 PerformanceLayer | `NookView.tsx:549-567` 仅挂 Canvas，未挂 `PerformanceLayer`；Nook 内 show/演出无法宣称与 layer 同源，需补接而不新增 WS/相机。 |
+| 组件内 Escape | `DeclaredActionDialog.tsx:126-151`、`PhotoDetailDialog.tsx:47-89`、`GateThreshold.tsx:10-20` 自有 Escape 处理，尚未统一到 App focus coordinator；Nook/对话退出仍需验证一次只退一层。 |
+| 右侧角色/背包形态 | 统一引用 `docs/presence/00 §4.2.1`：CharacterRail 上、Bag 下；Nook 本文不再登记旧双 tab 入口。 |
+
 
 ## 1. 一句话定位
 
@@ -42,21 +64,19 @@
 
 | 证据 | 现状 | A05 影响 |
 |---|---|---|
-| `App` 的 `nookChar` | `apps/web/src/App.tsx:127-129` 已有 `nookChar: string \| null`。 | 状态已有，但 active projection 事务尚未形成单一入口。 |
-| 主 Canvas | `App.tsx:546-579` 无条件渲染一个 layer `Canvas`。 | 进入 Nook 不能仅追加另一个 Canvas；必须替换或严格卸载旧 Canvas。 |
-| Nook 挂载 | `App.tsx:732-758` 当前把 `<NookView>` 追加在主工作区之后的 `.prototype-nook` 容器中；`:758` 仍有独立 Nook DOM，而 layer Canvas 仍在 `:547`。 | 当前工作树违反「一个 active projection」的目标，且是隐藏 Canvas/全局 `.object` 串扰的直接风险。 |
-| `NookView` 取数 | `apps/web/src/components/nook/NookView.tsx:91-121` 请求 `/api/nook?character=...`；`:154-173` 有 `reqSeqRef` 的最后请求胜出。 | 取数 Adapter 正确；投影切换不能绕过 stale response guard。 |
-| `NookView` 渲染 | `NookView.tsx:299-440` 以 `data-nook` 根渲染存在核心、错误/空态及 `Canvas`；正常内容 `:423-439` 把 `state.layer` 传给 Canvas。 | 可复用 Canvas，但需由 `App` 保证旧 Canvas 不同时存在。 |
-| Nook scheduler | `NookView.tsx:225-256` 创建第二个 `createFootprintScheduler`；其 `widths` 仅来自 Nook `stateRef.items`，但 `measure`/`isDragging` 使用全局 DOM 查询。 | 第二 scheduler 可以存在，但必须配合单一 active DOM 或 scope root，不能靠全局查询猜投影。 |
+| `App` 的 `nookChar` | `apps/web/src/App.tsx:187` 已有 `nookChar: string \| null`；`:251-273` 已有 open/close Nook transition。 | 状态与过渡入口已有；需继续验证快速切换/重复关闭幂等。 |
+| 主 Canvas / Nook 挂载 | `App.tsx:856-890` 以 `nookChar` 与 `!nookChar` 互斥挂载；Nook 自己在 `NookView.tsx:549-567` 渲染复用 Canvas。 | 当前已不再是 App 同时追加 layer/Nook；但 active marker 覆盖边界仍需浏览器核验。 |
+| `NookView` 取数 | `apps/web/src/components/nook/NookView.tsx:217-236` 通过 `reqSeqRef` 让最后请求胜出。 | 取数 Adapter 与 stale guard 已落地。 |
+| `NookView` 渲染 | `NookView.tsx:423-432` 提供 Nook root marker/inert；`:505-567` 覆盖空态、初始化与 loaded Canvas。 | Canvas Interface 已复用；Nook 未挂 PerformanceLayer 是明确缺口。 |
+| Nook scheduler | `NookView.tsx:347-378` 的 `measure` 取 `rootRef`，`:380-411` 的 observer 也只观察该 root。 | Nook 测量已 root-scoped；layer scheduler 的全局查询只在其 Canvas 存活时使用。 |
 | Canvas props | `apps/web/src/components/canvas/Canvas.tsx:19-43` 已包含 `currentLayer`、`items`、`links`、动作回调、`stillPortraits` 等。 | Nook 通过同一 Interface 接入；不在 Nook 另造卡片/拖拽 API。 |
 | Canvas 相机接线 | `Canvas.tsx:109` 调用 `useCamera()`；`:143-151` 在 `currentLayer` 变化时 save/restore；`:158-182` 按真实 `.object` bounds 取景且不写坐标。 | Nook 的 `currentLayer` 必须是响应的 `characters/<id>`；取景永远只动相机。 |
 | Canvas 根 DOM | `Canvas.tsx:517-584` 每个 Canvas 拥有 `camera.viewportRef`、`camera.worldRef`，`.object` 在 `:543-557` 渲染。 | 同时挂两个 Canvas 会竞争同一个 module-scope camera ref/driver 和 DOM 查询。 |
 | CanvasObject | `CanvasObject.tsx:137-170` 的 shell 负责 `left/top/w/z/rotation`；`:231-290` 的根是 `.object[data-path]`，阅读、hover、键盘 Enter 和实体子动作均在这里接线。 | active projection 必须保留完整 `.object` 交互，不能以 `pointer-events:none` 隐藏整张卡。 |
 | 相机存储 | `apps/web/src/state/useCamera.ts:35-44` 为 module-scope `DEFAULT_VIEW`、扁平 `CAM_MEMORY`、共享 target/current；`:53-74` 暴露 `save/restore/getCam/getTarget`；`:143-174` 负责按 key 存取。 | `useCamera` 是共享驱动，不是每个投影一个实例；平铺 key 需要由 App 编排成嵌套 stack。 |
 | Layer scheduler | `apps/web/src/state/useWorld.ts:278-310` 创建 layer scheduler，`:282-304` 读取 layer ref/items；`:315-346` 给全局 `.object[data-path]` 安装 ResizeObserver。 | layer scheduler 仍属于 `useWorld`；A05 不复制 `useWorld`，但必须解决它在 Nook DOM 出现时的待刷包风险。 |
-| 全局测量 | `apps/web/src/lib/footprint.ts:82-93` 的 `measureHeights(root = document)` 默认扫全局 `.object[data-path]`；`:109-112` 默认 hover 也扫全局；`:153-211` 负责 gate/debounce/POST/fingerprint。 | 同时存在隐藏 layer 与 Nook 时，测量是非局部的；必须单投影或使用 root-scoped Adapter。 |
-| 全局路径查询 | `apps/web/src/components/canvas/LinkLayer.tsx:128` 使用 `document.querySelector('.object[data-path=...]')`；`Canvas.tsx:164-170/374-375/423-425` 则按其 viewport 查询。 | active projection 是正确性前提；不能让旧 Canvas 留着，因为 LinkLayer 可能命中错误副本。 |
-| WS 单入口 | `useWorld.ts:349-387` 统一接收 WS；writer lane 可投影为 `airp:agent-frame`，character lane 必须投影为 `airp:character-frame`，App 是唯一公开 Agent ingress。 | Nook 不调用 `useWorld()` 或创建第二 WebSocket；Nook 只消费已归属事件。 |
+| 全局测量 / 路径查询 | `footprint.ts:82-93,109-112` 与 `LinkLayer.tsx` 仍有 document-level 默认查询；Nook 自身测量已在 `NookView.tsx:347-411` root-scoped。 | 互斥 Canvas 已降低串扰；若未来保留过渡 DOM，必须先完成 root scope，当前 marker/运行时边界仍要测。 |
+| WS 单入口 | `apps/web/src/state/useWorld.ts:478-485,559-617` 统一处理 writer/world/character 分流；角色只派发 `airp:character-frame`。 | Nook 不调用 `useWorld()` 或创建第二 WebSocket；Nook 只消费已归属事件。 |
 
 ## 4. Active projection 契约
 
@@ -188,7 +208,7 @@ restoreTarget(target: { projection: Projection; identity: string; slot: string }
 | `act.create/delete/arrange layout` | God 工具/Agent 动作 | Nook UI 本批不提供新建/删除；Agent `arrangeCards` 的 nook place/layout 分支由 nook 01 接通 | 不新增 Nook UI 和请求体；漏接服务端分支会让 Agent 整理 Nook 404。 | nook 01；layout 不改 API |
 | `cancel`：阅读/演出/对话退出 | 既有 Card/CharacterModal close 语义 | Nook close 只退出 Nook；dialogue cancel 返回 Nook，且复用同一 close transaction | 退出必须恢复正确 stack frame；漏接会从 Nook Esc 穿透到父 layer。 | App/A05 |
 
-**Parity 结论（已冻结）：** Nook 必须与 layer 共享 `inspect`、所有适用的 `act`（choice、dice、take、实体动作）、`present`、`cancel` 及 dialogue 进入/退出；`enter` 的 gate 仅对 layer 适用，Nook 必须拒绝/不可生成 gate，不是缺失实现。普通拖拽与 God Chalk 权限也完全一致。任何尚未在 `NookView.tsx:424-439` 透传的既有可选回调，都是必须补齐的接线，不得继续登记为“可选功能”或静默 no-op。
+**Parity 结论（已冻结）：** Nook 已透传 layer 的 inspect、适用 act、present、cancel 及 dialogue 回调（`NookView.tsx:549-567`）；仍缺共享 ActionFeedbackStore、PerformanceLayer 与 active marker 浏览器证据。`enter` 的 gate 仅对 layer 适用，Nook 必须拒绝/不可生成 gate，不是缺失实现。普通拖拽与 God Chalk 权限也完全一致。
 
 ## 7. Hidden Canvas、全局 `.object` 与 footprint scheduler
 
@@ -230,31 +250,29 @@ Nook 进入时必须卸载 layer Canvas，返回时卸载 Nook Canvas；禁止 `
 
 精确落点：
 
-- 状态：`apps/web/src/App.tsx:127-129` 的 `nookChar` 附近；增加/收敛 active projection 与 stack 的 **NEW** 内部语义。
-- layer Canvas：`App.tsx:546-579`；不能和 Nook Canvas 并存。
-- `openCharacter`：`App.tsx:486-496`；改为保存当前 caller frame，不写固定 `'dialogue'`。
-- `closeCharacter`：`App.tsx:513-517`；只关闭 dialogue 并恢复 caller。
-- Esc：`App.tsx:317-353`；Nook 分支只调用统一 `closeNook`，不能重复 save/restore/refresh。
-- CharacterModal 接线：`App.tsx:732-755`；`onOpenNook` 只传递意图给 App transaction。
-- Nook 接线：`App.tsx:758`；改为 active projection 互斥分支，并传既有 layer callbacks；不得把 Nook 逻辑塞进 `useWorld`。
+- 状态：`apps/web/src/App.tsx:187,251-273` 的 `nookChar` 与 open/close transition；active marker 装配在 `App.tsx:856-890` 和 `NookView.tsx:423-432`。
+- layer/Nook Canvas：`App.tsx:856-890` 互斥分支；Nook 内部复用 Canvas，但暂未挂 PerformanceLayer。
+- `openCharacter`：`App.tsx:766-790` push dialogue caller frame；`closeCharacter`：`:810-826` pop/restore caller。
+- Esc：`App.tsx:498-570` 走 focus coordinator/topmost；Nook 分支调用 `closeNook`。
+- CharacterModal 接线：`App.tsx:1151-1174`；`onOpenNook` 传递意图，camera 由 App handlers 统一编排。
 
 ### 8.2 `NookView`（Nook Adapter 与本地测量 owner）
 
 精确落点：
 
-- `NookViewProps`：`apps/web/src/components/nook/NookView.tsx:29-47`；不得新增第二 WebSocket/第二 `useWorld`。现有 `locale`、`onRequestInit` 已在工作树出现，和 `docs/nook/02 §2.2` 的旧形状有差异，见 §11。
-- 请求与 stale guard：`NookView.tsx:91-121/154-173`；只消费 `/api/nook` 响应的 `state.layer`。
-- `airp:world-event`：`NookView.tsx:213-223`；整 Nook 重取，不新增事件名。
-- scheduler：`NookView.tsx:225-256`；保留 Nook widths map，按 active root 改善测量 scope。
-- ResizeObserver/font gate：`NookView.tsx:258-287`；只触发 scheduler notify，不写坐标。
-- Canvas props：`NookView.tsx:423-439`；与 layer 相同的动作接线不得被 Nook 内部重写。
+- `NookViewProps`：`apps/web/src/components/nook/NookView.tsx:33-57`；保留 locale、动作回调与 onRequestInit，不新增第二 WebSocket/`useWorld`。
+- 请求与 stale guard：`NookView.tsx:217-236`；只消费 `/api/nook` 响应的 `state.layer`。
+- `airp:world-event`：`NookView.tsx:308-345`；整 Nook 重取，不新增事件名。
+- scheduler：`NookView.tsx:347-378`；Nook widths map 与 active root scope 已接线。
+- ResizeObserver/font gate：`NookView.tsx:380-411`；只触发 scheduler notify，不写坐标。
+- Canvas props：`NookView.tsx:549-567`；动作回调已透传，PerformanceLayer 仍缺。
 
 ### 8.3 `Canvas` / `CanvasObject`（共享空间 Interface）
 
-- Canvas 相机与 framing：`Canvas.tsx:109-182`；framing 只能 `camera.flyTo`，不得调用 `onMoveCard`、`separateBounds` 或写 `left/top`。
+- Canvas 相机与 framing：`apps/web/src/components/canvas/Canvas.tsx:148-192`；framing 只能 `camera.flyTo`，不得调用 `onMoveCard`、`separateBounds` 或写 `left/top`。
 - Canvas pointer dispatcher：`Canvas.tsx:247-303`；layer/Nook 使用同一 Chalk God guard、交互子元素 early return 和拖拽 state。
-- Canvas DOM：`Canvas.tsx:517-584`；active marker/owner root（若实现需要）必须在这里与 `camera.viewportRef` 同一宿主，phantom 继续 `pointer-events:none`。
-- CanvasObject shell 与操作：`CanvasObject.tsx:137-170/231-290`；`.object[data-path]` 是可测量和 LinkLayer 的实体边界，不能用全局 shell 覆盖 `surface:none` Chalk。
+- Canvas DOM：`Canvas.tsx:561-636`；active marker/owner root 由 App/Nook 宿主提供，phantom 继续 `pointer-events:none`。
+- CanvasObject shell 与操作：`CanvasObject.tsx:169-179,259-293`；`.object[data-path]` 是可测量和 LinkLayer 的实体边界，不能用全局 shell 覆盖 `surface:none` Chalk。
 
 ### 8.4 `useCamera` / footprint（现有低层 Interface）
 
@@ -281,20 +299,13 @@ Nook 进入时必须卸载 layer Canvas，返回时卸载 Nook Canvas；禁止 `
 
 ### 10.1 单元/集成测试：怎样证明「一个 active projection」
 
-新增测试工件建议落点（均 **NEW**；不在本文实现）：
+现有聚焦测试已覆盖代码接缝；尚缺真实浏览器不变量与跨 projection 回放：
 
-- `apps/web/test/active-projection.test.mjs`：挂载 App 的 layer → Nook → layer 与 dialogue 流程。
-- `apps/web/test/camera-memory-stack.test.mjs`：用 `CameraApi.getTarget/getCam` 验证嵌套保存/恢复。
-- 现有 `apps/server/test/nook-routes.test.mjs`、`packages/shared/test/nook.test.mjs` 继续承担 `GET /api/nook`、footprint 门禁、arrange place/layout、坐席非空性；不要在 A05 重写 Nook API shape。
+- `apps/web/test/active-projection.test.mjs:9-26` 检查 App 互斥分支、marker 字面与 Nook 不启动 `useWorld`/WebSocket；不等价于运行时 Canvas 计数证明。
+- `apps/web/test/camera-memory-stack.test.mjs:19-65` 已验证 layer/Nook/dialogue stack 恢复。
+- `apps/web/test/app-nook-camera-contract.test.mjs:10-26,41-56` 已验证回调透传、world event 重取与 note composer 接缝。
 
-**必须有的主动失败测试（没有修复时会红）：**
-
-1. **双挂载红测：**在当前 `App.tsx:547` layer Canvas 与 `:758` Nook append 的形态下，点击 Nook 入口后断言 active marker 不是恰好一个、或 `.object[data-path]` 同时包含 layer 与 Nook 两组路径；修复后必须为一组。仅断言“Nook 文案出现”不能通过这条。
-2. **隐藏 DOM 红测：**让 layer Canvas 使用 `hidden/opacity:0` 保留，再 mount Nook；调用 `measureHeights()`/LinkLayer 查询，断言结果包含旧 layer path 即失败。实现后的测试要求旧根不存在，或 root-scoped measure 只返回 active Nook path。
-3. **相机覆盖红测：**先在 layer A 平移到非 default target，再进入 Nook、在 Nook 平移、进入 dialogue、关闭 dialogue、退出 Nook；断言最终 layer A `getTarget()` 等于进入前 target，Nook slot 等于 Nook 离开前 target。固定 `'dialogue'` 单槽实现会在多角色/嵌套情形失败。
-4. **响应竞态红测：**先发角色 A，再发角色 B；让 A 延迟响应且最后到；断言 active marker、标题、Canvas items 和 footprint layer 仍是 B。
-5. **scheduler 非空红测：**Nook 中有一个真实高于声明值的 `.object[data-path]`，字体 settle 后触发 ResizeObserver；断言 POST `layer === state.layer` 且 boxes 只含 `characters/<id>/...`。widths 若仍读 layer，则 boxes 为空，测试必红。
-6. **dialogue focus 红测：**对话期间断言恰好一份 Canvas、底层 root `inert`（或等价不可交互标记）且焦点在 dialogue；尝试 pointer/Enter 不得触发 move/read。关闭后焦点回到底层 active projection。
+仍需主动失败/浏览器测试：marker 恰好一个、dialogue focus/inert、快速 A→B stale response 与 Nook PerformanceLayer 覆盖；不得把当前静态 source test 误报为全闭环。
 
 **回归断言：**
 
@@ -356,12 +367,12 @@ Nook 进入时必须卸载 layer Canvas，返回时卸载 Nook Canvas；禁止 `
 
 ## 11. 发现的冲突 / 需要修订的上位文档
 
-1. **`App.tsx` 当前双挂载与 `docs/ux/00 §4.5` 冲突。** `App.tsx:547` 无条件保留 layer Canvas，同时 `:758` 追加 Nook。必须在实现前由 App/UX 统一切换为互斥 active projection；不能把 CSS 隐藏当修复。
-2. **`docs/nook/02 §3.6` 的全局 `measureHeights()` 与 A05 的单投影/Locality 要求存在接缝。** 02 明确第二 scheduler，但当前 Nook `:233` 仍默认 global root；建议 02/04 回写为 active root Adapter，或者明确以“一次只有一个 Canvas”作为暂时充分条件并加双挂载红测。
-3. **`docs/nook/02 §3.1/§3.4/§3.6` 的“camera.save(currentLayer) / restore(currentLayer)”不足以表达 nested dialogue。** 应由 A05 的 CameraMemoryStack 作为 UX 跨 Module 语义回写；不修改 `useCamera` API 与 Nook response。
-4. **`docs/nook/02 §⑫-1` 仍声明 Nook 省略 `onItemDropOnTarget`、`onEntityAction`、`onOpenCharacterModal`、`onOpenRadialMenu`，与本篇已冻结的完整 parity 冲突。** 必须回写 02 的调用侧说明：Nook 复用这些既有 Canvas callbacks/动作语义，不新增 API shape、路由或请求体；`onOpenRadialMenu` 仍受 God Hand 权限与“本批不提供 Nook 新建 UI”边界约束。
-5. **`docs/nook/02 §3.4` 与现状 `NookViewProps` 不完全一致。** 当前 `NookView.tsx:34` 有 `locale`，`:41-47` 有 `onRequestInit`；02 原先列 6 props。Nook initialization 由后续/既有 init 文档决定，需统一文档的“本批是否执行”口径；A05 只要求它仍服从 active projection。
-6. **当前 `closeCharacter` 与 `onOpenNook` 分别操作相机，违反 `docs/ux/00 §4.5` 的可嵌套记忆要求。** 需要在 App 设计回写中声明唯一 close/open transaction；不由 CharacterModal 或 NookView 各自 restore。
+1. **App 双挂载差异已收敛为互斥分支，但 marker 语义仍未闭环。** `App.tsx:856-890` 已按 `nookChar` 与 `!nookChar` 分支；`NookView.tsx:423-432` 仍固定 active marker，dialogue modal 无同类 marker，需浏览器验证一个 active projection。
+2. **Nook scheduler 的 root scope 已接线。** `NookView.tsx:347-411` 只测量自身 root；`footprint.ts`/`LinkLayer` 的 document-level 默认查询仍是未来保留非 active DOM 时的风险。
+3. **相机 stack 已落地。** `apps/web/src/lib/camera.ts:128-181` 与 `App.tsx:251-273,766-826` 已替代固定 dialogue/layer slot；仍需真实嵌套回放覆盖快速关闭与重复事务。
+4. **Nook action callbacks 已透传。** `NookView.tsx:549-567` 与 `App.tsx:864-880` 包含 present/dialogue/action 接缝；Nook 共享 ActionFeedbackStore 与 PerformanceLayer 仍缺，不能将 parity 写成全闭环。
+5. **`NookViewProps` 现状已包含 `locale`、动作回调和 `onRequestInit`（`NookView.tsx:33-57`）；与旧 `docs/nook/02` 的 props 列表仍有文档接缝。**
+6. **close/open 事务已集中到 App handlers，但 `closeCharacter`→`openNook` 的嵌套 marker/focus 边界仍需回放。** Camera 调用集中在 `App.tsx:251-273,766-826`，Modal/Nook 不直接操作 camera。
 7. **`docs/layout/00` 禁止 layout 拥有相机；本篇不把 camera/focus 责任下放给 layout。** 若实现者把 active projection marker 或 camera stack 放进 `flowColumns`/`phantom-seat`，应退回评审。
 
 ## 12. 仍未知待拍板
@@ -369,7 +380,7 @@ Nook 进入时必须卸载 layer Canvas，返回时卸载 Nook Canvas；禁止 `
 1. **active marker 的最终 DOM 属性名**：本文暂称 `data-airp-projection` / `data-airp-projection-active`（NEW）；必须只选一套并加入 browser test，不得靠 CSS class 猜。
 2. **dialogue 的 inert 实现**：原生 `inert`、等价 focus trap 或其他实现；语义必须满足“底层 Canvas 不可交互、只有一个 dialogue focus”，具体 Implementation 待评审。
 3. **CameraMemoryStack 的存储位置**：推荐 App 内部 ref/状态，不进入 `useWorld` 或服务器；需确认 StrictMode 重挂时 stack 不重复 push/pop。
-4. **Nook present item 与角色实体 dialogue 的产品范围已冻结为必须 parity；仍未知的是既有回调如何在 `NookViewProps` 维持不改请求/数据形状的前提下完成透传。** 实现评审必须补齐接线并更新 `docs/nook/02`，不得将其降级为 conditional/no-op。
+4. **Nook present item 与角色实体 dialogue 的 parity 接线已存在**（`NookView.tsx:549-567`）；仍未知的是 App-level ActionFeedbackStore 的共享装配与 Nook `PerformanceLayer` 的落点，不得因缺口静默隐藏动作。
 5. **layer scheduler 在 Nook active 时的挂起方式**：最小实现是旧 Canvas 卸载 + path-local widths；更稳妥的是给 scheduler 注入 active root/suspend seam。不得在实现时无记录地选择。
 6. **Nook 是否允许保留底层 layer `Canvas` 以做视觉过渡**：A05 当前答案为“不允许”；如果产品坚持保留，必须先完成 root-scoped `measureHeights`、LinkLayer、hover/drag 查询及相机 driver 隔离，并修订 `docs/ux/00 §4.5`。
 7. **截图 fixture 的非空角色**：遵守 `docs/nook/00 §3.7.1`，不得用被探针污染的 `watson`；由 Nook 05 的 `ryo`/`sumi` 等确证 fixture 统一。

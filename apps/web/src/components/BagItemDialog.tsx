@@ -36,11 +36,9 @@ export function BagItemDialog({ item, onClose, onPlace, onUse, useDisabled = fal
   const paper = useRef<HTMLElement>(null);
   useEffect(() => { playFoley('page-turn'); }, [item.path]);
   useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); onClose(); } };
-    window.addEventListener('keydown', key, true);
     const outside = (e: PointerEvent) => { if (!paper.current?.contains(e.target as Node)) onClose(); };
     window.addEventListener('pointerdown', outside, true);
-    return () => { window.removeEventListener('keydown', key, true); window.removeEventListener('pointerdown', outside, true); };
+    return () => window.removeEventListener('pointerdown', outside, true);
   }, [onClose]);
   const choose = async (choice: string) => {
     setBusy(true); setError(''); setActionFeedback(null);

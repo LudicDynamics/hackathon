@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ChalkCard } from '../narrative/ChalkCard.js';
 import { MarkdownText, plainExcerpt, stripLeadingTitle, leadingTitleOf } from '../../lib/md.js';
-import { playFoley } from '../../lib/audio.js';
 import { DoorOpen } from 'lucide-react';
 import { useLocale } from '../../lib/i18n.js';
 import { PropCard } from './PropCard.js';
 import { PhotoCard } from './PhotoCard.js';
 import type { AppearanceView } from '../../lib/appearance-view.js';
+
 
 interface CardRendererProps {
   item: {
@@ -81,7 +81,9 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
   const [letterOpen, setLetterOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isItemDragging, setIsItemDragging] = useState(false);
-  const [isUnlockedEffect, setIsUnlockedEffect] = useState(false);
+  const [gateInspected, setGateInspected] = useState(false);
+  const gateClickTimer = useRef<number | null>(null);
+  const enterGestureIssued = useRef(false);
 
   useEffect(() => {
     const onDragStart = () => setIsItemDragging(true);
@@ -94,22 +96,54 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
     return () => {
       window.removeEventListener('airp:item-drag-start', onDragStart);
       window.removeEventListener('airp:item-drag-end', onDragEnd);
+      clearTimeout(gateClickTimer.current ?? undefined);
+      gateClickTimer.current = null;
     };
   }, []);
+
+  const gateTarget = typeof frontmatter?.target === 'string' && frontmatter.target.trim()
+    ? frontmatter.target
+    : path.replace(/\/README\.md$/, '');
+  const handleGateClick = () => {
+    if (gateClickTimer.current !== null) {
+      clearTimeout(gateClickTimer.current ?? undefined);
+      gateClickTimer.current = null;
+      setGateInspected(false);
+      enterGestureIssued.current = true;
+      onEnterGate?.(gateTarget);
+      return;
+    }
+    // The first click is a local inspect. Keep it immediate while retaining a
+    // 500ms inclusive window for the second click to become enter.
+    setGateInspected(true);
+    gateClickTimer.current = window.setTimeout(() => {
+      gateClickTimer.current = null;
+    }, 500);
+  };
+
+  const handleGateDoubleClick = () => {
+    // Browsers emit click, click, dblclick. The second click already submitted
+    // this intent; this guard keeps the browser's dblclick notification from
+    // submitting a second request while also supporting direct dblclick events.
+    if (enterGestureIssued.current) {
+      enterGestureIssued.current = false;
+      return;
+    }
+    clearTimeout(gateClickTimer.current ?? undefined);
+    gateClickTimer.current = null;
+    setGateInspected(false);
+    onEnterGate?.(gateTarget);
+  };
 
   const handleTargetDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
     const draggedPath = e.dataTransfer.getData('text/plain');
-    if (draggedPath) {
-      playFoley('unlock');
-      setIsUnlockedEffect(true);
-      setTimeout(() => setIsUnlockedEffect(false), 800);
-      onItemDropOnTarget?.(draggedPath, path);
-    }
+    if (draggedPath) onItemDropOnTarget?.(draggedPath, path);
   };
 
-  const puzzleClasses = `${isItemDragging ? 'puzzle-target-ready' : ''} ${isDragOver ? 'puzzle-target-hover' : ''} ${isUnlockedEffect ? 'puzzle-unlock-burst' : ''}`.trim();
+  const puzzleClasses = `${isItemDragging ? 'puzzle-target-ready' : ''} ${isDragOver ? 'puzzle-target-hover' : ''}`.trim();
+
   // Dice rewards are persisted world entities. The card only reveals the
   // authored outcome snapshot; taking it remains EntityInteractions' move
   // action, never a second dice or reward authority.
@@ -122,11 +156,11 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
     );
   }
 
-  // 1. Chalk Card — ink on the canvas (bare by default).
   if (frontmatter?.visual === 'envelope' || frontmatter?.visual === 'phone' || frontmatter?.visual === 'door') {
-    return <PropCard visual={frontmatter.visual} title={frontmatter.title || filename} body={body}
+    return <PropCard visual={frontmatter.visual} path={path} filename={filename} title={frontmatter.title || filename} body={body}
+      frontmatter={frontmatter}
       image={typeof frontmatter.image === 'string' ? frontmatter.image : undefined}
-      onEnter={frontmatter.type === 'gate' ? () => onEnterGate?.(frontmatter.target) : undefined} appearance={appearance} />;
+      onEnter={frontmatter.visual === 'door' ? () => onEnterGate?.(gateTarget) : undefined} appearance={appearance} />;
   }
 
   if (frontmatter?.type === 'chalk') {
@@ -149,7 +183,6 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
       (path.includes('/')
         ? path.slice(0, -'/README.md'.length).split('/').pop()
         : filename.replace('.md', ''));
-    // Ordinal: explicit frontmatter order/n wins, else the layer-derived gate
     // index. Formatted to two digits ("01") like the prototype's seal — numeric
     // orders pad, but a non-numeric label (e.g. "A") passes through untouched.
     const rawOrder = frontmatter?.order ?? frontmatter?.n;
@@ -165,17 +198,15 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
     const excerpt = plainExcerpt(body);
     return (
       <div
-        onClick={() => {
-          const target = frontmatter?.target || path.replace('/README.md', '');
-          onEnterGate?.(target);
-        }}
+        onClick={handleGateClick}
+        onDoubleClick={handleGateDoubleClick}
         onDragOver={(e) => {
           e.preventDefault();
           setIsDragOver(true);
         }}
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleTargetDrop}
-        className={`gate${isStub ? ' gate--stub' : ''} ${puzzleClasses}`}
+        className={`gate${isStub ? ' gate--stub' : ''}${gateInspected ? ' gate--inspected' : ''} ${puzzleClasses}`}
       >
         <GateNum n={order} />
         <GatePin />

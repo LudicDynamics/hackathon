@@ -1,9 +1,31 @@
 # 06 Agent 演出状态与角色剧场（A04 + A08）
 
 > Module owner：`UXAgentTheatre06`；本篇只拥有角色帧归属与 dialogue theatre，不拥有 pi-rp 协议、Nook 数据形状或 TTS provider。
-> 状态：设计阶段，未进入实现
+> 状态：**核心已落地 / 部分接线 / 仍有缺口**（2026-09-14）。角色帧 typed relay/FIFO、CharacterModal queue 消费、writer-state canonical projection、TTS/portrait 生命周期与 Camera/Nook 接缝已有实现；组件 Escape、active marker 覆盖、Nook PerformanceLayer 与完整浏览器回放仍未闭环。
 > 
 > **一句话定位：** 角色帧只沿一条 `useWorld → App → CharacterModal` 归属路径进入剧场；`App` 是唯一角色帧路由者，`CharacterModal` 只消费 `incoming`，作家公开忙闲由 `writer-state` 单一投影提供，TTS、情绪、分页和退场都不能另开第二个状态源。
+
+> 角色栏布局引用已冻结为 `docs/presence/00 §4.2.1`：CharacterRail 在上、Bag 在下；本文不恢复旧右侧双 tab。
+
+### 当前状态
+
+#### 已落地
+
+| 范围 | 当前实现与证据 | 验收证据 |
+|---|---|---|
+| 角色帧单一路径 | `apps/web/src/state/useWorld.ts:559-617` 校验角色帧并派发 typed relay；`apps/web/src/App.tsx:401-420` 按 active id 路由；Modal 通过 `CharacterFrameQueue` 消费（`CharacterModal.tsx:701-711`）。 | `apps/web/test/character-frame-queue.test.mjs:26-109` 覆盖 FIFO、barrier、缺序、缺 ID 与非法帧。 |
+| Writer canonical 状态 | `apps/web/src/lib/writer-state.ts:13-31,139-220` 提供唯一 writer snapshot；App/WriterBar/AgentSettings 读取同一投影。 | `apps/web/test/writer-state.test.mjs:20-84` 覆盖 busy、终止、retry、重连。 |
+| 分页、语音与相机接缝 | `CharacterModal.tsx:701-737` 队列 pump/输入门；`audio.ts:946-1042` stinger/voice hidden gate；`App.tsx:766-826` 角色关闭恢复 CameraMemoryStack。 | `apps/web/test/voice-engine.test.mjs:20-52`、`apps/web/test/camera-memory-stack.test.mjs:35-50` 提供聚焦证据。 |
+
+#### 尚未闭环
+
+| 缺口 | 当前证据与下一步 |
+|---|---|
+| 组件内 Escape / focus 事务 | `DeclaredActionDialog.tsx:126-151`、`PhotoDetailDialog.tsx:47-89`、`GateThreshold.tsx:10-20` 各自处理 Escape，尚未纳入 App focus coordinator；需保证 topmost 一次只退一层。 |
+| App/Canvas marker 覆盖 | `App.tsx:857-888`、`NookView.tsx:423-432` 有 marker/inert，但 `CharacterModal.tsx:784-791` 没有 projection marker；dialogue/Nook 过渡需浏览器断言 marker 恰一个。[推断] |
+| Nook 演出层缺口 | `NookView.tsx:549-567` 只挂 Canvas，未挂 `PerformanceLayer`；Nook 内角色对话可接入，但 show/性能演出不能宣称同构。 |
+| CharacterRail/Bag 布局证据 | 只引用 `docs/presence/00 §4.2.1` 的“角色栏上、背包下”冻结口径；本篇不再使用 RightSidebar 双 tab 作为实现目标。 |
+
 
 ## 1. 权威文档与边界
 
@@ -58,12 +80,11 @@ flowchart LR
 
 **冻结规则：**
 
-1. `apps/web/src/state/useWorld.ts:348-356` 的原始广播不得再把角色帧放进通用 `airp:agent-frame`；否则 `App` 与 `CharacterModal` 会各消费同一帧。角色帧只在 `case 'character_delta'` / `case 'character_message'` / `case 'character_idle'` / 合法角色 `error` 分支派发 `airp:character-frame`（现有派发点 `useWorld.ts:430-440`）。
-2. `apps/web/src/App.tsx:246-260` 是 `airp:character-frame` 的**唯一订阅者**。它按 `activeCharacter.id` 过滤，生成一个新的 `CharacterFrame` 对象后写入 `activeModalFrame`；不再向 `window` 二次派发。
-3. `apps/web/src/components/overlay/CharacterModal.tsx:116-127` 的 `receivedFrame` 和 `airp:agent-frame` listener 必须删除。`incoming` 是唯一入方向；其现有 `consumedFrameRef`（`:539-544`）保留为 React StrictMode 重入保护，不是第二个归属器。
-4. App 不把角色帧传给 `WriterResult`，Modal 不读取 writer 帧；`writer-state.ts:13-54` 继续是作家公开状态的 Module。`WriterBar` 已通过 `useWriterPhase` 读取（`WriterBar.tsx:13,34`），`App` 的 `writerWorking/writerStage/writerElapsed` 本地镜像（`App.tsx:132-158`）和 `WriterResult.tsx:12-28` 的原始帧监听必须在实现期迁移到同一 `writer-state` 快照。
-5. `AgentSettings.tsx:24` 的 `agent_progress` synthetic `airp:agent-frame` 必须删除；Agents 只读 UX03 canonical projection 的 phase/stage/elapsed 摘要。WS 的 `writer_idle` / `error` / `turn_aborted` 是终结事实，覆盖任何暂态进度显示。
-6. 此路径不以 `timestamp`、文本相等或 emotion 相等去重：相同台词可能合法重复。去重单位是一次 WS 消费→一次 `airp:character-frame`→一次 `incoming` identity；Modal 的 `consumedFrameRef` 只阻止同一对象在 effect 重入中重复消费。若未来服务端提供 frame id，由 `useWorld` 归属层登记，不改变 Modal 接口。
+1. `apps/web/src/state/useWorld.ts:559-617` 的角色帧分支先校验 `source/characterId/text`，仅派发 `airp:character-frame`；writer 帧由 `useWorld.ts:478-481` 进入 `writer-state`，不再使用通用角色旁路。
+2. `apps/web/src/App.tsx:401-420` 是 `airp:character-frame` 的唯一订阅者与 identity router；匹配 active id 后写入共享 `CharacterFrameQueue`，不再向 `window` 二次派发。
+3. `apps/web/src/components/overlay/CharacterModal.tsx:160-168,701-711` 只订阅/消费 queue；旧 `receivedFrame` 与 `airp:agent-frame` listener 已不存在，`queueVersion` 只负责 pump 重渲染。
+4. App 不把角色帧传给 `WriterResult`，Modal 不读取 writer 帧；`apps/web/src/lib/writer-state.ts:139-220` 是作家公开状态 Module，`WriterBar`/App/AgentSettings 读同一快照。
+5. `apps/web/src/components/AgentSettings.tsx:33-87` 的 REST 轮询只更新配置/模型，writer 摘要读取 `useWriterState`；不再合成 `airp:agent-frame`。
 
 **漏接后果：**
 
@@ -204,7 +225,7 @@ interface CharacterFrameQueue {
 |---|---|---|---|
 | 画布单击角色 | 进入 dialogue theatre | `App.openCharacter` | 不进入 Nook，不先打开独立聊天页 |
 | Modal “Visit private space” | 离开 dialogue，进入该角色 Nook | `App.onOpenNook` → `NookView(characterId)` | 不由 Modal 自己调用 `/api/nook` |
-| App inline Chrome 的 Nook 入口 | 从角色 tab 的私密空间按钮进入 Nook | `App.tsx` inline character rail → `onOpenNook(char.id)`（NEW seam） | 不保留 `RightSidebar.tsx` 旧 Adapter，不让 Nook entry 分裂 |
+| App inline Chrome 的 Nook 入口 | 从上方 `CharacterRail` 的角色行私密空间按钮进入 Nook | `App.tsx` CharacterRail → `openNook(char.id)`（`App.tsx:1049-1062`） | 不保留 `RightSidebar.tsx` 旧 Adapter，不让 Nook entry 分裂 |
 | Nook close | 返回进入前 layer | App-owned `closeNook` pop `CameraMemoryStack` → restore caller slot + `refresh` | 不创建第二相机/第二 WS |
 
 ### 7.2 过渡顺序
@@ -220,33 +241,29 @@ interface CharacterFrameQueue {
 
 | 文件/符号 | 设计落点 | 类型 |
 |---|---|---|
-| `apps/web/src/state/useWorld.ts:onMessage`（现 `:353-581`） | 唯一 WS dispatch；移除角色帧的通用广播；保留 `character_*`→`airp:character-frame` 字面 case | Seam / owner |
-| `apps/web/src/App.tsx:onCharacterFrame`（`:246-260`） | 唯一 `characterId` 校验、缺失/失配 notice、`activeModalFrame` identity | Interface / router |
-| `apps/web/src/components/overlay/CharacterModal.tsx` | 删除 `receivedFrame` + `airp:agent-frame` listener（`:116-127`）；保留 `incoming`、`consumedFrameRef`、phase/page/voice | Module |
+| `apps/web/src/state/useWorld.ts:onMessage`（`useWorld.ts:478-481,559-617`） | 唯一 WS dispatch；writer 进入 writer-state，角色帧校验后进 `airp:character-frame` | Seam / owner |
+| `apps/web/src/App.tsx:onCharacterFrame`（`App.tsx:401-420`） | 唯一 `characterId` 校验与 queue enqueue | Interface / router |
+| `apps/web/src/components/overlay/CharacterModal.tsx` | `CharacterFrameQueue` 订阅/消费（`CharacterModal.tsx:160-168,701-711`）；无 raw frame listener | Module |
 | `apps/web/src/components/overlay/dialogue-pages.ts` | `parseEmoTag`、`parseEmoPages`、`charDelay`、`clampPageIndex`；不加网络/副作用 | Adapter / pure locality |
-| `apps/web/src/lib/writer-state.ts` | 复用 UX03 §3.1–§3.3 的唯一 `WriterPublicState` projection；本篇不新增字段、签名或入口 | Module / public projection |
-| `apps/web/src/components/WriterResult.tsx` | 从原始 `airp:agent-frame` listener 改为 writer-state completion snapshot | Consumer |
-| `apps/web/src/components/AgentSettings.tsx` | `agent_progress` 轮询改调用 writer-state Adapter，不再伪造通用 agent frame | Adapter |
-| `apps/web/src/lib/audio.ts` | 复用 `playVoice` / `stopVoice` / `playStinger` / `unlock`；不改主轨 | Leverage |
-| `apps/server/src/routes/tts.ts` | TTS 合成、缓存、错误 code 的既有冻结实现；本篇不改 | Seam |
-| `apps/web/src/components/nook/NookView.tsx` | `/api/nook`、单 active projection、事件回写和空态 | Adapter |
-| `apps/web/src/App.tsx:486-497,513-517,732-758` | 现状 dialogue/Nook handlers；实现改由 A05 `enterDialogue` / `closeDialogue` / `openNook` / `closeNook` `CameraMemoryStack` 统一编排 | Orchestrator |
+| `apps/web/src/lib/writer-state.ts` | 复用 UX03 唯一 `WriterState` projection（`writer-state.ts:139-220`）；本篇不新增字段 | Module / public projection |
+| `apps/web/src/components/WriterResult.tsx` / `AgentSettings.tsx` | 均消费 canonical writer snapshot；AgentSettings REST 仅供配置/模型 | Consumer / Adapter |
+| `apps/web/src/lib/audio.ts` | 复用 `playVoice` / `stopVoice` / `playStinger` / `unlock`；一次性声效已有 hidden gate（`audio.ts:943-1042`） | Leverage |
+| `apps/server/src/routes/tts.ts` | TTS 合成、缓存、错误 code 的既有实现；本篇不改 | Seam |
+| `apps/web/src/components/nook/NookView.tsx` | `/api/nook`、active projection、事件回写和空态（`NookView.tsx:217-236,423-567`）；尚无 PerformanceLayer | Adapter |
+| `apps/web/src/App.tsx:251-273,766-826` | 当前 open/close Nook、dialogue 使用 CameraMemoryStack；marker/focus 边界仍需回放 | Orchestrator |
 
 ### 8.1 当前实现与设计目标的差异
 
-| 现状证据 | 差异 |
-|---|---|
-| `useWorld.ts:354-356` 每个 raw frame 都发 `airp:agent-frame` | 角色帧会被通用监听器消费；需收窄为 writer 公开状态或取消 UI 消费 |
-| `useWorld.ts:430-440` 已发 `airp:character-frame`，但 `App.tsx:246-260` 与 Modal 自己的 `:118-127` 都存在监听 | 双入口违反单一路径；Modal listener/`receivedFrame` 是待删旧接缝 |
-| `CharacterModal.tsx:116-117` 使用 `suppliedFrame ?? receivedFrame` | `receivedFrame` 让 prop 和事件两个真相源并存 |
-| `CharacterModal.tsx:539-544` 有 identity guard | 可保留，职责限定为 StrictMode 重入去重，不承担身份归属 |
-| `App.tsx:132-158` 自持 `writerWorking/stage/elapsed`，`WriterResult.tsx:12-28` 自听 raw frame | writer public state 分裂；需统一 `writer-state` |
-| `writer-state.ts:13-54` 目前只有 `phase/reason` | 对 Chrome 最终回执、进度、Stop requested 的公开快照不足，需在同一 Module 扩展，不能再造 App-local 状态 |
-| `dialogue-pages.ts:40-82` 与 `CharacterModal.tsx:567-635` 已实现分页与帧推进 | 语义可复用；清理重复入方向后才满足 ownership |
-| `audio.ts:925-952` 的 `playVoice` 会 stop 前 voice，AudioContext 未 running 时 drop | 需保持；遮罩 pointerdown/unlock 是入口前置，不得改成队列 |
-| `App.tsx:753-758` 已有 Modal→Nook 与 Nook close | 顺序和 active projection 需按本篇明确，尤其不能同时保留 Modal/Nook |
-| [推断] 角色生产帧在所有部署都已附带 `characterId` | wiring/00 仍允许旧帧无 ID；实现验收必须主动注入缺失/失配 fixture，不能以当前模板单角色通过代替契约证明 |
-
+| 现状证据 | 当前状态 | 尚未闭环 |
+|---|---|---|
+| `useWorld.ts:559-617` 的角色分流 | 已收窄为 source/id/text 校验后派发 `airp:character-frame`；缺 id/失配由 App `:401-420` 丢弃并 notice | 旧通用角色广播不再是当前实现差异。 |
+| `CharacterModal.tsx:160-168,701-711` | queue 是唯一消费面，旧 `receivedFrame`/raw listener 已删除 | FIFO 与 gap 行为仍需浏览器端路由回放。 |
+| `CharacterModal.tsx` 的 identity guard | queue 在 App 路由后接收 active id；Modal 仍以 `consumedFrameRef` 保护 StrictMode 重入 | 身份校验不应回到 Modal。 |
+| `App.tsx:191-244` / `writer-state.ts:139-220` | writer busy/stage/elapsed 已由 canonical snapshot 提供，App 的 `writerWorking` 只是派生值 | 不再把派生变量误报为第二状态源。 |
+| `dialogue-pages.ts` 与 CharacterModal frame pump | 分页、emotion、queue pump 已在用（`CharacterModal.tsx:701-711`） | TTS 并发/取消仍是 §12 待拍板项。 |
+| `audio.ts:943-1042` | stinger/voice 已有 hidden、mute、visibility epoch 与不排队门禁 | 主轨 ambient/BGM/theme hidden 策略仍未冻结（见 UX07）。 |
+| `App.tsx:251-273,766-826` | Nook/dialogue open/close 已走 CameraMemoryStack | active marker 边界与 Nook PerformanceLayer 仍是缺口。 |
+| `[推断]` 角色生产帧在所有部署都附带 `characterId` | 当前前端对缺失/失配严格丢弃；测试必须继续注入缺失/失配 fixture | 不以单角色模板替代契约证明。 |
 ## 9. 错误边界与失败可见性
 
 1. **归属错误**：缺 ID、失配 ID、未知 `type` 不进入 Modal；缺/失配必须走 `airp:notice`。日志可附 `frame.type`、`characterId`、active ID，但日志不是唯一反馈。
@@ -301,17 +318,17 @@ interface CharacterFrameQueue {
 
 ## 11. 发现的冲突 / 需要修订上位文档
 
-1. **`docs/ux/00 §4.6` vs `docs/wiring/00 §3` / `docs/wiring/03 §2.1、§3.1`：缺失 `characterId` 的处理相反。** UX 冻结要求缺失或失配必须丢弃并可见报错；wiring 旧契约允许单角色按当前遮罩兜底。这会决定旧世界是否静默无声，必须由主 agent 先裁决并回写 wiring 文档；本篇不自行改 wiring。
-2. **`useWorld.ts:354-356` 的全量 `airp:agent-frame` 广播 vs `docs/ux/00 §4.6` 的单一消费路径。** 现实现让角色 Modal、App/WriterResult/其它面都可自行监听；需在 wiring/perform 回写“通用 raw frame 不再是角色公开 UI 接缝”。
-3. **`CharacterModal.tsx:116-127` 的 `receivedFrame` listener vs `docs/wiring/03 §2.3` 的 `incoming` 单一路径。** 代码同时存在两条入方向，且 `suppliedFrame ?? receivedFrame` 会掩盖双消费；实现期必须删旧 listener/state，而不是保留兼容旁路。
-4. **`App.tsx` 本地 `writerWorking` 与 UX03 `writer-state` 唯一投影冲突。** `docs/ux/03-Chrome与公开状态.md §3.1–§3.3` 已冻结字段、入口和消费者；本篇不另定字段或 Adapter，冲突只在现状尚未迁移。
-5. **现有 `App.tsx:486-517,753-758` 的固定 `camera.save/restore` 与 `docs/ux/05-Nook投影与相机连续性.md §4.3、§5` 冲突。** 实现必须由 A05 `CameraMemoryStack` 的 `enterDialogue` / `closeDialogue` / `openNook` / `closeNook` 统一事务，不能保留 `'dialogue'` 或 `layer` 的固定 slot。
-6. **单角色空 slot 的旧注释写着 `watson`（`CharacterModal.tsx:719-721`），但实际组件由任意 `characterId` 使用。** 这是实现注释漂移，不应成为 UX 身份规则；实现期改为通用角色语义并同步截图验收。
+1. **缺失 `characterId` 规则已按 UX 严格丢弃。** `useWorld.ts:559-617` 与 `App.tsx:401-420` 都拒绝缺失/失配身份并发 notice；wiring 旧文档若仍允许单角色兜底，需由上位 owner 回写，前端不恢复 fallback。
+2. **角色帧单一路径已接线。** `useWorld.ts:559-617` → `App.tsx:401-420` → `CharacterFrameQueue`；CharacterModal 无 raw `airp:agent-frame`/`airp:character-frame` listener（`CharacterModal.tsx:160-168,701-711`）。
+3. **writer-state 已统一。** `writer-state.ts:139-220` 是公开投影，App `writerWorking` 仅派生 `phase`（`App.tsx:191-244`）；旧本地进度镜像/synthetic frame 描述已过时。
+4. **CameraMemoryStack 已接线但 marker/focus 仍有边界。** `App.tsx:251-273,766-826` 负责 Nook/dialogue 事务；`App.tsx:857-888` 与 `NookView.tsx:423-432` 的 marker 覆盖仍需浏览器验证。
+5. **单角色空 slot** 仍需使用通用角色语义；当前 DOM 在 `CharacterModal.tsx:799-821` 提供空 slot + lit portrait/fallback，不应再以旧注释名作身份规则。
+6. **Nook parity 仍部分接线。** `NookView.tsx:549-567` 已透传动作/角色回调，但未挂 `PerformanceLayer`，且未共享 App-level ActionFeedbackStore。
 
 ## 12. 仍未知待拍板
 
 - 缺 `characterId` 的历史帧统一采用“丢弃 + visible notice”；若旧世界需要迁移，服务端/event-bridge 在进入 `airp:character-frame` 前补齐 ID，前端不得恢复 active-modal fallback。`docs/wiring/00` 已按此回写。
-- `docs/ux/03-Chrome与公开状态.md §3.1–§3.3` 的 canonical writer-state 实现与本篇角色 theatre 迁移是否同批落地仍待排期；无论批次如何拆分，本篇不新增 writer 字段、签名或入口。
+- `docs/ux/03-Chrome与公开状态.md §3.1–§3.3` 的 canonical writer-state 已落地（`apps/web/src/lib/writer-state.ts:139-220`）；本篇未新增字段/入口。剩余是浏览器矩阵与跨 projection 证据，不是等待实现。
 - 角色终结后若有延迟 `character_stop`/世界事件，退出揭示是等待事件、关闭后一次 `refresh`，还是两者取其一；需要真实 WS 时序确认。
 - `airp:notice` 是否携带稳定 error code 供截图/自动化断言，或仅保留本地化文案；不影响本篇“必须玩家可见”的硬规则。
 - TTS 页预取并发上限与取消请求机制尚未冻结；当前契约只冻结 voiceTurn token 丢弃旧结果，不冻结 AbortController。

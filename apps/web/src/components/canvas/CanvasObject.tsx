@@ -197,16 +197,23 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   // Verified resolution → trusted attrs/vars (docs/components/04 §:79). Memoised in the
   // adapter, so re-renders cost nothing; a missing resolution simply means legacy defaults.
   const appearance = item.appearance ? appearanceViewOf(item.appearance) : null;
-  const readable = kind !== 'sprite' && kind !== 'gate';
+  const isGate = kind === 'gate' || item.frontmatter?.type === 'gate' || item.path.endsWith('/README.md');
+  const readable = kind !== 'sprite' && !isGate;
   const isPhoto = kind === 'photo' && item.frontmatter?.component === 'photo';
   const photoDialogId = `photo-detail-${item.path.replace(/[^A-Za-z0-9_-]/g, '-')}`;
   const [isDragOver, setIsDragOver] = React.useState(false);
   const [isItemDragging, setIsItemDragging] = React.useState(false);
-  const [isUnlockedEffect, setIsUnlockedEffect] = React.useState(false);
   const anchorCleanup = React.useRef<(() => void) | undefined>(undefined);
+  const enterPendingKey = React.useRef<string | null>(null);
+  const enterPendingTimer = React.useRef<number | null>(null);
   const [hovered, setHovered] = React.useState(false);
   const [focused, setFocused] = React.useState(false);
-  React.useEffect(() => () => anchorCleanup.current?.(), [item.path, item.frontmatter?.anchor]);
+  React.useEffect(() => () => {
+    anchorCleanup.current?.();
+    clearTimeout(enterPendingTimer.current ?? undefined);
+    enterPendingTimer.current = null;
+    enterPendingKey.current = null;
+  }, [item.path, item.frontmatter?.anchor]);
   const highlight = (element: HTMLElement, active: boolean) => {
     highlightLinks(item.path, active);
     anchorCleanup.current?.();
@@ -215,7 +222,19 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
       anchorCleanup.current = highlightChalkAnchor(element, item.path, item.frontmatter.anchor);
     }
   };
-
+  const gateTarget = typeof item.frontmatter?.target === 'string' && item.frontmatter.target.trim()
+    ? item.frontmatter.target
+    : item.path.replace(/\/README\.md$/, '');
+  const requestEnter = (target: string) => {
+    if (enterPendingKey.current === target) return;
+    clearTimeout(enterPendingTimer.current ?? undefined);
+    enterPendingKey.current = target;
+    enterPendingTimer.current = window.setTimeout(() => {
+      enterPendingKey.current = null;
+      enterPendingTimer.current = null;
+    }, 500);
+    onEnterGate?.(target);
+  };
   React.useEffect(() => {
     const onDragStart = () => setIsItemDragging(true);
     const onDragEnd = () => {
@@ -229,19 +248,13 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
       window.removeEventListener('airp:item-drag-end', onDragEnd);
     };
   }, []);
-
   const handleSpriteDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
     const draggedPath = e.dataTransfer.getData('text/plain');
-    if (draggedPath) {
-      setIsUnlockedEffect(true);
-      setTimeout(() => setIsUnlockedEffect(false), 800);
-      onItemDropOnTarget?.(draggedPath, item.path);
-    }
+    if (draggedPath) onItemDropOnTarget?.(draggedPath, item.path);
   };
-
-  const spritePuzzleClasses = `${isItemDragging ? 'puzzle-target-ready' : ''} ${isDragOver ? 'puzzle-target-hover' : ''} ${isUnlockedEffect ? 'puzzle-unlock-burst' : ''}`.trim();
+  const spritePuzzleClasses = `${isItemDragging ? 'puzzle-target-ready' : ''} ${isDragOver ? 'puzzle-target-hover' : ''}`.trim();
 
   return (
     <div
@@ -257,7 +270,18 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
         if (Math.hypot(event.clientX - pointerStart.current.x, event.clientY - pointerStart.current.y) > 6) return;
         setReading(value => !value);
       }}
-      onKeyDown={event => { if (readable && event.target === event.currentTarget && event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); setReading(value => !value); } }}
+      onKeyDown={event => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          event.stopPropagation();
+          if (isGate) {
+            requestEnter(gateTarget);
+          } else if (readable) {
+            setReading(value => !value);
+          }
+        }
+      }}
       onPointerEnter={event => { setHovered(true); highlight(event.currentTarget, true); }}
       onPointerLeave={event => { setHovered(false); highlight(event.currentTarget, false); }}
       onFocus={event => { setFocused(true); highlight(event.currentTarget, true); }}
@@ -313,13 +337,13 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             index={index}
             onSelectChoice={onSelectChoice}
             onDiceRolled={onDiceRolled}
-            onEnterGate={onEnterGate}
+            onEnterGate={onEnterGate ? requestEnter : undefined}
             onOpenCharacterModal={onOpenCharacterModal}
             onItemDropOnTarget={onItemDropOnTarget}
             onTakeItem={onTakeItem}
           />
         )}
-        {!reading && <EntityInteractions item={item} active={hovered || focused} onChoice={onEntityAction} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate} onOpenCharacter={onOpenCharacterModal} />}
+        {!reading && <EntityInteractions item={item} active={hovered || focused} onChoice={onEntityAction} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate ? requestEnter : undefined} onOpenCharacter={onOpenCharacterModal} />}
     </div>
   );
 };
