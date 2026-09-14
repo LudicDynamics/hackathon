@@ -27,6 +27,136 @@ import {
   startsSceneInit,
   type WorldSettings,
 } from '@airp/shared/world-settings';
+export type CanvasArrangeMode = 'grid' | 'circle' | 'row';
+
+export interface CanvasArrangeRequest {
+  worldId: string;
+  layer: string;
+  mode: CanvasArrangeMode;
+  requestId: string;
+  expectedRevision: number;
+  expectedCanvasVersion: number;
+  snapshotId: string;
+  screenshotPolicy: 'none' | 'before' | 'after' | 'before_and_after';
+}
+
+export interface CanvasArrangeAccepted {
+  ok: true;
+  operationId: string;
+  requestId: string;
+  worldId: string;
+  layer: string;
+  agentId: 'canvas-arranger';
+  turnId: string;
+  stage: 'accepted';
+}
+
+export interface CanvasArrangeCancelAccepted {
+  ok: true;
+  operationId: string;
+  requestId: string;
+  worldId: string;
+  layer: string;
+  stage: 'cancel_requested' | 'already_completed' | 'already_cancelled';
+}
+
+export class CanvasArrangeRequestError extends Error {
+  readonly code: string;
+  readonly status: number;
+  readonly payload: Record<string, unknown> | null;
+
+  constructor(message: string, code = 'unknown', status = 0, payload: Record<string, unknown> | null = null) {
+    super(message);
+    this.name = 'CanvasArrangeRequestError';
+    this.code = code;
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
+/** Raw arrangement signals are published only after useWorld has consumed the
+ * socket frame. Controls may subscribe to this bridge, but never open a socket
+ * themselves. */
+export type CanvasArrangeFrame = Record<string, unknown>;
+const canvasArrangeFrameListeners = new Set<(frame: CanvasArrangeFrame) => void>();
+
+export function subscribeCanvasArrangeFrames(listener: (frame: CanvasArrangeFrame) => void): () => void {
+  canvasArrangeFrameListeners.add(listener);
+  return () => canvasArrangeFrameListeners.delete(listener);
+}
+
+function publishCanvasArrangeFrame(frame: CanvasArrangeFrame): void {
+  for (const listener of canvasArrangeFrameListeners) {
+    try {
+      listener(frame);
+    } catch {
+      // A presentation subscriber must not interrupt canonical WS ingestion.
+    }
+  }
+}
+
+async function canvasArrangeRequest<T>(url: string, body: Record<string, unknown>): Promise<T> {
+  let response: Response;
+  let payload: Record<string, unknown> | null = null;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new CanvasArrangeRequestError('Connection lost while arranging. Refresh to check the saved canvas, then retry.', 'connection_lost');
+  }
+  const text = await response.text();
+  try {
+    payload = text ? JSON.parse(text) as Record<string, unknown> : null;
+  } catch {
+    payload = null;
+  }
+  if (!response.ok || payload?.ok !== true) {
+    const code = typeof payload?.code === 'string' ? payload.code : response.status === 404 ? 'unavailable' : 'unknown';
+    const message = typeof payload?.error === 'string' ? payload.error : 'Canvas arrangement is unavailable. Nothing was changed. Try again later.';
+    throw new CanvasArrangeRequestError(message, code, response.status, payload);
+  }
+  return payload as T;
+}
+
+async function requestCanvasArrange(input: CanvasArrangeRequest): Promise<CanvasArrangeAccepted> {
+  const payload = await canvasArrangeRequest<CanvasArrangeAccepted>('/api/canvas/arrange', input as unknown as Record<string, unknown>);
+  if (
+    payload.stage !== 'accepted' ||
+    typeof payload.operationId !== 'string' ||
+    typeof payload.requestId !== 'string' ||
+    typeof payload.worldId !== 'string' ||
+    typeof payload.layer !== 'string' ||
+    payload.agentId !== 'canvas-arranger' ||
+    typeof payload.turnId !== 'string'
+  ) {
+    throw new CanvasArrangeRequestError('Canvas arrangement is unavailable. Nothing was changed. Try again later.', 'invalid_response');
+  }
+  return payload;
+}
+
+async function cancelCanvasArrange(
+  operationId: string,
+  input: Pick<CanvasArrangeRequest, 'worldId' | 'layer' | 'requestId'>,
+): Promise<CanvasArrangeCancelAccepted> {
+  const payload = await canvasArrangeRequest<CanvasArrangeCancelAccepted>(
+    `/api/canvas/arrange/${encodeURIComponent(operationId)}/cancel`,
+    input,
+  );
+  if (
+    typeof payload.operationId !== 'string' ||
+    typeof payload.requestId !== 'string' ||
+    typeof payload.worldId !== 'string' ||
+    typeof payload.layer !== 'string' ||
+    !['cancel_requested', 'already_completed', 'already_cancelled'].includes(payload.stage)
+  ) {
+    throw new CanvasArrangeRequestError('Canvas arrangement is unavailable. Nothing was changed. Try again later.', 'invalid_response');
+  }
+  return payload;
+}
+
 export interface LayerItem {
   path: string;
   filename: string;
@@ -83,6 +213,11 @@ export interface LayerState {
   links: LayerLink[];
   presence: PresenceEntry[];
   worldFrozen: boolean;
+  /** Server-issued identity for arrangement fences. Never derived client-side. */
+  revision?: number;
+  canvasVersion?: number;
+  canvasRevision?: string;
+  snapshotId?: string;
 }
 
 export interface UseWorldApi {
@@ -116,6 +251,8 @@ export interface UseWorldApi {
    * On failure the previous items snapshot is restored and a warning logged.
    */
   moveCard(path: string, x: number, y: number): Promise<void>;
+  requestArrange(input: CanvasArrangeRequest): Promise<CanvasArrangeAccepted>;
+  cancelArrange(operationId: string, input: Pick<CanvasArrangeRequest, 'worldId' | 'layer' | 'requestId'>): Promise<CanvasArrangeCancelAccepted>;
   /** Send a writer_prompt; optional override targets an active projection layer. */
   sendToWriter(text: string, layerOverride?: string): WriterPromptAcceptance;
   /** Raw WS send (character_prompt etc.). false = socket not OPEN. */
@@ -123,6 +260,7 @@ export interface UseWorldApi {
   /** Debug/test seam: force a footprint flush (gates still apply). */
   flushFootprints(): void;
 }
+
 
 const INITIAL_LAYER = 'map';
 const WRITER_ABORT_TYPE = ['writer', 'abort'].join('_');
@@ -215,6 +353,13 @@ export function useWorld(): UseWorldApi {
     try {
       const data = await airpGateway.layer<any>(target);
       if (seq !== reqSeqRef.current) return; // stale response (layer switched meanwhile)
+      const identity = data.identity && typeof data.identity === 'object'
+        ? data.identity as Record<string, unknown>
+        : null;
+      const numberField = (value: unknown): number | undefined =>
+        typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
+      const stringField = (value: unknown): string | undefined =>
+        typeof value === 'string' && value.length > 0 ? value : undefined;
       const next: LayerState = {
         layer: data.layer,
         scene: data.scene ?? null,
@@ -224,6 +369,10 @@ export function useWorld(): UseWorldApi {
         links: Array.isArray(data.links) ? data.links : [],
         presence: Array.isArray(data.presence) ? data.presence : [],
         worldFrozen: data.worldFrozen === true,
+        revision: numberField(data.revision),
+        canvasVersion: numberField(data.canvasVersion) ?? numberField(identity?.canvasVersion),
+        canvasRevision: stringField(data.canvasRevision) ?? stringField(identity?.canvasRevision),
+        snapshotId: stringField(data.snapshotId) ?? stringField(identity?.snapshotId),
       };
       stateRef.current = next;
       setState(next);
@@ -480,15 +629,11 @@ export function useWorld(): UseWorldApi {
       // (355px → 291px on the same paragraph, contract §3.5).
       if (fontsSettledRef.current) {
         fpRef.current?.notify();
-        return;
+      } else {
+        console.warn('[footprint] fonts did not settle in time; heights may be off');
       }
-      void whenFontsSettled().then((outcome) => {
-        if (outcome === 'timeout') {
-          console.warn('[footprint] fonts did not settle in time; heights may be off');
-        }
-        fontsSettledRef.current = true;
-        if (!disposed) fpRef.current?.notify();
-      });
+      fontsSettledRef.current = true;
+      if (!disposed) fpRef.current?.notify();
     });
     return () => {
       disposed = true;
@@ -566,8 +711,9 @@ export function useWorld(): UseWorldApi {
           // explicit consumer case for the websocket contract checker.
           break;
         case 'agent_activity':
-          // Player-facing activity has one canonical store consumer; it never
-          // enters writer-state or a component-local raw listener.
+          // Player-facing activity has one canonical store consumer; the
+          // bridge is published only after this useWorld ingress point.
+          publishCanvasArrangeFrame(msg);
           agentActivityStore.ingest(msg);
           break;
         case 'tool_start':
@@ -740,7 +886,6 @@ export function useWorld(): UseWorldApi {
           // 帧带 layer：不匹配（或缺失）整帧忽略 —— 作家在别的层摆位不该让当前页抖一下。
           if (typeof msg.layer !== 'string' || msg.layer !== layerRef.current) break;
           if (msg.kind === 'links') {
-            if (!Array.isArray(msg.links)) break;
             setState((s) => {
               if (!s) return s;
               const links = mergeLinkPatch(s.links, msg.links as never, msg.action as never);
@@ -751,6 +896,7 @@ export function useWorld(): UseWorldApi {
             });
           } else if (msg.kind === 'cards') {
             if (!Array.isArray(msg.cards)) break;
+            publishCanvasArrangeFrame(msg);
             setState((s) => {
               if (!s) return s;
               let items: readonly LayerItem[] = s.items;
@@ -854,6 +1000,8 @@ export function useWorld(): UseWorldApi {
     refresh,
     readLayerState,
     moveCard,
+    requestArrange: requestCanvasArrange,
+    cancelArrange: cancelCanvasArrange,
     sendToWriter,
     sendMessage,
     settings,

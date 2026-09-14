@@ -1,10 +1,10 @@
 import { useLocale } from './lib/i18n.js';
 import { withBase } from './lib/base-path.js';
 import { AgentSettings } from './components/AgentSettings.js';
-import { TtsSettings } from './components/TtsSettings.js';
 import { WriterBar } from './components/chrome/WriterBar.js';
 import { ActivityRail } from './components/chrome/ActivityRail.js';
 import { AgentActivityLog } from './components/chrome/AgentActivityLog.js';
+import { CanvasArrangeControl, type CanvasArrangeControlHandle } from './components/chrome/CanvasArrangeControl.js';
 import { ConnectedWorldToastRegion } from './components/chrome/WorldToast.js';
 import { ItemArtwork } from './components/ItemArtwork.js';
 import { NookView } from './components/nook/NookView.js';
@@ -258,6 +258,7 @@ export function App() {
   // Canvas world state (layer payload, WS events, card persistence).
   const world = useWorld();
   const { state, layer, enterLayer, refresh, moveCard, sendToWriter, sendMessage } = world;
+  const arrangeControlRef = useRef<CanvasArrangeControlHandle>(null);
   useEffect(() => {
     worldEventToastStore.setProjectId(manifest?.id ?? null);
   }, [manifest?.id]);
@@ -568,6 +569,11 @@ export function App() {
       const target = event.target as HTMLElement | null;
       const typing = target?.closest('input, textarea, select, button, a, [role="switch"], [contenteditable="true"]');
       if (event.key === 'Escape') {
+        if (arrangeControlRef.current?.isFocused() && arrangeControlRef.current.cancel()) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         if (closeWorkspaceDisclosure()) {
           event.preventDefault();
           event.stopPropagation();
@@ -618,7 +624,17 @@ export function App() {
         }
         return;
       }
-      if (typing || activeCharacter) return;
+      if (event.shiftKey && event.key.toLowerCase() === 'r') {
+        if (focusCoordinator.peek() !== null) return;
+        event.preventDefault();
+        if (shell.immersive) {
+          setShell(current => ({ ...current, immersive: false }));
+          window.requestAnimationFrame(() => arrangeControlRef.current?.request());
+        } else {
+          arrangeControlRef.current?.request();
+        }
+        return;
+      }
       if (event.key === 'Tab') {
         event.preventDefault();
         toggleShell('immersion');
@@ -1084,6 +1100,18 @@ export function App() {
             <div className="prototype-tools prototype-chrome" aria-label={t("Canvas tools")}>
               <button className="active" title={t("Explore")} aria-label={t("Explore")}><span aria-hidden="true">↖</span><span className="prototype-tools__label">{t("Explore")}</span></button>
               <button onClick={() => cameraStack.restoreTarget(projectionTarget('layer', layer))} title={t("Return to scene")} aria-label={t("Return to scene")}><span aria-hidden="true">⌖</span><span className="prototype-tools__label">{t("Return")}</span></button>
+              <CanvasArrangeControl
+                ref={arrangeControlRef}
+                worldId={manifest?.id ?? null}
+                layer={layer}
+                worldReady={worldReady}
+                writerBusy={writerLocked}
+                worldChanging={loadingWorld !== null}
+                state={state}
+                requestArrange={world.requestArrange}
+                cancelArrange={world.cancelArrange}
+                refresh={refresh}
+              />
             </div>
           )}
 
