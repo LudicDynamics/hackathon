@@ -3,7 +3,8 @@
 > 状态：**C1 设计草案（2026-09-14）**，证据等级 **E1（设计）+ E2（静态读码）**。本文 MUST NOT 被当作 E3 使用——没有人在本会话中运行过本文描述的任何一行代码。文中标**实测**的数字是本机跑出的字符/行数统计，不是 SLA。
 > 上位契约：`docs/command/00-共同上下文.md`（下称"契约"）。冲突时以它为准；本文发现它有问题的地方一律写在 §11，不就地修改。
 > **本文已按 2026-09-14 的契约变更（§3.2/§3.3：命令文件改为 `command/<id>.yaml`、取消 `type` 与 Markdown 正文、顶层四键 `name`/`desc`/`params`/`do`、strict）重写。**§6.2 的写入门禁要求也随之从"加一个前缀"变成"按前缀分派扩展名"（契约 §6.2 逐字：「MUST NOT 改成"放行 `command/` 下的任意扩展名"」）。
-> 本文**拥有**：写入门禁的精确改动、写入即校验的落点与实现、错误回传给 Agent 的文案、Agent 如何知道有哪些效果可用、Agent 何时该写命令的判据、命令的可发现性与注入成本、`[C-2]`/`[C-3]` 的方案、可直接使用的提示词草稿。
+> 本文**拥有**：写入门禁的精确改动、写入即校验的落点与实现、错误回传给 Agent 的文案、Agent 如何知道有哪些效果可用、Agent 何时该写命令的判据、命令的可发现性与注入成本、`[C-2]`（不落账）与 `[C-3]`（writer 专属）的判定记录与落地清单、可直接使用的提示词草稿。
+> **2026-09-14 收口**：按契约 §11.3 的 B2 项，§5.1/§5.2/§11.3/§12.1/§12.2 已按评审门实测证据改判并重写论据（`[C-2]`=A、`[C-3]`=A），行号按当前工作树修正（`resolveLayer`→`local-store.ts:859-873`、`useWorld.ts`→`:387-401`、`App.tsx`→`:464`），`parseOnBindings` 归属按契约 §R.16 改为"`02` 实现、`07` 调用"。
 > 本文**不拥有**：命令文件的 schema（→ `01`）、`on` 字段的形状与变量集（→ `02`）、条件求值与执行序（→ `03`）、效果名与参数（→ `04`）、幂等真相源（→ `05`）、玩家侧渲染（→ `06`）、多租户与物理层隔离（→ `09`）。
 
 ---
@@ -69,17 +70,20 @@ export function classifyWorldWritePath(file: string): WorldWriteTarget;
 **为什么是纯函数而不是钩子里的一串 `||`。** 三个理由：
 
 1. **契约 §6.2 的冻结要求是一个二维规则**（前缀 → 扩展名），不是一个布尔式。写成分类器后，"`command/` 只放行 `.yaml`"与"三个内容根只放行 `.md`"各自成为一条可断言的分支，评审门不必读 diff 推语义。
-2. **它同时是 `[C-3]` 的落点**（§12.2）：角色的额外限制是"分类结果 + 身份"的函数，加在分类器外面比加在布尔式里面干净。
+2. **它同时是 `[C-3]` 的落点邻接处**（§12.2）：角色的额外限制是"分类结果 + 身份"的函数，落在 `classifyWorldWritePath` 的**调用点之后**比塞进分类器（或原来的布尔式）里面干净——分类器保持纯路径函数，不接身份参数。
 3. **与 `01` 的 `commandIdOfPath` 有重叠，必须显式对齐。** `01 §7.1` 导出 `commandIdOfPath(path): string | null`。两者的关系：`classifyWorldWritePath` 负责**区分五类拒绝原因**（给模型看的文案不同），`commandIdOfPath` 负责**取 id**。一致性 MUST 由单测钉住：对任意 `file`，`classifyWorldWritePath(file).kind === 'command'` ⟺ `commandIdOfPath(file) !== null`，且两者返回的 id 逐字节相同。
 
 ### 2.2 校验入口（引用，不重定义）
 
 ```ts
+// 两个都由别的文档拥有并实现，本文只调用（签名逐字照抄，不重定义）：
 /** 01 §7.1 冻结。纯、同步、无 I/O；`raw` 是整份 YAML 文件。 */
-export function parseWorldCommand(id: string, raw: string): WorldCommandParseResult;
-/** 02 §11.1 冻结。纯、同步、无 I/O。`hook=null` 时校验整个 `on`（写入时用）。 */
-export function parseOnBindings(frontmatter: Record<string, any> | null, hook: CommandTriggerHook | null): OnBindingsParseResult;
+function parseWorldCommand(id: string, raw: string): WorldCommandParseResult;
+/** 02 §11.1 冻结（实现落 `packages/shared/src/commands/bindings.ts`）。纯、同步、无 I/O。`hook=null` 时校验整个 `on`（写入时用）。 */
+function parseOnBindings(frontmatter: Record<string, any> | null, hook: CommandTriggerHook | null): OnBindingsParseResult;
 ```
+
+> **归属（契约 §R.16 + 主 agent 2026-09-14 裁定）**：`parseWorldCommand` 归 `01`、`parseOnBindings` 归 `02`——**两者都不是本文的实现**。本文在 `extensions/world-context.ts` 的 `tool_call` 里**调用**它们，并把错误翻译成 `block.reason`（§3.1-§3.3）。本文定义的是**何时调用**与**怎么回错误**，不是实现。（先前本文把 `parseOnBindings` 写成自己 `export`，与 `02` 形成双向认领——已按裁定修正。）
 
 **这两个函数 MUST 保持纯与同步**——这是本文在开工时向 `01`/`02` 提的硬需求，理由是落点决定的：`tool_call` 钩子里只有"待写文本"和 store，没有事务、没有请求上下文；而同一个 `parseWorldCommand` 还要被动作层在**触发时**再调一次（§3.8），两处共用一份实现是"写入时学到的修正方法在触发时对得上号"的前提。
 
@@ -163,7 +167,7 @@ export function parseOnBindings(frontmatter: Record<string, any> | null, hook: C
         5b  proposed = proposedFileText(previous, toolName, input)
         5c  photo 门禁（现状 :72-77，不变）
         5d  【新增】解析出 frontmatter 且含顶层 `on` →
-              parseOnBindings(fm, null) 有错 → block
+              parseOnBindings(fm, null) 有错 → block   ← 调用 02 的实现
               跨字段：`from` 指向的 key MUST 在同一实体的 frontmatter 里
               真实存在、是数组、且长度 ≤ 01 的上限（§7.6）
         5e  【新增】跨文件引用完整性：每条 bindings[i].run 指向的 id
@@ -333,14 +337,13 @@ chalk.
 | `command_must_be_yaml` | `A world command must be command/<id>.yaml - exactly ".yaml", no subdirectories. Got "<file>".` |
 | `command_must_be_flat` | `A command's id comes from its filename, so commands live directly in command/. Got "<file>". Did you mean "command/<basename>.yaml"?` |
 | `command_id_invalid` | `"<id>" is not a valid command id (ASCII lowercase kebab-case, 1-48 chars, must not start with a hyphen). Got "<file>".` |
+**放行 `command/` 之后 `tool_result` 会发生什么**（契约 §6.2 点名要回答）——完整推演与四条后果见 §5.1，结论三条：
 
-**放行 `command/` 之后 `tool_result` 会发生什么**（契约 §6.2 点名要回答）——完整推演与三条后果见 §5.1，结论三条：
-
-1. `resolveLayer('command/x.yaml')` 返回 **`null`**（`local-store.ts:836-846`：非 `world/**` 一律 `null`；且这是**设计**而非缺陷，见 `:828-833` 的注释）；
+1. `resolveLayer('command/x.yaml')` 返回 **`null`**（`local-store.ts:859-873`：非 `world/**` 一律 `null`；且这是**设计**而非缺陷，见 `:828-833` 的注释）；
 2. `kind` 只能填 **`'other'`**（`fm` 是 `null`，`:102` 的四个 `fm?.type` 比较全 false）；
 3. **这条 `entity_created` 能成功落账**，因为 `kind: 'other'` 在 `EventDetailSchemas.entity_created` 的封闭枚举里（`schemas/events.ts:43-48`）——**不需要改任何 schema**。
 
-→ 本文 §5.2 给出 `[C-2]` 的两个方案（不落账 / 落账 + `detail.command` + 改渲染器），**保留待拍板标记**。
+→ 本文 §5.2 记录 `[C-2]` 的判定：**不落账（方案 A）**（评审门裁定，契约 §11.1）；被放弃的方案 B（落账 + `detail.command` + 改 toast/渲染器）的理由与代价同节保留。
 
 ### 3.8 写入门禁的覆盖面：诚实地登记 `bash` 绕过
 
@@ -446,10 +449,10 @@ function proposedFileText(previous: string, toolName: 'write' | 'edit', input: R
        （FM_BLOCK 正则要求 `---` 从字节 0 开始；命令 YAML 顶层是 `name:` → 不匹配 → 没有 frontmatter）
        ↓
 :86   name = String(fm?.title ?? fm?.name ?? path.basename(file, '.md'))
-       → fm 是 null → 'x.yaml'（注意：basename 去的是 `.md`，对 `.yaml` 无效，所以得到 "x.yaml" 而不是 "x"）
+       → 'x.yaml'（注意：basename 去的是 `.md`，对 `.yaml` 无效，所以得到 "x.yaml" 而不是 "x"）
        ↓
 :87   layer = await store.resolveLayer('command/x.yaml')
-       → null（local-store.ts:836-846：非 world/** 一律 null）
+       → null（local-store.ts:859-873：非 world/** 一律 null）
        ↓
 :90   !existed && file.endsWith('/README.md') → false（不是 README）
        ↓
@@ -462,59 +465,62 @@ function proposedFileText(previous: string, toolName: 'write' | 'edit', input: R
 
 **这条 `appendEvent` 会成功，不会抛**：`EventDetailSchemas.entity_created` 是 `{ path, name, kind: enum(['chalk','component','note','letter','other']) }`（`packages/shared/src/schemas/events.ts:43-48`），而 `kind: 'other'` **在枚举里**。dev 模式的 `safeParse` 门槛（`local-store.ts:668-679`、`:450-458`）因此通过。**不需要改任何 schema 就能落这条账——这恰恰是问题所在。**
 
-**落下去之后会发生什么**（三处可观测的后果，都有 `file:line`）：
+**落下去之后会发生什么**（四处可观测的后果，都有 `file:line`）：
 
 | 后果 | 机制 | 严重度 |
 |---|---|---|
-| **作家注入里多一句假事实** | `render/events.ts:209-227` 的 `entity_created` 渲染器：`kind: 'other'` 落 `default` 分支 → `The world created "x.yaml" (command/x.yaml).`（`S` 是命令主语渲染，归 `10`）。`pathPhrase`（`events.ts:154-160`）对 `command/` 不做特判，原样印路径 | **中**：作家每写一份命令，都会在自己的 `dynamics` 段看到一条"世界创建了一个东西"，而它其实什么都没创建 |
-| **前端做一次全量 chrome 重载** | `apps/web/src/state/useWorld.ts:373-386`：`entity_created` 在转发集合里 → `dispatch('airp:world-event')` → `apps/web/src/App.tsx:364-365` 的 `onWorldEvent` 调 `loadChromeData()`（`App.tsx:259`）；`apps/web/src/components/nook/NookView.tsx:269-291` 也会因此重新 `load()`。**行号依 2026-09-14 工作树**——`useWorld.ts` 与 `App.tsx` 当时有未提交改动（`git status --porcelain` 两者均为 ` M`） | **低但真实**：写命令不该触发画布刷新 |
+| **向玩家弹一条假话** | `apps/web/src/lib/world-event-toast.ts` 的 `validDetail`（`:212-217`）对 `entity_created` 取 `detail.kind`，而 `ENTITY_KIND_VALUES`（`:35`）**含 `'other'`** → 画像通过 → 弹 `Created "x.yaml". The object is now in {layer}.`；而 `layerLabel(event)`（`:121-123`）在 `event.layer === null` 时**硬编码返回 `'the current scene'`**。`command/**` 的 `layer` 是 `null` ⇒ **每次写命令，玩家都看到一条断言"这个对象现在在'当前场景'里"的假话。** 这是 `[C-2]` 判 A 的**主因**：选 B 要么弹假话，要么改 `layerLabel` 的 null 语义 + i18n 消息键。 | **高**（玩家可见，且是假事实） |
+| **前端做一次全量 chrome 重载** | `apps/web/src/state/useWorld.ts:387-401`：`entity_created` 在转发集合里 → `dispatch('airp:world-event')` → `apps/web/src/App.tsx:464` 的 `onWorldEvent` 调 `loadChromeData()`（`App.tsx:342`）；`apps/web/src/components/nook/NookView.tsx:269-291` 也会因此重新 `load()`。**行号依 2026-09-14 工作树** | **低但真实**：写命令不该触发画布刷新 |
 | **事件表里多一条"实体"历史** | 命令不是 entity（契约 §6.3 逐字：「它不成层、不是实体、不出现在画布上」）。历史面板若按 `kind` 过滤，`other` 会混进玩家可见的记录 | **中**：世界史里出现了一条关于"规则文件"的记录，叙事上不对 |
+| ~~作家注入里多一句假事实~~ | ~~`render/events.ts:209-227` 的 `kind:'other'` 落 `default` 分支~~ **此条对 writer 不成立，已撤回**：作家注入的事件读带 `excludeActor: actor`（`inject/collect.ts:251` + `local-store.ts:770-774`，`docs/hooks/00:178`「作家不把自己刚写的念给自己听」），命令是作家自己写的 ⇒ 那条 `entity_created` 的 `actor_type='writer'` ⇒ **被排除，作家注入里不出现**。该后果**只在角色写命令时成立**，而 `[C-3]` 判 A（角色不可写）后整条不存在 | — |
 
-### 5.2 `[C-2]`：命令文件的创建/编辑是否落账——**两个方案，本文不拍板**
+> **为什么第 1 行才是主因、第 4 行被撤回**：`07` 先前把"作家注入里多一句假事实"列为第一条后果——**它说反了适用对象**。作家看不到自己的写入（`excludeActor`）；真正被那条假事实击中、且每次都击中的是**玩家**（toast，第 1 行）。判 A 的决定性论据因此落在 toast 上，不在作家注入上。
 
-> 契约 §3.3 冻结的顶层 key 分配里，命令文件**没有**对应的记账键（`command_log` / `command_error` 归**被触发实体**，契约 §3.3.2）。因此 `[C-2]` 不是"往哪个 key 写"，而是"落不落事件表"。这是本文必须给出方案而不拍板的原因。
+### 5.2 `[C-2]`：命令文件的创建/编辑**不落账**（评审门裁定 = 方案 A）
 
-#### 方案 A：**不落账**（本文推荐，但**保留 `[C-2]` 标记**）
+> 契约 §3.3 冻结的顶层 key 分配里，命令文件**没有**对应的记账键（`command_log` / `command_error` 归**被触发实体**，契约 §3.3.2）。因此 `[C-2]` 不是"往哪个 key 写"，而是"落不落事件表"。**评审门已裁定为方案 A（不落账）**，契约 §11.1 逐字：「**`[C-2]` = 不落账**」。本节保留两案的理由与代价，作为判定的记录。
+
+#### 判定：**不落账**（方案 A）
 
 `tool_result` 在 `tracked.kind === 'command'` 时**直接返回**，不调 `appendEvent`。
 
 **理由（四条，按强度排序）**：
 
-1. **命令不是 entity，`kind` 的五个值全是实体的分类。** `entity_created.detail.kind` 的封闭枚举是 `chalk|component|note|letter|other`（`schemas/events.ts:43-48`），语义是"这是什么**东西**"。命令是**规则**（契约 §3.2 的核心分界表）。填 `other` 不是"分类模糊"，是**把规则伪装成一个东西**——这正是 `09 §9` 第 11 条批评的那类"技术指标全绿、语义全错"。
-2. **`resolveLayer` 返回 `null`，而这不是缺陷、是设计。** `local-store.ts:828-833` 的注释逐字：「Layer id a world path belongs to, or null when it is NOT in the layer tree (`player/**`, `characters/<id>/**`, `world.json`)」。命令与 `player/` 同类**不在层树里**——但与 `player/` 有一个关键差别：背包里的东西**是**实体（有卡、可拿、可看），命令不是。给一个不在层里的非实体落 `entity_created`，等于让 `layer: undefined` + `kind: 'other'` 这两个"我不知道它是什么"合起来冒充一次分类。
-3. **落账的收益为零，成本明确。** 事件的读者有两个：作家注入（§5.1 表格第 1 行，读到的是假事实）与玩家历史（第 3 行，读到的是规则文件）。**没有任何一个读者需要"命令被创建了"这个事实**——需要知道命令存在的是 Agent 与作者，而他们读的是**文件系统**（§6 的发现通道）与**命令清单**（§6.3）。
-4. **与相邻的既有决定方向一致**：`01 §5` 逐字「本文的解析路径不落任何事件」，且 `01 §4` 的表把"创建/编辑/删除命令文件"的归属写成 `07`——即**由本文决定**，`01` 不预设。
+1. **主因：`entity_created` 的主要消费者是玩家可见的 toast。** `apps/web/src/lib/world-event-toast.ts` 画像通过（`:35` 含 `'other'`、`:212-217`）→ 弹 `Created "x.yaml". The object is now in {layer}.`，而 `layerLabel(event)`（`:121-123`）在 `layer === null` 时硬编码 `'the current scene'`，`command/**` 的 `layer` 正是 `null` ⇒ **每次写命令向玩家弹一条假话**。选方案 B 要么弹假话，要么改 `layerLabel` 的 null 语义 + i18n 消息键——成本远超"改渲染器"。
+2. **命令不是 entity，`kind` 的五个值全是实体的分类。** `entity_created.detail.kind` 的封闭枚举是 `chalk|component|note|letter|other`（`schemas/events.ts:43-48`），语义是"这是什么**东西**"。命令是**规则**（契约 §3.2 的核心分界表）。填 `other` 不是"分类模糊"，是**把规则伪装成一个东西**——这正是 `09 §9` 第 11 条批评的那类"技术指标全绿、语义全错"。
+3. **`resolveLayer` 返回 `null`，而这不是缺陷、是设计。** `local-store.ts:861-864` 的注释逐字：「Layer id a world path belongs to, or null when it is NOT in the layer tree (`player/**`, `characters/<id>/**`, `world.json`)」。命令与 `player/` 同类**不在层树里**——但与 `player/` 有一个关键差别：背包里的东西**是**实体（有卡、可拿、可看），命令不是。给一个不在层里的非实体落 `entity_created`，等于让 `layer: null` + `kind: 'other'` 这两个"我不知道它是什么"合起来冒充一次分类。
+4. **落账的收益今天为零。** 没有任何现存消费者做审计（`entity_created` 的消费者只有 §5.1 的四条：toast / chrome 重载 / 历史面板 / 座位排序，**无一是审计**）；命令的溯源已由 git 提供（契约 §6.3：命令随世界分发、可 `read`）。且 `01 §5` 逐字「本文的解析路径不落任何事件」、`01 §4` 把"创建/编辑/删除命令文件"的归属写成 `07`——即由本文决定，`01` 不预设。
 
-**代价（必须如实写下来）**：
+**残留代价（如实登记）**：
 
-- **世界史里查不到"这条规则是什么时候被谁加进来的"。** 命令随世界分发（契约 §6.3）、可被 git 追踪、可 `read`——但**没有事件表记录**。若将来要做"世界里发生了哪些规则变更"的审计面，需要另开一条路（这是 `[C-2]` 的 reopen 触发条件）。
-- **写命令不进 `dynamics`**，因此同一轮之后的作家不会从注入里看到"我刚写了一条命令"。这一点今天本来也不成立（§5.1 那条是假事实，不该被当成收益），但它确实意味着**没有"刚改过规则"的提示**。
+- **命令的创建不进事件表**，世界史里查不到"这条规则是什么时候被谁加进来的"。若将来出现审计需求，**唯一路径是给命令一个独立的事件类型**（需同时改枚举 + `EventDetailSchemas` + 渲染模板，`schemas/events.ts:4-7` 明写这个代价）——**MUST NOT 复用 `entity_created`**（理由见 §5.1 第 1 行：那条 toast 会把"规则"读成"一个东西"）。
+- **写命令不进 `dynamics`**，因此同一轮之后的作家不会从注入里看到"我刚写了一条命令"。这一点今天本来也不成立（作家本来就看不到自己的写入，`excludeActor`），但它确实意味着**没有"刚改过规则"的提示**。
 
-#### 方案 B：**落账，但用一个明确的记账形状**（备选）
+#### 被放弃的方案 B：**落账，但用一个明确的记账形状**
 
 落 `entity_created`，但 `detail` 带命令专属的附加键（`docs/tools/00 §5.2` 逐字允许「`detail` MAY 额外带可选键」）：
 
 ```
-{ type: 'entity_created', subject: 'command/x.yaml', layer: undefined,
+{ type: 'entity_created', subject: 'command/x.yaml', layer: null,
   detail: { path: 'command/x.yaml', name: <YAML 的 name: 字段>, kind: 'other',
             command: 'x' } }
 ```
 
-**理由**：与命令**执行**时产生的效果事件一致（那些事件带 `detail.command`，`10` 已定，见 `01 §5` 的裁定 1），于是"凡与命令相关的事件都带 `detail.command`"成为一条无例外的规律；`render/events.ts:209-227` 的 `kind: 'other'` 分支可以特判。
+**它原本的理由**：与命令**执行**时产生的效果事件一致（那些事件带 `detail.command`，`10` 已定，见 `01 §5` 的裁定 1），于是"凡与命令相关的事件都带 `detail.command`"成为一条无例外的规律。
 
-**注意：`detail.by` MUST NOT 被使用。** 主 agent 的裁定 1 已定：`detail.by` 被 `layer_initialized` 占用且是闭枚举 `z.enum(['writer','player','engine'])`（`schemas/events.ts:99`），dev 模式 `appendEvent` 对 detail 跑 `safeParse`（`local-store.ts:668-679`）→ 写 `'command'` 会炸。**只留 `detail.command`。**
+**为什么被放弃**：
 
-**代价**：
+- **它买不到承诺的一致性收益。** §5.1 第 4 行证明了那条"假事实"对 writer 不成立（`excludeActor`），所以"凡与命令相关的事件都带 `detail.command`"这条规律**只剩下一个玩家可见的副作用**（toast 假话），没有对应的收益。
+- **它其实是"方案 B + 改 toast + 改渲染器"三件事**：不改 toast，玩家每次写命令都收到假话（§5.1 第 1 行）；要改 toast 就得动 `layerLabel` 的 null 语义与 i18n 消息键。工作量比"只用 `detail.command`"大得多。
+- **`[C-3]` 判 A 之后它连"补归因"的残余价值也没了**：角色不可写，就没有"谁写的规则"需要靠命名空间或 `detail.command` 补回。
 
-- **需要动渲染器**（`render/events.ts` 加一条 `command/` 前缀特判），否则 §5.1 的假事实照旧——那意味着"方案 B"其实是"方案 B + 改渲染器"两件事，工作量比看上去大。
-- **`name` 从哪来**要再定一次：`tool_result` 目前从 `parseFrontmatter` 取（`:85-86`），对 YAML 拿不到；方案 B 要额外 `parseWorldCommand` 一次（§3.5 的 7a 已经做了一次，可复用）。
-- **仍然要在世界史里解释"命令是什么"**，而它是规则不是实体——同一类问题只是被 `detail.command` 缓解而非解决。
+**注意：`detail.by` MUST NOT 被使用。** 主 agent 的裁定 1 已定：`detail.by` 被 `layer_initialized` 占用且是闭枚举 `z.enum(['writer','player','engine'])`（`schemas/events.ts:99`），dev 模式 `appendEvent` 对 detail 跑 `safeParse`（`local-store.ts:668-679`）→ 写 `'command'` 会炸。**只留 `detail.command`**（且按方案 A，命令的**创建**根本不用它）。
 
-#### 两案的共同点（不因选择而变）
+#### 判定的共同点（记录）
 
-- **都不新增事件类型**（契约 §5.2）。两案都用 `entity_created`，因为十五个类型是封闭的（`schemas/events.ts:9-25`）。
-- **两案的 `actor` / `turn` 相同**：`actor = agentActor()`（现状 `:88`），`turn = currentTurnAnchor(ctx)`（现状 `:89`）。命令是 Agent 写的，归 `writer` 或 `character`，**不是 `engine`**（契约 §5.1）。
-- **两案都不改 `extensions/world-context.ts:101-104` 的实体分支**。
+- **不新增事件类型**（契约 §5.2，十五个类型封闭，`schemas/events.ts:9-25`）。
+- `actor = agentActor()`（现状 `:88`），`turn = currentTurnAnchor(ctx)`（现状 `:89`）。命令是 Agent 写的，归 `writer`（`[C-3]` 判 A 后只剩这一种），**不是 `engine`**（契约 §5.1）。
+- **不改 `extensions/world-context.ts` 的实体分支**（命令分支直接 return）。
 
 ### 5.3 命令文件的**执行**落账（引用，不重定义）
 
@@ -622,7 +628,7 @@ graph TD
 
 **但成本不是拒绝的主要理由。真正的理由有三条**：
 
-1. **`SectionKey` 是冻结的封闭联合，加一节是一次上位契约修改。** `packages/shared/src/render/sections.ts:35-43` 的注释逐字：「`00 §3.1's closed key set; frozen — tests and logs assert on it (02 §2.2)`」；`docs/hooks/00 §3.1` 逐字「`key` **一旦定下不得改**（测试、日志、诊断都按它断言）」。为一个**今天六个模板世界全都用不到**的节（它们没有任何 `command/`，且迁移（`08`，`[C-5]`）尚未落地）动冻结契约，收益/代价比不成立。
+1. **`SectionKey` 是冻结的封闭联合，加一节是一次上位契约修改。** `packages/shared/src/render/sections.ts:35-43` 的注释逐字：「`00 §3.1's closed key set; frozen — tests and logs assert on it (02 §2.2)`」；`docs/hooks/00 §3.1` 逐字「`key` **一旦定下不得改**（测试、日志、诊断都按它断言）」。为一个**今天六个模板世界全都用不到**的节（它们没有任何 `command/`，且迁移（`08`；`[C-5]` 已定 = 路线 ④ + 叠加 ③）尚未实现）动冻结契约，收益/代价比不成立。
 2. **它是"平台知识伪装成世界状态"的同一类错误的镜像。** §6 开头立的分界：命令清单**确实**是世界内容（所以它不是错的落点），但它是**规则面**的内容，而整块状态块回答的是"**玩家此刻站在哪里、这里有什么、刚发生了什么**"（`docs/hooks/00 §3.2` 六节）。规则不是场景。
 3. **硬门 7（关掉仍可玩）与 `10` 的排除口径都指向同一个结论**：注入块越长，"该看见的没看见"的风险越高——`10` 已经发现 `excludeActor` 让作家看不见自己触发的命令事件（`inject/collect.ts:250-252`），并用**触发动作的 `details` 回执**（同轮、不走注入）解决它。命令清单同理：**按需查**优于**每轮灌**。
 
@@ -811,9 +817,9 @@ Split the extra rewards into a second entry, or drop them. The engine expands th
 
 **一次自修的第二个前提（不是文案问题，但同属本节）**：**错误必须到达模型**。`block.reason` 经 `createErrorToolResult` 变成标准的工具结果（`agent-loop.ts:636-646`、`:760-763`），在**同一轮**的工具结果消息里（`:544-547`）——不依赖事件注入，因此**不受 `10` 发现的 `excludeActor` 排除影响**（`inject/collect.ts:250-252`）。这条性质让"写入失败"和"执行失败"有了同一种可靠通道，也是 `10` 主张"后果走 `details`"的同一理由。
 
-### 7.6 `parseOnBindings` 必须承担的第三件校验：数组长度上限
+### 7.6 由 `02` 的 `parseOnBindings` 承担、但本文提供校验规格的第三件校验：数组长度上限
 
-主 agent 的指派（`09` 的静态上限论证）落到本文：**`rewards ≤ 3` / `options ≤ 2` 今天没有真正的强制落点**——`on` 走实体 `.md` 的 passthrough（契约 §10.8），`EntityFrontmatter` 不强制它；而契约的方向三裁定（数组实参 + 引擎内有界展开）**完全依赖**"迭代次数 = 实体数组长度 ≤ schema 上限"这个静态上界。
+主 agent 的指派（`09` 的静态上限论证）落到 `02` 的 `parseOnBindings`：**`rewards ≤ 3` / `options ≤ 2` 今天没有真正的强制落点**——`on` 走实体 `.md` 的 passthrough（契约 §10.8），`EntityFrontmatter` 不强制它；而契约的方向三裁定（数组实参 + 引擎内有界展开）**完全依赖**"迭代次数 = 实体数组长度 ≤ schema 上限"这个静态上界。**`parseOnBindings` 由 `02` 实现（§2.2），本文是它的调用方与这条校验的规格提出方。**
 
 **所以写入时校验清单是四件，不是三件**（§3.3 步骤 5d/5e）：
 
@@ -826,7 +832,7 @@ Split the extra rewards into a second entry, or drop them. The engine expands th
 
 **常量来源唯一**：上限值 MUST 从 `01` 的 `MAX_ARRAY_REWARDS` / `MAX_ARRAY_OPTIONS` 取（`01 §2.8` 已定义），**MUST NOT 在 `07`/`04`/`09` 各写一个 `3`**。错误码用 `01` 的 `unknown_array_bound`（它已经在 `WorldCommandErrorCode` 里，`01 §7.1` 的 J 组）。
 
-**为什么这件校验必须在 `parseOnBindings` 里而不是在 `01` 的 `parseWorldCommand` 里**：`parseWorldCommand` 解析的是**命令文件**，它看不到实体 frontmatter（那是触发时才传进来的）；而 `from` 指向的数组住在**实体**上。**拥有实体 frontmatter 的解析器只有一个：`parseOnBindings`。** 这也是主 agent 把它指给 `01` 实现、由 `07` 调用的原因。
+**为什么这件校验必须在 `parseOnBindings` 里而不是在 `01` 的 `parseWorldCommand` 里**：`parseWorldCommand` 解析的是**命令文件**，它看不到实体 frontmatter（那是触发时才传进来的）；而 `from` 指向的数组住在**实体**上。**拥有实体 frontmatter 的解析器只有一个：`parseOnBindings`。** 这也是主 agent 把 `parseOnBindings` 指给 **`02`** 实现（`packages/shared/src/commands/bindings.ts`）、由 `07` 调用的原因。
 
 **漏了第 3 项的后果（必须写清楚，因为它是"纸面前提"的典型）**：一个写了 10 项 `rewards` 的实体（Agent 手写、或从旧存档拷来）会让 `give` 展开 10 次，而引擎的预算是按 ≤3 算的（`03` 的 `WORLD_COMMAND_EFFECT_BUDGET = 24` 与 `05` 的 `steps` 粒度都按此设计）。**`09` 的整个静态上限论证会变成一句没有落点的话**——这正是 `design-first-feature-workflow` 点名的「登记 ≠ 落地」。
 
@@ -900,7 +906,7 @@ export const getCommandTool: ToolDefinition;   // 形状对齐 extensions/toolki
 | `packages/shared/src/index.ts` | `:32-62` 的手工 barrel | 加 `export * from './commands/paths.js';`（漏了 → 扩展侧不可达，`:64-65` 注释已写明这个坑） |
 | `tools/check-skills.mjs` | `:45-54` | 若加 skill：`TRIGGERS_BY_SKILL` 登记 `world-commands`（`EXPECTED_PLATFORM` 由它派生，`:54`） |
 
-**不做的事（明确列出，避免越界）**：不改 `presets/*.json`；不改 `apps/server/**`（本模块的写入路径不经过 server）；不改任何事件 schema；不改 `packages/shared/src/render/**`（`[C-2]` 若选方案 B 才需要，且那时归 `10`）。
+**不做的事（明确列出，避免越界）**：不改 `presets/*.json`；不改 `apps/server/**`（本模块的写入路径不经过 server）；不改任何事件 schema；不改 `packages/shared/src/render/**`（命令分支直接 return，连 `render/**` 都不进）。
 
 ### 8.3 依赖的实现顺序（谁先谁后，为什么）
 
@@ -932,11 +938,11 @@ graph LR
 | 2 | 没有任何"写入即校验"：Agent 写什么都直接落盘（只有 photo 一条特例，`:72-77`） | §3.1-§3.3 的三条校验（命令文件 / `on` 形状与跨字段 / `run` 引用） | **新增一条门禁** |
 | 3 | `on` 字段**没有任何校验**（passthrough，`schemas/frontmatter.ts:137-146`） | 写入时 `parseOnBindings` + 触发时 `02` 的 `on_malformed` | **把静默保留变成可见拒绝**（契约 §10.8） |
 | 4 | `extensions/world-context.ts:16-28` 的 `inputText`/`mergedEditText` 对 `edit` 恒返回 `undefined`（`:26-28` 死代码） | §4.1 的 `proposedFileText`（只认 `content` 与 `edits[]`） | **修一个既有缺陷的可用面**（§11.1） |
-| 5 | `tool_result` 对任何被跟踪的写入都落 `entity_created`/`entity_edited`（`:102-104`），`kind` 由 `fm?.type` 推 | 命令分支**不落账**（`[C-2]` 方案 A）或落一条带 `detail.command` 的账（方案 B） | **待拍板**（§5.2） |
-| 6 | 效果名还没有任何 Agent 可见的通道（`WORLD_COMMAND_EFFECTS` 尚未存在） | §13.1 的 skill + §13.2 的常驻一行 + 写入失败的文案 | **新增三条知识通道** |
+| 5 | `tool_result` 对任何被跟踪的写入都落 `entity_created`/`entity_edited`（`:102-104`），`kind` 由 `fm?.type` 推 | 命令分支**不落账**（`[C-2]` 方案 A，§5.2） | **判定的结果：命令创建不进事件表** |
+| 6 | 效果名还没有任何 Agent 可见的通道（`WORLD_COMMAND_EFFECTS` 尚未存在） | §13.1 的 skill + §6.4 的常驻一行 + 写入失败的文案 | **新增三条知识通道** |
 | 7 | 没有 `get_command` 之类的只读门面 | §6.3 候选 B2（`NEW`，若采纳） | **可选新增** |
 | 8 | `docs/prompts/04 §2.2` 断言"角色进程不带 `--skill`" | `launch.ts:206` + `presets/character.json:42` 表明**已经带了** | **上位文档过期**（§11.2） |
-| 9 | `init-command.ts:305-324` 会在 spawn initializer 时临时改写 `AIRP_AGENT_SCOPE` | 若恢复失败会让 §13.2 的 `[C-3]` 判断条件失效 | **既有实现的一个 `[推断]` 风险**（§11.3 第 1 行） |
+| 9 | `init-command.ts:305-324` 会在 spawn initializer 时临时改写 `AIRP_AGENT_SCOPE` | 若恢复失败会让 §12.2 的 `[C-3]` 判断条件失效 | **既有实现的一个 `[推断]` 风险**（§12.3 第 1 行） |
 | 10 | 迁移基线：`origin/niko` 的实现（`apps/server/src/engine/declared-actions.ts:159-212`）在 server engine，只被 HTTP 路由调用 | 命令在动作层（契约 §4.1），任何入口同一套后果 | **架构位置改变**（归 `08` 收敛，本文只引用） |
 
 **迁移影响的旧调用点**（本文改动的全部触及面）：
@@ -992,10 +998,24 @@ graph LR
 | N4 | `classifyWorldWritePath` 的 11 条输入（§2.1 的表）逐条返回期望值 | 纯函数，最便宜的回归 |
 | N5 | 对任意 `file`：`classifyWorldWritePath(file).kind === 'command'` ⟺ `commandIdOfPath(file) !== null`，且 id 逐字相同 | §2.1 第 3 条；防两个 id 正则漂移 |
 | N6 | 写入一条合法命令后，`reason` 不在场、工具结果**不置 `isError`**，且返回文本含 `Entities can bind it with on.<hook>[].run: <id>` | §3.5 的成功文案 |
-| N7 | `[C-2]` 方案 A 落地后：写命令**不产生**任何 `entity_created`（断言事件表前后条数不变） | 若选方案 B，此断言改成"产生一条带 `detail.command` 的 `entity_created`，且 `detail.by` **不存在**" |
+| N7 | `[C-2]` 方案 A 落地后：写命令**不产生**任何 `entity_created`（断言 `getMaxSeq()` 前后不变） | §5.2 的判定；断言同时守住"toast 不弹假话" |
 | N8 | 校验器抛错时（mock `parseWorldCommand` 抛非 `ActionError`）：写入**放行**，且 `stderr` 有一次 warn | §7.7 表格最后一行的 fail-open |
 | N9 | skill 若落地：`node tools/check-skills.mjs` 通过（A0/A5/A6/A7/A8），且 `references/effects.md` 与 `04` 的注册表**逐字节一致**（生成 + 比对） | §6.1 候选 A2 的漂移防线 |
 | N10 | 注入成本回归：`WRITER_INSTRUCTION` 与 7 份 skill `description` 的字符数在 §6.5 给的预算内 | 防"顺手又加一段" |
+
+### 10.5 `[C-2]` / `[C-3]` 判定落地的验收断言（B 组必做）
+
+**`[C-2]` = A（命令文件创建/编辑不落账）**：
+
+- **实现**：`tool_result`（`extensions/world-context.ts:80`）在 `tracked.kind === 'command'` 时**直接 return**，不调 `appendEvent`。
+- **MUST NOT** 改 `render/**`、`world-event-toast.ts`、事件 schema。
+- **验收断言**：写一份合法命令**前后** `store.getMaxSeq()` 不变（= 事件表零新增；同时等价于"没有任何 `entity_created` 生成"，见 N7）。
+
+**`[C-3]` = A（writer / initializer 专属）**：
+
+- **实现**：在 `tool_call`（`extensions/world-context.ts:50`）的**命令分类分支内**加一条同步身份判断：`target.kind === 'command'` 且 `agentScope ∉ {'writer-top-level','initializer'}` → `block: true`，文案逐字见 §12.2。
+- **MUST NOT** 改 `assertNookMutationAllowed`；**MUST NOT** 用 shell 字符串匹配防 `bash`。
+- **验收断言**：角色 scope（`AIRP_AGENT_SCOPE=character`）下送一份**合法**命令 → `{block:true}`、磁盘无文件；writer scope 下同一份 → 通过。
 
 ---
 
@@ -1017,16 +1037,18 @@ graph LR
 **建议怎么改**：改为「角色进程带同一套 `--skill`（`launch.ts:206`）；两级都可见。是否**该**给是 `§3.5` 的设计问题，不是装配事实」。
 **归属**：`07` 提出；`docs/prompts/04` 的 owner 回写。
 
-### 11.3 `docs/tools/00 §8` 的反模式与 `[C-3]` 方案 B 正面冲突
+### 11.3 `docs/tools/00 §8` 的反模式与 `[C-3]` 曾经的方案 B 正面冲突（**已由评审门裁决**）
 
 **哪两句**：
 
 - `docs/tools/00-共同上下文.md:377` 逐字：「❌ 给角色加"只能写自己目录"的权限门禁（doc-20 §1.1：能力不按身份裁）」；
 - `docs/doc-20-agent工具与互动字段协议.md:39` 逐字：「角色没有工具权限上的"只能写自己目录"。它可以按剧情需要在场景里生成物件、改写组件、移动角色或把一个新东西交给玩家。人格 prompt 只决定它通常会不会这样做，不把这种能力从工具层拿走。」
 
-**为什么矛盾**：本文 §12.2 的 `[C-3]` 方案 B（角色可写命令，但限 `command/<characterId>-*.yaml` 命名空间）**正是**一条"按身份裁能力"的门禁。
-**建议怎么改**：**不由本文裁决。** 两条口径都可能对——`doc-20 §1.1` 说的是**世界内容**（角色能写任何世界的 `.md`），而 `[C-3]` 问的是**规则面**（角色能不能定义全世界的执行规则）。**这是一条真正的分类问题，必须由评审门与 `doc-20` 的 owner 一起定。** 本文只保证：**若选方案 B，那条命名空间限制 MUST 在 `classifyWorldWritePath` 之外单独实现**（§2.1 第 2 条把落点留在那里），从而"能力不按身份裁"对**世界内容**仍然成立。
-**归属**：`07` 提出、评审门 + `docs/tools/00` / `docs/doc-20` 的 owner 裁决。
+**当初为什么登记**：本文 §12.2 曾提的 `[C-3]` 方案 B（角色可写命令，但限 `command/<characterId>-*.yaml` 命名空间）**正是**一条"按身份裁能力"的门禁。
+
+**评审门的裁决（契约 §11.1）**：`[C-3]` 判**方案 A**（角色不可写）。分类如下——`doc-20 §1.1` 说的是**世界内容**（角色能写任何世界的 `.md`，管的是"角色能写任何**实体**"），而 `[C-3]` 问的是**规则面**（角色能不能定义全世界的执行规则）。**这是两个平面**：命令是**规则**（契约 §3.2），本判定限制的是**规则平面**的进入权，**不缩小角色对任何实体的能力**——因此 `docs/tools/00:377` 的反模式（限制**内容**书写范围）不被触发。
+
+**归属**：`07` 提出、评审门已裁决；`docs/tools/00` / `docs/doc-20` 的 owner 若认为该分类需回写，按此口径改。
 
 ### 11.4 `02 §10.1` 的错误表缺 `line`/`column`，会让 §7.5 的论证失效
 
@@ -1043,11 +1065,14 @@ graph LR
 **为什么仍要登记**：**若试玩后发现作家反复写同义命令**（§6.3 候选 B2 要解决的那个问题），唯一更彻底的解法就是加一节，那时需要一次**上位契约修改**（改 `docs/hooks/00 §3.2` 的表 + `sections.ts:35-43` 的联合 + `docs/hooks/02 §7.1` 的 golden 块 + `docs/hooks/00 §4.2` 的上限表）。**本文把它写下来，是为了让那次修改是有准备的，而不是被当成一次随手的加节。**
 **归属**：`07` 登记；若触发，`docs/hooks` 批次与 `07` 同批改。
 
-### 11.6 需要 `04` 确认的一处：效果数从 8 到 7 的连带
+### 11.6 效果数从 8 到 7 的连带（**已由 `04` 收口解决**）
 
-**哪一句**：`04 §2.1` 的表列 **8** 个效果（含 `unlink`），而 Main 的裁定（2026-09-14）已把它收到 **7** 个（`give · move · edit · set_status · consume · enter · link`；`link` 降为 `give` 的附属 `link_to`，`unlink` 移除，理由是 `linkCards` 不落事件 → 违反硬门 1）。
-**本文的依赖**：§3.7 的文案表与 §7.3 的样例 1 逐字引用了 `Allowed effects: give, move, edit, set_status, consume, enter, link` —— **这 7 个名字 MUST 与 `04` 的注册表逐字一致**，否则写入失败的文案会给出**不存在的候选**（一种新的静默失败：模型照候选改，改完还是错）。
-**建议**：`04` 定稿后，本文 §7.3 的样例按它逐字对齐；`01 §7.3` 的 `unknown_action` 文案模板里的 `{effects}` 由同一个常量渲染（**单一真相源**）。
+**哪一句**：`04 §2.1` 的表原先列 **8** 个效果（含 `unlink`），而 Main 的裁定（2026-09-14）把它收到 **7** 个（`give · move · edit · set_status · consume · enter · link`；`link` 降为 `give` 的附属，`unlink` 移除，理由是 `linkCards` 不落事件 → 违反硬门 1）。
+
+**已解决**：`04` 收口后，`WORLD_COMMAND_EFFECTS` 逐字为 `['give','move','edit','set_status','consume','enter','link']`（`04:843-846`）。本文 §3.7 的文案表与 §7.3 的样例 1 引用的 `Allowed effects: give, move, edit, set_status, consume, enter, link` **与它逐字一致**——**已核对，无需再改**。
+
+**仍成立的机制**：这 7 个名字 MUST 一直与 `04` 的注册表逐字一致，否则写入失败的文案会给出**不存在的候选**（一种新的静默失败：模型照候选改，改完还是错）。`01 §7.3` 的 `unknown_action` 文案模板里的 `{effects}` 由**同一个常量渲染**（单一真相源）。
+
 **归属**：`04` 拥有集合；`07` / `01` 引用。
 
 ### 11.7 `receipt.ts` 的所有权：本文**不**声明它
@@ -1058,75 +1083,84 @@ Main 的裁定（2026-09-14）把 `WorldCommandReceipt` 归 **`04`** 独占（`p
 
 ---
 
-## 12. 仍未知 / 待拍板
+## 12. 判定与仍未知
 
-### 12.1 待拍板项（保留标记，MUST NOT 被写成既定事实）
+### 12.1 六项待拍板的裁决结果
 
-| 编号 | 问题 | 本文给的方案 | 谁拍板 |
+| 编号 | 问题 | 裁定 | 出处 |
 |---|---|---|---|
-| **`[C-2]`** | 命令文件的创建/编辑是否落 `entity_created` | §5.2：**方案 A 不落账**（推荐）+ 方案 B（落账 + `detail.command` + 改渲染器） | 评审门 |
-| **`[C-3]`** | 世界命令能否被**角色 Agent** 创建 | §13.2：两个方案 + 代价 | 评审门 |
+| **`[C-2]`** | 命令文件的创建/编辑是否落 `entity_created` | **方案 A：不落账** | 契约 §11.1；本文 §5.2 |
+| **`[C-3]`** | 世界命令能否被**角色 Agent** 创建 | **方案 A：writer / initializer 专属，角色 MUST NOT 创建** | 契约 §11.1；本文 §12.2 |
 
-### 12.2 `[C-3]`：角色 Agent 能不能写命令——两个方案 + 代价（**不拍板**）
+> 两案**互相独立**：`[C-3]` 判 A 之后，`[C-2]` 方案 B 的唯一"互补价值"（命名空间补归因）随之消失。**两案 MUST 同批落地**（若只判 `[C-2]`=A 而不判 `[C-3]`，"角色写了全局规则且无人知"是最坏组合）。
+
+### 12.2 `[C-3]`：角色 Agent 不能写命令（评审门裁定 = 方案 A）
 
 **现状事实（本文核实，三条）**：
 
 1. **角色有自己的身份与 scope**：`apps/server/src/engine/launch.ts:208-211` 给角色进程注入 `AIRP_AGENT_ROLE=character:<id>` 与 `AIRP_AGENT_SCOPE=character`；`extensions/world-context.ts:9-14` 的 `scopeFromEnvironment` 据此把它解析成 `AgentScope = 'character'`。
 2. **现有的 nook 权限门对 `command/` 是**无操作**：`assertNookMutationAllowed`（`packages/shared/src/actions/actor.ts:128-156`）第一件事是 `characterIdOfPath(path)`（`packages/shared/src/rules/characters.ts:46-48`），它只认 `characters/` 前缀，其余一律 `return null`，于是 `actor.ts:136` 立刻 `return`。**所以"能不能写 `command/`"今天没有任何现成门禁**——`[C-3]` 不是"收窄一条已有的规则"，是"新写一条"。
-3. **角色看得到 skill**（§11.2）：`launch.ts:206` + `presets/character.json:42`。因此**两个方案都不需要额外常驻提示词成本**——这一条纠正了"教角色写命令更贵"的直觉。
+3. **角色看得到 skill**（§11.2）：`launch.ts:206` + `presets/character.json:42`。因此**实现不需要额外常驻提示词成本**——这一条纠正了"教角色写命令更贵"的直觉。
 
-#### 方案 A（**限制**）：只有 writer / initializer scope 能写 `command/`
+#### 判定：**方案 A** —— 只有 writer / initializer scope 能写 `command/`，角色 MUST NOT 创建世界命令
 
-**实现**：在 `classifyWorldWritePath` **之外**加一条身份判断：`target.kind === 'command'` 且 `agentScope` 不是 `'writer-top-level'` / `'initializer'` → `block`，理由文案：
+**落点**：在 `extensions/world-context.ts:54` 的**门禁分派之后**（即 `classifyWorldWritePath(file)` 返回之后）加一条同步身份判断。**注意 `classifyWorldWritePath` 本身今天还不存在**（`packages/shared/src/commands/` 尚未创建，见 §8.1），所以"落点在分类器之外"的说法是把设计当现状——准确的表述是**落在 `tool_call` 的门禁分派之后**，与分类器同在 `tool_call` 里、但**不代表分类器的语义**（`classifyWorldWritePath` 仍是纯路径函数，不接身份参数，§2.1 第 2 条）。
+
+**判据**：`target.kind === 'command'` 且 `agentScope` 不是 `'writer-top-level'` / `'initializer'` → `block: true`，理由文案：
 
 ```text
 World commands are the world's rules; only the Writer writes them. Describe the consequence in
 your own turn instead, or leave a note the Writer will read.
 ```
 
-**理由**：契约 §3.2 的核心分界逐字——「**「世界里的实体」与「世界的规则」是两个概念，不能共用一种载体**」。命令是**规则**，而规则的作用域是**整个世界**；角色的身份是"世界里的一个人"，它的动作作用域天然是自己的小天地与在场场景。
+**实现成本**：一条判断 + 一条文案；**不动** `assertNookMutationAllowed`（它对 `command/` 本就无操作，且语义是 nook），**不动** `classifyWorldWritePath` 的分类语义。
 
-**代价（三条）**：
+**理由（按强度）**：
+
+1. **被放弃的方案 B 保证不了自己的目标**（见下"决定性机制"）：命名空间只约束**名字**，不约束**引用 / 触发 / 作用域**。一条保证不了自己目标的限制，不值得引入它与 `docs/tools/00:377` 反模式的冲突。
+2. **命令是全局规则**（契约 §3.2 冻结分界表逐字：「「世界里的实体」与「世界的规则」是两个概念，不能共用一种载体」）。角色的身份是"世界里的一个人"；**一个角色的局部行为改变全世界的规则**（包括玩家的骰子）与 `doc-20 §1.2` 的"仅直聊期间行动"直接冲突。
+3. **与 `[C-2]` 交叉**：`[C-2]` 判 A（不落账）⇒ 角色若可写则**无人知道这条全局规则是谁加的**。方案 B 曾用命名空间"部分补回"归因，而第 1 条证明连这个补回也不可靠。
+4. **不违反"能力不按身份裁"**（`docs/doc-20 §1.1`）：该条针对**世界内容**（"角色并不局限于自己的小天地"，管的是"角色能写任何**实体**"）。命令是**规则**（契约 §3.2），是**另一个平面**。本判定限制的是**规则平面**的进入权，**不缩小角色对任何实体的能力**——`07 §11.3` 判定"这是真正的分类问题"是对的，本报告给出分类：**两个平面，规则平面归作者**。
+
+**代价（如实登记，三条）**：
 
 - **角色的自主性被砍掉一块**：角色在小天地里自己长出来的玩法（"我的怀表每天慢五分钟"）只能靠叙述表达，无法固化为规则。**代价的真实性取决于一个本文无法回答的问题**：角色**会不会**真的想写世界规则？（`doc-20 §1.2` 逐字：「现阶段角色不会常驻自主活动，也没有角色间主动通信」——角色只在玩家打开直聊遮罩时活动，那时它面对的是**正在进行的对话**，而不是"设计一套规则"的场景。）
-- **一次真实的表达需求会丢**：角色发现"这件事该有确定后果"时，它**没有把需求交给作家**的通道（角色与作家是两个进程，无跨 agent 通信）。方案 A 下这个需求只能被静默丢弃。**缓解**：角色可以在叙述里明说（"这件事该由规律决定，不是我随口说的"），玩家读到后可转告作家——但那是**玩家手动搬运**。
-- **实现成本最低**：一条判断 + 一条文案；不动 `assertNookMutationAllowed`，不动 `classifyWorldWritePath` 的分类语义。
+- **一次真实的表达需求会丢**：角色发现"这件事该有确定后果"时，它**没有把需求交给作家**的通道（角色与作家是两个进程，无跨 agent 通信）。方案 A 下这个需求只能被静默丢弃。**缓解**：角色可以在叙述里明说（"这件事该由规律决定，不是我随口说的"），玩家读到后可转告作家——那是**玩家手动搬运**，不是机制。
+- **约束层级是工具层，不是物理层**：见下。
 
-#### 方案 B（**放行，但限命名空间**）：角色能写，但只能写 `command/<characterId>-*.yaml`
+**约束层级（必须说清）**：这是**工具层**的一条约束，**不是提示词层、也不是物理层**。`bash` 绕过**同 writer 侧**（`world-context.ts:51` 只认 `write`/`edit`；`vendor/pi-rp/.../tools/bash.ts:90-107` 无白名单）——**既有缺口，非本批引入**。
 
-**实现**：`target.kind === 'command'` 且 `agentScope === 'character'` 时，额外要求 `id.startsWith(\`${actor.id}-\`)`，否则 `block`，理由文案：
+> ⚠️ **一条只属于 `[C-3]` 的加剧**：角色的 `bash` 是**它自己的进程**（`doc-20 §1.1` 明列角色有 bash ✅，`presets/character.json:16-30` 的 deny 不含 bash）⇒ **一个越狱的角色既能写命令又绕过写入门禁，而 `[C-2]` 判 A 后连事件都不留**。这不是本批次要修的（物理隔离归 `09`），但 MUST 被登记（`09` 攻击面清单）。
 
-```text
-Your character may write commands named after you: command/<characterId>-<name>.yaml. Got
-"command/<id>.yaml".
-```
+#### 被放弃的方案 B：角色可写，但限 `command/<characterId>-*.yaml` 命名空间
 
-**理由**：① 与 `doc-20 §1.1` 的能力分发表逐字一致（「角色并不局限于自己的小天地」「**能力不按身份裁**」）；② 命名空间让"哪个命令是谁写的"从 id 一眼可读，无需落账（**与 `[C-2]` 方案 A 的不落账形成互补**：不落账的代价"查不到谁加的规则"被 id 前缀部分补回）。
+**它原本的形状**：`target.kind === 'command'` 且 `agentScope === 'character'` 时，额外要求 `id.startsWith(\`${actor.id}-\`)`，否则 `block`。理由曾是与 `doc-20 §1.1`（"能力不按身份裁"）一致，且命名空间让"哪个命令是谁写的"从 id 一眼可读。
 
-**代价（四条）**：
+**决定性机制（为什么它不成立）**：**命名空间只约束名字，不约束引用 / 触发 / 作用域。** 角色写 `command/watson-curse.yaml`（名字带前缀 ✓）之后：
 
-- **它是一条"按身份裁能力"的门禁，与 `docs/tools/00 §8` 的反模式正面冲突**（§11.3）。这是本方案最大的代价，且它**不是文案问题**——两条上位口径必须有一个让步，本文无权裁决。
-- **命名空间是"写入时"的，不是"引用时"的**：`02` 的绑定解析（`on.<hook>[].run`）**不检查**前缀。任何实体都能引用角色写的命令，于是"这条规则是谁的世界的一部分"仍然模糊。要收紧就得在绑定层也加判断，而 `parseOnBindings` 现在是**纯函数、只吃 frontmatter**——加一个"调用方身份"参数会破坏它的纯度契约，只能退化成"由 07 在写入 `on` 时补一条引用合法性检查"（**归属与接口都要重定，这是真实成本**）。
-- **命令的作用域是全世界，不是小天地**：角色的命令一旦被引用，它的效果可以改任何路径（`04` 的效果表允许 `world/**`）。命名空间限制的是**名字**，不是**作用域**。诚实地说：**方案 B 的"限制"比它看起来的弱**——它防的是"命名冲撞"与"归因模糊"，不防"越权改写"（后者由 `04` / 动作层的既有路径检查负责）。
-- **并发面扩大**：角色进程数 = 世界里已注册的角色数（`launch.ts:177-213` 每个角色一个进程）。多个角色同时写 `command/` 时，`write` 与 `bash` 的**文件级并发**没有任何串行门（`origin/niko` 的 `serialDeclared` 是 `apps/server/src/engine/declared-actions.ts:152-156` 的模块级 Map，契约 §4.1 已登记它在动作层用不上）。
+1. **任意**实体（别的角色的实体、玩家层实体、世界层实体）都可以写 `on: { roll_resolved: [{ run: watson-curse }] }` —— 绑定期**无前缀检查**（`02` 的 `parseOnBindings` 是纯函数、只吃 frontmatter，不查调用方身份）；
+2. 玩家**自己点掷骰**（`POST /api/dice`，契约 §2.2 末行：**不经过任何 agent 进程**）→ 触发该命令；
+3. 效果表允许改 `world/**` 任意路径（`04` 效果集）⇒ **角色的一条命令，其触发与作用域都完全不受"命名空间"约束。**
 
-#### 本文的立场（不拍板，但给出判断依据）
+⇒ 方案 B 的"限制"比它看起来的弱：它防**文件名冲撞**与**归因模糊**，**不防**"一个角色的局部意图变成全世界的执行规则"。**一条只约束名字、不约束引用/触发/作用域的限制，其实现成本（与 `docs/tools/00:377` 反模式正面冲突 + 新开一条身份分支 + 并发面扩大）无法被它的收益覆盖。**
 
-**两案的分歧点是一个可回答的问题，不是品味**：
+**其余被放弃的理由**：
 
-> **「世界规则」是不是「世界内容」的一种？**
+- **它是一条"按身份裁能力"的门禁，与 `docs/tools/00 §8` 的反模式正面冲突**（§11.3）。这是它最大的代价，且**不是文案问题**——两条上位口径必须有一个让步（本条已由评审门裁掉：不是让步，是"两个平面"的分类，见上理由 4）。
+- **并发面扩大**：角色进程数 = 世界里已注册的角色数（`launch.ts:177-213` 每个角色一个进程）。多个角色同时写 `command/` 时，`write` 与 `bash` 的文件级并发没有任何串行门（`origin/niko` 的 `serialDeclared` 是模块级 Map，契约 §4.1 已登记它在动作层用不上）。
 
-契约 §3.2 说**不是**（核心分界表逐字：「「世界里的实体」与「世界的规则」是两个概念」）；`doc-20 §1.1` 说**是**（"能力不按身份裁"，角色能改世界的任何内容）。**这是一条上位契约之间的真实矛盾，`[C-3]` 是它的第一次具体化。**
+#### 落地清单（判定落地时必须做的，写进 §10 验收）
 
-**本文的建议**（理由不诉诸品味）：**先落方案 A，并同时落一条"角色请求"的出口**——让角色在它写下的内容里明确表达"这需要一条规则"（一个约定俗成的格式，例如小天地 `README.md` 的一句 `requested-rule:`），由玩家或作家读到后转达。理由：方案 A 的代价是"偶尔丢一个需求"，方案 B 的代价是"引入一条与上位反模式冲突的身份门禁，且它的限制比看起来弱"。**在需求被实测证明存在之前，选代价可逆的那一个**（方案 A 删掉一条判断就回到 B；B 引入的命名空间语义一旦有世界内容依赖它，回退就要动内容）。
-
-**但这条建议不由本文拍板**：`[C-3]` 保留标记。
+- 在 `tool_call`（`extensions/world-context.ts:50`）的**命令分类分支内**加一条同步身份判断：`target.kind === 'command'` 且 `agentScope ∉ {'writer-top-level','initializer'}` → `block: true`，文案逐字见上。
+- MUST NOT 改 `assertNookMutationAllowed`（对 `command/` 本就无操作）。
+- MUST NOT 用 shell 字符串匹配防 `bash`（§3.8 第 2 条已论证那是"看起来在管、实际漏得更多"）。
+- 验收断言：角色 scope（`AIRP_AGENT_SCOPE=character`）下送一份**合法**命令 → `{block:true}`、磁盘无文件；writer scope 下同一份 → 通过。
 
 ### 12.3 仍未知（本文无法从代码回答的）
 
 | # | 未知 | 影响 | 怎么才能回答 |
 |---|---|---|---|
-| 1 | **角色的 `agentScope` 在写 `command/` 时到底是 `'character'` 还是别的** | 决定 §12.2 两案的判断条件是否成立 | 本文的推断链是 `launch.ts:210` 注入 `AIRP_AGENT_SCOPE=character` → `world-context.ts:11` 白名单接受。**但 `extensions/toolkit/init-command.ts:305-324` 会在 spawn initializer 时临时改写这个 env 并恢复**——若恢复失败，scope 会留在 `'initializer'`，那时方案 A 会**放行**角色写命令。**标 `[推断]`**，需一次真实的角色直聊 + 一次 `write command/` 观察 |
+| 1 | **角色的 `agentScope` 在写 `command/` 时到底是 `'character'` 还是别的** | 决定 §12.2 判定（方案 A）的判断条件是否成立 | 本文的推断链是 `launch.ts:210` 注入 `AIRP_AGENT_SCOPE=character` → `world-context.ts:11` 白名单接受。**但 `extensions/toolkit/init-command.ts:305-324` 会在 spawn initializer 时临时改写这个 env 并恢复**——若恢复失败，scope 会留在 `'initializer'`，那时方案 A 会**放行**角色写命令。**标 `[推断]`**，需一次真实的角色直聊 + 一次 `write command/` 观察 |
 | 2 | **`edit` 的模糊匹配命中率**（§4.1 的预测函数 vs 真实落盘） | 决定 T2 复核的**实际触发频率** | 试玩统计"T1 通过但 T2 报错"的次数。本文的设计假设是"罕见"（`[推断]`）；若实测频繁，应把命令分支的 T1 改成"只接受 `write`，拒绝 `edit`"（更简单、更严） |
 | 3 | **模型是否真的会去读那份 skill** | 决定 §6.1 候选 A2 的价值 | 需要一次真实的模型路径观察（契约 §9.4 要求 E3 才能声称）。**本批次 MUST NOT 声称 E3** |
 | 4 | **一个世界需要多少条命令才算"够用"** | 决定 §6.3 候选 B1（注入 142 tok/轮）何时值得付 | 试玩统计；**reopen 触发条件**：若同一世界的命令数超过 6 且作家反复重写同义命令 |

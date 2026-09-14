@@ -175,7 +175,7 @@ do:
 ```yaml
 # 实体 04-investigation-dice.md 的 frontmatter 里 —— 内容留在实体
 on:
-  roll:
+  roll_resolved:
     - when: "1..12"
       run: investigation-clue
       from: dice_outcomes
@@ -234,9 +234,9 @@ options: z.array(OptionSchema).max(2),
 
 > **为什么这条必须由本文写下来**：`01` 的 strict schema 是这条论据的**守卫**——但它守的是**命令文件**这一侧；数组长度活在**实体**那一侧。若上限只写在 `04` 的文档里而没进 Zod，一个手写实体 frontmatter 就能带 500 项 `rewards`，**R10 当场失效**，`09` 的上界论证变成空话。
 >
-> `09` 已把它列为四条硬前提之一（失守则本模块改判"仅本地自部署"）。**归属提醒**：实体侧 `rewards` / `options` 的 schema 上限归 `07` 的 `parseOnBindings` 一并校验（同一个实体对象内、纯同步、无 I/O），`04` 提供上限数字。
+> `09` 已把它列为四条硬前提之一（失守则本模块改判"仅本地自部署"）。**归属提醒（契约 §R.16）**：实体侧 `rewards` / `options` 的 schema 上限由 **`02` 拥有并实现的 `parseOnBindings`** 校验（同一个实体对象内、纯同步、无 I/O），**`07` 在写入时调用它**；`04` 提供上限数字。**`parseOnBindings` 解析的是实体上的 `on`，不是命令文件**——本文定的是命令文件的 schema，两个 parser 不同。
 >
-> **注意一个真实的错位**：`rewards` 与 `options` **今天没有 Zod 定义**——`dice_outcomes` 是被 passthrough 保留的裸数据（这也正是本文 §11.3 登记的那半个缺口）。所以这条上限**不是"改一个数字"，是"新建实体侧 schema"**，工作量归 `07`。
+> **注意一个真实的错位**：`rewards` 与 `options` **今天没有 Zod 定义**——`dice_outcomes` 是被 passthrough 保留的裸数据（这也正是本文 §11.3 登记的那半个缺口）。所以这条上限**不是"改一个数字"，是"新建实体侧 schema"**，工作量归 **`02`（schema 与解析）+ `07`（写入时接线）**。
 
 #### 2.4.4 链式触发**不在 `do` 里**：用 `on` 数组
 
@@ -247,7 +247,7 @@ options: z.array(OptionSchema).max(2),
 ```yaml
 # 实体 frontmatter —— 链式 = 同一 hook 下的多条绑定，按声明顺序执行
 on:
-  roll:
+  roll_resolved:
     - when: "1..60"
       run: award-investigation-note
     - when: "61..100"
@@ -292,6 +292,8 @@ on:
 
 **`{{ }}` MUST NOT 嵌套**（主 agent 裁定 A）。`{{ dice_outcomes[{{ entry }}] }}` 非法 → `malformed_template`。原因是静态分析：内层下标动态 = 上界不可静态界定，直接砸掉 `09` 的资源上限论证。正确写法是 `trigger.entry` + 静态下标。
 
+> **`[C-6]` 的 scope（契约 §11.2 硬要求 2，MUST 照写）**：读取面的收窄与否 **只约束 `{{ trigger.fm.* }}` 插值面，不约束 `on.<hook>[].from`**。原因是把 `[C-5]`（迁移路线 ④）与 `[C-6]` 真正耦合起来的是 **`from:`**（`from: dice_outcomes` 读的 key ∉ `humanKeys`），不是 `trigger.fm`——`08 §4.1` 的最终样本一个 `trigger.fm.*` 都没有。若把 `[C-6]` 的 scope 扩到 `from`，路线 ④ 会在写入时被拒。**判定为 (a) 全开**（读触发实体任意 frontmatter 字段），本文的命名空间表因此不设白名单；但**本文只定语法与位置**，读取面是否收窄的裁定归 `09`。
+
 **数组值的两条消费约束**（求值归 `03`，消费归 `04`）：
 
 - **整串引用才可产出数组**。行内子串引用一个数组 → `array_in_inline_template`。理由：`"a{{ arr }}b"` 需要一套数组→字符串的序列化约定，那是不必要的语法面。
@@ -333,7 +335,7 @@ on:
 | 本文拥有 | 位置（`do[i].when`）、上限、ASCII 约束、"写入时能验到哪一步"的边界 |
 | 本文不拥有 | 算子集、区间语义、`status.*` 求值、`unresolved_ref`（→ `03`） |
 
-区间语法统一采用 `parseExpect` 形式（`packages/shared/src/rules/dice.ts:196`；区间原子 `41..60` 见 `:154-160`）：`on.roll[].when: "13..60"`、`do[].when: "roll.result >= 61"`。**结构化的 `min`/`max` 双键不进新 schema**（论证见 §9.2，迁移见 `08`）。
+区间语法统一采用 `parseExpect` 形式（`packages/shared/src/rules/dice.ts:196`；区间原子 `41..60` 见 `:154-160`）：`on.roll_resolved[].when: "13..60"`、`do[].when: "roll.result >= 61"`。**结构化的 `min`/`max` 双键不进新 schema**（论证见 §9.2，迁移见 `08`）。
 
 ### 2.7 人类文本 vs 机器字段（翻译污染的硬界）
 
@@ -529,7 +531,7 @@ const pos = node?.range ? lc.linePos(node.range[0]) : undefined;  // → { line,
 | 编辑命令 | `command/<id>.yaml` | 整份文件 | `07` |
 | 删除命令 | 删除 `command/<id>.yaml` | — | `07` |
 
-**命令文件本身不进任何层**：`command/` 不在 `world/` 下，`deriveLayers` 只保留 `world/**`（`packages/shared/src/store/layers.ts:61-63`），`resolveLayer` 只认 `world/**`（`packages/shared/src/store/local-store.ts:836-846`）。因此 `resolveLayer('command/x.yaml')` 返回 `null`——这条直接影响 `[C-2]`（命令文件创建是否落 `entity_created`，归 `07`）。
+**命令文件本身不进任何层**：`command/` 不在 `world/` 下，`deriveLayers` 只保留 `world/**`（`packages/shared/src/store/layers.ts:61-63`），`resolveLayer` 只认 `world/**`（`packages/shared/src/store/local-store.ts:859-873`；非层早退在 `:861-864`）。因此 `resolveLayer('command/x.yaml')` 返回 `null`——这条直接影响 `[C-2]`（命令文件创建是否落 `entity_created`；**`[C-2]` 已判 A：不落账**，归 `07`）。
 
 **命令文件随世界分发**：`tools/localize-world-editions.mjs:19` 的 `forbidden` 正则已排除 `.airpworld` / `.pi` / `node_modules` / `.env*`，`command/` 不在其中，会被打包复制。契约 §6.3 的口径成立。
 
@@ -924,7 +926,7 @@ export function commandIdOfPath(path: string): string | null;
 3. **strict schema 的一致性**：`do` 的每一项由 `action` 判别。若 `when` 还能是 `{min, max}`，同一位置就有两种类型，错误文案要分叉。
 4. **上行下效**：`02` 已把 `on.<hook>[].when` 定为"复用 `parseExpect` 语法"。若命令侧用双键，**同一条世界规则在两个文件里写两种形状**——那正是契约 §8 反模式 3「分档规则硬编码两遍」的同构错误。
 
-**对 36 份存量声明的影响**：内容是 `min: 1 / max: 12` 形式，迁移时机械改写为 `"1..12"`。归 `08`，**`[C-5]` 待拍板**——本文只冻结"新语法是 `a..b`"，不改存量。
+**对 36 份存量声明的影响**：内容是 `min: 1 / max: 12` 形式，迁移时机械改写为 `"1..12"`。归 `08`。**`[C-5]` 已裁定 = 路线 ④ + 叠加 ③ 兜底**（契约 §11.2），存量按该路线处理；本文只冻结"新语法是 `a..b`"。
 
 > **一处诚实的代价**：`parseExpect` 的 `INT` 允许负数（`dice.ts:82` 的 `-?\d+`），而 `dice_outcomes` 的 `min`/`max` 是正数。这不是缺陷——`2d10 - 3` 的结果可以是负的，`roll.result` 也就可能是负数。语义由 `03` 定，本文只选语法。
 
@@ -996,7 +998,7 @@ do:
 ```yaml
 # templates/whitechapel-jp/world/london-map/04-investigation-dice.md 的 frontmatter
 on:
-  roll:
+  roll_resolved:
     - when: "1..12"
       run: investigation-clue
       from: dice_outcomes
@@ -1235,8 +1237,8 @@ do:
 - **为什么矛盾**：把 `dice_outcomes` 迁成 `on` 之后，**写歪的 `on`（未知 hook、`run` 拼错、`when` 语法坏）在 passthrough 下照样静默保留**。契约 §3.2 理由 4 的"机制性对策"因此**只覆盖命令文件那一半**。契约 §3.3.2 已经承认了这一点（"实体侧的 passthrough 陷阱依然存在"），但 §3.2 理由 4 的措辞没有收窄。
 - **建议的改法（主 agent 已采纳并将回写）**：
   1. 把 §3.2 理由 4 的措辞收窄为 **"strict 保护仅覆盖 `command/*.yaml`"**；
-  2. 在契约 §10 登记为**已登记缺口**，并明确 `07` 的 `parseOnBindings` 是**硬性依赖**（不是建议）——否则整个 C1 批次的"机制性对策"只兑现了一半。
-- **本文的立场**：`01` **不试图覆盖**这一半。命令文件的 strict 是本文的全部责任范围；实体侧由 `07` 补（`07` 的 `parseOnBindings` MUST 同时做 `on` 的形状校验与 `from` 的跨字段校验）。
+  2. 在契约 §10 登记为**已登记缺口**，并明确 **`02` 拥有并实现的 `parseOnBindings`、由 `07` 在写入时调用**是**硬性依赖**（不是建议）——否则整个 C1 批次的"机制性对策"只兑现了一半。（归属以契约 §R.16 冻结口径为准。）
+- **本文的立场**：`01` **不试图覆盖**这一半。命令文件的 strict 是本文的全部责任范围；实体侧由 **`02` 的 `parseOnBindings`** 补（它 MUST 同时做 `on` 的形状校验与 `from` 的跨字段校验），`07` 在写入时调用它并把错误翻译成 `block.reason`。
 
 ### 11.4 契约 §1.4「三个半拉子抽象收敛成一个」与本文的关系（**无冲突，说明边界**）
 
