@@ -122,6 +122,7 @@ export class CanvasArrangerRuntime {
   private readonly operationByRequest = new Map<string, string>();
   private readonly runs = new Map<string, Promise<void>>();
   private readonly clients = new Map<string, RpcClient>();
+  private readonly waitRejectors = new Map<string, (error: unknown) => void>();
   private readonly stores = new Map<string, LocalWorldStore>();
 
   constructor(options: CanvasArrangerRuntimeOptions) { this.opts = options; }
@@ -170,7 +171,18 @@ export class CanvasArrangerRuntime {
     if (operation.terminal) return { ...this.cancelAck(operation), stage: 'already_completed' };
     operation.cancelRequested = true;
     await this.clients.get(operationId)?.abort().catch(() => {});
+    this.waitRejectors.get(operationId)?.(new RuntimeTimeout('agent_stopped'));
     return { ...this.cancelAck(operation), stage: 'cancel_requested' };
+  }
+  async stopAll(): Promise<void> {
+    for (const operation of this.operations.values()) {
+      if (operation.terminal) continue;
+      operation.cancelRequested = true;
+      this.waitRejectors.get(operation.operationId)?.(new RuntimeTimeout('agent_stopped'));
+    }
+    await Promise.all([...this.clients.values()].map((client) => client.stop().catch(() => {})));
+    await Promise.all([...this.runs.values()].map((run) => run.catch(() => {})));
+    this.clients.clear();
   }
   private accepted(operation: CanvasArrangerOperation): CanvasArrangeAccepted {
     return {
@@ -290,11 +302,29 @@ export class CanvasArrangerRuntime {
       if (operation.cancelRequested) throw new RuntimeTimeout('agent_stopped');
       await client.prompt(taskBrief(operation, operation.turnId));
       await new Promise<void>((resolve, reject) => {
-        const deadline = setTimeout(() => reject(new RuntimeTimeout('timeout')), timeoutFromEnv('AIRP_ARRANGER_TOTAL_TIMEOUT_MS', DEFAULT_TOTAL_TIMEOUT_MS) + 1000);
+        const deadline = setTimeout(() => {
+          this.waitRejectors.delete(operation.operationId);
+          reject(new RuntimeTimeout('timeout'));
+        }, timeoutFromEnv('AIRP_ARRANGER_TOTAL_TIMEOUT_MS', DEFAULT_TOTAL_TIMEOUT_MS) + 1000);
         const check = setInterval(() => {
-          if (settled) { clearInterval(check); clearTimeout(deadline); resolve(); }
-          else if (operation.cancelRequested) { clearInterval(check); clearTimeout(deadline); reject(new RuntimeTimeout('agent_stopped')); }
+          if (settled) {
+            clearInterval(check);
+            clearTimeout(deadline);
+            this.waitRejectors.delete(operation.operationId);
+            resolve();
+          } else if (operation.cancelRequested) {
+            clearInterval(check);
+            clearTimeout(deadline);
+            this.waitRejectors.delete(operation.operationId);
+            reject(new RuntimeTimeout('agent_stopped'));
+          }
         }, 25);
+        this.waitRejectors.set(operation.operationId, (error) => {
+          clearInterval(check);
+          clearTimeout(deadline);
+          this.waitRejectors.delete(operation.operationId);
+          reject(error);
+        });
         check.unref?.();
       });
       if (timeoutRequested) throw new RuntimeTimeout('timeout');
