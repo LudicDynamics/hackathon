@@ -365,17 +365,19 @@ appearance:
 
 ## 11. 验收测试
 
-测试建议落点：`packages/shared/test/appearance-schema.test.mjs`（NEW）、`packages/shared/test/appearance-registry.test.mjs`（NEW），纳入根 `pnpm test` 的 shared test glob；本设计批不执行项目级验证。
+测试落点（**已落地，实测**）：单个 `packages/shared/test/appearance.test.mjs`（5 条）覆盖 registry 五轴完整性、`resolveAppearance` 的 legacy bridge、未知 preset/维度回退与 `componentAppearanceDocOf`。原设计提案的 `appearance-schema.test.mjs`/`appearance-registry.test.mjs` **未创建**，两条提案合并进这一个文件。
 
-- `AppearanceInputSchema.safeParse({font: 'hand', surface: 'none'})` 与空 object 成功；`font: 'Hand'`、`surface: '../x.css'`、`css: '...'`、`version: 1` 失败/诊断，未经验证值不进 `values`。
-- registry 五轴 defaults 均在 allowlist；preset key 与 ID 一致；kind key 覆盖 `chalk + COMPONENT_KINDS`。
+覆盖点（`packages/shared/test/appearance.test.mjs`）：
+
+- `AppearanceInputSchema` 结构校验（`font: 'Hand'`、`surface: '../x.css'`、`css: '...'` 不生效并诊断）；未经验证值不进 `values`。
+- registry 五轴 defaults 均在 allowlist；preset key 与 ID 一致；kind key 覆盖 `chalk + COMPONENT_KINDS`（`packages/shared/src/components/appearance-registry.ts:110` 的 `validateAppearanceRegistry`）。
 - 旧 Chalk 无 appearance 得 `surface=none`；新 Chalk `{font: hand}` 得 hand；letter `{font: hand, surface: parchment, ornament: seal}` 三轴保留且 `kind=letter`。
 - 未知 preset 有 `unknown-preset`、显式 font 仍生效且 `fallbackCount > 0`；非法组合有非空 warnings 和安全 fallback。
-- 解析前后 `choice/status/roll_dice/accepts` 深相等，`CARD_FORMS[kind].w/h` 深相等；material/bgStyle/audio.theme fixture 互不影响。
+- 解析前后 `choice/status/roll_dice/accepts` 深相等，`CARD_FORMS[kind].w/h` 深相等。
 
 ### 11.1 修复前必失败的非空性断言
 
-> 对 `type: component, component: letter, appearance: {surface: parchment, ornament: seal}`，当前 `LetterKindSchema` 仅 passthrough（`packages/shared/src/schemas/components.ts:93-99`），旧实现不会产出带五轴 `values` 的 `AppearanceResolution`。测试必须断言：`expect(resolveAppearance(...).values).toEqual(expect.objectContaining({surface: 'parchment', ornament: 'seal'}))`，且 `warnings` 为数组；修复前 `values` 非空断言失败，修复后才通过。禁止将其放宽为“返回 undefined/501 即可”。
+> 对 `type: component, component: letter, appearance: {surface: parchment, ornament: seal}`，迁移前 `LetterKindSchema` 仅 passthrough（`packages/shared/src/schemas/components.ts:93-99`），旧实现不会产出带五轴 `values` 的 `AppearanceResolution`。该断言（`expect(resolveAppearance(...).values).toEqual(expect.objectContaining({surface: 'parchment', ornament: 'seal'}))`）**已落地**于 `packages/shared/test/appearance.test.mjs`，且实现（`packages/shared/src/appearance/resolver.ts:37`）已通过。
 
 ## 12. 发现的冲突与需修订上位文档
 
