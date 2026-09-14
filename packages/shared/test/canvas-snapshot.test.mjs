@@ -141,7 +141,7 @@ test('arrangeCanvas rejects a stale snapshot before writing', async () => {
     await assert.rejects(
       () =>
         arrangeCanvas(
-          { store, actor: { type: 'writer' }, turn: 'arrange:stale' },
+          { store, actor: { type: 'functional', id: 'canvas-arranger' }, agentScope: 'functional-canvas-arranger', turn: 'arrange:stale' },
           {
             operationId: 'arrange-stale',
             layer: 'world/room',
@@ -181,7 +181,7 @@ test('arrangeCanvas accepts a current snapshot and returns the fenced result ide
     await store.placeCard('world/room', 'world/room/b.md', { x: 100, y: 100 });
     const before = await readCanvasSnapshot(store, { layer: 'world/room' });
     const result = await arrangeCanvas(
-      { store, actor: { type: 'writer' }, turn: 'arrange:current' },
+      { store, actor: { type: 'functional', id: 'canvas-arranger' }, agentScope: 'functional-canvas-arranger', turn: 'arrange:current' },
       {
         operationId: 'arrange-current',
         layer: 'world/room',
