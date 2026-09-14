@@ -15,9 +15,11 @@ import {
 } from '../lib/action-feedback.js';
 import type { AppearanceView } from '../lib/appearance-view.js';
 
-export function BagItemDialog({ item, onClose, onPlace, onUse, useDisabled = false, inline = false, appearance }: {
+export function BagItemDialog({ item, onClose, onChoose, onPlace, onUse, useDisabled = false, inline = false, appearance }: {
   item: { path: string; filename: string; body: string; frontmatter: Record<string, any> | null };
   onClose: () => void;
+  /** Hand a choice to the owner instead of posting it here (declared actions need the canvas flow). */
+  onChoose?: (choice: string) => void;
   onPlace?: (path: string) => Promise<boolean>;
   /** Add this item to the local Writer draft; this callback must not execute an action. */
   onUse?: (path: string) => void;
@@ -84,7 +86,7 @@ export function BagItemDialog({ item, onClose, onPlace, onUse, useDisabled = fal
           {inline && typeof image === 'string' && <img src={airpGateway.assetUrl(image, undefined, 'image')} alt="" style={{ maxHeight: 200, maxWidth: '100%', objectFit: 'contain' }} />}
           <MarkdownText text={item.body} />
           <fieldset disabled={busy} aria-busy={busy}>
-            {renderFrontmatterWidgets(item.frontmatter, { filePath: item.path, reveal: true, onChoice: choose })}
+            {renderFrontmatterWidgets(item.frontmatter, { filePath: item.path, reveal: true, onChoice: onChoose ?? choose })}
             {onUse && <button type="button" disabled={useDisabled} onClick={() => onUse(item.path)}>{t('Use this item')}</button>}
             {onPlace && <button type="button" onClick={() => void run(async () => { if (await onPlace(item.path)) onClose(); else setError(t('Could not move item')); })}>{t('Place in current scene')}</button>}
           </fieldset>

@@ -192,6 +192,9 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
 }) => {
   const kind = item.kind;
   const [reading, setReading] = React.useState(false);
+  // A choice picked in the reader, run by EntityInteractions once it is back:
+  // declared actions (take / read / dialogs) are only handled there.
+  const [pendingChoice, setPendingChoice] = React.useState<string | null>(null);
   const pointerStart = React.useRef({ x: 0, y: 0 });
   const objectRef = React.useRef<HTMLDivElement>(null);
   // Verified resolution → trusted attrs/vars (docs/components/04 §:79). Memoised in the
@@ -302,7 +305,13 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             returnFocusRef={objectRef}
           />
         ) : reading ? (
-          <BagItemDialog inline item={item} appearance={appearance} onClose={() => setReading(false)} />
+          <BagItemDialog
+            inline
+            item={item}
+            appearance={appearance}
+            onClose={() => setReading(false)}
+            onChoose={choice => { setReading(false); setPendingChoice(choice); }}
+          />
         ) : kind === 'portrait' ? (
           <PortraitFig
             video={item.frontmatter?.video}
@@ -343,7 +352,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             onTakeItem={onTakeItem}
           />
         )}
-        {!reading && <EntityInteractions item={item} active={hovered || focused} onChoice={onEntityAction} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate ? requestEnter : undefined} onOpenCharacter={onOpenCharacterModal} />}
+        {!reading && <EntityInteractions item={item} active={hovered || focused} onChoice={onEntityAction} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate ? requestEnter : undefined} onOpenCharacter={onOpenCharacterModal} pendingChoice={pendingChoice} onPendingChoiceHandled={() => setPendingChoice(null)} />}
     </div>
   );
 };

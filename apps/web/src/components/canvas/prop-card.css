@@ -14,6 +14,9 @@
 .cabin-prop--door i{position:absolute;right:9%;top:53%;width:18%;height:7px;border-radius:4px;background:linear-gradient(#c2b9a3,#6c6b65);box-shadow:0 3px 3px #0008}
 .paper-reading{--paper-ink:var(--ux-color-ink);position:relative;box-sizing:border-box;width:100%;padding:26px 30px 22px;background:var(--ux-surface-paper) url('/materials/ivory-paper-v1.webp') repeat;background-size:384px;color:var(--paper-ink);border:1px solid var(--ux-color-line);border-radius:var(--ux-radius-panel);box-shadow:var(--ux-shadow-soft);font:18px/1.85 var(--ux-font-human);letter-spacing:.018em;overflow-wrap:anywhere;text-align:left;text-shadow:none}
 .paper-reading--inline{position:absolute;top:0;left:0;width:min(500px,calc(100vw - 32px));max-width:none}
+/* Inside the hover panel the paper stays in flow: absolute, it gave the scrolling
+   panel no height and was clipped to a single line. */
+.entity-interactions .paper-reading--inline{position:relative;width:100%}
 .paper-reading--carried{position:fixed;z-index:var(--depth-chrome-carried-reader);left:clamp(16px,6vw,100px);bottom:100px;width:min(460px,calc(100vw - 32px));transform:rotate(-.5deg)}
 .paper-reading header{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px;border-bottom:1px solid var(--ux-color-line);padding-bottom:12px}
 .paper-reading h2{flex:1;margin:0;font:500 23px/1.45 var(--ux-font-human);letter-spacing:.03em}

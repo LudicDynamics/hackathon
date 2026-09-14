@@ -17,6 +17,9 @@ interface Props {
   onEnterGate?: (path: string) => void;
   onOpenCharacter?: (id: string) => void;
   onActionResult?: (result: ActionFeedback) => void;
+  /** A choice picked in the canvas reader; run here, then acknowledged. */
+  pendingChoice?: string | null;
+  onPendingChoiceHandled?: () => void;
 }
 
 type DeclaredChoiceDetails = {
@@ -54,7 +57,7 @@ function requestCanvasReading(source: HTMLElement): void {
     cancelable: true,
   }));
 }
-export function EntityInteractions({ item, active = false, onChoice, onDiceRolled, onEnterGate, onOpenCharacter, onActionResult }: Props) {
+export function EntityInteractions({ item, active = false, onChoice, onDiceRolled, onEnterGate, onOpenCharacter, onActionResult, pendingChoice, onPendingChoiceHandled }: Props) {
   const { t } = useLocale();
   const [busy, setBusy] = React.useState(false);
   const [feedbackStatus, setFeedbackStatus] = React.useState<string | null>(null);
@@ -114,7 +117,8 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
     observer.observe(viewport);
     viewport.addEventListener('wheel', schedule, { passive: true });
     return () => { cancelAnimationFrame(frame); observer.disconnect(); viewport.removeEventListener('wheel', schedule); };
-  }, [active]);
+    // Opening the reading paper widens the panel: choose the side again for it.
+  }, [active, inspecting]);
 
   const publish = (result: ActionFeedback, acceptedMessage?: string) => {
     onActionResult?.(result);
@@ -204,6 +208,14 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
     }
     void runGatewayAction('choice', `${item.path}:${choice}`, () => airpGateway.choose(item.path, choice));
   };
+
+  // The reader posted nothing itself: run its choice through the same path as the panel.
+  React.useEffect(() => {
+    if (!pendingChoice) return;
+    onPendingChoiceHandled?.();
+    choose(pendingChoice);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingChoice]);
 
   const requestMaterialReview = async (action: DeclaredResponse, selections: MaterialSelection[]) => {
     const response = await fetch('/api/material-review', {

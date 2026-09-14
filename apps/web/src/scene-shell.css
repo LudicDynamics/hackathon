@@ -68,6 +68,7 @@
 .entity-interactions:empty { display: none; }
 .entity-interactions { position: absolute; left: 100%; top: 0; width: max-content; min-width: 140px; max-width: 250px; padding-left: 14px; font: 13px/1.6 var(--ux-font-ui); color: var(--ux-color-ink); visibility: hidden; pointer-events: none; overflow-y: auto; scrollbar-width: thin; background: transparent; border: 0; box-shadow: none; }
 .entity-interactions:has(.fm-block) { width: 240px; }
+.entity-interactions:has(.paper-reading) { width: min(420px, calc(100vw - 32px)); max-width: none; }
 .entity-interactions { scrollbar-color: color-mix(in srgb, var(--ux-color-muted) 60%, transparent) transparent; }
 .entity-interactions--left { left: auto; right: 100%; padding-left: 0; padding-right: 14px; }
 .entity-interactions--below { left: 0; right: auto; top: 100%; padding-left: 0; padding-top: 12px; }
