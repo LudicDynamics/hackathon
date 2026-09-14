@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MarkdownText } from '../lib/md.js';
 import { useLocale } from '../lib/i18n.js';
-import { EntityInteractions, type EntityInteractionProps } from './narrative/EntityInteractions.js';
+import { renderFrontmatterWidgets } from '../lib/fm.js';
 import { airpGateway } from '../lib/airp-gateway.js';
 import { playFoley } from '../lib/audio.js';
 import { ItemArtwork } from './ItemArtwork.js';

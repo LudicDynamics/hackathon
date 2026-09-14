@@ -2,6 +2,7 @@ import React from 'react';
 import { chalkStyleOf } from '@airp/shared/forms';
 import { renderFrontmatterWidgets } from '../../lib/fm.js';
 import { MarkdownText } from '../../lib/md.js';
+import { useLocale } from '../../lib/i18n.js';
 import type { AppearanceView } from '../../lib/appearance-view.js';
 
 interface ChalkCardProps {

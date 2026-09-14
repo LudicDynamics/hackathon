@@ -48,7 +48,7 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict,
   const stageDisplay = input ? diceStageDisplay(input.dice, input.rolls) : null;
   const still = useStill();
   const [phase, setPhase] = useState<CeremonyPhase>('rolling');
-
+  const [tick, setTick] = useState(0);
 
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;

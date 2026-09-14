@@ -4,46 +4,54 @@
   "audio": {
     "theme": "canvas-firstsnow"
   },
-  "locale": "en",
-  "entry": "map",
-  "name": "First Snow Radio · English",
-  "version": "1.2.0",
+  "name": "First Snow Radio",
+  "version": "1.0.0",
   "schema": 1,
-  "description": "What will you say tonight? Your destination, promises, and replies. Your words shape this night’s ending.",
-  "author": "Worldlines / AIRP",
-  "genre": "Story Experience",
+  "description": "A final university winter where two promises compete, and every small choice remains visible in places, objects, and memory.",
+  "author": "Worldlines Canvas / AIRP",
+  "genre": "romantic drama",
   "tags": [
-    "short story",
-    "generative world"
+    "romance",
+    "winter",
+    "relationship memory"
   ],
   "material": "warm",
   "cover": "assets/scenes/intro.webp",
-  "extensions": [],
-  "player": {
-    "id": "player",
-    "name": "You · Student Director",
-    "avatar": "assets/characters/radio-director.webp"
-  },
+  "extensions": [
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
+  ],
   "characters": [
     {
       "id": "nanami",
-      "name": "Nanami",
-      "home": "world/tonight-promises/radio-studio",
+      "home": "world/winter-schedule/radio-studio",
       "role": "companion",
       "avatar": "assets/motion/seedance/characters/nanami-transparent.webp",
-      "description": "A friend for ten years and host of \"First Snow Hour.\" She remembers the rooftop promise. She takes words conveyed by the player seriously and concretely.",
+      "description": "The host of First Snow Hour and your friend of ten years.",
       "avatarVideo": "assets/motion/seedance/characters/nanami-transparent.webm"
     },
     {
       "id": "sumi-yukimura",
-      "name": "Sumi Yukimura",
-      "home": "world/tonight-promises/amber-cafe",
+      "home": "world/winter-schedule/amber-cafe",
       "role": "npc",
+      "description": "A newly debuted singer who asks for forty minutes without work.",
       "avatar": "assets/motion/seedance/characters/sumi-transparent.webp",
-      "description": "A newly debuted singer. Wants to spend non-work time before the tour. Does not automatically know private conversations with Nanami.",
       "avatarVideo": "assets/motion/seedance/characters/sumi-transparent.webm"
     }
   ],
   "createdAt": "2026-09-12T00:00:00Z",
-  "updatedAt": "2026-09-12T00:00:00Z"
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "player": {
+    "id": "radio-director",
+    "name": "Radio Director",
+    "avatar": "assets/characters/radio-director.webp"
+  }
 }

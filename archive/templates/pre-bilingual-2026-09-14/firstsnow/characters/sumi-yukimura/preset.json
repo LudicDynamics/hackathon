@@ -1,8 +1,58 @@
 {
   "schemaVersion": 1,
-  "id": "first-snow-sumi-yukimura",
+  "id": "sumi-yukimura",
   "name": "Sumi Yukimura",
-  "description": "A newly debuted singer. Wants to spend non-work time before the tour. Does not automatically know private conversations with Nanami.",
+  "description": "A newly debuted singer who asks for forty minutes without work.",
+  "items": [
+    {
+      "kind": "slot",
+      "id": "character-instruction",
+      "slot": "system-char"
+    },
+    {
+      "kind": "slot",
+      "id": "tools",
+      "slot": "tools",
+      "options": {
+        "onlyWithSnippets": true
+      }
+    },
+    {
+      "kind": "slot",
+      "id": "tool-guidelines",
+      "slot": "tool-guidelines",
+      "options": {
+        "includePiDefaultGuidelines": false,
+        "heading": "Guidelines:"
+      }
+    },
+    {
+      "kind": "slot",
+      "id": "skills",
+      "slot": "skills"
+    },
+    {
+      "kind": "slot",
+      "id": "profile",
+      "slot": "file",
+      "options": {
+        "path": [
+          "README.md",
+          "identity.md",
+          "personality.md",
+          "memory.md"
+        ],
+        "baseDir": "characters/sumi-yukimura",
+        "stripFrontmatter": true,
+        "onMissing": "skip"
+      }
+    },
+    {
+      "kind": "slot",
+      "id": "chat-history",
+      "slot": "chat-history"
+    }
+  ],
   "hiddenOverrides": {
     "compaction": {
       "systemPrompt": "You are the continuity record for a single character in an interactive story. You read a scene of dialogue and produce a summary of what THIS character knows, felt, and said. Do NOT continue the conversation, do NOT speak as the character, and do NOT include anything the character could not have witnessed. Output ONLY the structured summary.",
@@ -29,52 +79,5 @@
       "get_state",
       "state_update"
     ]
-  },
-  "items": [
-    {
-      "kind": "slot",
-      "id": "character-instruction",
-      "slot": "system-char"
-    },
-    { "kind": "slot", "id": "tools", "slot": "tools", "options": { "onlyWithSnippets": true } },
-    {
-      "kind": "slot",
-      "id": "tool-guidelines",
-      "slot": "tool-guidelines",
-      "options": { "includePiDefaultGuidelines": false, "heading": "Guidelines:" }
-    },
-    { "kind": "slot", "id": "skills", "slot": "skills" },
-    {
-      "kind": "block",
-      "id": "world-language",
-      "content": "Speak English. Memories are characters/sumi-yukimura/memory.md. She only knows what she has actually seen or heard."
-    },
-    {
-      "kind": "slot",
-      "id": "profile",
-      "slot": "file",
-      "options": {
-        "path": [
-          "README.md",
-          "personality.md",
-          "memory.md",
-          "identity.md",
-          "relationships.md",
-          "diary.md",
-          "unspoken.md",
-          "likes-and-fears.md",
-          "near-term.md",
-          "long-term.md"
-        ],
-        "baseDir": "characters/sumi-yukimura",
-        "stripFrontmatter": true,
-        "onMissing": "skip"
-      }
-    },
-    {
-      "kind": "slot",
-      "id": "chat-history",
-      "slot": "chat-history"
-    }
-  ]
+  }
 }

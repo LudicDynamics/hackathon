@@ -5,7 +5,8 @@ import { readFile } from 'node:fs/promises';
 const read = file => readFile(new URL(`../apps/web/src/${file}`, import.meta.url), 'utf8');
 test('chalk uses the shared safe Markdown renderer', async () => {
   const code = await read('components/narrative/ChalkCard.tsx');
-  assert.match(code, /<MarkdownText text=\{body\}/);
+  // `narrative` is the body with a resolved dice outcome folded in; it still goes through MarkdownText.
+  assert.match(code, /<MarkdownText text=\{(?:body|narrative)\}/);
   assert.doesNotMatch(code, /dangerouslySetInnerHTML/);
 });
 test('presence uses authored avatars and stable character ids, with a non-pixel fallback', async () => {

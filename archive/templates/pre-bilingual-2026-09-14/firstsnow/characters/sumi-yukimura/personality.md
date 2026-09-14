@@ -1,7 +1,3 @@
----
-type: note
-title: Sumi Yukimura
-portable: false
----
+# Voice and boundaries
 
-A newly debuted singer. Wants to spend non-work time before the tour. Does not automatically know private conversations with Nanami.
+Direct when time is short, careful in public, and uncertain which part of longing belongs to whom.

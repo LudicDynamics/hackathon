@@ -6,7 +6,7 @@ import { StubPrompt } from '../chrome/StubPrompt.js';
 import { ghostItemFor } from '../../lib/init-ghost.js';
 import type { LayerState } from '../../state/useWorld.js';
 import { NookNoteComposer } from './NookNoteComposer.js';
-import { UI_COPY, type Locale } from '../../lib/i18n.js';
+import { UI_COPY, translate, type Locale } from '../../lib/i18n.js';
 import { useLiveCall } from '../../lib/live-call.js';
 import type { CharacterFrame } from '../../lib/character-frame-queue.js';
 import { airpGateway, type AssetMediaKind } from '../../lib/airp-gateway.js';
@@ -177,7 +177,7 @@ export const NookView: React.FC<NookViewProps> = ({
   }, []);
   const { state: call, available: callAvailable, start: startCall, stop: stopCall } = useLiveCall({
     characterId,
-    locale,
+    locale: locale === 'ja' ? 'ja' : 'en',
     onCharacterFrame: handleCharacterFrame,
   });
   const callInProgress = call.phase === 'connecting' || call.phase === 'live';

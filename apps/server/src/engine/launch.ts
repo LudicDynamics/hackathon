@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import { ensureProviderConfig } from './provider-config.js';
 import { modelPreferenceArgs } from './model-preferences.js';
 import path from 'node:path';
-import { ensureProviderConfig } from './provider-config.js';
 import { airpEnv, extensionArgs, installPreset, skillArgs } from './presets.js';
 import { CHARACTER_ROLE_PREFIX, isValidCharacterId } from '@airp/shared';
 

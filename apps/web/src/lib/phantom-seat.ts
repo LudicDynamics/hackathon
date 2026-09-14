@@ -9,6 +9,8 @@
 
 import { flowColumns, type AutoLayoutRect } from '@airp/shared/layout';
 import { getPhantomsSnapshot, type PhantomSeat } from './phantom.js';
+import { makeBox, overlap } from './collide.js';
+import { SEAT_ANCHOR, seatSpiral } from './seat.js';
 
 /** Measure complete provisional text before paint. Only its own DOM moves;
  * real card seats remain server-owned and win when the file arrives. */

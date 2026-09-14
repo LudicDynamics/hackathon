@@ -49,8 +49,6 @@ import { usePresence } from './state/usePresence.js';
 import { airpGateway, onWorldUnavailable, AirpRequestError, type AssetMediaKind, type WorldShelf } from './lib/airp-gateway.js';
 import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
 import { BagItemDialog } from './components/BagItemDialog.js';
-import { appendItemAction, buildItemActionPrompt } from './lib/item-action-draft.js';
-import { PLAY_HINT_REQUEST } from './lib/play-hints.js';
 import { guardImeKey } from './lib/ime.js';
 import { initialShell, transitionShell, splitCharacters } from './lib/ui-shell.mjs';
 import { MarkdownText } from './lib/md.js';

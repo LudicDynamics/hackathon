@@ -67,7 +67,7 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
   const [direct, setDirect] = React.useState<DeclaredResponse | null>(null);
 
   React.useLayoutEffect(() => {
-    if (inline || !active || !ref.current) return;
+    if (!active || !ref.current) return;
     const el = ref.current;
     const object = el.closest<HTMLElement>('.object');
     const viewport = object?.closest<HTMLElement>('[aria-label="Infinite canvas"]') || object?.parentElement?.parentElement;
@@ -198,7 +198,7 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
     const response = await fetch('/api/material-review', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: action.source, choice: action.choice, revision: action.revision, selections }),
+      body: JSON.stringify({ world: action.world, path: action.source, choice: action.choice, revision: action.revision, selections }),
     });
     let payload: unknown;
     try {

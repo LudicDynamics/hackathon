@@ -4,6 +4,7 @@ import { ActivityRail } from '../chrome/ActivityRail.js';
 import { AgentActivityLog } from '../chrome/AgentActivityLog.js';
 import { canRequestTts, invalidateTts, ttsEnabled } from '../../lib/tts-readiness.js';
 import { useLocale } from '../../lib/i18n.js';
+import { guardImeKey } from '../../lib/ime.js';
 import { playStinger, playVoice, stopVoice, unlock, type Emotion } from '../../lib/audio.js';
 import { sanitiseTtsText } from '@airp/shared/tts-text';
 import {
@@ -284,8 +285,11 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         const res = await fetch('/api/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, voice, language }),
+          body: JSON.stringify({ text, voice, language, characterId, emotion: page.emo }),
         });
+        if (res.headers.get('X-AIRP-TTS-Fallback') === 'local-to-online') {
+          console.warn('[AIRP TTS] Local voice failed; falling back to online TTS.');
+        }
         if (token !== voiceTurnRef.current || sanitiseTtsText(page.text) !== requestedText) return;
         const data = (await res.json()) as { ok?: boolean; url?: string; code?: string };
         if (!res.ok || !data.ok || typeof data.url !== 'string' || data.url === '') {

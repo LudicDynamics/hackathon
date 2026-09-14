@@ -8,6 +8,7 @@
  */
 import React, { useState } from 'react';
 import { useLocale } from '../../lib/i18n.js';
+import { guardImeKey } from '../../lib/ime.js';
 import { useWriterState } from '../../lib/writer-state.js';
 
 export interface WriterBarProps {

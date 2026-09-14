@@ -10,7 +10,7 @@ function Preview() {
  const [key,setKey]=useState(0);
  return <main style={{padding:40}} onPointerDown={event=>{ if (!(event.target as HTMLElement).closest('main')) event.currentTarget.setPointerCapture(event.pointerId); }}>
   <h1>D10 interaction check</h1><p>Visual test only: fixed scores 10 / 62, no world writes. The parent captures pointers to reproduce the canvas interaction.</p>
-  <DiceRoller key={key} filePath="world/test.md" rollDice={{type:mode,desc:mode === '1d10' ? 'A single D10' : 'Percentile dice',expect:mode === '1d10' ? '>=6' : '<=65'}} />
+  <DiceRoller key={key} filePath="world/test.md" rollDice={{desc:mode === '1d10' ? 'A single D10' : 'Percentile dice',expect:mode === '1d10' ? '>=6' : '<=65'}} />
   <button onClick={()=>setKey(k=>k+1)}>Reset test</button> · <button onClick={()=>{mode='1d10';setKey(k=>k+1);}}>Use 1d10</button> · <button onClick={()=>{mode='1d100';setKey(k=>k+1);}}>Use 1d100</button>
  </main>;
 }

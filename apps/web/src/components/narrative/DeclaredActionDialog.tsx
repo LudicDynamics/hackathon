@@ -17,6 +17,8 @@ export type MaterialSlot = {
   title: string;
   required: boolean;
   paths: string[];
+  /** Server default is the slot's path count; one evidence slot may take several files. */
+  maxItems?: number;
 };
 
 export type DeclaredActionKind = 'read' | 'take' | 'stage' | 'enter' | 'character' | 'reply' | 'writer';
@@ -24,6 +26,8 @@ export type DeclaredActionKind = 'read' | 'take' | 'stage' | 'enter' | 'characte
 /** The server's validated action detail. This is a read-only snapshot. */
 export type DeclaredResponse = {
   kind: DeclaredActionKind;
+  /** Active world root stamped by the choice route; the review route rejects a stale one. */
+  world?: string;
   source: string;
   choice: string | number;
   revision: string;
@@ -38,21 +42,24 @@ export type DeclaredResponse = {
 
 export type MaterialSelection = { slot: string; path: string; revision: string };
 
+/** Adds `path` to `slot`, moving it out of any other slot; a file is used once. */
 export function replaceMaterialSelection(
-  selected: Record<string, string>,
+  selected: Record<string, string[]>,
   slot: string,
   path: string,
-): Record<string, string> {
-  return Object.fromEntries([
-    ...Object.entries(selected).filter(([id, selectedPath]) => id !== slot && selectedPath !== path),
-    [slot, path],
-  ]);
+): Record<string, string[]> {
+  const others = Object.fromEntries(Object.entries(selected).map(([id, paths]) => [id, paths.filter(p => p !== path)]));
+  return { ...others, [slot]: [...(others[slot] ?? []), path] };
 }
 
-export function materialSelectionReady(slots: MaterialSlot[], selected: Record<string, string>): boolean {
+export function slotCapacity(slot: MaterialSlot): number {
+  return slot.maxItems ?? slot.paths.length;
+}
+
+export function materialSelectionReady(slots: MaterialSlot[], selected: Record<string, string[]>): boolean {
   return slots.length > 0
-    && Object.values(selected).some(Boolean)
-    && slots.every(slot => !slot.required || !!selected[slot.id]);
+    && Object.values(selected).some(paths => paths.length > 0)
+    && slots.every(slot => !slot.required || (selected[slot.id]?.length ?? 0) > 0);
 }
 
 function copy(locale: string, en: string, ja: string, zh: string): string {
@@ -77,7 +84,7 @@ export function DeclaredActionDialog({
   onChoose?: (path: string, choice: string) => void;
 }) {
   const { locale } = useLocale();
-  const [selected, setSelected] = useState<Record<string, string>>({});
+  const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [activeSlot, setActiveSlot] = useState(value.slots?.[0]?.id ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -92,16 +99,27 @@ export function DeclaredActionDialog({
     return () => previous?.focus();
   }, []);
 
-  const place = (path: string, target = activeSlot) => {
+  const place = (path: string, target?: string) => {
     if (busy) return;
     const item = items.find(candidate => candidate.path === path);
-    const slot = slots.find(candidate => candidate.id === target);
+    // Clicking a material fills the active slot if it fits, else the first slot that does.
+    const slot = target
+      ? slots.find(candidate => candidate.id === target)
+      : slots.find(candidate => candidate.id === activeSlot && !!item && isSelectable(item, candidate))
+        ?? slots.find(candidate => !!item && isSelectable(item, candidate));
     if (!item || !slot || !isSelectable(item, slot)) {
       setError(copy(locale, 'This material does not fit here. Choose another slot.', 'この材料はここには置けません。別の枠を選んでください。', '这份材料不适合当前槽位，请选择其他槽位。'));
       return;
     }
+    const current = selected[slot.id] ?? [];
+    if (current.includes(path)) return;
+    if (current.length >= slotCapacity(slot)) {
+      setError(copy(locale, 'This slot is full. Remove a material before adding another.', '枠がいっぱいです。材料を戻してから追加してください。', '槽位已满，请先移除一份材料。'));
+      return;
+    }
     setError('');
-    setSelected(current => replaceMaterialSelection(current, target, path));
+    setActiveSlot(slot.id);
+    setSelected(previous => replaceMaterialSelection(previous, slot.id, path));
   };
 
   const ready = materialSelectionReady(slots, selected);
@@ -110,11 +128,11 @@ export function DeclaredActionDialog({
     setBusy(true);
     setError('');
     try {
-      const prompt = await onSubmit(slots.filter(slot => selected[slot.id]).map(slot => ({
+      const prompt = await onSubmit(slots.flatMap(slot => (selected[slot.id] ?? []).map(path => ({
         slot: slot.id,
-        path: selected[slot.id],
-        revision: items.find(item => item.path === selected[slot.id])?.revision ?? '',
-      })));
+        path,
+        revision: items.find(item => item.path === path)?.revision ?? '',
+      }))));
       setReviewPrompt(prompt);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -157,7 +175,7 @@ export function DeclaredActionDialog({
         {value.kind === 'stage' && <fieldset className="material-slots" disabled={busy}>
           {slots.map(slot => {
             const candidates = items.filter(item => isSelectable(item, slot));
-            const item = candidates.find(candidate => candidate.path === selected[slot.id]);
+            const chosen = candidates.filter(candidate => selected[slot.id]?.includes(candidate.path));
             return <section
               className={`material-slot ${activeSlot === slot.id ? 'is-active' : ''}`}
               key={slot.id}
@@ -171,11 +189,14 @@ export function DeclaredActionDialog({
             >
               <button type="button" className="material-slot__target" aria-pressed={activeSlot === slot.id} onClick={() => setActiveSlot(slot.id)}>
                 <small>{slot.title}{slot.required ? ' *' : ''}</small>
-                <strong>{item?.title ?? copy(locale, 'Place material here', 'ここに材料を置く', '将材料放在这里')}</strong>
+                <strong>{chosen.length ? `${chosen.length} / ${slotCapacity(slot)}` : copy(locale, 'Place material here', 'ここに材料を置く', '将材料放在这里')}</strong>
               </button>
-              {item && <button type="button" onClick={() => { setSelected(current => ({ ...current, [slot.id]: '' })); setError(''); }}>{copy(locale, 'Remove', '戻す', '移除')}</button>}
+              {chosen.map(item => <div key={item.path} className="material-slot__item">
+                <strong>{item.title}</strong>
+                <button type="button" aria-label={`${copy(locale, 'Remove', '戻す', '移除')} ${item.title}`} onClick={() => { setSelected(current => ({ ...current, [slot.id]: (current[slot.id] ?? []).filter(path => path !== item.path) })); setError(''); }}>{copy(locale, 'Remove', '戻す', '移除')}</button>
+                <details><summary>{copy(locale, 'Read', '読む', '查看原文')}</summary><p>{item.body}</p></details>
+              </div>)}
               {!candidates.length && <small>{copy(locale, 'No material available for this slot yet.', '材料がまだありません。', '此槽位的材料尚未准备。')}</small>}
-              {item && <details><summary>{copy(locale, 'Read selected material', '選択した材料を読む', '查看所选材料')}</summary><p>{item.body}</p></details>}
             </section>;
           })}
         </fieldset>}
@@ -188,7 +209,7 @@ export function DeclaredActionDialog({
               type="button"
               draggable={!busy}
               disabled={busy}
-              aria-pressed={Object.values(selected).includes(item.path)}
+              aria-pressed={Object.values(selected).some(paths => paths.includes(item.path))}
               onClick={() => place(item.path)}
               onDragStart={event => {
                 event.stopPropagation();

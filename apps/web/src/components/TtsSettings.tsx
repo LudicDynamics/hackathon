@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ConnectionSettings } from './ConnectionSettings.js';
+import { NanamiTtsSettings } from './NanamiTtsSettings.js';
 import { getChannelVolume, setChannelVolume, type VolumeChannel } from '../lib/audio.js';
 import { useLocale } from '../lib/i18n.js';
 import { readTtsConfig, setTtsEnabled, ttsEnabled, type TtsConfig } from '../lib/tts-readiness.js';
@@ -50,8 +51,8 @@ export function TtsSettings({ focus }: { focus?: FocusCoordinator } = {}) {
     if (token && focus) focus.release(token);
   }, [focus]);
   const refresh = async () => {
-    try { setConfig(await readTtsConfig(true)); setHasError(false); }
-    catch { setHasError(true); }
+    try { setConfig(await readTtsConfig(true)); setError(''); }
+    catch { setError('Voice service is unavailable. Text dialogue still works.'); }
   };
   const openSettings = () => {
     setVolumes(readVolumes());
@@ -96,6 +97,7 @@ export function TtsSettings({ focus }: { focus?: FocusCoordinator } = {}) {
         {config && <><p>Model: {config.model}</p><p>Default voice: {config.defaultVoice} (characters may override it)</p></>}
         {config && !config.configured && <p>Add your DashScope API key below. Text dialogue remains available.</p>}
         <button type="button" onClick={() => { void refresh(); }}>Recheck configuration</button>
+        <NanamiTtsSettings onSaved={() => { void refresh(); }} />
         <ConnectionSettings onSaved={() => { void refresh(); }} />
       </section>
     </div>, document.body)}

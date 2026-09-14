@@ -1,23 +1,11 @@
 import { author } from './common.mjs';
-const p = author('whitechapel', 'ホワイトチャペルの手紙 · 体験版', 'あなたはホームズ。描かれた四件目を、まだ起きていない事件のまま止める。');
-p.scene('world', 'ベイカー街二二一Ｂ · ワトソンの封書', 'あなたはシャーロック・ホームズ。窓に映る自分の姿の横で、ワトソンが封書を置く。\n\n「患者との約束は破りたくない。だが今朝、三枚目と同じ事件が起きた。四枚目が印刷所へ渡るのは正午だ」。守りたい相手のため、彼は今ここであなたに頼んでいる。', ['ワトソンの封書を開く', '青い真鍮の蓋を持ち、依頼を引き受ける'], { bg: 'assets/backgrounds/intro.webp', intent: '封書は患者イーディスの信頼を守って調べてほしいという依頼。受諾時に青い真鍮の蓋を player/ へ移す。正午は場面上の圧力で、実時間で放置罰を課さない。', appearance: { font: 'hand', surface: 'none', accent: 'rust', ornament: 'underline', motion: 'calm' } });
-p.note('world/ワトソンの封書.md', '開封を待つ封書', '封にはワトソンの筆跡。「三件目が絵と一致したら、ホームズにだけ見せてほしい」。中には、まだ発表されていない四枚目の挿絵。', { type: 'letter', visual: 'envelope', appearance: { surface: 'parchment', accent: 'rust', ornament: 'seal', motion: 'calm' } });
-p.note('world/青い真鍮の蓋.md', '群青の付いた真鍮の蓋', '絵の筒を閉じていた小さな蓋。縁に乾いた群青が残る。ワトソンが患者から預かった。');
-p.scene('world/ロンドンの地図', 'ロンドン · 四枚目の前', '三件目の現場、印刷所、検視室、存在しない通り。ここでは住所が手がかりになる。ワトソンがあなたの歩調を待つ。', [], { bg: 'assets/backgrounds/map.webp', requires: { items: ['player/青い真鍮の蓋.md'] }, blocked: 'まず二二一Ｂで依頼を引き受け、真鍮の蓋を持とう。' });
-for (const [folder, title, body, file, note, asset] of [
-  ['三件目の現場', '三件目の現場', '雨に流れなかった顔料が、挿絵と同じ位置に残っている。偶然にしては、構図が整いすぎている。', '顔料の記録', '現場の群青と筒の蓋の群青は似ている。比較はできるが、これだけで作者を犯人と断定できない。', 'third-scene'],
-  ['印刷所', 'フリート街の印刷所', '活字工が原稿の受領票を指す。「文章が来て、一週間後に絵が戻る」。', '受領票', 'イーディスは文章だけを提出。挿絵担当のウェインが、一週間早く原稿を受け取る。', 'fleet-street'],
-  ['検視室', '検視室 · 絵とのずれ', 'ワトソンは布をめくらず、時刻の記録を示した。尊厳を守った観察だけで十分だ。', '時刻の記録', '三件目が起きた時刻は、絵の納品後。絵が事件の記録だったという説明と食い違う。', 'mortuary'],
-  ['存在しない通り', '地図にない番地', 'この住所だけ、地図をどれだけたどっても見つからない。あなたが見つけるべきなのは、通りそのものではない。', '改稿の切れ端', 'イーディスは四件目の住所を実在しない通りへ書き換えていた。誰がその嘘に反応するだろう。', 'nonexistent-street'],
-]) {
-  const art = { 'third-scene': 'scene3', 'fleet-street': 'press', mortuary: 'morgue', 'nonexistent-street': 'fourth' }[asset];
-  p.scene(`world/ロンドンの地図/${folder}`, title, body, ['記録を確かめる', 'ワトソンと観察を整理する'], { bg: `assets/backgrounds/${art}.webp` });
-  p.note(`world/ロンドンの地図/${folder}/${file}.md`, file, note);
-}
-p.put('world/ロンドンの地図/02-推論と作戦.md', { type: 'chalk', title: '四枚目を外すために', choice: { options: ['推論を書く', '作戦計画を書く', '二つの文章を提出する'], allow_free: true, free_hint: '観察から何を推論し、誰がどこで何をするかを書いてください。' }, intent: '推論と作戦の内容を自由入力で一つずつ受ける。選択だけなら内容を尋ねる。実際のプレイヤーの言葉を player/推論.md と player/作戦計画.md に保存。空白や作家の独断で提出を成立させない。' }, '推論は「何が起きているか」。作戦は「四枚目を現実にしないため、誰がどこで何をするか」。証拠を使う順番も、誘い出し方も、あなたが決める。');
-p.person('watson', 'ワトソン', 'world/ロンドンの地図', '医師でありホームズの友人。イーディスを守る約束をしている。医学的観察と人間的な懸念を伝え、最終推論を横取りしない。');
-p.rules(`## 変えてはいけない事件
-犯人は挿絵画家ウェイン。作家イーディスではない。彼は先に受け取った文章に絵を付け、その絵に事件を合わせる。疑ったイーディスが四件目を架空の住所へ改稿した。未知の別犯人へ差し替えない。露悪的な写実より、群青・紙・雨・絵の構図で演出する。
+import { HOLMES_SUBMISSION_INTENT, HOLMES_RESOLUTION_RULES } from './holmes-resolution.mjs';
+const p = author('whitechapel', 'ホワイトチャペルの手紙 · 体験版', 'あなたはホームズ。小説どおりに起きる事件。誰が物語を犯罪に変えているのかを調べ、今日の四件目を止める。');
+const map = 'world/london-map';
+const press = `${map}/print-shop`;
+const edithRoom = `${map}/edith-room`;
+const editor = `${press}/editor-office`;
+const studio = `${press}/illustration-room`;
 
 p.scene('world', '二二一Ｂ · 次の事件を止めてほしい', 'あなたはシャーロック・ホームズ。暖炉のそばで、ワトソンが患者から預かった封書を置く。\n\n「患者のイーディスは小説家だ。その小説の挿絵と同じ事件が、三件続けて起きた。四枚目には今日の正午が描かれている。誰かが小説をまねて人を襲っているなら、次は止められる」。\n\nあなたの仕事は、誰が物語を犯罪に変えているのかを調べ、今日の四件目を防ぐこと。イーディスはこの家の客間で保護している。まず封書の四枚目を読み、昨日までに何が描かれ、今朝何が起きたかを確かめよう。', ['ワトソンの封書と四枚目を読む', '依頼を引き受け、真鍮の蓋を持つ'], { bg: 'assets/backgrounds/intro.webp', intent: 'world/watson-letter.md と fourth-illustration.md を読んで示す。受諾して取ると言われたら world/blue-brass-cap.md を player/blue-brass-cap.md へ move。次は倫敦地図から第三現場へ案内。真相はまだ明かさない。正午は物語上の圧力で、実時間の読書時間に罰を課さない。' });
 p.note('world/watson-letter.md', 'ワトソンの依頼状', 'ホームズへ。イーディスは「自分の文章が誰かを傷つけている」と怯えている。三件目は今朝、挿絵と同じ構図で発見された。四枚目はまだ公表されていない。作者を犯人と決めつけず、原稿と絵を誰がいつ見たか調べてほしい。彼女の居場所は本人の許可なく印刷所へ知らせない。', { type: 'letter', visual: 'envelope' });
