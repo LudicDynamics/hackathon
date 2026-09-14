@@ -193,7 +193,15 @@ app.use('/api', createTtsRouter(REPO_ROOT, () => activeStore));
 // (world.ts:407-422), so `/api/live/config` stays answerable with no world
 // while `/api/live/session` does its own nook check.
 app.use('/api', createLiveRouter(() => activeStore, liveCalls));
-app.use('/api', createConnectionSettingsRouter(REPO_ROOT));
+app.use('/api', createConnectionSettingsRouter(REPO_ROOT, {
+  // The self-test probes the models the agents actually run on; `modelStatus`
+  // starts the writer if needed, exactly as the Agents panel does.
+  agentModels: async () => {
+    if (!activeStore) return null;
+    const status = await lifecycle.modelStatus(activeStore.worldRoot, false);
+    return { writer: status.writer.model, characters: status.characters };
+  },
+}));
 // Player voice input (docs/live-voice/语音输入（STT）.md): HTTP-only, no world needed.
 app.use('/api', createSttRouter());
 // Server-side Canvas DOM screenshots: active-world/read-only only, no WS transport.

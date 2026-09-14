@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { readLocalTtsConfig, parseCharacterVoices } from './local-tts.js';
+import { runConnectionTests, type ConnectionTestDeps } from './connection-test.js';
 
 const fields = ['DASHSCOPE_API_KEY', 'AIRP_TTS_BASE_URL', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'FLOW_API_KEY', 'FLOW_API_BASE', 'DEEPSEEK_API_KEY', 'AIRP_TTS_LOCAL_BASE_URL', 'AIRP_TTS_LOCAL_VOICE', 'AIRP_TTS_LOCAL_TIMEOUT_MS', 'AIRP_TTS_LOCAL_API_KEY', 'AIRP_TTS_CHARACTER_VOICES'] as const;
 const defaults: Record<string, string> = {
@@ -68,7 +69,7 @@ export function saveConnectionSettings(repoRoot: string, input: unknown) {
   Object.assign(process.env, updates);
 }
 
-export function createConnectionSettingsRouter(repoRoot: string): Router {
+export function createConnectionSettingsRouter(repoRoot: string, deps?: { agentModels: ConnectionTestDeps['agentModels'] }): Router {
   const router = Router();
   router.use('/connection-settings', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -89,6 +90,14 @@ export function createConnectionSettingsRouter(repoRoot: string): Router {
     } catch {
       return res.status(400).json({ error: 'Could not save settings. Check the values and server file permissions.' });
     }
+  });
+  // Live self-test of every configured service (docs/settings/连接测试.md).
+  // Same localhost guard as the settings themselves: it spends a few tokens and
+  // one syllable of TTS per run, and its details name the models in use.
+  router.post('/connection-settings/test', async (req, res) => {
+    if (req.headers['x-airp-settings'] !== '1') return res.status(403).json({ error: 'Invalid settings request' });
+    const checks = await runConnectionTests({ agentModels: deps?.agentModels ?? (async () => null) });
+    res.json({ ok: true, checks, ranAt: new Date().toISOString() });
   });
   return router;
 }
