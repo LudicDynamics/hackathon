@@ -23,22 +23,22 @@ test('bundled DeepSeek model has the expected shape and never introduces a secre
     copyBundledProvider(root);
     const bundled = JSON.parse(fs.readFileSync(path.join(root, 'config/deepseek-models.example.json'), 'utf8'));
     assert.equal(bundled.providers.deepseek.apiKey, '$DEEPSEEK_API_KEY');
-    assert.equal(bundled.providers.deepseek.models[0].id, 'deepseek-flash');
+    assert.equal(bundled.providers.deepseek.models[0].id, 'deepseek-v4-flash');
     assert.ok(!JSON.stringify(bundled).includes('test-only-secret'));
     ensureProviderConfig(root);
     const file = path.join(root, '.pi', 'agent', 'models.json');
     const config = JSON.parse(fs.readFileSync(file, 'utf8'));
     const provider = config.providers.deepseek;
-    const model = provider.models.find(({ id }) => id === 'deepseek-flash');
+    const model = provider.models.find(({ id }) => id === 'deepseek-v4-flash');
     assert.equal(provider.baseUrl, 'https://api.deepseek.com');
     assert.equal(provider.api, 'openai-completions');
     assert.equal(provider.apiKey, '$DEEPSEEK_API_KEY');
     assert.deepEqual(model, {
-      id: 'deepseek-flash',
-      name: 'DeepSeek V4.1 Flash',
+      id: 'deepseek-v4-flash',
+      name: 'DeepSeek V4 Flash',
       reasoning: true,
       input: ['text'],
-      contextWindow: 128000,
+      contextWindow: 1000000,
       maxTokens: 8192,
       compat: {
         supportsStore: false,

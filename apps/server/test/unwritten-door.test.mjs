@@ -74,7 +74,7 @@ test('doors record the entry; only the auto-write switch starts a turn', async (
   }
 });
 
-test('writer queue completes prop updates before starting the door beat', async () => {
+test('a second writer beat is refused while the previous one is still resolving', async () => {
   const listeners = new Set();
   const trace = [];
   const manager = new AgentLifecycleManager({ repoRoot: '.', vendorCliPath: 'unused' });
@@ -89,6 +89,10 @@ test('writer queue completes prop updates before starting the door beat', async 
     },
   };
   manager.startWriter = async () => client;
-  await Promise.all([manager.submitWriter('/demo', 'letter'), manager.submitWriter('/demo', 'door')]);
-  assert.deepEqual(trace, ['start:letter', 'write:letter', 'start:door', 'write:door']);
+  // docs/ux/03 §5.1: a busy writer refuses the next beat instead of queueing it,
+  // so the door beat can never overtake an in-flight prop update.
+  const first = manager.submitWriter('/demo', 'letter');
+  await assert.rejects(manager.submitWriter('/demo', 'door'), /still resolving your previous action/);
+  await first;
+  assert.deepEqual(trace, ['start:letter', 'write:letter']);
 });

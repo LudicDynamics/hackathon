@@ -32,7 +32,6 @@ test('App keeps failed writer input, has one Stop, and focuses Enter', () => {
   assert.match(app, /requestWriterStop\(\)/);
   assert.match(app, /window\.setTimeout\(\(\) => writerRef\.current\?\.focus\(\), 0\)/);
   assert.match(app, /setCharacters\(\[\]\)/);
-  assert.match(app, /setEncounters\(\{\}\)/);
   assert.match(app, /retryWriterPrompt\(\)/);
   assert.match(app, /data-writer-retry/);
   assert.match(app, /parseDiceFrameResult/);

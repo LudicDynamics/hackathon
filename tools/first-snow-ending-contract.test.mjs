@@ -50,7 +50,7 @@ test('decision night is unlocked and does not offer preselected partner endings'
       const { frontmatter, errors } = parseFrontmatter(text);
       assert.deepEqual(errors, []);
       assert.equal(frontmatter.requires, undefined);
-      assert.deepEqual(frontmatter.choice, ['今夜を結ぶ', 'まだ話したいことがある']);
+      assert.deepEqual(frontmatter.choice.options.map(option => option.label), ['今夜を結ぶ', 'まだ話したいことがある']);
       assert.ok(frontmatter.intent.includes('入場だけでは結末を書かない'));
     }
   }
@@ -64,7 +64,7 @@ test('four outcomes follow evidence; read failures never imply solitude', () => 
   for (const phrase of ['nanami', 'sumi', 'entangled', 'solitary', '信物は重要な証拠だが唯一の条件ではない', '記録の読み取りに失敗', '最後のクリックや持ち物の数だけでは決めない', '同じ夜を別ルートへ再抽選しない']) assert.ok(skill.includes(phrase), phrase);
 });
 test('one narration precedes image generation; failure preserves ending and manual retry', () => {
-  for (const phrase of ['一段落、三〜六文、1000文字以内', 'generate_image を一回', '返された実在 asset', 'bgVideo を除く', '画像失敗だけで結末を無効にしない', '自動再試行', '01-opening.md はこの回合では編集しない']) assert.ok(skill.includes(phrase), phrase);
+  for (const phrase of ['一段落、三〜六文、1000文字以内', 'generate_image を一回', '返された実在 asset', 'bgVideo を除く', '画像失敗だけで結末を無効にしない', '自動再試行', '01-opening.md はこの場面では編集しない']) assert.ok(skill.includes(phrase), phrase);
 });
 test('ending creates the README-only shell before CG; later play expands it', () => {
   for (const phrase of ['結末完成の回合に後日談の本文を続けて生成しない', 'world/tonight-promises/first-snow/after-story', 'この後日談を始める', '孤独ルートに未交流の恋人を足さない', '別名の場面を作らない']) assert.ok(skill.includes(phrase), phrase);
