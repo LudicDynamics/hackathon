@@ -22,9 +22,9 @@
 
 | 缺口 | 当前证据与下一步 |
 |---|---|
-| App/Canvas marker 覆盖边界 | `App.tsx:857-888`、`NookView.tsx:423-432` 各有 marker/inert，但 layer wrapper 的 active 属性与 dialogue modal（`CharacterModal.tsx:784-791`）没有统一的 active marker 事务；需浏览器断言恰好一个 active projection。[推断] |
-| Nook 无 PerformanceLayer | `NookView.tsx:549-567` 仅挂 Canvas，未挂 `PerformanceLayer`；Nook 内 show/演出无法宣称与 layer 同源，需补接而不新增 WS/相机。 |
-| 组件内 Escape | `DeclaredActionDialog.tsx:126-151`、`PhotoDetailDialog.tsx:47-89`、`GateThreshold.tsx:10-20` 自有 Escape 处理，尚未统一到 App focus coordinator；Nook/对话退出仍需验证一次只退一层。 |
+| 下一批待办：App/Canvas marker 覆盖边界 | `App.tsx:857-888`、`NookView.tsx:423-432` 各有 marker/inert，但 layer wrapper 的 active 属性与 dialogue modal（`CharacterModal.tsx:784-791`）没有统一的 active marker 事务；需浏览器断言恰好一个 active projection。[推断] |
+| 下一批待办：Nook 无 PerformanceLayer | `NookView.tsx:549-567` 仅挂 Canvas，未挂 `PerformanceLayer`；Nook 内 show/演出无法宣称与 layer 同源，需补接而不新增 WS/相机。 |
+| 下一批待办：组件内 Escape | `DeclaredActionDialog.tsx:126-151`、`PhotoDetailDialog.tsx:47-89`、`GateThreshold.tsx:10-20` 自有 Escape 处理，尚未统一到 App focus coordinator；Nook/对话退出仍需验证一次只退一层。 |
 | 右侧角色/背包形态 | 统一引用 `docs/presence/00 §4.2.1`：CharacterRail 上、Bag 下；Nook 本文不再登记旧双 tab 入口。 |
 
 

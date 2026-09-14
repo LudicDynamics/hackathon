@@ -20,9 +20,9 @@
 | 缺口 | 当前证据与下一步 |
 |---|---|
 | 静态 checker 未覆盖所有 depth marker | `tools/ux-contract.json:159-171` 目前只有一个 `depth.registration` 声明，且 `apps/web/src/prototype.css:75-76,165-166` 仍保留数字 z-index；需扩充同一 checker 的 marker/父 context 覆盖，不能以当前 clean 输出宣称全量扫描。 |
-| App/Canvas marker 覆盖边界 | `apps/web/src/App.tsx:857-888` 的 layer/Nook 分支分别设置 marker/inert，`NookView.tsx:423-432` 仍在 root 上固定写 active marker；`CharacterModal.tsx:784-791` 没有 projection marker。需用浏览器验证 dialogue/Nook 过渡时恰好一个 active marker。[推断] |
-| Nook 无 PerformanceLayer | `apps/web/src/components/nook/NookView.tsx:549-567` 只挂 Canvas，未挂 `PerformanceLayer`；Nook 的 show/演出覆盖尚不能宣称与 layer 同构，需由 Nook/演出 owner 补接且不新增 WS。 |
-| dialogue 内 Escape 归属 | `apps/web/src/components/narrative/DeclaredActionDialog.tsx:126-151`、`apps/web/src/components/photo/PhotoDetailDialog.tsx:47-89`、`apps/web/src/components/performance/GateThreshold.tsx:10-20` 各自处理 Escape，尚未纳入同一 focus/overlay admission 事务。 |
+| 下一批待办：App/Canvas marker 覆盖边界 | `apps/web/src/App.tsx:857-888` 的 layer/Nook 分支分别设置 marker/inert，`NookView.tsx:423-432` 仍在 root 上固定写 active marker；`CharacterModal.tsx:784-791` 没有 projection marker。需用浏览器验证 dialogue/Nook 过渡时恰好一个 active marker。[推断] |
+| 下一批待办：Nook 无 PerformanceLayer | `apps/web/src/components/nook/NookView.tsx:549-567` 只挂 Canvas，Nook 的 show/演出覆盖尚不能宣称与 layer 同构，需由 Nook/演出 owner 补接且不新增 WS。 |
+| 下一批待办：dialogue 内 Escape 归属 | `apps/web/src/components/narrative/DeclaredActionDialog.tsx:126-151`、`apps/web/src/components/photo/PhotoDetailDialog.tsx:47-89`、`apps/web/src/components/performance/GateThreshold.tsx:10-20` 各自处理 Escape，尚未纳入同一 focus/overlay admission 事务。 |
 
 
 ## 1. 一句话定位

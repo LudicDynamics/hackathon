@@ -19,8 +19,8 @@
 | 缺口 | 当前证据与下一步 |
 |---|---|
 | 动作反馈尚未贯通 App 全部入口 | `apps/web/src/lib/action-feedback.ts:98-233` 与 `EntityInteractions.tsx:127-193`、`BagItemDialog.tsx:43-54` 已使用分类 store；但 `apps/web/src/App.tsx:726-733` 的 present 仍直接 gateway + 固定成功通知，需接入真实 details/reconcile。 |
-| 组件内 Escape 未统一到 focus coordinator | `DeclaredActionDialog.tsx:126-151`、`PhotoDetailDialog.tsx:47-89`、`GateThreshold.tsx:10-20` 各自监听/清理 Escape；App 的 topmost 事务尚未覆盖这三个组件，需避免一次按键跨层关闭。[推断：当前无对应统一 focus owner 接线。] |
-| Nook 演出与 Chrome 仍有投影边界 | `apps/web/src/components/nook/NookView.tsx:549-567` 只挂 Canvas；Nook 没有 `PerformanceLayer`，且 projection marker/inert 的覆盖仍需浏览器核验（见 A05）。 |
+| 下一批待办：组件内 Escape 未统一到 focus coordinator | `DeclaredActionDialog.tsx:126-151`、`PhotoDetailDialog.tsx:47-89`、`GateThreshold.tsx:10-20` 各自监听/清理 Escape；App 的 topmost 事务尚未覆盖这三个组件，需避免一次按键跨层关闭。[推断：当前无对应统一 focus owner 接线。] |
+| 下一批待办：Nook 演出与 Chrome 仍有投影边界 | `apps/web/src/components/nook/NookView.tsx:549-567` 只挂 Canvas；Nook 没有 `PerformanceLayer`，且 projection marker/inert 的覆盖仍需浏览器核验（见 A05）。 |
 
 
 ## 1. 权威契约与边界
