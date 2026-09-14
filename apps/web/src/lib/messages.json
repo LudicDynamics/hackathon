@@ -1,7 +1,11 @@
 {
+  "Sound & settings": { "zh-CN": "声音与设置", "ja": "サウンドと設定" },
+  "Close sound settings": { "zh-CN": "关闭声音设置", "ja": "サウンド設定を閉じる" },
   "Audio volume": { "zh-CN": "音量", "ja": "音量" },
-  "TTS voice": { "zh-CN": "TTS 人声", "ja": "TTS 音声" },
-  "BGM / theme music": { "zh-CN": "BGM / 主题曲", "ja": "BGM / テーマ曲" },
+  "Voice volume": { "zh-CN": "语音", "ja": "音声" },
+  "Background music": { "zh-CN": "背景音乐", "ja": "BGM" },
+  "All sound is muted. Volume changes will apply after sound is turned on.": { "zh-CN": "当前已总静音。调整会保留，开启声音后生效。", "ja": "現在、すべての音がミュートされています。調整は保存され、音をオンにすると反映されます。" },
+  "Turn sound on": { "zh-CN": "开启声音", "ja": "音をオンにする" },
   "Volumes are saved on this browser. Master mute still silences all audio.": { "zh-CN": "音量保存在此浏览器。总静音仍会关闭全部声音。", "ja": "音量はこのブラウザに保存されます。全体ミュートはすべての音を消します。" },
   "Initialize to furnish this space from the character’s history.": { "zh-CN": "点击初始化，根据角色的经历布置这里。", "ja": "初期化を押すと、来歴に合う空間を作ります。" },
   "Initializing private space…": { "zh-CN": "正在初始化小天地…", "ja": "小天地を作っています…" },

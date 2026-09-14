@@ -85,6 +85,9 @@
   color: #f0e5d4; background: #393142; font: 13px/1.5 system-ui, sans-serif;
 }
 .settings-panel input::placeholder { color: #b6aabd; }
+.settings-master-muted { display:flex; align-items:center; justify-content:space-between; gap:14px; margin:0 0 16px; padding:12px 14px; border:1px solid #d4b36a66; border-radius:10px; background:#6b4f2538; color:#f5dfb5; }
+.settings-master-muted span { line-height:1.5; }
+.settings-master-muted button { flex:none; background:#70542d; border-color:#e0bf7a88; }
 .settings-volume span { display:flex; justify-content:space-between; gap:12px; }
 .settings-volume output { font-variant-numeric:tabular-nums; color:#d2b5eb; }
 .settings-volume input[type='range'] { display:block; width:100%; height:28px; margin-top:6px; accent-color:#b39acb; cursor:pointer; }
@@ -92,4 +95,5 @@
 @media(max-width: 600px) {
   .settings-backdrop { padding: 12px; }
   .settings-panel { padding: 18px; max-height: calc(100dvh - 24px); }
+  .settings-master-muted { align-items:stretch; flex-direction:column; }
 }
