@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 // Edition IDs are packaging only; scene, item and character paths never change.
 export const editionFamilies = [
   { base: 'wuwu', source: 'wuwu-playtest', en: 'Fogwharf', ja: '霧埠の町', zh: '雾坞镇' },
@@ -14,3 +17,28 @@ const SUFFIX = { en: '', ja: '-jp', 'zh-CN': '-zh' };
 // First Snow ships as `first-snow` (the family key stays `firstsnow`).
 export const editionId = (family, locale) => (family.base === 'firstsnow' ? 'first-snow' : family.base) + SUFFIX[locale];
 export const templateArchive = 'archive/templates/pre-bilingual-2026-09-14';
+
+/**
+ * Experimental sandboxes (`world.json` `exp: true`) are not shipped editions.
+ *
+ * `templates/exp` is a deliberate, permanent exception: it exists so a
+ * character can be carried onto the canvas with their own pi-memory DB, and it
+ * is NOT one of the 21 canonical bilingual editions. Every gate that enumerates
+ * `templates/*` as "the edition set" must skip it — otherwise the sandbox can
+ * only exist by deleting it.
+ *
+ * This is a DIRECTORY-NAME-INDEPENDENT check on purpose: the marker lives in the
+ * manifest, so an experiment never has to be named a special way to be ignored,
+ * and `world-editions.mjs` stays the one place that knows the rule.
+ *
+ * Fail-soft: an unreadable/malformed manifest is NOT experimental (a gate should
+ * still see a broken world and complain about it).
+ */
+export function isExperimentalWorld(tier, world) {
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(tier, world, 'world.json'), 'utf8'));
+    return manifest.exp === true;
+  } catch {
+    return false;
+  }
+}

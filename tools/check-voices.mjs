@@ -29,6 +29,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { VOICES, VOICE_COUNT, resolveVoice } from '../packages/shared/dist/index.js';
+import { isExperimentalWorld } from './world-editions.mjs';
+
 import { parseFrontmatter } from '../vendor/pi-rp/packages/coding-agent/dist/utils/frontmatter.js';
 
 const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -142,7 +144,7 @@ function characterReadmes() {
   const templates = path.join(REPO, 'templates');
   if (!fs.existsSync(templates)) return out;
   for (const world of fs.readdirSync(templates, { withFileTypes: true })) {
-    if (!world.isDirectory()) continue;
+    if (!world.isDirectory() || isExperimentalWorld(templates, world.name)) continue;
     const chars = path.join(templates, world.name, 'characters');
     if (!fs.existsSync(chars)) continue;
     for (const c of fs.readdirSync(chars, { withFileTypes: true })) {

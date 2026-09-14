@@ -31,6 +31,13 @@ function characterPresets() {
     if (!fs.existsSync(tierDir)) continue;
     for (const world of fs.readdirSync(tierDir)) {
       if (!process.env.AIRP_CHECK_SAVES && world.includes('-playtest')) continue;
+      // Experimental sandboxes (`exp: true`) carry a foreign character preset
+      // verbatim; the platform-parity contract does not apply to them.
+      try {
+        if (JSON.parse(fs.readFileSync(path.join(tierDir, world, 'world.json'), 'utf-8')).exp === true) continue;
+      } catch {
+        // No/unreadable manifest: not experimental, let the walk see it.
+      }
       const charsDir = path.join(tierDir, world, 'characters');
       if (!fs.existsSync(charsDir)) continue;
       for (const id of fs.readdirSync(charsDir)) {

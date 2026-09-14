@@ -37,10 +37,18 @@ test('translation guards reject changed or missing paths and dice numbers', () =
   assert.throws(() => restore(p.masked.replace('⟪0⟫', ''), p.literals), /protected/);
   assert.throws(() => restore(p.masked + '⟪0⟫', p.literals), /protected/);
 });
-test('the world shelf exposes only the canonical editions', async () => {
+test('the world shelf separates the canonical editions from experimental sandboxes', async () => {
   if (staged) return;
   const shelf = await readWorldShelf(repo);
   assert.deepEqual(shelf.templates.sort(), editionFamilies.flatMap(f => editionLocales.map(l => editionId(f, l))).sort());
+  // `expTemplates` is the OTHER half of the contract: a sandbox must be listed
+  // there (so the Launcher can open it) while staying out of `templates` (so the
+  // edition corpus above stays exactly 21). Asserting both keeps either half
+  // from quietly disappearing.
+  for (const id of shelf.expTemplates ?? []) {
+    assert.ok(!shelf.templates.includes(id), `${id}: experimental world leaked into the edition list`);
+    assert.ok(shelf.groups.some(g => g.id === id && g.templatePath), `${id}: experimental world is not openable from the Launcher`);
+  }
 });
 
 test('fresh saves of every edition resolve the same layers and direct choices without calling an Agent', async () => {

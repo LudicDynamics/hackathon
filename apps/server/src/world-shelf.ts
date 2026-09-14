@@ -71,16 +71,26 @@ type ShelfGroup = {
   coverVideo: string | null;
   locale: string | null;
   description: string;
+  /** `world.json` `exp: true` — an experimental sandbox, not a shipped edition. */
+  exp: boolean;
   saves: { id: string; path: string; updatedAt: string; active: boolean }[];
 };
 
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 
 export async function readWorldShelf(repoRoot: string, activeRoot?: string) {
-  const [templates, worlds] = await Promise.all([entries(path.join(repoRoot, 'templates')), entries(path.join(repoRoot, 'worlds'))]);
-  const covers = new Map(await Promise.all(templates.map(async t => [t.id, await coverOf(path.join(repoRoot, 'templates', t.id), t.manifest)] as const)));
-  const videos = new Map(await Promise.all(templates.map(async t => [t.id, await coverVideoOf(path.join(repoRoot, 'templates', t.id), t.manifest)] as const)));
-  const groups = new Map<string, ShelfGroup>(templates.map(t => [t.id, {
+  const [allTemplates, worlds] = await Promise.all([entries(path.join(repoRoot, 'templates')), entries(path.join(repoRoot, 'worlds'))]);
+  // `world.json` `exp: true` marks an experimental sandbox (templates/exp). It
+  // is deliberately NOT an edition, so it is kept out of the `templates`
+  // edition-id list the edition gates compare against — but it stays in
+  // `groups`, because the whole point is that a human can open it from the
+  // Launcher. A sandbox only exists if it is visible AND does not redden the
+  // edition corpus, so both halves belong here.
+  const templates = allTemplates.filter(t => t.manifest.exp !== true);
+  const expTemplates = allTemplates.filter(t => t.manifest.exp === true);
+  const covers = new Map(await Promise.all(allTemplates.map(async t => [t.id, await coverOf(path.join(repoRoot, 'templates', t.id), t.manifest)] as const)));
+  const videos = new Map(await Promise.all(allTemplates.map(async t => [t.id, await coverVideoOf(path.join(repoRoot, 'templates', t.id), t.manifest)] as const)));
+  const groups = new Map<string, ShelfGroup>(allTemplates.map(t => [t.id, {
     id: t.id,
     name: String(t.manifest.name || t.id),
     templatePath: `templates/${t.id}`,
@@ -88,19 +98,25 @@ export async function readWorldShelf(repoRoot: string, activeRoot?: string) {
     coverVideo: videos.get(t.id) ? `/api/worlds/cover?id=${encodeURIComponent(t.id)}&kind=video` : null,
     locale: text(t.manifest.locale) || null,
     description: text(t.manifest.description),
+    exp: t.manifest.exp === true,
     saves: [],
   }]));
   for (const save of worlds) {
     // Older scaffolded copies changed manifest.id; match the longest known
     // template prefix only as a fallback. Never group by translated display name.
-    const template = templates.find(t => t.manifest.id === save.manifest.id)
-      ?? [...templates].sort((a, b) => b.id.length - a.id.length).find(t => save.id.startsWith(`${t.id}-`));
+    const template = allTemplates.find(t => t.manifest.id === save.manifest.id)
+      ?? [...allTemplates].sort((a, b) => b.id.length - a.id.length).find(t => save.id.startsWith(`${t.id}-`));
     const groupId = template?.id ?? save.manifest.id;
-    if (!groups.has(groupId)) groups.set(groupId, { id: groupId, name: String(save.manifest.name || groupId), templatePath: null, cover: null, coverVideo: null, locale: text(save.manifest.locale) || null, description: text(save.manifest.description), saves: [] });
+    if (!groups.has(groupId)) groups.set(groupId, { id: groupId, name: String(save.manifest.name || groupId), templatePath: null, cover: null, coverVideo: null, locale: text(save.manifest.locale) || null, description: text(save.manifest.description), exp: save.manifest.exp === true, saves: [] });
     groups.get(groupId)!.saves.push({ id: save.id, path: `worlds/${save.id}`, updatedAt: save.updatedAt, active: activeRoot ? path.resolve(activeRoot) === path.join(repoRoot, 'worlds', save.id) : false });
   }
   for (const group of groups.values()) group.saves.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  return { templates: templates.map(t => t.id), worlds: worlds.map(w => w.id), groups: [...groups.values()] };
+  return {
+    templates: templates.map(t => t.id),
+    expTemplates: expTemplates.map(t => t.id),
+    worlds: worlds.map(w => w.id),
+    groups: [...groups.values()],
+  };
 }
 
 /** Delete means recoverable rename, never recursive removal. */

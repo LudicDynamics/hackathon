@@ -43,6 +43,14 @@ function characterPresets() {
     if (!fs.existsSync(tierDir)) continue;
     for (const world of fs.readdirSync(tierDir)) {
       if (!process.env.AIRP_CHECK_SAVES && world.includes('-playtest')) continue;
+      // An experimental sandbox (`world.json` `exp: true`) ships a character
+      // preset verbatim from another project on purpose: it is not AIRP
+      // platform content and must not be forced into the platform item list.
+      try {
+        if (JSON.parse(fs.readFileSync(path.join(tierDir, world, 'world.json'), 'utf-8')).exp === true) continue;
+      } catch {
+        // No/unreadable manifest: not experimental, let the walk see it.
+      }
       const charsDir = path.join(tierDir, world, 'characters');
       if (!fs.existsSync(charsDir)) continue;
       for (const id of fs.readdirSync(charsDir)) {

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { parseFrontmatter, WorldManifestSchema } from '../packages/shared/dist/index.js';
-import { editionFamilies, editionId, editionLocales } from './world-editions.mjs';
+import { editionFamilies, editionId, editionLocales, isExperimentalWorld } from './world-editions.mjs';
 import { filesUnder, mapText } from './localize-world-editions.mjs';
 
 const repo = fileURLToPath(new URL('../', import.meta.url));
@@ -49,7 +49,14 @@ export async function checkEditions({ staged = false, only = null } = {}) {
   assert.equal(families.length, only?.length ?? editionFamilies.length, `Unknown family in --only=${only}`);
   const expectedIds = families.flatMap(f => locales.map(l => editionId(f, l))).sort();
   const actualIds = [];
-  for (const d of await fs.readdir(base)) if (await fs.access(path.join(base, d, 'world.json')).then(() => true).catch(() => false)) actualIds.push(d);
+  // Experimental sandboxes carry `exp: true` and are deliberately outside the
+  // edition set: the whole point of templates/exp is that it is NOT a shipped
+  // edition, so asserting `templates == 21` would only force its deletion.
+  for (const d of await fs.readdir(base)) {
+    if (!(await fs.access(path.join(base, d, 'world.json')).then(() => true).catch(() => false))) continue;
+    if (isExperimentalWorld(base, d)) continue;
+    actualIds.push(d);
+  }
   if (only) for (const id of expectedIds) assert.ok(actualIds.includes(id), `Missing edition ${id}`);
   else assert.deepEqual(actualIds.sort(), expectedIds, `Exactly one edition per family and locale (${locales.join(', ')})`);
   const skills = new Set(); let files = 0; let dice = 0;

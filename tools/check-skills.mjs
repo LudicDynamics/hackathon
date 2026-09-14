@@ -27,6 +27,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseFrontmatter } from '../vendor/pi-rp/packages/coding-agent/dist/utils/frontmatter.js';
+import { isExperimentalWorld } from './world-editions.mjs';
 
 
 const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -62,13 +63,25 @@ const check = (label, ok, extra = '') => {
   if (!ok) failed++;
 };
 
-/** Every `<tier>/<world>/skills` directory that exists (`templates/` + `worlds/`). */
+/**
+ * Every `<tier>/<world>/skills` directory that exists.
+ *
+ * `templates/` is the shipped corpus. `worlds/` holds per-machine SAVES — an
+ * untracked copy of a template with the player's own runtime state — and a save
+ * carries the SAME skill names as the template it came from, so including it
+ * made A10 (globally-unique names) fail by construction the moment anyone
+ * played a world. The rule A10 actually states is "unique across the shipped
+ * corpus" (docs/prompts/04 §⑧), which is `templates/` only.
+ *
+ * Experimental sandboxes (`exp: true`) are outside that corpus too.
+ */
 function worldSkillDirs() {
   const out = [];
-  for (const tier of ['templates', 'worlds']) {
+  for (const tier of ['templates']) {
     const tierDir = path.join(REPO, tier);
     if (!fs.existsSync(tierDir)) continue;
     for (const world of fs.readdirSync(tierDir)) {
+      if (isExperimentalWorld(tierDir, world)) continue;
       const dir = path.join(tierDir, world, 'skills');
       if (fs.existsSync(dir)) out.push({ world, dir });
     }

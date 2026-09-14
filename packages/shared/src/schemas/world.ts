@@ -51,6 +51,12 @@ export const WorldManifestSchema = z.object({
   // World theme song key. Resolved to a URL by the server before it reaches the
   // client (docs/audio/00 §4.3); the raw key never leaves the server.
   audio: z.object({ theme: z.string().optional() }).optional(),
+  /**
+   * Experimental sandbox marker (`templates/exp`). Not a shipped edition: the
+   * edition gates skip it and the world shelf lists it separately, so it can be
+   * opened from the Launcher without joining the 21-edition corpus.
+   */
+  exp: z.boolean().default(false),
   createdAt: z.string(),
   updatedAt: z.string(),
 }).passthrough();
