@@ -5,6 +5,7 @@ import { ghostVisibleOn, LANDED_DWELL_MS, REUSED_DWELL_MS } from '../../lib/ghos
 import { GhostCard } from '../narrative/GhostCard.js';
 import type { GhostCopy } from '../narrative/GhostCard.js';
 import { ChalkMark } from '../performance/WriterInkLayer.js';
+import { CardSkeleton } from '../narrative/CardSkeleton.js';
 
 /**
  * The ONE mount point for provisional cards (docs/perform/00 §5, ruling E).
@@ -34,6 +35,10 @@ export interface PhantomLayerProps {
 /** Window an evicted ghost stays in the DOM (fading) before deregistration.
  *  Matches the `.ghost-card--evicted` opacity transition in index.css. */
 const EVICT_FADE_MS = 700;
+/** A skeleton's failure exit: a one-shot shell with no asset behind it, so it
+ *  borrows the chalk lane's budget (WriterInkLayer's 320ms). Must match the
+ *  `.card-skeleton--evicted` animation in index.css. */
+const SKELETON_EVICT_MS = 320;
 
 export const PhantomLayer: React.FC<PhantomLayerProps> = ({ currentLayer, bgSrc, copy }) => {
   const phantoms = usePhantoms();
@@ -48,11 +53,20 @@ export const PhantomLayer: React.FC<PhantomLayerProps> = ({ currentLayer, bgSrc,
     const timers: number[] = [];
     const now = Date.now();
     for (const p of phantoms) {
-      if (p.kind !== 'image') continue;
+      // Evicted phantoms deregister after their fade so the registry drains
+      // (browser criterion #1: "最终为空"). Image and component each own a
+      // budget; chalk retires its own ghost (WriterInkLayer, owner 01), so a
+      // second timer here would fight it.
       if (p.phase === 'evicted') {
-        timers.push(window.setTimeout(() => drop(p.toolCallId), EVICT_FADE_MS));
+        const budget =
+          p.kind === 'component' ? SKELETON_EVICT_MS : p.kind === 'image' ? EVICT_FADE_MS : undefined;
+        if (budget !== undefined) timers.push(window.setTimeout(() => drop(p.toolCallId), budget));
         continue;
       }
+      // Landed-dwell applies to the image lane only: a landed image ghost
+      // leaves when the layer's live backdrop IS its asset (the real refetch
+      // won), or after a dwell when the writer never writes `bg:`.
+      if (p.kind !== 'image') continue;
       if (p.phase !== 'landed') continue;
       if (p.asset !== undefined && p.asset === bgSrc) {
         evict(p.toolCallId);
@@ -81,7 +95,13 @@ export const PhantomLayer: React.FC<PhantomLayerProps> = ({ currentLayer, bgSrc,
           style={{ left: p.seat.x, top: p.seat.y, width: p.seat.w, zIndex: p.seat.z }}
           aria-hidden
         >
-          {p.kind === 'image' ? <GhostCard entry={p} copy={copy} /> : <ChalkMark entry={p} />}
+          {p.kind === 'component' ? (
+            <CardSkeleton entry={p} />
+          ) : p.kind === 'image' ? (
+            <GhostCard entry={p} copy={copy} />
+          ) : (
+            <ChalkMark entry={p} />
+          )}
         </div>
       ))}
     </>

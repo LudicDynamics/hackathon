@@ -2336,3 +2336,160 @@ body:before {
     opacity: 0.85;
   }
 }
+
+/* ============================================================================
+   Component card skeletons (docs/skeleton/03) — the `kind:'component'` phantom
+   lane. A writer `write` registers a phantom the instant the server announces
+   it (card_writing frame); this sketches a structure-only grey skeleton in the
+   real seat until the card lands and `reconcileLanded` removes it. Shows no
+   text (docs/skeleton/00 §2.3); never in `items`/drag/footprint (00 §6.4).
+
+   Colours are the existing material tokens plus three local slate values the
+   vocabulary needs (forms.ts:16/19 name "stone/metal" and "kraft paper" but the
+   token set has no slate): #e9e3d6 / #d9d1bf (slab gradient) and #d3c1a0
+   (scroll edge underside). See docs/skeleton/03 §5.4/§5.7 (ruling I).
+   ========================================================================= */
+
+@keyframes cardSkeletonPulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 0.92; }
+}
+@keyframes cardSkeletonEvict {
+  0%   { opacity: 0.92; }
+  100% { opacity: 0; }
+}
+
+.card-skeleton {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;          /* decorations never spill into a neighbour */
+  border-radius: 2px;
+  animation: cardSkeletonPulse 600ms ease-in-out infinite;
+}
+.card-skeleton__lines {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 14px 16px;
+}
+.card-skeleton__line {
+  display: block;
+  height: 6px;               /* overridden by the inline height */
+  border-radius: 1px;
+  background: rgba(43, 33, 23, 0.10);
+}
+
+/* paper — a sheet with ragged grey lines (default / letter / book / …) */
+.card-skeleton--paper {
+  background: var(--paper);
+  border: 1px solid var(--hair);
+  box-shadow: var(--shadow-mid);
+}
+
+/* note — memo pad, ruled lines, paper clip */
+.card-skeleton--note {
+  background: var(--note-yellow);
+  box-shadow: var(--shadow-mid);
+  background-image: repeating-linear-gradient(0deg, transparent 0 27px, rgba(43, 33, 23, 0.05) 27px 28px);
+}
+.card-skeleton__clip {
+  position: absolute;
+  top: 2px;                  /* deliberately inside the box (overflow: hidden) */
+  right: 14px;
+  width: 15px;
+  height: 26px;
+  border: 2px solid var(--pencil);
+  border-bottom-color: transparent;
+  border-radius: 8px;
+  transform: rotate(6deg);
+}
+
+/* slab — stone/metal block set INTO the scene (inset shading) */
+.card-skeleton--slab {
+  background: linear-gradient(180deg, #e9e3d6 0%, #d9d1bf 100%);
+  border: 1px solid var(--hair);
+  box-shadow:
+    inset 0 2px 6px rgba(43, 33, 23, 0.22),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.35),
+    var(--shadow-far);
+}
+.card-skeleton__block {
+  position: absolute;
+  inset: 24% 26%;
+  border: 1px solid rgba(43, 33, 23, 0.18);
+  border-radius: 2px;
+  background: rgba(43, 33, 23, 0.05);
+}
+
+/* board — the world's table top: deeper cream + the same 80px grid as CanvasGrid */
+.card-skeleton--board {
+  background-color: var(--kraft);
+  background-image:
+    linear-gradient(rgba(41, 40, 32, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(41, 40, 32, 0.06) 1px, transparent 1px);
+  background-size: 80px 80px, 80px 80px;
+  border: 1px solid var(--hair);
+  box-shadow: var(--shadow-mid);
+}
+
+/* panel — an instrument face: pale ink wash + equal-width bars */
+.card-skeleton--panel {
+  background: rgba(43, 33, 23, 0.06);
+  border: 1px solid var(--hair);
+  border-radius: 1px;
+}
+.card-skeleton--panel .card-skeleton__line {
+  background: rgba(43, 33, 23, 0.16);
+}
+
+/* scroll — legal paper with doubled top/bottom edges, no rounding */
+.card-skeleton--scroll {
+  background: var(--legal);
+  border-radius: 0;
+  box-shadow: var(--shadow-mid);
+}
+.card-skeleton__edge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 7px;
+  background: linear-gradient(180deg, var(--kraft) 0%, #d3c1a0 100%);
+}
+.card-skeleton__edge--top    { top: 0;    border-bottom: 1px solid var(--hair); }
+.card-skeleton__edge--bottom { bottom: 0; border-top: 1px solid var(--hair); }
+
+/* cover — top material band + a numbered seal ring (ring only: no digits) */
+.card-skeleton--cover {
+  background: var(--paper);
+  border: 1px solid var(--hair);
+  box-shadow: var(--shadow-mid);
+}
+.card-skeleton--cover .card-skeleton__lines { padding-top: 48px; }
+.card-skeleton__band {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 36px;
+  background: var(--kraft);
+  border-bottom: 1px solid var(--hair);
+}
+.card-skeleton__seal {
+  position: absolute;
+  top: 8px; left: 8px;
+  width: 18px; height: 18px;
+  border: 1.8px solid var(--red);
+  border-radius: 50%;
+  transform: rotate(-6deg);
+}
+
+/* phase variants: landed freezes solid to meet the real card; evicted fades out.
+   The 320ms MUST equal SKELETON_EVICT_MS in PhantomLayer.tsx. */
+.card-skeleton--landed { animation: none; opacity: 1; }
+.card-skeleton--evicted { animation: cardSkeletonEvict 320ms ease-in forwards; }
+
+/* Reduced motion: the shape IS the information, the breathing is decoration. */
+@media (prefers-reduced-motion: reduce) {
+  .card-skeleton { animation: none; opacity: 0.8; }
+  .card-skeleton--landed { opacity: 1; }
+  .card-skeleton--evicted { animation: none; opacity: 0; }
+}

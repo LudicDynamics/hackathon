@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { WebSocketServer } from 'ws';
 import type { JsonAgentSessionEvent } from '../../../../vendor/pi-rp/packages/coding-agent/dist/index.js';
-import type { LocalWorldStore } from '@airp/shared';
+import { parseFrontmatter, cardKindOf, layerOfDir, dirOf, entityName, type LocalWorldStore } from '@airp/shared';
 import { extractContentPrefix } from './chalk-delta.js';
 import {
   ActivityProjector,
@@ -61,6 +61,43 @@ function emitChalkDeltas(
   if (truth && prev !== truth) {
     push({ type: 'writer_delta', source: 'writer', delta: truth, toolCallId, mode: 'replace' });
   }
+}
+/**
+ * Build the `card_writing` presentation frame from a `write` tool's start event
+ * (docs/skeleton/01 §3). The writer is about to land a component card; this
+ * tells the front end which seat, shape and title to sketch, so the card never
+ * pops into existence (docs/skeleton/00 §0).
+ *
+ * Pure: no I/O, never throws (the caller is the synchronous `mapEngineEvent`
+ * loop — a throw here would drop every later frame). `content` absent or
+ * unparseable → `kind` falls back to `'note'` (NOT `'default'`: `cardKindOf`'s
+ * final return is `note`). `layer` is omitted when `args.path` has no directory
+ * (docs/skeleton/00 F-2).
+ *
+ * Owner: docs/skeleton/01.
+ */
+function cardWritingFrame(
+  source: EventSource,
+  toolCallId: string,
+  args: unknown,
+): Record<string, unknown> {
+  const a = args as { path?: unknown; content?: unknown } | undefined;
+  const relPath = typeof a?.path === 'string' ? a.path : '';
+  const content = typeof a?.content === 'string' ? a.content : '';
+  const layer = layerOfDir(dirOf(relPath));
+  const fm = parseFrontmatter(content).frontmatter;
+  const kind = cardKindOf(fm, path.basename(relPath));
+  const frame: Record<string, unknown> = {
+    type: 'card_writing',
+    source,
+    toolCallId,
+    kind,
+    title: entityName(fm, relPath),
+  };
+  // Omit `layer` when the path has no directory (F-2 §2): the front end treats a
+  // missing layer as "not a layer card" and skips the skeleton (F-10 ruling O).
+  if (layer !== '') frame.layer = layer;
+  return frame;
 }
 
 /**
@@ -208,6 +245,12 @@ export function mapEngineEvent(
       }));
       if (event.toolName === 'chalk') {
         push({ type: 'chalk_writing', source, toolCallId: event.toolCallId });
+      }
+      // Component cards: the writer's own `write` (not the chalk lane, not the
+      // init subagents — their events do not bubble). Independent statement,
+      // parallel to `pushActivities` above, so this hunk separates cleanly.
+      if (event.toolName === 'write' && source === 'writer') {
+        push(cardWritingFrame(source, event.toolCallId, event.args));
       }
       break;
     }

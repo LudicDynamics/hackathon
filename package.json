@@ -23,6 +23,7 @@
     "probe:inject": "node tools/probe-inject.mjs",
     "probe:init": "node tools/probe-init.mjs",
     "probe:prompt": "node tools/probe-prompt.mjs && node tools/probe-prompt-character.mjs",
+    "probe:skeleton": "node tools/probe-skeleton.mjs",
     "check:skills": "node tools/check-skills.mjs",
     "check:worlds": "node tools/check-world-editions.mjs",
     "typecheck:extensions": "tsc -p extensions/tsconfig.json",

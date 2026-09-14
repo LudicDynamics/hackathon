@@ -322,3 +322,74 @@ test('custom role airp activity relay is not hidden by assistant-only mapping', 
   assert.equal(activity.phase, 'started');
   assert.equal(activity.characterId, undefined);
 });
+
+test('card_writing fires for a writer `write` and carries kind/title/layer', () => {
+  const out = frames('writer', {
+    type: 'tool_execution_start',
+    toolCallId: 'c9',
+    toolName: 'write',
+    args: {
+      path: 'world/baker-street/lock.md',
+      content: '---\ntype: component\ncomponent: lock\ntitle: Brass Lock\n---\n\nbody\n',
+    },
+  });
+  const frame = out.find((f) => f.type === 'card_writing');
+  assert.equal(frame.source, 'writer');
+  assert.equal(frame.toolCallId, 'c9');
+  assert.equal(frame.kind, 'lock');
+  assert.equal(frame.title, 'Brass Lock');
+  assert.equal(frame.layer, 'world/baker-street');
+  // The frame never carries `path` — handover is keyed on chalk_landed.path.
+  assert.equal(frame.path, undefined);
+});
+
+test('card_writing survives missing frontmatter (no throw, no half frame)', () => {
+  // Unparseable / absent content → kind falls back to 'note', NOT 'default'.
+  const out = frames('writer', {
+    type: 'tool_execution_start',
+    toolCallId: 'c10',
+    toolName: 'write',
+    args: { path: 'world/map/note.md', content: '' },
+  });
+  const frame = out.find((f) => f.type === 'card_writing');
+  assert.equal(frame.kind, 'note');
+  assert.equal(frame.layer, 'world/map');
+  // A title is never empty: entityName falls back to the basename minus `.md`.
+  assert.equal(frame.title, 'note');
+});
+
+test('card_writing omits `layer` when the path has no directory (F-2)', () => {
+  const out = frames('writer', {
+    type: 'tool_execution_start',
+    toolCallId: 'c11',
+    toolName: 'write',
+    args: { path: 'stray.md', content: '---\ntype: note\n---\n' },
+  });
+  const frame = out.find((f) => f.type === 'card_writing');
+  assert.equal('layer' in frame, false);
+});
+
+test('card_writing fires only for the writer lane, never character/chalk', () => {
+  const start = (source, toolName, args) => frames(source, {
+    type: 'tool_execution_start',
+    toolCallId: 'c12',
+    toolName,
+    args,
+  });
+  const args = { path: 'world/map/x.md', content: '---\ntype: note\n---\n' };
+  assert.equal(start('writer', 'write', args).some((f) => f.type === 'card_writing'), true);
+  assert.equal(start('character', 'write', args).some((f) => f.type === 'card_writing'), false);
+  assert.equal(start('writer', 'chalk', args).some((f) => f.type === 'card_writing'), false);
+});
+
+test('card_writing resolves a nook path (characters/<id>/** is its own layer)', () => {
+  const out = frames('writer', {
+    type: 'tool_execution_start',
+    toolCallId: 'c13',
+    toolName: 'write',
+    args: { path: 'characters/bob/photo.md', content: '---\ntype: component\ncomponent: photo\n---\n' },
+  });
+  const frame = out.find((f) => f.type === 'card_writing');
+  assert.equal(frame.layer, 'characters/bob');
+  assert.equal(frame.kind, 'photo');
+});

@@ -12,6 +12,7 @@ import { CARD_FORMS } from '@airp/shared/forms';
 import { isValidCharacterId } from '@airp/shared/characters';
 import type { AppearanceResolution, WorldEvent } from '@airp/shared';
 import { register as registerPhantom, land as landPhantom, appendInk, setInk, evict as evictPhantom, reconcileLanded, getPhantomsSnapshot } from '../lib/phantom.js';
+import { cardWritingGuard } from '../lib/card-skeleton.js';
 import { phantomSeatFor, publishSeatItems } from '../lib/phantom-seat.js';
 import { mergeItemPatch, mergeLinkPatch } from '../lib/canvas-patch.js';
 import { acceptWriterFrame, beginWriterPrompt, getWriterState, resetForReconnect as resetWriter, type WriterPromptAcceptance } from '../lib/writer-state.js';
@@ -565,6 +566,28 @@ export function useWorld(): UseWorldApi {
             layer: layerRef.current,
           });
           playCharge(0);
+          break;
+        }
+        // 组件骨架屏（docs/skeleton/02 §3.1）：作家 write 一张组件卡时，服务端在
+        // tool_execution_start 发 card_writing；这里注册 component 幻影，由
+        // CardSkeleton 画结构化骨架，落地后经既有 reconcileLanded 按 path 删除。
+        case 'card_writing': {
+          if (msg.source !== 'writer' || typeof msg.toolCallId !== 'string') break;
+          const kind = typeof msg.kind === 'string' ? msg.kind : undefined;
+          const form = kind !== undefined ? CARD_FORMS[kind] : undefined;
+          const layer = typeof msg.layer === 'string' ? msg.layer : undefined;
+          // 白名单（不回退 layerRef.current）：层推不出 = 该 path 永不进 items →
+          // reconcileLanded 永不删 → 骨架永挂且挤座（docs/skeleton/00 F-10 裁决 O）。
+          if (!cardWritingGuard(form, kind, layer)) break;
+          const seat = phantomSeatFor({ w: form!.w, h: form!.h }, layer!).seat;
+          registerPhantom(msg.toolCallId, {
+            kind: 'component',
+            source: 'writer',
+            seat,
+            layer,
+            cardKind: kind,
+            cardTitle: typeof msg.title === 'string' ? msg.title : undefined,
+          });
           break;
         }
         case 'writer_delta': {
