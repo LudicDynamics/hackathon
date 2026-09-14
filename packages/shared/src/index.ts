@@ -75,6 +75,7 @@ export * from './render/events.js';       // renderEventWindow / EventWindowLine
 export * from './render/next-step.js';    // computeNextStep / NextStepFacts (04)
 export * from './render/viewpoint.js';    // ViewRect / quantiseViewRect / encodeViewRect / decodeViewRect / viewpointKey / VIEWPOINT_* (05)
 export * from './render/sanitise.js';     // sanitiseForBlock (00 §14)
+export * from './render/canvas-snapshot.js'; // CanvasSnapshotV1 perception/read fence
 export * from './render/brief.js';        // buildSceneInitBrief / buildNookInitBrief (docs/init/00 §4)
 export * from './inject/turn-cache.js';   // readTurnBlock / writeTurnBlock (01)
 export * from './inject/collect.js';      // collectSections / makeSectionDeps / buildNextStepFacts (01)

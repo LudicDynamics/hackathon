@@ -11,7 +11,6 @@
  * agent's text view and the player's canvas can never diverge (doc-03 §4.3).
  */
 import type { WorldStore } from '../store/world-store.js';
-import { cardKindOf } from '../schemas/forms.js';
 import {
   cardsOfLayer,
   childLayers,
@@ -37,7 +36,7 @@ import {
   type CanvasComposition,
   type LayerItem,
 } from '../render/layer-page.js';
-import { boxesOverlap } from '../render/spatial.js';
+import { readCanvasSnapshot, type CanvasSnapshot } from '../render/canvas-snapshot.js';
 
 export interface LookAtInput {
   /**
@@ -83,7 +82,6 @@ export interface ViewCanvasInput {
   /** 'image' only: viewport in CSS px. Clamped to [320,2560]×[240,1600]. */
   viewport?: { width: number; height: number };
 }
-
 export interface ViewCanvasDetails {
   layer: string;
   /** What actually happened. 'summary' today; 'image' only when a shot was returned. */
@@ -98,6 +96,18 @@ export interface ViewCanvasDetails {
   unplaced: string[];
   /** Characters on this layer (canvas.db `presence`). */
   presence: Array<{ characterId: string; x: number; y: number; following: boolean }>;
+  /** NEW: canonical CanvasSnapshotV1 identity used by arrangement fences. */
+  identity: CanvasSnapshot['identity'];
+  /** NEW: complete layer rows, including layer and footprint provenance. */
+  rows: CanvasSnapshot['rows'];
+  /** NEW: canonical unplaced diagnostics; `unplaced` remains the legacy path list. */
+  unplacedRows: CanvasSnapshot['unplaced'];
+  /** NEW: complete link rows; `links` are not rendered into the legacy summary. */
+  links: CanvasSnapshot['links'];
+  /** NEW: complete presence rows with freshness evidence. */
+  presenceRows: CanvasSnapshot['presence'];
+  /** NEW: the current TTL-filtered viewpoint, when available. */
+  viewpoint: CanvasSnapshot['viewpoint'];
   /** 'image' only, when implemented (doc-03 §6.3): `.airpworld/eye/<hash>.png`. */
   shot?: string;
   event?: never;
@@ -373,28 +383,6 @@ function clampViewport(viewport?: { width: number; height: number }): { width: n
   return { width, height };
 }
 
-/** Presence rows for a layer (doc-03 §6.2 "Characters present"). */
-async function readPresence(
-  ctx: ActionContext,
-  layerId: string
-): Promise<Array<{ characterId: string; x: number; y: number; following: boolean }>> {
-  try {
-    const rows = ctx.store.queryCanvas(
-      'SELECT character_id, x, y, following FROM presence WHERE layer = ?',
-      [layerId]
-    );
-    return (rows as Array<Record<string, unknown>>).map((row) => ({
-      characterId: String(row.character_id),
-      x: Number(row.x),
-      y: Number(row.y),
-      following: row.following === 1 || row.following === true,
-    }));
-  } catch {
-    // No presence table yet (a world that never seated anyone): be honest with
-    // an empty list rather than failing the read.
-    return [];
-  }
-}
 
 export async function viewCanvas(
   ctx: ActionContext,
@@ -408,65 +396,47 @@ export async function viewCanvas(
   }
 
   const rawLayer = input?.layer;
-  const layerId =
-    rawLayer === undefined ? await resolveDefaultLayer(ctx) : layerOfDir(String(rawLayer).replace(/\/+$/, '').replace(/^\.\//, ''));
-  assertSafePath(layerId);
-
-  const dir = dirOfLayer(layerId);
-  if ((await ctx.store.statKind(dir)) !== 'dir') {
-    fail('not_found', `No layer "${rawLayer ?? layerId}" in this world`);
-  }
-
+  const snapshot = await readCanvasSnapshot(ctx.store, { layer: rawLayer });
+  const layerId = snapshot.layer.id;
+  const dir = snapshot.layer.dir;
   const viewport = clampViewport(input?.viewport);
-  const allFiles = await ctx.store.listFiles(WORLD_DIR);
-  const layers = await layerConfigs(ctx);
-  const cardPaths = cardsOfLayer(layerId, allFiles);
-  const doorPaths = childLayers(layerId, layers).map((child) => `${child}/README.md`);
-  const boxes = await boxesOf(ctx, [...cardPaths, ...doorPaths]);
-
+  const rowByPath = new Map(snapshot.rows.map((row) => [row.path, row]));
+  const pagePaths = [...snapshot.rows.map((row) => row.path), ...snapshot.unplaced.map((row) => row.path)];
   const items: LayerItem[] = [];
-  for (const cardPath of cardPaths) {
-    const item = await itemOf(ctx, cardPath, boxes.get(cardPath));
-    if (item) items.push(item);
-  }
-  for (const doorPath of doorPaths) {
-    const loaded = await loadFile(ctx, doorPath);
-    const box = boxes.get(doorPath);
-    const item: LayerItem = { path: doorPath, fm: loaded?.fm ?? null, body: loaded?.body ?? '', z: box?.z ?? 0 };
-    if (box) item.box = { x: box.x, y: box.y, w: box.w, h: box.h };
+  for (const cardPath of pagePaths) {
+    const loaded = await loadFile(ctx, cardPath);
+    const row = rowByPath.get(cardPath);
+    const item: LayerItem = {
+      path: cardPath,
+      fm: loaded?.fm ?? null,
+      body: loaded?.body ?? '',
+      z: row?.z ?? 0,
+    };
+    if (row) item.box = { x: row.x, y: row.y, w: row.w, h: row.h };
     items.push(item);
   }
 
-  const links = await ctx.store.getLayerLinks(layerId);
-  const presence = await readPresence(ctx, layerId);
   const composition: CanvasComposition = {
     layerId,
     dir,
-    layerName: layers[layerId]?.name ?? dir.split('/').pop() ?? layerId,
-    stub: layers[layerId]?.stub === true,
+    layerName: snapshot.layer.name,
+    stub: snapshot.layer.stub,
     readmeFm: (await loadFile(ctx, `${dir}/README.md`))?.fm ?? null,
     items,
-    links: links.map((link) => ({
+    links: snapshot.links.map((link) => ({
       from: link.from,
       to: link.to,
       style: link.style,
       label: link.label,
     })),
-    presence,
+    presence: snapshot.presence.map(({ characterId, x, y, following }) => ({
+      characterId,
+      x,
+      y,
+      following,
+    })),
     viewport,
   };
-
-  const placed = items.filter((item): item is LayerItem & { box: NonNullable<LayerItem['box']> } =>
-    item.box !== undefined
-  );
-  const overlaps: Array<[string, string]> = [];
-  for (let i = 0; i < placed.length; i++) {
-    for (let j = i + 1; j < placed.length; j++) {
-      if (boxesOverlap(placed[i].box, placed[j].box)) {
-        overlaps.push([placed[i].path, placed[j].path]);
-      }
-    }
-  }
 
   return {
     text: renderCanvasBlock(composition),
@@ -474,18 +444,29 @@ export async function viewCanvas(
       layer: layerId,
       mode: 'summary',
       viewport,
-      items: placed.map((item) => ({
-        path: item.path,
-        kind: cardKindOf(item.fm, item.path.split('/').pop() ?? item.path),
-        x: item.box.x,
-        y: item.box.y,
-        w: item.box.w,
-        h: item.box.h,
-        z: item.z,
+      items: snapshot.rows.map((row) => ({
+        path: row.path,
+        kind: row.kind,
+        x: row.x,
+        y: row.y,
+        w: row.w,
+        h: row.h,
+        z: row.z,
       })),
-      overlaps,
-      unplaced: items.filter((item) => item.box === undefined).map((item) => item.path),
-      presence,
+      overlaps: snapshot.overlaps,
+      unplaced: snapshot.unplaced.map((row) => row.path),
+      presence: snapshot.presence.map(({ characterId, x, y, following }) => ({
+        characterId,
+        x,
+        y,
+        following,
+      })),
+      identity: snapshot.identity,
+      rows: snapshot.rows,
+      unplacedRows: snapshot.unplaced,
+      links: snapshot.links,
+      presenceRows: snapshot.presence,
+      viewpoint: snapshot.viewpoint,
     },
   };
 }
