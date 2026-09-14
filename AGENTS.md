@@ -82,6 +82,7 @@ AIRP（AI Role-Playing Narrative Canvas）是一款 AI 互动叙事游戏：玩�
 | 卡片尺寸、footprint、排座 | `docs/footprint/00-共同上下文.md`、`docs/layout/00-共同上下文.md` |
 | 音频与素材 | `docs/audio/00-共同上下文.md`、`docs/assets/00-共同上下文.md`、对应 `assets/skills/*/SKILL.md` |
 | TTS 与音色 | `docs/tts/00-共同上下文.md`、`docs/tts/07-音色别名映射.md` |
+| 实时语音通话（nook 内 GPT-Live） | `docs/live-voice/00-共同上下文.md` |
 | prompt、preset、skill | `docs/prompts/00-共同上下文.md`、`docs/doc-23-提示词写作规范.md` |
 | 每世界设置 | `docs/settings/00-共同上下文.md` |
 | pi-rp 引擎 | `vendor/pi-rp/packages/coding-agent/docs/` 对应文档；仓库内操作使用 `pnpm pi` |

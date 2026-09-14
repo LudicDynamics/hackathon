@@ -40,6 +40,7 @@ import {
 import type { AgentLifecycleManager } from '../engine/lifecycle.js';
 import type { EventBridge } from '../engine/event-bridge.js';
 import { prepareMaterialReview, runDeclaredChoice, serialDeclared } from '../engine/declared-actions.js';
+import type { LiveCallRegistry } from '../engine/live-session.js';
 
 interface LayerItem {
   path: string;
@@ -400,7 +401,12 @@ export function createWorldRouter(
   lifecycle: AgentLifecycleManager,
   eventBridge: EventBridge,
   getActiveStore: () => LocalWorldStore | null,
-  setActiveStore: (store: LocalWorldStore | null) => void
+  setActiveStore: (store: LocalWorldStore | null) => void,
+  // Live calls are torn down with the world (docs/live-voice/00 §2.4 freeze 3):
+  // a call points at a character agent inside one specific world root, so it
+  // cannot outlive that world. Optional — tests and any caller without a voice
+  // channel get a no-op, so this router gains no hard dependency on the registry.
+  liveCalls: Pick<LiveCallRegistry, 'closeAll'> = { closeAll: async () => {} }
 ): Router {
   const router = Router();
   let releasingWorld: Promise<void> | null = null;
@@ -409,6 +415,10 @@ export function createWorldRouter(
     if (store && !existsSync(path.join(store.worldRoot, 'world.json'))) {
       setActiveStore(null);
       eventBridge.close();
+      // Fire-and-forget on the 409 path: this branch must return quickly
+      // (AGENTS.md §2 — the client needs `no_active_world` immediately), and
+      // `closeAll` may await socket teardown. Its own errors are swallowed.
+      void liveCalls.closeAll().catch(() => {});
       releasingWorld = lifecycle.stopAll().finally(() => { store.close(); releasingWorld = null; });
     }
     if (releasingWorld) {
@@ -501,6 +511,9 @@ export function createWorldRouter(
       }
 
       worldFrozen = false;
+      // Hang up every live call before the character agents go away, so no
+      // sideband survives into the next world (docs/live-voice/00 §2.4 freeze 3).
+      await liveCalls.closeAll();
       await lifecycle.stopCharacters();
 
       const current = getActiveStore();

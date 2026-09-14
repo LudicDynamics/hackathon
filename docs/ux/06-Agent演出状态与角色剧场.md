@@ -212,6 +212,7 @@ interface CharacterFrameQueue {
 - dialogue → Nook：停止 voice 和 dialogue timer → 发送 `character_stop`（若仍 active）→ 调用 App-owned `closeDialogue` pop `dialogue:<characterId>:<callerSlot>` → 调用 `openNook` push/restore Nook frame → `setActiveCharacter(null)` / 设置 `nookChar` → 渲染 Nook。Modal 与 NookView 不直接操作 camera；当前 `App.tsx:753-758` 仅是现状落点，必须收敛到 A05 transition Adapter。
 - Nook 是与 layer 并列的 active projection；`NookView` 复用 Canvas 外壳、独立 `GET /api/nook?character=<id>`，但不调用 `useWorld()`（`NookView.tsx:19-27`）。
 - dialogue 关闭后返回 layer 时只恢复相机记忆，不把 character modal 的 portrait slot 或 page state 带入 Nook。
+- **nook 实时通话与遮罩朗读互斥**（docs/live-voice/00 §7.1 未决 1 的落地约束）：nook 内的 GPT-Live 实时通话走 WebRTC 媒体轨，**不是** `playVoice` 路径，因此与上一条「dialogue → Nook 时停止 voice」不冲突；但通话与角色对话遮罩会同时驱动同一个角色 agent，必须在 nook 内保证互斥——**通话进行中不打开对话遮罩，对话遮罩打开中不发起通话**。互斥是 nook 通话 UI 的局部判定，不新增全局状态（docs/live-voice/00 §2.8 不新增 WS 帧）。反向约束（通话中在别处打开遮罩）本批不处理，登记在 docs/live-voice/00 §7.1。
 
 **漏接后果：** 同时挂 Modal 与 Nook 会出现两个交互 surface；直接在 Modal fetch 会制造第二个数据/加载/错误状态；未保存和恢复相机会让玩家失去“仍在原地”的连续性。
 

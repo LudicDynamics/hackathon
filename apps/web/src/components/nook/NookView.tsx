@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2, Mic, PhoneOff } from 'lucide-react';
 import { Canvas } from '../canvas/Canvas.js';
 import { WriterBar } from '../chrome/WriterBar.js';
 import { StubPrompt } from '../chrome/StubPrompt.js';
@@ -7,6 +7,8 @@ import { ghostItemFor } from '../../lib/init-ghost.js';
 import type { LayerState } from '../../state/useWorld.js';
 import { NookNoteComposer } from './NookNoteComposer.js';
 import { UI_COPY, type Locale } from '../../lib/i18n.js';
+import { useLiveCall } from '../../lib/live-call.js';
+import type { CharacterFrame } from '../../lib/character-frame-queue.js';
 import { airpGateway, type AssetMediaKind } from '../../lib/airp-gateway.js';
 import { useStill } from '../../lib/motion.js';
 import { whenFontsSettled } from '../../lib/fonts.js';
@@ -156,18 +158,67 @@ export const NookView: React.FC<NookViewProps> = ({
 
   const copy = UI_COPY[locale];
 
+  // The character's REAL lines during a call, read off the frames `useWorld`
+  // already dispatches (docs/live-voice/00 §2.8) — never a second WS, never a
+  // second source of truth. `character_message` commits a line; `character_delta`
+  // streams the one in flight; `character_idle` drops a half-typed one.
+  const [callLines, setCallLines] = useState<{ streaming: string; lines: string[] }>({
+    streaming: '',
+    lines: [],
+  });
+  const handleCharacterFrame = useCallback((frame: CharacterFrame) => {
+    if (frame.type === 'character_delta') {
+      setCallLines((prev) => ({ ...prev, streaming: prev.streaming + frame.delta }));
+    } else if (frame.type === 'character_message') {
+      setCallLines((prev) => ({ lines: [...prev.lines, frame.text], streaming: '' }));
+    } else if (frame.type === 'character_idle') {
+      setCallLines((prev) => (prev.streaming === '' ? prev : { ...prev, streaming: '' }));
+    }
+  }, []);
+  const { state: call, available: callAvailable, start: startCall, stop: stopCall } = useLiveCall({
+    characterId,
+    locale,
+    onCharacterFrame: handleCharacterFrame,
+  });
+  const callInProgress = call.phase === 'connecting' || call.phase === 'live';
+  // Mutual exclusion (docs/live-voice/00 §5.15, unresolved 1): a live call never
+  // opens the dialogue overlay, which would drive the same character agent twice.
+  const handleOpenCharacterModal = useCallback(
+    (id: string) => {
+      if (callInProgress) {
+        setNotice(copy.liveCallModalBlocked);
+        return;
+      }
+      onOpenCharacterModal?.(id);
+    },
+    [callInProgress, copy.liveCallModalBlocked, onOpenCharacterModal],
+  );
+
   const nookIdRef = useRef('');
   const stateRef = useRef<LayerState | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const reqSeqRef = useRef(0);
+  const mountedRef = useRef(false);
   const fpRef = useRef<FootprintScheduler | null>(null);
   const fontsSettledRef = useRef(false);
   const reduceMotion = useStill();
+
+  // A projection can disappear while /api/nook, a move write, or an
+  // initialiser refresh is in flight. Invalidate those continuations at the
+  // boundary so an unmounted Nook never animates or writes a stale footprint.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      ++reqSeqRef.current;
+    };
+  }, []);
+
   const load = useCallback(async (id: string) => {
     const seq = ++reqSeqRef.current;
-    setLoading(true);
+    if (mountedRef.current) setLoading(true);
     const result = await fetchNook(id);
-    if (seq !== reqSeqRef.current) return; // last request wins (02 §⑦)
+    if (!mountedRef.current || seq !== reqSeqRef.current) return; // last request wins (02 §⑦)
     if (result.ok) {
       // The nook id comes FROM the response (00 §5.1); never re-derived here.
       if (nookIdRef.current !== result.data.layer) {
@@ -195,7 +246,7 @@ export const NookView: React.FC<NookViewProps> = ({
     const onLayerInit = (event: Event) => {
       const msg = (event as CustomEvent).detail as { event?: { type?: string; layer?: string } } | undefined;
       const ev = msg?.event;
-      if (!ev || ev.layer !== nookIdRef.current) return;
+      if (!ev || ev.layer !== nookIdRef.current || !mountedRef.current) return;
       setInitializing(false);
       if (['layer_init_failed'].includes(ev.type ?? '')) setNotice(copy.nookInitFailed);
       else void load(characterId); // success: the refetched furnishing replaces the ghost
@@ -207,7 +258,7 @@ export const NookView: React.FC<NookViewProps> = ({
   const handleMoveCard = useCallback(
     async (path: string, x: number, y: number) => {
       const previous = stateRef.current;
-      if (!previous) return;
+      if (!mountedRef.current || !previous) return;
       const next = {
         ...previous,
         items: previous.items.map(item => item.path === path ? { ...item, x, y } : item),
@@ -217,8 +268,10 @@ export const NookView: React.FC<NookViewProps> = ({
       if (!onMoveCard) return;
       try {
         await onMoveCard(path, x, y);
+        if (!mountedRef.current) return;
         await load(characterId);
       } catch {
+        if (!mountedRef.current) return;
         stateRef.current = previous;
         setState(previous);
       }
@@ -491,14 +544,6 @@ export const NookView: React.FC<NookViewProps> = ({
               )}
             </>
           )}
-          {notice && (
-            <div
-              role="alert"
-              className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 px-3 py-2 rounded-lg bg-rust/10 border border-rust/40 font-mono text-[11px] text-ink shadow-soft"
-            >
-              {notice}
-            </div>
-          )}
         </div>
       ) : state ? (
         <Canvas
@@ -515,12 +560,123 @@ export const NookView: React.FC<NookViewProps> = ({
           onSelectChoice={onSelectChoice}
           onEntityAction={handleEntityAction}
           onDiceRolled={onDiceRolled}
-          onOpenCharacterModal={onOpenCharacterModal}
+          onOpenCharacterModal={handleOpenCharacterModal}
           onDropItemToScene={handleDropItemToScene}
           onItemDropOnTarget={onItemDropOnTarget}
           onTakeItem={onTakeItem}
         />
       ) : null}
+      {/* One visible notice lane for the whole nook (init failure, a blocked
+          dialogue while a call is running). Root-level so a furnished nook
+          shows it too — the empty-room branch is not the only state. */}
+      {notice && (
+        <div
+          role="alert"
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 px-3 py-2 rounded-lg bg-rust/10 border border-rust/40 font-mono text-[11px] text-ink shadow-soft"
+        >
+          {notice}
+        </div>
+      )}
+      {/* Realtime call entry (docs/live-voice/00 §2.3, §15.4). It lives on the
+          nook root, beside the note composer. When the server has no key the
+          button is NOT rendered — a visible-absent control, never a click that
+          errors (§2.9). */}
+      {callAvailable && (
+        <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (call.phase === 'idle' || call.phase === 'error') void startCall();
+              else void stopCall();
+            }}
+            disabled={inactive}
+            aria-label={callInProgress ? copy.liveCallStop : copy.liveCallStart}
+            title={callInProgress ? copy.liveCallStop : copy.liveCallStart}
+            className={
+              callInProgress
+                ? 'flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rust/90 border border-rust text-xs text-white shadow-soft backdrop-blur-md hover:bg-rust transition-all'
+                : 'flex items-center gap-1.5 px-3 py-2 rounded-xl bg-paper-card/95 border border-ink/10 text-xs text-ink/80 shadow-soft backdrop-blur-md hover:bg-ink hover:text-white transition-all'
+            }
+          >
+            {call.phase === 'connecting' ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : callInProgress ? (
+              <PhoneOff className="w-3.5 h-3.5" />
+            ) : (
+              <Mic className="w-3.5 h-3.5" />
+            )}
+            <span>
+              {call.phase === 'connecting'
+                ? copy.liveCallConnecting
+                : callInProgress
+                  ? copy.liveCallStop
+                  : copy.liveCallStart}
+            </span>
+          </button>
+          {call.phase === 'live' && (
+            <span
+              role="status"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-rust/10 border border-rust/30 font-mono text-[10px] text-rust"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-rust animate-pulse" />
+              {copy.liveCallLive}
+            </span>
+          )}
+          {call.phase === 'error' && call.error && (
+            <span
+              role="alert"
+              className="max-w-xs px-2 py-1 rounded-lg bg-rust/10 border border-rust/40 font-mono text-[10px] text-ink"
+            >
+              {call.error}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Subtitles: the player's words and the character's, both straight from
+          the transcript deltas (docs/live-voice/00 §2.3). The list of committed
+          lines is the character's real `character_message` text — the same
+          source the canvas trusts. */}
+      {callInProgress && (
+        <div className="absolute bottom-20 left-4 z-10 w-80 max-w-[60vw] rounded-xl border border-ink/10 bg-paper-card/90 p-3 shadow-soft backdrop-blur-md">
+          <div className="max-h-32 overflow-y-auto space-y-1.5">
+            {callLines.lines.length === 0 &&
+              callLines.streaming === '' &&
+              call.outputText === '' &&
+              call.inputText === '' && (
+              <div className="font-mono text-[10px] text-ink/40">{copy.liveCallConnecting}</div>
+            )}
+            {callLines.lines.map((line, index) => (
+              <div key={index} className="text-xs text-ink leading-snug">
+                <span className="font-serif font-bold text-rust mr-1">{copy.liveCallThem}</span>
+                {line}
+              </div>
+            ))}
+            {callLines.streaming !== '' && (
+              <div className="text-xs text-ink/70 leading-snug">
+                <span className="font-serif font-bold text-rust mr-1">{copy.liveCallThem}</span>
+                {callLines.streaming}
+              </div>
+            )}
+            {/* The voice front-end's own spoken transcript. Shown only when no
+                character line is streaming, so the same sentence is never
+                printed twice (docs/live-voice/00 §2.7: an append is accepted,
+                not proof it was spoken). */}
+            {callLines.streaming === '' && call.outputText !== '' && (
+              <div className="text-xs text-ink/60 leading-snug">
+                <span className="font-mono mr-1">{copy.liveCallThem}</span>
+                {call.outputText}
+              </div>
+            )}
+            {call.inputText !== '' && (
+              <div className="text-xs text-ink/50 leading-snug italic">
+                <span className="font-mono not-italic mr-1">{copy.liveCallYou}</span>
+                {call.inputText}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       <NookNoteComposer
         characterId={characterId}
         disabled={inactive || writerLocked || state?.worldFrozen === true}

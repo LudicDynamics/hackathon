@@ -11,7 +11,9 @@ import { AgentLifecycleManager } from './engine/lifecycle.js';
 import { assertCharacterLaunchable } from './engine/launch.js';
 import { EventBridge } from './engine/event-bridge.js';
 import { createWorldRouter } from './routes/world.js';
+import { LiveCallRegistry } from './engine/live-session.js';
 import { createTtsRouter } from './routes/tts.js';
+import { createLiveRouter } from './routes/live.js';
 import { createConnectionSettingsRouter } from './routes/connection-settings.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -66,6 +68,33 @@ const lifecycle = new AgentLifecycleManager({
   frameSink: (message) => eventBridge.broadcast(message),
 });
 
+// Live voice calls (docs/live-voice/00). The registry is built here — the
+// composition root — because two routers need it: `createLiveRouter` opens and
+// closes calls, and `createWorldRouter` closes them all on world switch / save
+// deletion (§2.4 freeze 3). Building it in either router would force the other
+// to import it.
+//
+// `onVisibleFailure` rides the EXISTING character `error` frame rather than a
+// new WS frame (§2.8): `useWorld` already forwards it to `airp:character-frame`
+// (useWorld.ts:583), so a failed delegation reaches the browser visibly instead
+// of stalling silently (docs/tools/00 hard rule 4).
+const liveCalls = new LiveCallRegistry({
+  repoRoot: REPO_ROOT,
+  lifecycle,
+  readCharacterReadme: async (characterId) => {
+    const store = activeStore;
+    if (!store) return null;
+    try {
+      return await store.readFile(`characters/${characterId}/README.md`);
+    } catch {
+      return null;
+    }
+  },
+  onVisibleFailure: (characterId, reason) => {
+    eventBridge.broadcast({ type: 'error', source: 'character', characterId, message: reason });
+  },
+});
+
 // Open the first curated world and start its writer.
 const DEFAULT_WORLD = path.resolve(REPO_ROOT, process.env.AIRP_WORLD ?? 'templates/wuwu');
 try {
@@ -93,7 +122,8 @@ app.use(
     lifecycle,
     eventBridge,
     () => activeStore,
-    (s) => { activeStore = s; }
+    (s) => { activeStore = s; },
+    liveCalls
   )
 );
 
@@ -102,6 +132,11 @@ app.use(
 // never shadows the first. Only getActiveStore is shared: TTS is HTTP-only and
 // must never touch the WS fan-out (docs/tts/00 §10.1).
 app.use('/api', createTtsRouter(REPO_ROOT, () => activeStore));
+// Realtime voice calls (docs/live-voice/00). Mounted after `createWorldRouter`
+// on purpose: that router's `needsWorld` middleware is scoped to its own paths
+// (world.ts:407-422), so `/api/live/config` stays answerable with no world
+// while `/api/live/session` does its own nook check.
+app.use('/api', createLiveRouter(() => activeStore, liveCalls));
 app.use('/api', createConnectionSettingsRouter(REPO_ROOT));
 
 // Serve static frontend files from apps/web/dist
