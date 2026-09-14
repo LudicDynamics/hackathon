@@ -115,7 +115,8 @@ export const WriterBar: React.FC<WriterBarProps> = ({
       />
       <VoiceInputButton
         disabled={locked}
-        onText={(spoken) => updateText(textRef.current ? `${textRef.current} ${spoken}` : spoken)}
+        getDraft={() => textRef.current}
+        onDraft={updateText}
       />
       <button
         className="writer-bar__send"

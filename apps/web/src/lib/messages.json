@@ -1,4 +1,5 @@
 {
+  "Connecting…": { "zh-CN": "正在连接…", "ja": "接続しています…" },
   "Voice input": { "zh-CN": "语音输入", "ja": "音声入力" },
   "Stop recording": { "zh-CN": "停止录音", "ja": "録音を止める" },
   "Transcribing…": { "zh-CN": "正在转写…", "ja": "文字に起こしています…" },

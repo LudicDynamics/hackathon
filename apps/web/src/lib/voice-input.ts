@@ -1,144 +1,252 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Locale } from './i18n.js';
 
 /**
- * Player voice input (docs/live-voice/语音输入（STT）.md): record one short
- * utterance, transcribe it on the server, and hand the text to the host input.
- * The transcript is only a draft — the host decides when anything is sent.
+ * Player voice input with live transcription (docs/live-voice/语音输入（STT）.md).
+ *
+ * The microphone is captured at 24kHz through an AudioWorklet and streamed as
+ * PCM16 to `/ws/stt`, which relays it to an OpenAI Realtime transcription
+ * session. Partial text arrives while the player is still speaking. The text is
+ * only a draft — the host decides when anything is sent.
  *
  * The microphone opens inside the player's click (never on mount) and is
- * released as soon as the recording stops.
+ * released as soon as recording stops.
  */
 
-export type VoiceInputState = 'idle' | 'recording' | 'transcribing';
+export type VoiceInputState = 'idle' | 'connecting' | 'recording' | 'finishing';
 export type VoiceInputError = 'mic_denied' | 'mic_unsupported' | 'unavailable' | 'failed';
 
 /** Auto-stop so a forgotten recording cannot run (and bill) indefinitely. */
 export const MAX_RECORDING_MS = 60_000;
+export const SAMPLE_RATE = 24_000;
+/** ~100ms of audio per frame sent to the relay. */
+const CHUNK_SAMPLES = 2_400;
+/** After Stop, wait this long at most for the last utterance to be finalised. */
+const FINISH_TIMEOUT_MS = 4_000;
 
-const MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+const WORKLET_SOURCE = `
+class AirpPcmTap extends AudioWorkletProcessor {
+  process(inputs) {
+    const channel = inputs[0] && inputs[0][0];
+    if (channel) this.port.postMessage(channel.slice(0));
+    return true;
+  }
+}
+registerProcessor('airp-pcm-tap', AirpPcmTap);
+`;
 
-export class VoiceInputFailure extends Error {
-  constructor(readonly code: VoiceInputError) {
-    super(code);
+export function floatToPcm16(samples: Float32Array): Int16Array {
+  const out = new Int16Array(samples.length);
+  for (let i = 0; i < samples.length; i += 1) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return out;
+}
+
+/** Ordered text of every utterance so far; a completed transcript replaces its deltas. */
+export class TranscriptAssembler {
+  private readonly order: string[] = [];
+  private readonly text = new Map<string, string>();
+  private readonly done = new Set<string>();
+
+  delta(itemId: string, delta: string): void {
+    if (!this.text.has(itemId)) {
+      this.order.push(itemId);
+      this.text.set(itemId, '');
+    }
+    if (!this.done.has(itemId)) this.text.set(itemId, (this.text.get(itemId) ?? '') + delta);
+  }
+
+  complete(itemId: string, transcript: string): void {
+    if (!this.text.has(itemId)) this.order.push(itemId);
+    this.text.set(itemId, transcript);
+    this.done.add(itemId);
+  }
+
+  get value(): string {
+    return this.order.map((id) => (this.text.get(id) ?? '').trim()).filter(Boolean).join(' ');
+  }
+
+  /** Every utterance that has started has also been finalised. */
+  get settled(): boolean {
+    return this.order.every((id) => this.done.has(id));
   }
 }
 
-/** First container the browser can record; Safari falls back to mp4. */
-export function pickRecordingMimeType(
-  isSupported: (type: string) => boolean = (type) =>
-    typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(type),
-): string {
-  return MIME_CANDIDATES.find((type) => isSupported(type)) ?? '';
+/** Spoken text goes after whatever the player had already typed. */
+export function joinDraft(base: string, spoken: string): string {
+  if (!spoken) return base;
+  const head = base.trimEnd();
+  return head ? `${head} ${spoken}` : spoken;
 }
 
-/** UI locale → the ISO-639-1 hint the server accepts. */
-export function transcriptionLanguage(locale: Locale): 'en' | 'ja' | 'zh' {
-  return locale === 'ja' ? 'ja' : locale === 'zh-CN' ? 'zh' : 'en';
+function relayUrl(): string {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/ws/stt`;
 }
 
-export async function transcribe(blob: Blob, locale: Locale): Promise<string> {
-  const response = await fetch(`/api/stt?language=${transcriptionLanguage(locale)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': blob.type || 'audio/webm' },
-    body: blob,
-  });
-  const data = (await response.json().catch(() => null)) as { ok?: boolean; text?: unknown; code?: string } | null;
-  if (!response.ok || data?.ok !== true) {
-    throw new VoiceInputFailure(data?.code === 'stt_unavailable' ? 'unavailable' : 'failed');
-  }
-  return typeof data.text === 'string' ? data.text.trim() : '';
+interface Session {
+  socket: WebSocket;
+  stream: MediaStream;
+  context: AudioContext;
+  node: AudioWorkletNode | null;
+  assembler: TranscriptAssembler;
+  finishing: boolean;
+  stopTimer: number | null;
+  finishTimer: number | null;
 }
 
-export function useVoiceInput({ locale, onText }: { locale: Locale; onText: (text: string) => void }) {
+export function useVoiceInput({ onTranscript }: { onTranscript: (text: string) => void }) {
   const [state, setState] = useState<VoiceInputState>('idle');
   const [error, setError] = useState<VoiceInputError | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const timerRef = useRef<number | null>(null);
+  const sessionRef = useRef<Session | null>(null);
+  const busyRef = useRef(false);
   const mountedRef = useRef(true);
-  const onTextRef = useRef(onText);
-  onTextRef.current = onText;
+  const onTranscriptRef = useRef(onTranscript);
+  onTranscriptRef.current = onTranscript;
 
-  const releaseMic = useCallback(() => {
-    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-    timerRef.current = null;
-    for (const track of streamRef.current?.getTracks() ?? []) track.stop();
-    streamRef.current = null;
+  const releaseAudio = useCallback((session: Session) => {
+    if (session.stopTimer !== null) window.clearTimeout(session.stopTimer);
+    session.stopTimer = null;
+    session.node?.port.close();
+    session.node?.disconnect();
+    session.node = null;
+    for (const track of session.stream.getTracks()) track.stop();
+    if (session.context.state !== 'closed') void session.context.close();
   }, []);
+
+  const end = useCallback((failure?: VoiceInputError) => {
+    const session = sessionRef.current;
+    sessionRef.current = null;
+    busyRef.current = false;
+    if (session) {
+      if (session.finishTimer !== null) window.clearTimeout(session.finishTimer);
+      releaseAudio(session);
+      session.socket.onclose = null;
+      if (session.socket.readyState <= WebSocket.OPEN) session.socket.close();
+    }
+    if (!mountedRef.current) return;
+    setState('idle');
+    if (failure) setError(failure);
+  }, [releaseAudio]);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      const recorder = recorderRef.current;
-      if (recorder) {
-        // Unmounting drops the recording instead of transcribing it.
-        recorder.ondataavailable = null;
-        recorder.onstop = null;
-        if (recorder.state !== 'inactive') recorder.stop();
-      }
-      recorderRef.current = null;
-      releaseMic();
+      end();
     };
-  }, [releaseMic]);
+  }, [end]);
 
   const stop = useCallback(() => {
-    const recorder = recorderRef.current;
-    if (recorder && recorder.state !== 'inactive') recorder.stop();
-  }, []);
+    const session = sessionRef.current;
+    if (!session || session.finishing) return;
+    session.finishing = true;
+    releaseAudio(session);
+    if (session.socket.readyState === WebSocket.OPEN) session.socket.send(JSON.stringify({ type: 'stop' }));
+    if (session.assembler.settled && session.assembler.value === '' && session.socket.readyState !== WebSocket.OPEN) {
+      end();
+      return;
+    }
+    setState('finishing');
+    session.finishTimer = window.setTimeout(() => end(), FINISH_TIMEOUT_MS);
+  }, [end, releaseAudio]);
 
   const start = useCallback(async () => {
-    if (recorderRef.current) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setError(null);
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    if (!navigator.mediaDevices?.getUserMedia || typeof AudioWorkletNode === 'undefined' || typeof WebSocket === 'undefined') {
+      busyRef.current = false;
       setError('mic_unsupported');
       return;
     }
+    setState('connecting');
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
     } catch (err) {
       const name = err instanceof DOMException ? err.name : '';
-      setError(name === 'NotAllowedError' || name === 'SecurityError' ? 'mic_denied' : 'mic_unsupported');
+      busyRef.current = false;
+      if (mountedRef.current) {
+        setState('idle');
+        setError(name === 'NotAllowedError' || name === 'SecurityError' ? 'mic_denied' : 'mic_unsupported');
+      }
       return;
     }
     if (!mountedRef.current) {
       for (const track of stream.getTracks()) track.stop();
+      busyRef.current = false;
       return;
     }
-    streamRef.current = stream;
-    const mimeType = pickRecordingMimeType();
-    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-    const chunks: Blob[] = [];
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) chunks.push(event.data);
+
+    const context = new AudioContext({ sampleRate: SAMPLE_RATE });
+    const socket = new WebSocket(relayUrl());
+    socket.binaryType = 'arraybuffer';
+    const session: Session = {
+      socket, stream, context, node: null, assembler: new TranscriptAssembler(),
+      finishing: false, stopTimer: null, finishTimer: null,
     };
-    recorder.onstop = async () => {
-      releaseMic();
-      recorderRef.current = null;
-      const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' });
-      if (blob.size === 0) {
-        setState('idle');
-        return;
-      }
-      setState('transcribing');
-      try {
-        const text = await transcribe(blob, locale);
-        if (text && mountedRef.current) onTextRef.current(text);
-      } catch (err) {
-        if (mountedRef.current) setError(err instanceof VoiceInputFailure ? err.code : 'failed');
-      } finally {
-        if (mountedRef.current) setState('idle');
+    sessionRef.current = session;
+
+    let ready = false;
+    const early: ArrayBuffer[] = [];
+    socket.onmessage = (event) => {
+      let message: { type?: string; itemId?: string; delta?: string; transcript?: string; code?: string };
+      try { message = JSON.parse(String(event.data)); } catch { return; }
+      if (message.type === 'ready') {
+        ready = true;
+        for (const frame of early.splice(0)) socket.send(frame);
+      } else if (message.type === 'delta' && message.itemId) {
+        session.assembler.delta(message.itemId, message.delta ?? '');
+        if (mountedRef.current) onTranscriptRef.current(session.assembler.value);
+      } else if (message.type === 'completed' && message.itemId) {
+        session.assembler.complete(message.itemId, message.transcript ?? '');
+        if (mountedRef.current) onTranscriptRef.current(session.assembler.value);
+        if (session.finishing && session.assembler.settled) end();
+      } else if (message.type === 'error') {
+        end(message.code === 'stt_unavailable' ? 'unavailable' : 'failed');
       }
     };
-    recorderRef.current = recorder;
-    recorder.start();
+    socket.onclose = () => {
+      if (sessionRef.current === session) end(session.finishing ? undefined : 'failed');
+    };
+
+    try {
+      const moduleUrl = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: 'application/javascript' }));
+      try { await context.audioWorklet.addModule(moduleUrl); } finally { URL.revokeObjectURL(moduleUrl); }
+      if (sessionRef.current !== session) return;
+      const source = context.createMediaStreamSource(stream);
+      const node = new AudioWorkletNode(context, 'airp-pcm-tap');
+      session.node = node;
+      let pending: Float32Array[] = [];
+      let pendingLength = 0;
+      node.port.onmessage = (event: MessageEvent<Float32Array>) => {
+        pending.push(event.data);
+        pendingLength += event.data.length;
+        if (pendingLength < CHUNK_SAMPLES) return;
+        const merged = new Float32Array(pendingLength);
+        let offset = 0;
+        for (const part of pending) { merged.set(part, offset); offset += part.length; }
+        pending = [];
+        pendingLength = 0;
+        const frame = floatToPcm16(merged).buffer as ArrayBuffer;
+        if (ready && socket.readyState === WebSocket.OPEN) socket.send(frame);
+        else early.push(frame);
+      };
+      // A silent sink keeps the worklet pulled by the graph without echoing the mic.
+      const sink = context.createGain();
+      sink.gain.value = 0;
+      source.connect(node).connect(sink).connect(context.destination);
+      if (context.state === 'suspended') await context.resume();
+    } catch {
+      end('failed');
+      return;
+    }
+    if (sessionRef.current !== session) return;
     setState('recording');
-    timerRef.current = window.setTimeout(() => {
-      if (recorder.state !== 'inactive') recorder.stop();
-    }, MAX_RECORDING_MS);
-  }, [locale, releaseMic]);
+    session.stopTimer = window.setTimeout(() => stop(), MAX_RECORDING_MS);
+  }, [end, stop]);
 
   const toggle = useCallback(() => {
     if (state === 'recording') stop();

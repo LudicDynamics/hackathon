@@ -14,7 +14,7 @@ import express, { Router } from 'express';
  */
 
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
-const DEFAULT_MODEL = 'gpt-4o-mini-transcribe';
+const DEFAULT_MODEL = 'gpt-4o-transcribe';
 /** A minute of Opus is well under 1MB; the cap only stops accidental floods. */
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 const UPSTREAM_TIMEOUT_MS = 30_000;

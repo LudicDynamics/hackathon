@@ -886,7 +886,8 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
           />
           <VoiceInputButton
             disabled={busy}
-            onText={(spoken) => setInputText((previous) => (previous ? `${previous} ${spoken}` : spoken))}
+            getDraft={() => inputText}
+            onDraft={setInputText}
           />
         </div>
       </div>

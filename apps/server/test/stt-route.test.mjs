@@ -72,7 +72,7 @@ test('a recording is forwarded as multipart with model and language, and the tri
     assert.equal(call.url, '/v1/audio/transcriptions');
     assert.equal(call.auth, 'Bearer sk-test');
     assert.match(call.type, /^multipart\/form-data; boundary=/);
-    assert.match(call.body, /name="model"\r\n\r\ngpt-4o-mini-transcribe/);
+    assert.match(call.body, /name="model"\r\n\r\ngpt-4o-transcribe/);
     assert.match(call.body, /name="language"\r\n\r\nja/);
     assert.match(call.body, /name="file"; filename="speech\.webm"/);
   } finally { await h.close(); await stub.close(); }

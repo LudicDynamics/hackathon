@@ -16,6 +16,7 @@ import { createTtsRouter } from './routes/tts.js';
 import { createLiveRouter } from './routes/live.js';
 import { createConnectionSettingsRouter } from './routes/connection-settings.js';
 import { createSttRouter } from './routes/stt.js';
+import { handleSttStream, STT_STREAM_PATH } from './engine/stt-stream.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -157,7 +158,12 @@ app.get('*', (req, res, next) => {
 });
 
 // WebSocket client connection handling
-wss.on('connection', (ws: WebSocket) => {
+wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
+  // Live voice input has its own socket; it never joins the event fan-out.
+  if (req.url?.startsWith(STT_STREAM_PATH)) {
+    handleSttStream(ws);
+    return;
+  }
   console.log('[AIRP WS] Client connected');
 
   ws.send(JSON.stringify({ type: 'connected', timestamp: new Date().toISOString() }));

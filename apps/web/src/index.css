@@ -673,6 +673,10 @@ body:before {
 
 /* player input — hidden until the pages are exhausted, then fades in (§6.6) */
 .speech-input-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
   border-top: 1px solid rgba(41, 40, 32, 0.12);
   margin-top: 0.5rem;
   padding-top: 0.35rem;
@@ -685,12 +689,15 @@ body:before {
 
 .speech-input-row.is-ready {
   opacity: 1;
-  max-height: 4rem;
+  /* Room for the input, the voice button beside it and one line of voice error. */
+  max-height: 6rem;
   pointer-events: auto;
 }
 .speech-input {
   display: block;
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
   margin-top: 0.4rem;
   padding: 0.3rem 0.1rem 0.25rem;
   background: transparent;
