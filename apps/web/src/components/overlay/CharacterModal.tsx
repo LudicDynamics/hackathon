@@ -21,6 +21,7 @@ import {
   getCharacterFrameQueue,
   type CharacterFrame,
   type CharacterFrameQueue,
+  type CharacterFrameQueueEvent,
 } from '../../lib/character-frame-queue.js';
 
 /**
@@ -156,8 +157,16 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const stingerFiredRef = useRef(false); // 当前页情绪音是否已了结（由语音取代或已响）
   const turnWatchdog = useRef<number | null>(null);
   const busyRef = useRef(false);
-  const [, setQueueVersion] = useState(0);
-  useEffect(() => frameQueue.subscribe(() => setQueueVersion((version) => version + 1)), [frameQueue]);
+  const [queueVersion, setQueueVersion] = useState(0);
+  const queueGapEventRef = useRef<Extract<CharacterFrameQueueEvent, { kind: 'gap' }> | null>(null);
+  useEffect(
+    () =>
+      frameQueue.subscribe((event) => {
+        if (event?.kind === 'gap') queueGapEventRef.current = event;
+        setQueueVersion((version) => version + 1);
+      }),
+    [frameQueue]
+  );
 
   const cancelStreamTimer = useCallback(() => {
     if (streamTimer.current !== null) window.clearTimeout(streamTimer.current);
@@ -646,22 +655,67 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 
   }, [beginStream, pump, syncPages, enterPage, settleIfDrained, cancelStreamTimer, clearWatchdog, clearStingerGrace]);
 
+  /** A delivery gap is a presentation failure, not a partial reply. Stop the
+   * current turn and leave a truthful, retryable page instead of concatenating
+   * around the missing frame. */
+  const presentQueueGap = useCallback(
+    (event: Extract<CharacterFrameQueueEvent, { kind: 'gap' }>) => {
+      if (event.characterId !== characterId) return;
+      cancelStreamTimer();
+      clearWatchdog();
+      clearStingerGrace();
+      voiceTurnRef.current += 1;
+      stopVoice();
+      mockRef.current = false;
+      streamingRef.current = false;
+      messageEndedRef.current = false;
+      channelIdleRef.current = false;
+      finalRef.current = true;
+      turnBufferRef.current = createCharacterTurn();
+      const text =
+        locale === 'ja'
+          ? `返答を停止しました。途中の発言が欠落しています（${event.expectedSeq} の次に ${event.receivedSeq}）。閉じて、もう一度試してください。`
+          : `The reply stopped because a line was missing (delivery ${event.expectedSeq} was followed by ${event.receivedSeq}). Close and try again.`;
+      syncPages(text, { final: true, reset: true });
+      enterPage(0, { announce: false });
+      const page = pagesRef.current[0];
+      if (page) {
+        pageShownRef.current = page.text.length;
+        setPageShown(page.text);
+      }
+      setEmo('normal');
+      lastEmoRef.current = 'normal';
+      setPhase('done');
+    },
+    [
+      cancelStreamTimer,
+      characterId,
+      clearStingerGrace,
+      clearWatchdog,
+      enterPage,
+      locale,
+      syncPages,
+    ]
+  );
+
   useEffect(() => {
     if (closing) return;
+    const gap = queueGapEventRef.current;
+    if (gap) {
+      queueGapEventRef.current = null;
+      presentQueueGap(gap);
+      return;
+    }
     const frames = frameQueue.drainUntil(characterId);
     for (const frame of frames) consumeCharacterFrameFromQueue(frame);
-  }, [frameQueue, characterId, closing, consumeCharacterFrameFromQueue]);
+  }, [frameQueue, characterId, closing, consumeCharacterFrameFromQueue, presentQueueGap, queueVersion]);
 
   // Unmount: cancel every pending timer + stop the voice channel.
   useEffect(() => streamTurn, [streamTurn]);
 
-  // Esc closes the overlay (kept from v1); Space advances (Enter stays for send).
+  // Space advances (Enter stays for send); App owns the document Escape path.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        handleClose();
-        return;
-      }
       if (e.key !== ' ' && e.code !== 'Space') return;
       if (e.target instanceof HTMLInputElement) return; // never steal typing
       if (document.activeElement === inputRef.current) return;
@@ -670,7 +724,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleClose, advance]);
+  }, [advance]);
 
   // Reset the monogram fallback if the avatar path changes.
   useEffect(() => setAvatarError(false), [avatar, emo]);
@@ -685,6 +739,9 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const handleSend = () => {
     const msg = inputText.trim();
     if (!msg || busyRef.current) return; // one performance at a time
+    // A retry after a delivery gap explicitly reopens the queue lane. This
+    // does not alter the character_prompt payload or claim that stop succeeded.
+    frameQueue.clear('stop');
     setInputText('');
     setPlayerEcho(msg); // kept on the paper, not a history list
     // 乐观占位：真实首帧要等 agent 启动 + 首个 token，期间不能露出"可再发一条"的窗口。
@@ -726,10 +783,11 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 
   return (
     <div
+      data-depth-surface="modal"
       className={`character-modal-layer${closing ? ' modal-closing' : ''}`}
       role="dialog"
+      aria-modal="true"
       aria-label={locale === 'ja' ? `${characterId}との会話` : `Dialogue with ${characterId}`}
-      onPointerDown={handleUnlock}
     >
       <button type="button" className="modal-close" onClick={handleClose} aria-label={t('Close dialog')}>
         ×
