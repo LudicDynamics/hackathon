@@ -17,9 +17,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { EventBridge } from '../dist/engine/event-bridge.js';
+import { EventBridge, shouldBroadcastFileChanged } from '../dist/engine/event-bridge.js';
 import { LocalWorldStore, WorldEventSchema } from '@airp/shared';
-
 const MANIFEST = JSON.stringify({
   id: 'proj-tail',
   name: 'Tail',
@@ -307,4 +306,11 @@ test('§10.1 the broadcast world_event payload matches WorldEventSchema', async 
 
   bridge.close();
   store.close();
+});
+test('canvas database changes trigger event draining but not file_changed refreshes', () => {
+  assert.equal(shouldBroadcastFileChanged('.airpworld/canvas.db'), false);
+  assert.equal(shouldBroadcastFileChanged('.airpworld/canvas.db-wal'), false);
+  assert.equal(shouldBroadcastFileChanged('.airpworld/canvas.db-shm'), false);
+  assert.equal(shouldBroadcastFileChanged('world/scene.md'), true);
+  assert.equal(shouldBroadcastFileChanged('.airpworld/history.db'), true);
 });

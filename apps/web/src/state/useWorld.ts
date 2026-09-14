@@ -162,6 +162,10 @@ export function useWorld(): UseWorldApi {
   const stateRef = useRef<LayerState | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reqSeqRef = useRef(0);
+  // One token per path lets concurrent optimistic moves fail independently:
+  // a late rollback must not restore a snapshot that already includes another
+  // drag (the visible "card jumps back" failure).
+  const moveAttemptRef = useRef(new Map<string, number>());
   useEffect(() => {
     const unavailable = () => {
       ++reqSeqRef.current;
@@ -291,21 +295,38 @@ export function useWorld(): UseWorldApi {
   const readLayerState = useCallback((): LayerState | null => stateRef.current, []);
 
   const moveCard = useCallback(async (path: string, x: number, y: number) => {
-    const prev = stateRef.current;
-    // Optimistic merge; identical to what the card_position broadcast will say.
-    setState((s) =>
-      s
-        ? {
-            ...s,
-            items: s.items.map((it) => (it.path === path ? { ...it, x, y } : it)),
-          }
-        : s
-    );
+    const previous = stateRef.current;
+    if (!previous) return;
+    const previousItem = previous.items.find((it) => it.path === path);
+    if (!previousItem) return;
+    const token = (moveAttemptRef.current.get(path) ?? 0) + 1;
+    moveAttemptRef.current.set(path, token);
+    // Keep the synchronous mirror in lockstep with the optimistic React state.
+    // Drag settling can submit several cards before React flushes; reading an
+    // old ref here used to make each request capture the same rollback snapshot.
+    const optimistic = {
+      ...previous,
+      items: previous.items.map((it) => (it.path === path ? { ...it, x, y } : it)),
+    };
+    stateRef.current = optimistic;
+    setState(optimistic);
     try {
       await airpGateway.moveCard(path, x, y);
+      if (moveAttemptRef.current.get(path) === token) moveAttemptRef.current.delete(path);
     } catch (err) {
       console.warn('moveCard failed, rolling back:', err);
-      if (prev) setState(prev);
+      // Only the latest attempt for this path may roll itself back, and only
+      // while its optimistic coordinates are still the visible coordinates.
+      const current = stateRef.current;
+      const currentItem = current?.items.find((it) => it.path === path);
+      if (moveAttemptRef.current.get(path) !== token || !current || !currentItem
+        || currentItem.x !== x || currentItem.y !== y) return;
+      const rollback = {
+        ...current,
+        items: current.items.map((it) => (it.path === path ? previousItem : it)),
+      };
+      stateRef.current = rollback;
+      setState(rollback);
     }
   }, []);
 

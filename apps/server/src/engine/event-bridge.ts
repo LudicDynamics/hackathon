@@ -18,6 +18,21 @@ const TAIL_POLL_MS = 1000;
 const WATCH_DEBOUNCE_MS = 150;
 
 /**
+ * Canvas SQLite is an implementation detail, not a world-content change.
+ * Position/footprint writes already have their own explicit frames (or no
+ * frame), while history.db is still drained below. Broadcasting a generic
+ * file_changed for SQLite pages makes one footprint write cause an extra
+ * layer fetch—and therefore a second reseat—visible as a card jump.
+ */
+export function shouldBroadcastFileChanged(relativePath: string): boolean {
+  return ![
+    '.airpworld/canvas.db',
+    '.airpworld/canvas.db-wal',
+    '.airpworld/canvas.db-shm',
+  ].includes(relativePath);
+}
+
+/**
  * Pulls the concatenated text blocks out of an assistant message.
  *
  * pi-rp message content is either a plain string or a block array; only `text`
@@ -569,14 +584,13 @@ export class EventBridge {
 
     try {
       this.fileWatcher = fs.watch(worldRoot, { recursive: true }, (eventType, filename) => {
-        // docs/tools/00 §5.3: `.airpworld` must NOT be filtered wholesale — that
-        // hid history.db's WAL writes and made the tail reader dead (the bug at
-        // the old line 138). Only two subtrees are "writes nobody needs a frame
-        // for": assets (the `image_landed` frame already announced them) and
-        // sessions (every agent turn appends, and each write would fire a drain
-        // that returns nothing).
+        // docs/tools/00 §5.3: keep history.db visible to the tail reader, but
+        // do not turn canvas SQLite implementation writes into content refreshes.
+        // Position writes already emit card_position/canvas_patched; footprint
+        // writes intentionally emit no frame and must not cause a second fetch.
         const rel = (filename ?? '').split(path.sep).join('/');
         const ignored =
+          !shouldBroadcastFileChanged(rel) ||
           rel.startsWith('.airpworld/assets/') ||
           rel.startsWith('.airpworld/sessions/') ||
           rel.startsWith('node_modules/') ||

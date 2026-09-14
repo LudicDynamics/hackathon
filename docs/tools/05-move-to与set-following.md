@@ -705,15 +705,13 @@ world/baker-street/raindrops.md   center (1125.5,  819.4)  200×168
 
 ### 4.2 写盘的副作用面（一个诚实的问题：presence 变了，前端凭什么知道？）
 
-`presence` 住在 `canvas.db`，**而 `fs.watch` 看不见 SQLite 内部的变化**（文件本身会变——WAL 会追加 `-wal` 文件——所以 `event-bridge.ts:138` 那条「`filename.includes('.airpworld')` 就 return」**恰好把 `canvas.db-wal` 过滤掉了**）。这条链有三处衔接，缺一不可：
+`presence` 住在 `canvas.db`。watcher 会继续因 SQLite 文件变化唤醒 history tail reader，但 `.airpworld/canvas.db*` 不广播 `file_changed`；presence 的可靠通知来自 `move_to` / `set_following` / `carryFollowers` 落入 `history.db` 的 `world_event`（必要时由重连 fetch 兜底）。
 
 1. **事件是可靠通道**：`move_to` / `set_following` / `carryFollowers` 都落 `history.db` 的 `events`（§5），server 尾部读表（`00 §5.3`）→ `world_event` 帧；
-2. **前端收到 `world_event` 后整层重取**：`useWorld` 现有的 `file_changed` 分支就 `fetchLayer(layerRef.current)`（`useWorld.ts` 的 `file_changed` 分支），把 `character_moved` / `following_changed` 加进同一分支即可（§6.2）；
+2. **前端收到 `world_event` 后整层重取**：`useWorld` 的 `world_event` 分支调 `fetchLayer(layerRef.current)`，把 `character_moved` / `following_changed` 转成当前层新投影（§6.2）；
 3. **`/api/layer?layer=` 每次现读 `presence`**（`world.ts:221`），所以重取一定拿到新坐标。
 
-**这就是为什么本文不依赖"`fs.watch` 会看到 canvas.db 变了"。** `12` 的尾部读表（`00 §5.3` 的 `.airpworld` 过滤收紧，`event-bridge.ts:138` 改成只滤 `assets/` 与 `sessions/`）落地后，还有 ~1s 兜底定时器兜着；两条路任一条通，前端就会重取。
-
-> **一个必须登记的隐患**：即使 `12` 收紧了过滤，`canvas.db-wal` 的写入仍然会触发 `file_changed` 帧（`.airpworld/canvas.db-wal` 不再被滤掉），而 `file_changed` 在前端是"整层重取"（`useWorld.ts` 的 `file_changed` 分支）。**每一次 `move_to` 会因此多触发一次无意义的整层重取**（除了那条 `world_event` 之外）。这不是正确性问题（重取是幂等的），是带宽问题。修法（登记给 `12`）：`file_changed` 的过滤名单加 `.airpworld/canvas.db` 前缀——`canvas.db` 的状态变化自有事件与 `card_position`/`canvas_patched` 帧覆盖。见 §11 冲突 4。
+**这就是为什么本文不依赖"`fs.watch` 会广播 canvas.db 变了"。** watcher 只负责唤醒 tail reader；事件帧是事实通道，重连时 `ws.onopen` 再拉一次当前层，避免瞬时帧丢失。
 
 ### 4.3 写盘原子性：SQLite 事务，不是 `writeFileAtomic`
 
