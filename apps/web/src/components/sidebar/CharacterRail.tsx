@@ -3,6 +3,7 @@ import { useLocale } from '../../lib/i18n.js';
 import { railEntry } from '../../lib/character-rail.mjs';
 import type { CharacterPresenceView } from '../../lib/presence.js';
 import type { AssetMediaKind } from '../../lib/airp-gateway.js';
+import { withBase } from '../../lib/base-path.js';
 import './character-rail.css';
 
 /**
@@ -105,7 +106,7 @@ export function CharacterRail({
                 else if (entry.talkHintKey) notify(t(entry.talkHintKey));
               }}
               aria-label={entry.canTalk ? t('Talk to {name}', { name: displayName }) : displayName}
-              style={avatarUrl ? { backgroundImage: `url("${avatarUrl}")` } : undefined}
+              style={avatarUrl ? { backgroundImage: `url("${withBase(avatarUrl)}")` } : undefined}
             >
               {!avatarUrl && <span aria-hidden="true">{view.id.charAt(0).toUpperCase()}</span>}
               {view.following && <span className="character-rail__follow-dot" aria-hidden="true" />}

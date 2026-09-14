@@ -1,4 +1,5 @@
 import { useLocale } from './lib/i18n.js';
+import { withBase } from './lib/base-path.js';
 import { AgentSettings } from './components/AgentSettings.js';
 import { TtsSettings } from './components/TtsSettings.js';
 import { WriterBar } from './components/chrome/WriterBar.js';
@@ -1055,7 +1056,7 @@ export function App() {
             })}</div>}
           </div>
 
-          <button className="prototype-player-orb prototype-chrome" style={playerAvatar ? { backgroundImage: `url("${playerAvatar}")`, backgroundSize: 'cover', backgroundPosition: 'center 25%' } : undefined} onClick={() => setProfileOpen((open) => !open)} aria-label={t("Open player profile")} aria-expanded={profileOpen}>{!playerAvatar && <UserRound size={25} />}<span className="prototype-player-label"><small>{t("YOU")}</small>{playerRole}</span></button>
+          <button className="prototype-player-orb prototype-chrome" style={playerAvatar ? { backgroundImage: `url("${withBase(playerAvatar)}")`, backgroundSize: 'cover', backgroundPosition: 'center 25%' } : undefined} onClick={() => setProfileOpen((open) => !open)} aria-label={t("Open player profile")} aria-expanded={profileOpen}>{!playerAvatar && <UserRound size={25} />}<span className="prototype-player-label"><small>{t("YOU")}</small>{playerRole}</span></button>
           {profileOpen && chromeVisible && (
             <div className="prototype-profile">
               <b>{playerRole}</b>

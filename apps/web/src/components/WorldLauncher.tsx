@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { WorldShelf } from '../lib/airp-gateway.js';
+import { withBase } from '../lib/base-path.js';
 import { useLocale } from '../lib/i18n.js';
 import { useStill } from '../lib/motion.js';
 import {
@@ -56,7 +57,7 @@ const Brick = memo(function Brick({ brickKey, world, index, left, top, width, he
   const title = worldTitle(world.name);
   const latest = world.saves[0];
   const current = world.saves.some(save => save.active);
-  const cover = { backgroundImage: `url("${world.cover}")` };
+  const cover = { backgroundImage: `url("${withBase(world.cover)}")` };
   return (
     <article
       className={`world-launcher__tile${active ? ' is-active' : ''}`}
@@ -369,7 +370,7 @@ export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves }
       onPointerLeave={() => lean(0, 0)}
     >
       <div className="world-launcher__ambient" aria-hidden="true" style={{ '--count': worlds.length || 1 } as React.CSSProperties}>
-        {worlds.map(world => <span key={world.id} style={{ backgroundImage: `url("${world.cover}")` }} />)}
+        {worlds.map(world => <span key={world.id} style={{ backgroundImage: `url("${withBase(world.cover)}")` }} />)}
       </div>
       <header className="world-launcher__top">
         <span className="world-launcher__brand">World<span>lines</span></span>

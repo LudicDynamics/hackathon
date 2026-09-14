@@ -11,6 +11,8 @@ RUN pnpm install --frozen-lockfile
 # Rehydrate generated catalogs in this layer; overlayfs cannot rename a directory
 # inherited from COPY into the generator's atomic staging directory.
 RUN rm -rf vendor/pi-rp/packages/ai/src/providers/data && pnpm pi build
+# URL prefix for the web build; "/" unless the host serves the app under a subpath.
+ARG AIRP_WEB_BASE=/
 RUN pnpm build
 
 ENV NODE_ENV=production
