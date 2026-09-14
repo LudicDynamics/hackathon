@@ -41,6 +41,7 @@ for (const pack of experiences) {
           assert.match(parsed.body, /[\p{Script=Hiragana}\p{Script=Katakana}]/u, file);
         } else assert.doesNotMatch(parsed.body, /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u);
         if (parsed.frontmatter?.roll_dice) {
+          assert.ok(file.endsWith('/04-investigation-dice.md'), 'Only authored investigation alternatives offer a prepared roll');
           const shipped = parseFrontmatter(await read(repo, `templates/${pack.base}/${file}`)).frontmatter.roll_dice.type;
           assert.equal(parsed.frontmatter.roll_dice.type, shipped, 'The compiler preserves the authored dice type');
           assert.equal(parsed.frontmatter.roll_dice.result, undefined, 'Consent is the player choosing to roll, never a pre-rolled result');
