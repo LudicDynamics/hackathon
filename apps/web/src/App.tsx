@@ -1,6 +1,7 @@
 import { useLocale } from './lib/i18n.js';
 import { withBase } from './lib/base-path.js';
 import { AgentSettings } from './components/AgentSettings.js';
+import { TtsSettings } from './components/TtsSettings.js';
 import { WriterBar } from './components/chrome/WriterBar.js';
 import { ActivityRail } from './components/chrome/ActivityRail.js';
 import { AgentActivityLog } from './components/chrome/AgentActivityLog.js';
@@ -624,6 +625,7 @@ export function App() {
         }
         return;
       }
+      if (typing || activeCharacter) return;
       if (event.shiftKey && event.key.toLowerCase() === 'r') {
         if (focusCoordinator.peek() !== null) return;
         event.preventDefault();
