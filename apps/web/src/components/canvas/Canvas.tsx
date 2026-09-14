@@ -16,6 +16,8 @@ import { setParallax } from '../../lib/parallax.js';
 import { portraitPlayStateOf } from '../../lib/motion.js';
 import { PresenceLayer } from './PresenceLayer.js';
 import { PRESENCE_NODE_ATTR } from '../../lib/presence-node.js';
+import { depthClassFor } from '../../lib/depth-surface.js';
+import { useStill } from '../../lib/motion.js';
 import type { CharacterPresenceView } from '../../lib/presence.js';
 import type { LayerItem, LayerLink } from '../../state/useWorld.js';
 
@@ -24,8 +26,24 @@ import type { AssetMediaKind } from '../../lib/airp-gateway.js';
  *  deps in PresenceLayer do not churn on every Canvas render. */
 const NO_PRESENCE: CharacterPresenceView[] = [];
 
+const DEPTH_KIND = {
+  background: 'background',
+  world: 'world',
+  entity: 'entity',
+  overlay: 'overlay',
+  writer: 'writer',
+  modal: 'modal',
+  ui: 'ui',
+} as const;
+type CanvasDepthKind = keyof typeof DEPTH_KIND;
+const DEPTH_MARKER = (kind: CanvasDepthKind): string => depthClassFor(DEPTH_KIND[kind]);
+
 interface CanvasProps {
   effectsEnabled?: boolean;
+  /** Optional host visibility seam; ParticleLayer also observes document.hidden. */
+  hidden?: boolean;
+  /** Optional host reduced-motion seam; defaults to the live media preference. */
+  reducedMotion?: boolean;
   allowChalkDrag?: boolean;
   currentLayer: string;
   items: LayerItem[];
@@ -59,6 +77,7 @@ interface CanvasProps {
   onTakeItem?: (path: string) => void;
   onOpenRadialMenu?: (x: number, y: number, worldX: number, worldY: number) => void;
 }
+
 
 /** Viewport blank-space pan/pinch session (cards never start one). */
 interface PanDragState {
@@ -105,6 +124,8 @@ function readTop(el: HTMLElement): number {
 export const Canvas: React.FC<CanvasProps> = ({
   allowChalkDrag = false,
   effectsEnabled = false,
+  hidden = false,
+  reducedMotion,
   assetUrl,
   currentLayer,
   ghost = null,
@@ -127,6 +148,8 @@ export const Canvas: React.FC<CanvasProps> = ({
   onOpenRadialMenu,
 }) => {
   const camera = useCamera();
+  const prefersReducedMotion = useStill();
+  const particleReducedMotion = reducedMotion ?? prefersReducedMotion;
 
 
   useEffect(() => { if (!effectsEnabled) setParallax(0, 0); }, [effectsEnabled]);
@@ -547,72 +570,76 @@ export const Canvas: React.FC<CanvasProps> = ({
       onContextMenu={handleContextMenu}
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
-      className="relative w-full h-full overflow-hidden cursor-grab active:cursor-grabbing select-none touch-none"
+      className={`relative w-full h-full overflow-hidden cursor-grab active:cursor-grabbing select-none touch-none ${DEPTH_MARKER('world')}`}
+      data-depth-surface={DEPTH_KIND.world}
       style={{ perspective: '1200px' }}
     >
-      {/* 2.5D Background sheet with 0.25x parallax drift & video support */}
-      <SceneBackdrop bg={bg} effectsEnabled={effectsEnabled} />
+      {/* 2.5D Background sheet with 0.25x parallax drift & video support. */}
+      <div className={`absolute inset-0 ${DEPTH_MARKER('background')}`} data-depth-surface={DEPTH_KIND.background}>
+        <SceneBackdrop bg={bg} effectsEnabled={effectsEnabled} />
+      </div>
 
       {/* World Transform Layer — single transform layer, rAF writes transform.
           Must pin transform-origin to top-left: default is center, which would
           offset every screen↔world mapping by half the content size. */}
-      <div ref={camera.worldRef} className="absolute left-0 top-0 origin-top-left">
+      <div ref={camera.worldRef} className="absolute inset-0 origin-top-left" data-depth-surface={DEPTH_KIND.world}>
         <LinkLayer links={links} />
-        {/* World-locked 80px hairlines; sized to one viewport, not 6000px. */}
         <CanvasGrid camera={camera} />
 
-        {/* Cards — absolutely positioned at server-seated coords (no flex wrapper).
-            `index` is the gate's ordinal among this layer's gates (01, 02, …). */}
-        {items.map((item) => (
-          <CanvasObject
-            key={item.path}
-            item={item}
-            index={gateOrdinal.get(item.path)}
-            onSelectChoice={onSelectChoice}
-            onEntityAction={onEntityAction}
-            onDiceRolled={onDiceRolled}
-            onEnterGate={onEnterGate}
+        <div className={`absolute inset-0 ${DEPTH_MARKER('entity')}`} data-depth-surface={DEPTH_KIND.entity}>
+          {/* Cards — absolutely positioned at server-seated coords. */}
+          {items.map((item) => (
+            <CanvasObject
+              key={item.path}
+              item={item}
+              index={gateOrdinal.get(item.path)}
+              onSelectChoice={onSelectChoice}
+              onEntityAction={onEntityAction}
+              onDiceRolled={onDiceRolled}
+              onEnterGate={onEnterGate}
+              onOpenCharacterModal={onOpenCharacterModal}
+              onItemDropOnTarget={onItemDropOnTarget}
+              onTakeItem={onTakeItem}
+              still={item.path !== playingPortrait}
+            />
+          ))}
+          <PresenceLayer
+            presence={presence}
+            layerId={currentLayer}
             onOpenCharacterModal={onOpenCharacterModal}
-            onItemDropOnTarget={onItemDropOnTarget}
-            onTakeItem={onTakeItem}
-            still={item.path !== playingPortrait}
+            assetUrl={assetUrl}
           />
-        ))}
-        {/* Presence avatars — world-locked, centre-anchored, never `.object` cards.
-            Mounted AFTER the cards (same depth band, avatars on top) and BEFORE the
-            ghost/phantom lanes so provisional shells still draw last. */}
-        <PresenceLayer
-          presence={presence}
-          layerId={currentLayer}
-          onOpenCharacterModal={onOpenCharacterModal}
-          assetUrl={assetUrl}
-        />
-        {/* Provisional "taking shape" card (docs/init/03 §3.5). Rendered with
-            the `.object--ghost` shell — OUTSIDE `items`, so it never enters
-            `itemsByPath`, the drag dispatcher, or footprint measurement, and
-            `pointer-events: none` makes it non-interactive (doc-10 E3). It reuses
-            the image-ghost skeleton visual and sits at the anchor cell the first
-            real product will claim: the handover is a no-jump swap. */}
-        {ghost && (
-          <div
-            data-path={ghost.path}
-            className="object--ghost"
-            style={{ left: ghost.x, top: ghost.y, width: ghost.w, zIndex: ghost.z }}
-            aria-hidden
-          >
-            <div className="ghost-card ghost-card--pending" style={{ height: ghost.h }}>
-              <div className="ghost-card__skeleton" />
-              <div className="ghost-card__stage">{ghostLabel ?? ghost.body}</div>
+        </div>
+
+        <div className={`absolute inset-0 ${DEPTH_MARKER('overlay')}`} data-depth-surface={DEPTH_KIND.overlay}>
+          {ghost && (
+            <div
+              data-path={ghost.path}
+              className="object--ghost"
+              style={{ left: ghost.x, top: ghost.y, width: ghost.w, zIndex: ghost.z }}
+              aria-hidden
+            >
+              <div className="ghost-card ghost-card--pending" style={{ height: ghost.h }}>
+                <div className="ghost-card__skeleton" />
+                <div className="ghost-card__stage">{ghostLabel ?? ghost.body}</div>
+              </div>
             </div>
-          </div>
-        )}
-        <PhantomLayer currentLayer={currentLayer} bgSrc={bg.src} copy={ghostCopy} />
+          )}
+          <PhantomLayer currentLayer={currentLayer} bgSrc={bg.src} copy={ghostCopy} />
+        </div>
       </div>
 
-      {/* Atmospheric 1.35x foreground particle system. Always mounted: show
-          bursts (`playBurst`) draw on this same canvas (docs/perform/05 §4.4),
-          so `effectsEnabled` only toggles the ambient dust/rain field. */}
-      <ParticleLayer key={bg.tone} tone={bg.tone} ambient={effectsEnabled} />
+      {/* Atmospheric particles own separate ambient/burst surfaces. */}
+      <div className="absolute inset-0" data-depth-surface={DEPTH_KIND.background}>
+        <ParticleLayer
+          key={bg.tone}
+          tone={bg.tone}
+          ambient={effectsEnabled}
+          effectsEnabled={effectsEnabled}
+          hidden={hidden}
+          reducedMotion={particleReducedMotion}
+        />
+      </div>
     </div>
   );
 };

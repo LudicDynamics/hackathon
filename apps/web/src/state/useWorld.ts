@@ -20,12 +20,12 @@ import { agentActivityStore } from '../lib/agent-activity-store.js';
 import { worldEventToastStore } from '../lib/world-event-toast.js';
 import { playFoley, playCharge, endCharge, setAmbient } from '../lib/audio.js';
 import { ghostSizeFor, stageText, GHOST_WAIT_AMBIENT } from '../lib/ghost.js';
+import { getCharacterFrameQueue, type CharacterFrameQueueEvent } from '../lib/character-frame-queue.js';
 import {
   DEFAULT_WORLD_SETTINGS,
   startsSceneInit,
   type WorldSettings,
 } from '@airp/shared/world-settings';
-
 export interface LayerItem {
   path: string;
   filename: string;
@@ -179,6 +179,20 @@ export function useWorld(): UseWorldApi {
   // world_event 去重（docs/tools/12 §6.4）：集合与 FIFO 队列同进同出。
   const seenEventIdsRef = useRef<Set<string>>(new Set());
   const seenEventOrderRef = useRef<string[]>([]);
+  // The queue is the character presentation owner after App has assigned
+  // identity. Consume its diagnostics here so a sequence gap or legacy
+  // unsequenced frame is visible through the existing notice lane. Character
+  // terminal/message frames never enter writer-state or advance its cursor.
+  useEffect(() => {
+    const unsubscribe = getCharacterFrameQueue().subscribe((event?: CharacterFrameQueueEvent) => {
+      if (!event) return;
+      window.dispatchEvent(new CustomEvent('airp:notice', {
+        detail: event.message,
+      }));
+    });
+    return unsubscribe;
+  }, []);
+
 
   const fpRef = useRef<FootprintScheduler | null>(null);
   // Footprint reads the canonical writer projection; tool count is not a second

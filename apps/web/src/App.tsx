@@ -1,6 +1,7 @@
 import { useLocale } from './lib/i18n.js';
 import { AgentSettings } from './components/AgentSettings.js';
 import { TtsSettings } from './components/TtsSettings.js';
+import { WriterBar } from './components/chrome/WriterBar.js';
 import { WriterResult } from './components/WriterResult.js';
 import { ActivityRail } from './components/chrome/ActivityRail.js';
 import { AgentActivityLog } from './components/chrome/AgentActivityLog.js';
@@ -43,8 +44,8 @@ import { useAudio } from './state/useAudio.js';
 import { useCamera } from './state/useCamera.js';
 import { useWorld } from './state/useWorld.js';
 import type { EnterLayerResult } from './state/useWorld.js';
-import { usePresence } from './state/usePresence.js';
 import { CharacterRail } from './components/sidebar/CharacterRail.js';
+import { usePresence } from './state/usePresence.js';
 import { airpGateway, onWorldUnavailable, AirpRequestError, type AssetMediaKind, type WorldShelf } from './lib/airp-gateway.js';
 import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
 import { BagItemDialog } from './components/BagItemDialog.js';
@@ -52,6 +53,9 @@ import { initialShell, transitionShell, splitCharacters } from './lib/ui-shell.m
 import { MarkdownText } from './lib/md.js';
 import { BookOpen, ChevronDown, ChevronUp, Maximize, Minimize, UserRound, Backpack, Sparkles } from 'lucide-react';
 import { preloadAudio } from './lib/audio.js';
+import { useStill } from './lib/motion.js';
+import { createFocusCoordinator, type FocusOwner } from './lib/focus-coordinator.js';
+import { createOverlayAdmission } from './lib/overlay-admission.js';
 
 interface WorldManifest {
   id: string;
@@ -147,6 +151,31 @@ export function App() {
   const [effectsEnabled, setEffectsEnabled] = useState(() => {
     try { return localStorage.getItem('airp:effects') === 'on'; } catch { return false; }
   });
+  const reducedMotion = useStill();
+  const [pageVisible, setPageVisible] = useState(() => typeof document === 'undefined' || !document.hidden);
+  useEffect(() => {
+    const onVisibilityChange = () => setPageVisible(!document.hidden);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, []);
+  const focusCoordinator = useMemo(() => createFocusCoordinator(), []);
+  const overlayAdmission = useMemo(() => createOverlayAdmission(focusCoordinator), [focusCoordinator]);
+  const [, setFocusRevision] = useState(0);
+  useEffect(() => focusCoordinator.subscribe(() => setFocusRevision(value => value + 1)), [focusCoordinator]);
+  const focusTokensRef = useRef(new Map<FocusOwner, string>());
+  const syncFocus = useCallback((owner: FocusOwner, active: boolean) => {
+    const token = focusTokensRef.current.get(owner);
+    if (active && !token) {
+      focusTokensRef.current.set(owner, focusCoordinator.acquire(owner));
+    } else if (!active && token) {
+      focusCoordinator.release(token);
+      focusTokensRef.current.delete(owner);
+    }
+  }, [focusCoordinator]);
+  const characterAdmissionRef = useRef<string | null>(null);
+  const radialAdmissionRef = useRef<string | null>(null);
+  const diceAdmissionRef = useRef<string | null>(null);
+  const closeCharacterRef = useRef<() => void>(() => {});
   useEffect(() => {
     try { localStorage.setItem('airp:effects', effectsEnabled ? 'on' : 'off'); } catch { /* Storage is optional. */ }
   }, [effectsEnabled]);
@@ -168,6 +197,14 @@ export function App() {
   const [writerDraft, setWriterDraft] = useState('');
   const historyDraft = useRef('');
   const toastTimer = useRef<number | null>(null);
+  const clearAdmittedCeremony = useCallback(() => {
+    clearCeremony();
+    const token = diceAdmissionRef.current;
+    if (token) {
+      overlayAdmission.release(token);
+      diceAdmissionRef.current = null;
+    }
+  }, [overlayAdmission]);
   const writerPendingRef = useRef(false);
 
   // Character frames cross the one App-owned identity router into the queue.
@@ -242,6 +279,13 @@ export function App() {
       setToast(null);
     }, 3000);
   }, []);
+  useEffect(() => { syncFocus('world-shelf', worldPickerOpen); }, [syncFocus, worldPickerOpen]);
+  useEffect(() => { syncFocus('nook', nookChar !== null); }, [nookChar, syncFocus]);
+  useEffect(() => { syncFocus('character-dialogue', activeCharacter !== null); }, [activeCharacter, syncFocus]);
+  useEffect(() => { syncFocus('belongings', bagOpen || selectedBagItem !== undefined); }, [bagOpen, selectedBagItem, syncFocus]);
+  useEffect(() => { syncFocus('profile', profileOpen); }, [profileOpen, syncFocus]);
+  useEffect(() => { syncFocus('writer', attention === 'authoring' && !shell.immersive); }, [attention, shell.immersive, syncFocus]);
+  useEffect(() => { syncFocus('journal', shell.journal); }, [shell.journal, syncFocus]);
 
   // The single presence projection (§4.1): both the canvas avatars and the
   // character rail consume THESE views, never a re-derivation of their own.
@@ -397,15 +441,23 @@ export function App() {
       if (rawSource === 'character' || rawCharacterId !== undefined) {
         if (rawSource !== 'character' || !activeCharacter || v.characterId !== activeCharacter.id) return;
       }
+      if (diceAdmissionRef.current) clearAdmittedCeremony();
+      const caller: FocusOwner = activeCharacter ? 'character-dialogue' : nookChar ? 'nook' : 'workspace';
+      const admission = overlayAdmission.request('dice', caller);
+      if (!admission.accepted) {
+        notify(admission.message);
+        return;
+      }
       markPlayed(v.path);
+      diceAdmissionRef.current = admission.token;
       playCeremony(v);
     };
     window.addEventListener('airp:dice-frame', onDiceFrame);
     return () => {
       window.removeEventListener('airp:dice-frame', onDiceFrame);
-      clearCeremony();
+      clearAdmittedCeremony();
     };
-  }, [activeCharacter?.id, layer]);
+  }, [activeCharacter?.id, clearAdmittedCeremony, layer, nookChar, notify, overlayAdmission]);
 
   useEffect(() => {
     void loadChromeData();
@@ -447,17 +499,46 @@ export function App() {
       const target = event.target as HTMLElement | null;
       const typing = target?.closest('input, textarea, select, button, a, [role="switch"], [contenteditable="true"]');
       if (event.key === 'Escape') {
-        // Dismiss transient chrome first; if nothing was open, Esc is the
-        // documented "go back" key (HintBar: "Alt+← / Esc to return"). Inside a
-        // nook it closes the nook and MUST NOT also walk the layer tree.
-        if (activeCharacter || bagOpen || profileOpen || worldPickerOpen) {
-          setWorldPickerOpen(false);
-          setProfileOpen(false);
-          setBagOpen(false);
+        event.preventDefault();
+        event.stopPropagation();
+        if (radialState || radialAdmissionRef.current) {
+          setRadialState(null);
+          const token = radialAdmissionRef.current;
+          if (token) overlayAdmission.release(token);
+          radialAdmissionRef.current = null;
           return;
         }
-        if (nookChar !== null) { closeNook(); return; }
-        if (shell.header || shell.journal || shell.immersive) { setShell(initialShell); return; }
+        if (ceremony) {
+          clearAdmittedCeremony();
+          return;
+        }
+        const topmost = focusCoordinator.peek();
+        if (topmost) {
+          focusCoordinator.handleEscape();
+          if (topmost === 'character-dialogue') {
+            closeCharacterRef.current();
+          } else if (topmost === 'nook') {
+            closeNook();
+          } else if (topmost === 'world-shelf') {
+            setWorldPickerOpen(false);
+          } else if (topmost === 'belongings') {
+            if (selectedBagPath !== null) setSelectedBagPath(null);
+            else setBagOpen(false);
+          } else if (topmost === 'profile') {
+            setProfileOpen(false);
+          } else if (topmost === 'writer') {
+            writerRef.current?.blur();
+            setAttention('ambient');
+            setIsGodHandOpen(false);
+          } else if (topmost === 'journal') {
+            setShell(current => ({ ...current, journal: false }));
+          }
+          return;
+        }
+        if (shell.header || shell.journal || shell.immersive) {
+          setShell(initialShell);
+          return;
+        }
         if (layer !== 'map') {
           void enterLayer(manifest?.layers?.[layer]?.parent || 'map').then(applyFollowFailures);
         }
@@ -477,7 +558,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [activeCharacter, bagOpen, profileOpen, worldPickerOpen, nookChar, shell, layer, manifest, enterLayer, closeNook]);
+  }, [activeCharacter, ceremony, clearAdmittedCeremony, closeNook, enterLayer, focusCoordinator, layer, manifest, overlayAdmission, radialState, selectedBagPath, shell]);
 
   const chalks = useMemo(
     () => (state?.items || []).filter((item) => item.frontmatter?.type === 'chalk'),
@@ -488,6 +569,23 @@ export function App() {
     return state?.items.find((item) => item.path === expected);
   }, [layer, state?.items]);
   const worldReady = Boolean(manifest && state && readme);
+  useEffect(() => {
+    overlayAdmission.setWorldAvailable(worldReady);
+    if (!worldReady) {
+      clearAdmittedCeremony();
+      const dialogueToken = characterAdmissionRef.current;
+      if (dialogueToken) {
+        overlayAdmission.release(dialogueToken);
+        characterAdmissionRef.current = null;
+      }
+      const radialToken = radialAdmissionRef.current;
+      if (radialToken) {
+        overlayAdmission.release(radialToken);
+        radialAdmissionRef.current = null;
+      }
+      setRadialState(null);
+    }
+  }, [clearAdmittedCeremony, overlayAdmission, worldReady]);
   // `encounters` is browser-memory only ("characters you have opened"), NOT
   // presence: it never decides who is in this scene (docs/presence/00 §2.1).
   const encounteredIds = encounters[manifest?.id || ''] || [];
@@ -537,7 +635,6 @@ export function App() {
     frameQueue.clear('world-change');
     cameraStack.clear();
     callerProjectionRef.current = null;
-    setNookChar(null);
     try {
       const result = await airpGateway.loadWorld<WorldManifest>(worldPath);
       setManifest(result.manifest);
@@ -616,10 +713,6 @@ export function App() {
     window.requestAnimationFrame(() => writerRef.current?.focus());
   }, [backpack, notify, t, writerLocked]);
 
-  const submitWriter = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    submitWriterText(writerDraft);
-  };
   const handleItemDrop = async (itemPath: string, targetPath: string) => {
     try {
       await airpGateway.useItem(itemPath, targetPath);
@@ -661,6 +754,13 @@ export function App() {
   };
 
   const openCharacter = (character: CharacterView) => {
+    if (activeCharacter) return;
+    const admission = overlayAdmission.request('dialogue', nookChar ? 'nook' : 'workspace');
+    if (!admission.accepted) {
+      notify(admission.message);
+      return;
+    }
+    characterAdmissionRef.current = admission.token;
     const worldId = manifest?.id || '';
     const caller: ProjectionTarget = nookChar
       ? projectionTarget('nook', nookChar)
@@ -678,6 +778,12 @@ export function App() {
       recentContext: chalks.slice(-3).map((chalk) => chalk.body).join('\n\n'),
     });
   };
+  const closeRadial = useCallback(() => {
+    setRadialState(null);
+    const token = radialAdmissionRef.current;
+    if (token) overlayAdmission.release(token);
+    radialAdmissionRef.current = null;
+  }, [overlayAdmission]);
 
   const createAt = async (type: RadialItemType, title: string, content: string, x: number, y: number) => {
     const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `creation-${Date.now()}`;
@@ -686,14 +792,18 @@ export function App() {
     const form = type === 'character' ? 'sprite' : type;
     try {
       await airpGateway.godAction('create', filePath, `---\ntype: ${form}\ntitle: ${JSON.stringify(title)}\n---\n${content}`);
-      await moveCard(filePath, x, y);
       await refresh();
-      setRadialState(null);
+      closeRadial();
       notify(`Created “${title}”`);
     } catch (error) { notify(error instanceof Error ? error.message : 'Could not create the object'); }
   };
   const closeCharacter = () => {
     if (activeCharacter) sendMessage({ type: 'character_stop', characterId: activeCharacter.id });
+    const token = characterAdmissionRef.current;
+    if (token) {
+      overlayAdmission.release(token);
+      characterAdmissionRef.current = null;
+    }
     agentActivityStore.clearSurface('character-modal');
     frameQueue.clear('close');
     const caller = callerProjectionRef.current;
@@ -704,9 +814,10 @@ export function App() {
     callerProjectionRef.current = null;
     setActiveCharacter(null);
   };
+  closeCharacterRef.current = closeCharacter;
 
   return (
-    <div className={`airp-prototype${isDusk ? ' is-dusk' : ''}${shell.immersive ? ' is-immersive' : ''}${shell.journal ? ' is-reading' : ''}${shell.header ? ' has-header' : ''}${attention === 'authoring' ? ' is-authoring' : ''}`}>
+    <div data-depth-surface="ui" className={`airp-prototype${isDusk ? ' is-dusk' : ''}${shell.immersive ? ' is-immersive' : ''}${shell.journal ? ' is-reading' : ''}${shell.header ? ' has-header' : ''}${attention === 'authoring' ? ' is-authoring' : ''}`}>
       <main className="prototype-workspace">
         <aside className={`prototype-narrative${shell.journal ? ' is-open' : ''}`} aria-label={t("Story journal")} aria-hidden={!shell.journal} inert={!shell.journal}>
           <div className="prototype-narrhead">
@@ -737,6 +848,8 @@ export function App() {
             <div
               className="prototype-nook"
               data-airp-projection={`nook:${nookChar}`}
+              aria-hidden={activeCharacter !== null || worldPickerOpen}
+              inert={activeCharacter !== null || worldPickerOpen}
             >
               <NookView
                 characterId={nookChar!}
@@ -746,8 +859,6 @@ export function App() {
                 onMoveCard={moveCard}
                 writerLocked={writerLocked}
                 onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }}
-                onEntityAction={(choice, targetLayer) => { void submitWriterText(choice, targetLayer); }}
-                onDiceRolled={(result, passed) => notify(`Roll ${result} · ${passed ? 'passed' : 'failed'}`)}
                 onOpenCharacterModal={(id) => {
                   const character = characters.find((item) => item.id === id);
                   if (character) openCharacter(character);
@@ -763,14 +874,17 @@ export function App() {
             <div
               data-airp-projection={`layer:${layer}`}
               data-airp-projection-active="true"
-              aria-hidden={activeCharacter !== null}
-              inert={activeCharacter !== null}
+              aria-hidden={activeCharacter !== null || worldPickerOpen}
+              inert={activeCharacter !== null || worldPickerOpen}
             >
               <Canvas
                 key={manifest?.id || 'opening'}
                 effectsEnabled={effectsEnabled}
-                allowChalkDrag={allowChalkDrag}
                 currentLayer={layer}
+                hidden={!pageVisible}
+                reducedMotion={reducedMotion}
+                allowChalkDrag={allowChalkDrag}
+                stillPortraits={reducedMotion}
                 ghost={ghostItem}
                 ghostLabel={ghostLabel}
                 ghostCopy={{
@@ -793,12 +907,28 @@ export function App() {
                 onEnterGate={(target) => void enterLayer(target).then(applyFollowFailures)}
                 onDropItemToScene={handleReturnItem}
                 onTakeItem={handleTakeItem}
-                onOpenRadialMenu={(x, y, worldX, worldY) => { if (attention === 'authoring') setRadialState({ x, y, worldX, worldY }); }}
+                onOpenRadialMenu={(x, y, worldX, worldY) => {
+                  if (attention !== 'authoring') return;
+                  const admission = overlayAdmission.request('radial', 'workspace');
+                  if (!admission.accepted) {
+                    notify(admission.message);
+                    return;
+                  }
+                  radialAdmissionRef.current = admission.token;
+                  setRadialState({ x, y, worldX, worldY });
+                }}
               />
 
               {/* Performance shows (docs/perform/05) — z-20, below the dice ceremony
                   (z-50). Cancels its own shows on layer change / freeze. */}
-              <PerformanceLayer layer={layer} frozen={state?.worldFrozen === true} />
+              <PerformanceLayer
+                layer={layer}
+                frozen={state?.worldFrozen === true}
+                hidden={!pageVisible}
+                effectsEnabled={effectsEnabled}
+                reducedMotion={reducedMotion}
+                admission={overlayAdmission}
+              />
             </div>
           )}
 
@@ -816,8 +946,8 @@ export function App() {
             <span className="prototype-status">{t('{items} ITEMS · {people} PEOPLE', { items: handItems.length, people: characters.length })}</span>
             <button className="prototype-pill" onClick={() => setWorldPickerOpen(true)}>{t("Worlds")}</button>
             <label className="prototype-language"><span className="sr-only">{t('Language')}</span><select aria-label={t('Language')} value={locale} onChange={event => setLocale(event.target.value as 'en' | 'zh-CN' | 'ja')}><option value="en">English</option><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
-            <AgentSettings settings={world.settings} onSaveSettings={world.saveSettings} />
-            <TtsSettings />
+            <AgentSettings settings={world.settings} onSaveSettings={world.saveSettings} focus={focusCoordinator} />
+            <TtsSettings focus={focusCoordinator} />
             <MuteButton />
             <button className="prototype-effects-toggle" role="switch" aria-label={t("Visual effects")} aria-checked={effectsEnabled} onClick={() => setEffectsEnabled(value => !value)} title={t("Particles, parallax and animated backgrounds")}><span aria-hidden="true" />{t(effectsEnabled ? 'Effects on' : 'Effects off')}</button>
             <button className="prototype-quiet" onClick={() => toggleShell('header')} aria-label={t("Close header")}><ChevronUp size={16} /></button>
@@ -849,7 +979,7 @@ export function App() {
               避免串台。始终挂在这里，不作为 modal 的后代。 */}
           <ActivityRail surface="rail" className="prototype-chrome" />
           <ConnectedWorldToastRegion className="prototype-chrome" />
-          <AgentActivityLog query={{ surface: 'rail' }} className="prototype-chrome" />
+          <AgentActivityLog query={{ surface: 'rail' }} className="prototype-chrome" focus={focusCoordinator} />
 
           <div className="prototype-tools prototype-chrome" aria-label={t("Canvas tools")}>
             <button className="active" title={t("Explore")}>↖</button>
@@ -920,11 +1050,21 @@ export function App() {
             notify={notify}
             assetUrl={assetUrl}
           />
-          <button className="prototype-action-toggle prototype-chrome" onClick={() => { if (attention === 'authoring') { setAttention('ambient'); setIsGodHandOpen(false); } else setAttention('authoring'); window.setTimeout(() => writerRef.current?.focus(), 0); }} aria-label={t("Write an action")}><Sparkles size={17} /><span aria-live="polite">{writerWorking ? t('The writer is working…') : t('What do you do?')}</span></button>
-          {writerWorking && <button type="button" className="writer-stop-control" disabled={writerState.stopRequested} onClick={() => {
+          <button className="prototype-action-toggle prototype-chrome" onClick={() => {
+            if (attention === 'authoring') {
+              closeRadial();
+              setAttention('ambient');
+              setIsGodHandOpen(false);
+              return;
+            }
+            setAttention('authoring');
+            setShell(current => ({ ...current, immersive: false }));
+            window.setTimeout(() => writerRef.current?.focus(), 0);
+          }} aria-label={t("Write an action")}><Sparkles size={17} /><span aria-live="polite">{writerWorking ? t('The writer is working…') : t('What do you do?')}</span></button>
+          {writerWorking && <button type="button" className="writer-stop-control" data-writer-stop disabled={writerState.stopRequested} onClick={() => {
             if (requestWriterStop()) sendMessage({ type: 'writer_abort' });
-          }} aria-label="Stop writing">
-            ■ {writerState.stopRequested ? 'Stop requested' : 'Stop writing'}
+          }} aria-label={t(writerState.stopRequested ? 'Stop requested' : 'Stop writing')}>
+            ■ {writerState.stopRequested ? t('Stop requested') : t('Stop writing')}
           </button>}
           {writerState.error?.retryable && retryWriterPrompt() && (
             <button type="button" className="writer-retry-control" data-writer-retry onClick={() => {
@@ -934,7 +1074,7 @@ export function App() {
               Retry writing
             </button>
           )}
-          <form className="prototype-dock prototype-chrome" onSubmit={submitWriter}>
+          <div className="prototype-dock prototype-chrome">
             <div className="prototype-docktop">
               <b>{t("✧ SPEAK TO THE WRITER")}</b>
               <span>{state?.worldFrozen ? t('The world is paused') : t('Your action moves the world forward')}</span>
@@ -942,20 +1082,18 @@ export function App() {
               <span>↵</span>
             </div>
             <div className="prototype-dockrow">
-              {writerWorking && <span role="status">{t(writerState.stopRequested ? 'Stop requested' : 'The writer is working…')}</span>}
-              <input
-                ref={writerRef}
+              <WriterBar
+                embedded
+                inputRef={writerRef}
+                inputAriaLabel={t('Action')}
                 value={writerDraft}
-                aria-label={t("Action")}
-                placeholder={writerLocked ? t('The writer is writing…') : t("What do you do? You can also address someone by name…")}
+                onChange={setWriterDraft}
+                onSend={text => submitWriterText(text)}
                 disabled={writerLocked}
-                autoComplete="off"
-                onChange={event => setWriterDraft(event.currentTarget.value)}
+                placeholder={t("What do you do? You can also address someone by name…")}
+                writingPlaceholder={t('The writer is writing…')}
+                sendLabel="↑"
                 onKeyDown={event => {
-                  if (event.key === 'Enter' && event.nativeEvent.isComposing) {
-                    event.preventDefault();
-                    return;
-                  }
                   if (!['ArrowUp', 'ArrowDown'].includes(event.key) || !writerHistory.current.length) return;
                   event.preventDefault();
                   event.stopPropagation();
@@ -970,14 +1108,13 @@ export function App() {
                   });
                 }}
               />
-              <button type="submit" className="prototype-primary" aria-label={t("Send action")}>↑</button>
             </div>
-          </form>
+          </div>
 
           {attention === 'authoring' && (
             <div className="prototype-authoring">
               <GodModeToolbar frozen={state?.worldFrozen === true} onToggleFreeze={handleToggleFreeze} allowChalkDrag={allowChalkDrag} onToggleChalkDrag={handleToggleGodHand} />
-              <button className="prototype-quiet" onClick={() => { setAttention('ambient'); setIsGodHandOpen(false); }}>{t("Close")}</button>
+              <button className="prototype-quiet" onClick={() => { closeRadial(); setAttention('ambient'); setIsGodHandOpen(false); }}>{t("Close")}</button>
             </div>
           )}
 
@@ -999,7 +1136,7 @@ export function App() {
         />
       )}
 
-      {radialState && <RadialMenu {...radialState} onClose={() => setRadialState(null)} onCreate={createAt} />}
+      {radialState && <RadialMenu {...radialState} onClose={closeRadial} onCreate={createAt} />}
 
       {activeCharacter && (
         <CharacterModal
@@ -1029,7 +1166,7 @@ export function App() {
 
       {/* Dice ceremony overlay (screen-fixed layer, same visual language as the player path) */}
       {ceremony && (
-        <DiceCeremony key={ceremony.key} verdict={ceremony.verdict} onDone={clearCeremony} />
+        <DiceCeremony key={ceremony.key} verdict={ceremony.verdict} onDone={clearAdmittedCeremony} />
       )}
 
       {toast && <div className="prototype-toast" role="status">{toast}</div>}
