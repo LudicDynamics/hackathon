@@ -17,6 +17,7 @@
  * the probe can assert the brief really reached the model.
  */
 import fs from 'node:fs';
+import path from 'node:path';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai/compat';
 
 const PROVIDER_ID = 'airp-init-probe';
@@ -160,10 +161,23 @@ export default function initProbeProvider(pi: { registerProvider(id: string, con
         const contentArg = isScene
           ? '---\ntype: chalk\n---\n\nA probe scene, written by the deterministic initializer.\n'
           : '---\ntype: note\ntitle: Probe note\n---\n\nA probe note.\n';
-        message = assistantMessage(
-          model,
-          [
-            {
+        // Scenes write their README with the native `write` tool; a nook's
+        // README is a profile configuration file, which native write/edit is
+        // blocked from — the initializer must go through the trusted
+        // `edit_character_config` channel (docs/init/02 §5, doc-11 §4.1).
+        const readmeCall = isNook
+          ? {
+              type: 'toolCall',
+              id: `init_probe_readme_${index}`,
+              name: 'edit_character_config',
+              arguments: {
+                characterId: path.basename(dir),
+                file: 'README.md',
+                content: `---\ntype: readme\nname: Probe ${kind}\nmaterial: parchment\n---\n\n# Probe ${kind}\n\nInstantiated by the init probe.\n`,
+                mode: 'replace',
+              },
+            }
+          : {
               type: 'toolCall',
               id: `init_probe_readme_${index}`,
               name: 'write',
@@ -171,7 +185,11 @@ export default function initProbeProvider(pi: { registerProvider(id: string, con
                 path: `${dir}/README.md`,
                 content: `---\ntype: readme\nname: Probe ${kind}\nmaterial: parchment\n---\n\n# Probe ${kind}\n\nInstantiated by the init probe.\n`,
               },
-            },
+            };
+        message = assistantMessage(
+          model,
+          [
+            readmeCall,
             {
               type: 'toolCall',
               id: `init_probe_content_${index}`,

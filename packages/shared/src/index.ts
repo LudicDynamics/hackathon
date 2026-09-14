@@ -7,6 +7,7 @@ export * from './schemas/events.js';
 export * from './schemas/canvas.js';
 export * from './schemas/nook-note.js';
 export * from './schemas/create-char.js';
+export * from './schemas/live.js';
 export * from './store/world-store.js';
 export * from './store/local-store.js';
 export * from './schemas/forms.js';
@@ -60,6 +61,7 @@ export * from './actions/create.js';
 export * from './actions/layer.js';
 export * from './actions/talk.js';
 export * from './actions/nook-note.js';
+export * from './actions/world.js';       // snapshotWorld / rollbackWorld (doc-16)
 
 // B2/B3 injection surface. TS `export *` has no glob, so every new module MUST
 // be added here by hand — a missing line is a SILENT unreachable module

@@ -62,6 +62,34 @@ test('generic character operations protect configuration and foreign nooks', asy
   assert.match(await store.readFile('characters/ryo/memory.md'), /A sourced fact/);
 });
 
+test('the initializer may create a missing configuration file but never rewrite one', async () => {
+  const store = await fixture();
+  const initializer = createActionService(
+    store,
+    { type: 'writer' },
+    { turn: 'guard:initializer', agentScope: 'initializer' },
+  );
+  const created = await editCharacterConfig(initializer.ctx, {
+    characterId: 'ryo', file: 'README.md', content: '# Ryo\n\nA quiet room.', mode: 'replace',
+  });
+  assert.equal(created.details.path, 'characters/ryo/README.md');
+  assert.match(await store.readFile('characters/ryo/README.md'), /A quiet room/);
+  // Second run must not rewrite it: create-only is the whole point.
+  await assert.rejects(
+    () => editCharacterConfig(initializer.ctx, {
+      characterId: 'ryo', file: 'README.md', content: '# Overwrite', mode: 'replace',
+    }),
+    code('unsupported'),
+  );
+  // An initializer may not touch a file that already exists either.
+  await assert.rejects(
+    () => editCharacterConfig(initializer.ctx, {
+      characterId: 'ryo', file: 'identity.md', content: 'Nope', mode: 'append',
+    }),
+    code('unsupported'),
+  );
+});
+
 test('validated player nook note remains the only player character write', async () => {
   const store = await fixture();
   const player = createActionService(store, { type: 'player' }, { turn: 'guard:player', agentScope: 'player' });

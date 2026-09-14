@@ -48,6 +48,11 @@ export async function editCharacterConfig(
   const agentScope: AgentScope =
     ctx.agentScope ??
     (actor.type === 'character' ? 'character' : actor.type === 'player' ? 'player' : 'writer-top-level');
+  // The initialization subagent is trusted to CREATE a missing root configuration
+  // file (the nook cover) but never to rewrite one that already exists. That is
+  // what keeps the "no second copy of the profile" rule intact while the brief
+  // still lets the model author the README (docs/init/02 §5, doc-11 §4.1).
+  const isInitializer = actor.type === 'writer' && agentScope === 'initializer';
   if (!registered) {
     throw new ActionError({
       code: 'unsupported',
@@ -58,7 +63,7 @@ export async function editCharacterConfig(
     if (agentScope !== 'character' || actor.id !== input.characterId || input.file !== 'memory.md') {
       throw new ActionError({ code: 'unsupported', message: 'A character may edit only its own memory.md' });
     }
-  } else if (actor.type !== 'writer' || agentScope !== 'writer-top-level') {
+  } else if (actor.type !== 'writer' || (agentScope !== 'writer-top-level' && !isInitializer)) {
     throw new ActionError({ code: 'unsupported', message: 'Only a top-level Writer may edit registered character configuration' });
   }
 
@@ -68,6 +73,12 @@ export async function editCharacterConfig(
     throw new ActionError({ code: 'not_found', message: `Character nook not found: "${nook}"` });
   }
   const existing = (await store.statKind(path)) === 'file' ? parseFrontmatter(await store.readFile(path)) : null;
+  if (isInitializer && existing !== null) {
+    throw new ActionError({
+      code: 'unsupported',
+      message: `The initializer may only create a missing configuration file; "${path}" already exists`,
+    });
+  }
   const body = input.mode === 'append'
     ? existing
       ? `${existing.body}${existing.body.endsWith('\n') || existing.body === '' ? '' : '\n'}${input.content}`

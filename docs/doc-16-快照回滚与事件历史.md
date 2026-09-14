@@ -8,6 +8,8 @@
 - **不用 git 做回滚**（doc-01 §2.10 定案：AIRP 用快照打点 + 事件表回溯）；
 - 快照打点机制已定（zip 打包 + 事件表，doc-05 §8.6）；
 - 世界历史面板（事件表前端可视化）挂在 doc-07 赛后 #2；
+
+> **实现进度（2026-09-14，B7）**：§3 快照打点与 §4 恢复**已落地**——`packages/shared/src/actions/world.ts` 的 `snapshotWorld` / `rollbackWorld`，HTTP 入口 `POST /api/snapshot` `POST /api/rollback`，切世界前自动打一枪。**回滚限于文件**（`world/` `characters/` `player/` `world.json` `.airpworld/assets`）；`canvas.db` 当前值仍按下文 §13 待设计 #1 的"仍待定"处理，未发明语义。验收：`packages/shared/test/world-snapshot.test.mjs`。§2 回滚 UI 与 §13 前端可视化仍赛后。
 - 快照 zip 可以赛前写好，触发时机赛时定（doc-07 C4）。
 
 ## 待设计清单

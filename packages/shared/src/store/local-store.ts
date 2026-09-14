@@ -723,6 +723,31 @@ export class LocalWorldStore implements WorldStore {
   }
 
   /**
+   * Rollback's atomic core (doc-21 §6 / hooks/03 §6.2). `appendEvent` opens its
+   * own transaction, so this reuses the locked insert and flushes every cursor
+   * BEFORE committing: both land or neither does. Pushing to the event's OWN
+   * seq (not a later `getMaxSeq()`) is what lets the writer still read the
+   * rollback sentence while losing the pre-rollback backlog.
+   */
+  async appendEventAndPushCursors(args: AppendEventArgs): Promise<WorldEvent> {
+    this.historyDb.exec('BEGIN IMMEDIATE');
+    try {
+      const event = await this.appendEventLocked(args);
+      const now = new Date().toISOString();
+      this.historyDb.prepare('UPDATE read_cursors SET seq = ?, updated_at = ?').run(event.seq, now);
+      this.historyDb.exec('COMMIT');
+      return event;
+    } catch (err) {
+      this.historyDb.exec('ROLLBACK');
+      if (err instanceof ActionError) throw err;
+      throw new ActionError({
+        code: 'event_failed',
+        message: `Failed to record the rollback event: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }
+
+  /**
    * Ascending — the consumption side renders in time order; DESC is getEvents'.
    *
    * `limit` bounds the READ, not just the render (评审 A-9 / 00 §6.1): the inner

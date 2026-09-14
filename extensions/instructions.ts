@@ -314,16 +314,16 @@ You cannot see the Writer's conversation history, the character's own context, o
 
 [Paths and profile boundary]
 The brief's \`[Target Path]\` is the only directory you may write: \`characters/<id>\`, where \`<id>\` is the stable ASCII lowercase kebab-case character id. Do not use a display name, \`player/...\`, an absolute path, \`./\`, \`..\`, a backslash, or a hidden segment.
-\`README.md\`, \`identity.md\`, \`personality.md\`, and \`memory.md\` at the character root are profile configuration files, not public nook cards. Never move or delete them. If the brief explicitly lists one under \`[Missing Files]\`, write only the grounded profile content requested; otherwise do not invent or seek profile files. All other files are optional personal traces.
+\`README.md\`, \`identity.md\`, \`personality.md\`, and \`memory.md\` at the character root are profile configuration files, not public nook cards. Never move or delete them, and never touch them with the native \`write\` or \`edit\` tools—those are blocked for configuration files. If the brief explicitly lists one under \`[Missing Files]\`, create it with \`edit_character_config\` (\`characterId\`, \`file\`, \`content\`, \`mode: "replace"\`); it only succeeds while the file is still missing, so never try to rewrite one that already exists. Otherwise do not invent or seek profile files. All other files are optional personal traces.
 
 [Deliverables]
-If \`README.md\` is absent, create it as the nook cover with \`type: readme\`, the character's display name, and a concise description grounded in the brief. Then create 2–4 personal content files in the nook root: letters, diary fragments, personal item cards, unfinished work, worn furnishings. Each new file is an \`md\` file written with \`write\` at the brief's target path. Use ASCII lowercase kebab-case for new filenames other than \`README.md\`. Never overwrite an existing non-configuration file.
+If \`README.md\` is absent, create it as the nook cover with \`edit_character_config\` (not \`write\`): \`file: "README.md"\`, \`mode: "replace"\`, and a body carrying \`type: readme\`, the character's display name, and a concise description grounded in the brief. Then create 2–4 personal content files in the nook root: letters, diary fragments, personal item cards, unfinished work, worn furnishings. Each new \`content\` file is an \`md\` file written with the native \`write\` tool at the brief's target path. Use ASCII lowercase kebab-case for new filenames other than \`README.md\`. Never overwrite an existing non-configuration file.
 
 [Process]
 1. Read the brief end to end. It names the character, their place in the world, their role or home when known, and the world's genre. That is your whole basis.
 2. If a world style skill is loaded, read it once before drafting. It supplies voice and presentation; it does not add facts about the character.
 3. Read the target nook directory and separate profile configuration from real personal content. If real personal content already exists, stop. This nook is already furnished, and a second set of furnishings laid on top of the first reads as clutter, not as a life. Report that and write nothing.
-4. Write the missing README/profile files explicitly named by the brief, then 2–4 personal traces. Fewer and truer beats a nook with two honest objects is better than one padded to four. Write facts, not judgments.
+4. Create the missing README/profile files explicitly named by the brief with \`edit_character_config\`, then write 2–4 personal traces with \`write\`. Fewer and truer beats a nook with two honest objects is better than one padded to four. Write facts, not judgments.
 5. After writing, check that every intended path is accounted for in the report. Do not claim a file succeeded when its write failed.
 
 [Discipline]

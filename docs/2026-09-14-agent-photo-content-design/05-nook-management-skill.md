@@ -308,7 +308,7 @@ move_to {
    ): Promise<ActionResult>;
    ```
 
-   `editCharacterConfig()` 是唯一配置编辑入口：先用 `nookIdOf(characterId)` 组成根路径，再按共同契约的 actor 矩阵授权；`character:<id>` 只能编辑自身 `memory.md`，Writer 可编辑 `manifest.characters` 中任一已登记角色的四项，engine、nook-init、player、god 与未授权 actor 拒绝。它只允许 `replace`/`append` 写内容，永远不提供 move/delete；成功沿用 `entity_edited`，不新增事件类型。`ActionService` 新增 `editCharacterConfig(input: EditCharacterConfigInput): Promise<ActionResult>` 方法，并由受信工具入口注册；普通 builtin `write`/`edit` 不得接收配置维护旁路。
+   `editCharacterConfig()` 是唯一配置编辑入口：先用 `nookIdOf(characterId)` 组成根路径，再按共同契约的 actor 矩阵授权；`character:<id>` 只能编辑自身 `memory.md`，Writer 可编辑 `manifest.characters` 中任一已登记角色的四项，engine、nook-init、player、god 与未授权 actor 拒绝。**例外（2026-09-14 明月拍板）：`agentScope === 'initializer'` 的子代理走同一受信 action，但只允许创建尚不存在的配置（create-only；目标已存在则 `unsupported`）**——因为 `doc-11 §4.1` 要求 nook 初始化"若缺则补" `README.md`，而 native `write/edit` 对四配置一律拒绝，没有这条通道 README 永远写不出来，nook 会被判成空态并反复重触发。它只允许 `replace`/`append` 写内容，永远不提供 move/delete；成功沿用 `entity_edited`，不新增事件类型。`ActionService` 新增 `editCharacterConfig(input: EditCharacterConfigInput): Promise<ActionResult>` 方法，并由受信工具入口注册；普通 builtin `write`/`edit` 不得接收配置维护旁路。
 
 
 `extensions/world-context.ts:10-19` 的 native `tool_call` 回调必须在工具真正执行前读取服务端注入、模型不可修改的 `agentScope`，加载并合并目标 Markdown 的最终 frontmatter；若最终内容是 `component: photo`（包括 body/caption-only edit 继承旧 photo 类型），直接以 `invalid_argument` 阻断并不落盘，因为 native `write/edit` 不是受支持的 photo 写入入口；捕获其他权限拒绝后返回 `{ block: true, reason }`，不得继续只登记 `writes`。`edit_character_config` 同样只接受服务端 `ctx.agentScope`，不得从模型参数取得授权。该回调只拦模型对世界 Markdown 的写入；内部 manifest/asset 继续走 engine 专用 `WorldStore.writeFile()` 路径。
@@ -320,7 +320,7 @@ move_to {
    |---|---|---|---|---|---|
    | `character:<id>` | 仅自己的 `characters/<id>/**` | 仅自己 `memory.md`，且必须通过受信 action | 仅自己的生活痕迹，可交给 `player/` 或 `world/` | 永久禁止 | 仅自己，省略 `character` 时解析为自己 |
    | `writer` | `manifest.characters` 中已登记的任一角色 | 任一已登记角色四项，且必须通过受信 action | 指定角色的生活痕迹 | 永久禁止 | 必须显式指定角色 id |
-   | `engine` / `nook-init` | 仅按 brief 写入生活痕迹；不得写入 `player/` | 拒绝（create_char 的初始字段由 Writer action 自己提交，不走此 actor） | 不作为初始化动作搬运 | 永久禁止 | 不因初始化而移动角色 |
+   | `engine` / `nook-init` | 仅按 brief 写入生活痕迹；不得写入 `player/` | **仅可创建缺失的配置**（create-only；已存在则拒绝）；不得用此通道改写既有配置（create_char 的初始字段由 Writer action 自己提交，不走此 actor） | 不作为初始化动作搬运 | 永久禁止 | 不因初始化而移动角色 |
    | `player` | 仅 `/api/nook-note` 的既有玩家便签通路；不接受通用角色路径写入 | 禁止 | 玩家 UI 明确发起的非配置物品转移 | 永久禁止 | 不由 Skill 触发 |
    | `god` | 任意角色生活痕迹 | 拒绝 | 任意非配置物品 | 永久禁止 | 按既有显式角色参数 |
 

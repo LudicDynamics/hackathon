@@ -414,7 +414,7 @@ export function createWorldRouter(
     if (releasingWorld) {
       try { await releasingWorld; } catch { /* The unavailable world stays detached. */ }
     }
-    const needsWorld = ['/agent-settings', '/manifest', '/nook', '/nook-note', '/layer', '/backpack', '/characters', '/following', '/move', '/card/position', '/card/footprint', '/dice', '/use-item', '/choice', '/material-review', '/enter-layer', '/viewpoint', '/freeze', '/god-action', '/asset', '/audio'].includes(req.path);
+    const needsWorld = ['/agent-settings', '/manifest', '/nook', '/nook-note', '/layer', '/backpack', '/characters', '/following', '/move', '/card/position', '/card/footprint', '/dice', '/use-item', '/choice', '/material-review', '/enter-layer', '/viewpoint', '/freeze', '/god-action', '/snapshot', '/rollback', '/asset', '/audio'].includes(req.path);
     if (!getActiveStore() && needsWorld) {
       return res.status(409).json({ code: 'no_active_world', error: 'Choose a world or start a new save.' });
     }
@@ -504,7 +504,15 @@ export function createWorldRouter(
       await lifecycle.stopCharacters();
 
       const current = getActiveStore();
-      if (current) current.close();
+      if (current) {
+        // Session-end snapshot point (doc-07 C4 / doc-16 §3): the world being
+        // left behind gets a restore point. Best effort — a snapshot failure
+        // must never block loading the next world.
+        await serviceFor(current, { type: 'engine' })
+          .snapshotWorld({ reason: 'session end' })
+          .catch((err) => console.warn('[Snapshot Warning]', err instanceof Error ? err.message : String(err)));
+        current.close();
+      }
 
       const store = new LocalWorldStore(resolvedPath);
       setActiveStore(store);
@@ -1297,6 +1305,37 @@ export function createWorldRouter(
     res.json({ ok: true, at });
   });
 
+
+  /**
+   * World snapshot (doc-16 §3). Engine-initiated points — a plot beat, session
+   * end, before a god-scale rewrite — plus an explicit player/god request. The
+   * action owns the zip and the `world_snapshot` event; this route only resolves
+   * the actor and the reason.
+   */
+  router.post('/snapshot', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const body = req.body as { reason?: unknown };
+    const reason = typeof body.reason === 'string' && body.reason.trim() !== ''
+      ? body.reason.trim()
+      : 'manual snapshot';
+    await reply(res, () => serviceFor(store, { type: 'god' }).snapshotWorld({ reason }));
+  });
+
+  /**
+   * Roll back the world FILES to a snapshot (doc-16 §4). The event table is
+   * append-only: this appends `world_rolled_back` and pushes every read cursor,
+   * so the writer is told the world moved back but no history is deleted.
+   */
+  router.post('/rollback', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const body = req.body as { snapshot?: unknown };
+    if (typeof body.snapshot !== 'string' || body.snapshot.trim() === '') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'snapshot must be a non-empty id' });
+    }
+    await reply(res, () => serviceFor(store, { type: 'engine' }).rollbackWorld({ snapshot: body.snapshot }));
+  });
   // God mode toggle freeze — a presentation toggle, not an action: it writes no
   // event and broadcasts a演出 frame directly (docs/tools/12 §2.4).
   router.post('/freeze', (_req, res) => {

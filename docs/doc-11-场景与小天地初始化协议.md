@@ -300,6 +300,8 @@ characters/旅店老板/
 └── 一张旧照片.md        # 沉默细节（与内容文件合计 2~4 个）
 ```
 
+**写入通道（2026-09-14 定）**：上列 `README.md` / `identity.md` / `personality.md` / `memory.md` 四项是**角色根配置**，通用 native `write/edit` 对它们一律拒绝（`extensions/world-context.ts` 的 nook 门禁）。初始化器改用受信的 `edit_character_config` 通道补齐它们，且**只允许创建尚不存在的文件**（create-only；已存在即拒绝），所以"若缺则补"不会退化成"覆盖既有简介"。其余生活痕迹（作品、旧照片等）继续用 native `write`。
+
 **"若缺则补"很关键**：holmes-world 的 `characters/watson/` 至今只有 `README.md` + `preset.json`，而 preset 引用了 `identity.md` / `personality.md`（**两个文件都不存在**）。按 C4，只要 slot 用默认的 `onMissing: skip`，这不会报错——但角色 spawn 时就少了履历。**初始化顺带补齐 preset 引用的缺失文件**是本意。**已修（I1 批次）**：`buildNookInitBrief`（`packages/shared/src/render/brief.ts`）新增 `[Missing Files]` 字段（非空时输出），由 `airp-init` 命令从 `preset.json` 的 file 槽差集算出并传入——纪律不再"永不触发"。
 
 **内容纪律**：写"痕迹"不写"设定"。

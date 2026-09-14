@@ -62,56 +62,10 @@ export async function settleTurnCursor(
   }
 }
 
-/**
- * doc-21 §6: rollback pushes EVERY cursor to the max seq. NOT wired in this
- * batch — there is no rollback handler today (`service.ts` registers
- * `snapshotWorld`/`rollbackWorld` signatures only). Defined here so the handler,
- * when written, has one place to call: append `world_rolled_back` FIRST, then
- * call this in the SAME `historyDb` transaction.
- *
- * `getAllReadCursors` already exists for exactly this.
- */
-export async function pushAllCursorsToMax(
-  store: WorldStore,
-  onWarn?: (message: string) => void
-): Promise<void> {
-  const warnOpts = { onWarn };
-  let seq: number;
-  try {
-    seq = await store.getMaxSeq();
-  } catch (err) {
-    warn(
-      warnOpts,
-      `[cursor] pushAllCursorsToMax: getMaxSeq() failed: ${
-        err instanceof Error ? err.message : String(err)
-      }`
-    );
-    return;
-  }
+// NOTE: rollback's "push every cursor" step is NOT a free function here. It must
+// commit in the SAME `historyDb` transaction as the `world_rolled_back` append
+// (doc-21 §6), and a transaction handle never leaves the store — so it lives in
+// `LocalWorldStore.appendEventAndPushCursors`, called by the rollback action
+// (`actions/world.ts`). A caller-side loop over `writeCursor()` would be a
+// second, torn path.
 
-  let cursors: Array<{ reader: string; seq: number }>;
-  try {
-    cursors = await store.getAllReadCursors();
-  } catch (err) {
-    warn(
-      warnOpts,
-      `[cursor] pushAllCursorsToMax: getAllReadCursors() failed: ${
-        err instanceof Error ? err.message : String(err)
-      }`
-    );
-    return;
-  }
-
-  for (const row of cursors) {
-    try {
-      await store.writeCursor(row.reader, seq);
-    } catch (err) {
-      warn(
-        warnOpts,
-        `[cursor] pushAllCursorsToMax: writeCursor("${row.reader}", ${seq}) failed: ${
-          err instanceof Error ? err.message : String(err)
-        }`
-      );
-    }
-  }
-}

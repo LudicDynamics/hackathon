@@ -129,6 +129,15 @@ export interface WorldStore {
   getMaxSeq(): Promise<number>;
   readCursor(reader: string): Promise<number>;
   writeCursor(reader: string, seq: number): Promise<void>;
+  /**
+   * Rollback's ONE atomic step (doc-21 §6, hooks/03 §6.2): append
+   * `world_rolled_back` and push EVERY read cursor to the resulting max seq in
+   * the SAME `historyDb` transaction. Doing them separately lets a concurrent
+   * writer turn observe "cursors pushed, rollback event not yet landed" — that
+   * turn would then see neither the rollback nor the pre-rollback events, a
+   * silent swallow. Returns the appended event (its `seq` is the pushed value).
+   */
+  appendEventAndPushCursors(args: AppendEventArgs): Promise<WorldEvent>;
   /** Newest-first, history panel only (doc-21 §3.1: seq is the cursor, never created_at). */
   getEvents(limit?: number, opts?: { layer?: string }): Promise<WorldEvent[]>;
   withCharacterCreationWriteLock<T>(
