@@ -6,6 +6,7 @@ import './declared-actions.css';
 import { airpGateway, AirpRequestError } from '../../lib/airp-gateway.js';
 import { actionDetailsOf, actionKey, ActionFeedbackStore, runAction, type ActionFeedback, type ActionResultLike, type ActionVerb } from '../../lib/action-feedback.js';
 import { renderFrontmatterWidgets } from '../../lib/fm.js';
+import { holdReveal, settleReveal } from '../../lib/dice-ceremony.js';
 
 interface Props {
   item: { path: string; filename?: string; body?: string; frontmatter: Record<string, any> | null };
@@ -158,6 +159,8 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
   const hasBody = typeof item.body === 'string' && item.body.trim().length > 0;
   const canvasReadingAllowed = !isGate && fm?.type !== 'sprite';
   const canRead = hasBody && canvasReadingAllowed;
+  // A declared roll that has not landed yet: its result is written before the ceremony plays.
+  const rollPending = Boolean(fm?.dice_outcomes) && !/<!--\s*resolved-dice:/.test(item.body ?? '');
 
   const handleDeclaredAction = (action: DeclaredResponse) => {
     if (action.kind === 'enter' && typeof action.target === 'string') {
@@ -175,6 +178,8 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
   };
 
   const executeDeclaredChoice = async (source: string, choice: string) => {
+    const rolling = rollPending && source === item.path;
+    if (rolling) holdReveal(source);
     const result = await runGatewayAction<DeclaredChoiceDetails>('choice', `${source}:${choice}`, async () => {
       const response = await airpGateway.choose(source, choice) as ActionResultLike<DeclaredChoiceDetails>;
       if ('ok' in response && response.ok === true) {
@@ -183,6 +188,7 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
       }
       return response;
     });
+    if (rolling) settleReveal(source, result?.outcome === 'accepted' ? undefined : 0);
     if (result?.outcome !== 'accepted' || !result.details) return;
     const action = declaredActionOf(result.details.action);
     if (!action) return;

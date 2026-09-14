@@ -28,6 +28,8 @@ const STILL_ROLL_MS = 180;
 const FACE_SPIN_MS = 90;
 /** Highlight duration once settled. */
 const HIGHLIGHT_MS = 800;
+/** The 3D stage lingers after the dice land (docs/perform/D10骰子动画.md). */
+const STAGE_HOLD_MS = 4_000;
 interface DiceCeremonyProps {
   /** Canonical input, or the legacy App verdict alias during the mount migration. */
   verdict: DiceCeremonyInput | DiceFrameVerdict;
@@ -47,6 +49,10 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict,
           rawVerdict.source === 'character' ? 'character-frame' : 'writer-frame',
         );
   const stageDisplay = input ? diceStageDisplay(input.dice, input.rolls) : null;
+  // The 3D stage settles the ceremony when its dice land, however long loading
+  // the model and simulating the throw takes; a fixed timer used to settle (and
+  // close) the ceremony before the animation had even started.
+  const staged = stageDisplay !== null;
   const still = useStill();
   const [phase, setPhase] = useState<CeremonyPhase>('rolling');
   const [tick, setTick] = useState(0);
@@ -61,13 +67,14 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict,
     }
     if (phase !== 'rolling') return;
     playFoley('dice-roll');
+    if (staged) return;
     const spin = still ? null : window.setInterval(() => setTick((t) => t + 1), FACE_SPIN_MS);
     const timer = window.setTimeout(() => setPhase('settled'), still ? STILL_ROLL_MS : ROLL_MS);
     return () => {
       if (spin !== null) window.clearInterval(spin);
       window.clearTimeout(timer);
     };
-  }, [phase, still, input]);
+  }, [phase, still, input, staged]);
 
   useEffect(() => {
     if (!input || phase !== 'settled') return;
@@ -79,13 +86,13 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict,
     );
     el?.classList.add('dice-ceremony-highlight');
     const hi = window.setTimeout(() => el?.classList.remove('dice-ceremony-highlight'), HIGHLIGHT_MS);
-    const done = window.setTimeout(() => onDoneRef.current(), SETTLE_MS);
+    const done = window.setTimeout(() => onDoneRef.current(), staged ? STAGE_HOLD_MS : SETTLE_MS);
     return () => {
       window.clearTimeout(hi);
       window.clearTimeout(done);
       el?.classList.remove('dice-ceremony-highlight');
     };
-  }, [phase, input]);
+  }, [phase, input, staged]);
 
   const badge = (pass: boolean) =>
     pass ? (
@@ -113,7 +120,13 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict,
       <div className={`dice-stage ${input.fumble && !still ? 'dice-shake' : ''}`}>
         {input.crit && <div className="crit-glow" />}
         {stageDisplay ? (
-          <D10Stage dice={input.dice} rolls={input.rolls} settled={phase === 'settled'} integrated />
+          <D10Stage
+            dice={input.dice}
+            rolls={input.rolls}
+            settled={phase === 'settled'}
+            onLanded={() => setPhase('settled')}
+            integrated
+          />
         ) : (
           <div className="dice-stage__faces">
             {input.rolls.map((value, i) => (

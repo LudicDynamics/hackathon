@@ -274,12 +274,62 @@ function notify(): void { for (const cb of listeners) cb(); }
 export function subscribeCeremony(cb: () => void): () => void { listeners.add(cb); return () => listeners.delete(cb); }
 export function getCeremonySnapshot(): CeremonySnapshot | null { return snapshot; }
 
+/**
+ * Reveal holds. The server writes a roll into its card before the ceremony has
+ * played, so a card must not show the result until that path's ceremony ends —
+ * or, when no ceremony arrives, shortly after its request settles.
+ */
+const holds = new Map<string, ReturnType<typeof setTimeout> | null>();
+/** How long a settled request keeps its card hidden waiting for the ceremony frame. */
+export const REVEAL_GRACE_MS = 2_000;
+
+function liftHold(path: string): boolean {
+  const timer = holds.get(path);
+  if (timer) clearTimeout(timer);
+  return holds.delete(path);
+}
+
+/** Hide a card's roll result from the moment its roll is requested. */
+export function holdReveal(path: string): void {
+  const timer = holds.get(path);
+  if (timer) clearTimeout(timer);
+  const had = holds.has(path);
+  holds.set(path, null);
+  if (!had) notify();
+}
+
+/** The request settled: a staged ceremony for the path keeps the hold; otherwise it lifts after a grace period. */
+export function settleReveal(path: string, graceMs = REVEAL_GRACE_MS): void {
+  if (!holds.has(path) || snapshot?.input.path === path) return;
+  const timer = holds.get(path);
+  if (timer) clearTimeout(timer);
+  if (graceMs <= 0) {
+    if (liftHold(path)) notify();
+    return;
+  }
+  holds.set(path, setTimeout(() => { if (liftHold(path)) notify(); }, graceMs));
+}
+
+/** True while a card's roll result must stay hidden. */
+export function isRevealHeld(path: string): boolean {
+  return holds.has(path) || snapshot?.input.path === path;
+}
+
 export function rollingFace(index: number, tick: number, value: number): number {
   const ceiling = value > 6 ? 100 : 6;
   return ((index * 7 + tick * 13) % ceiling) + 1;
 }
 export function stageCeremony(input: DiceCeremonyInput, legacyVerdict?: DiceFrameVerdict): boolean {
   key += 1;
+  // A replaced ceremony can no longer release its own card.
+  const previous = snapshot?.input.path;
+  if (previous !== undefined && previous !== input.path) liftHold(previous);
+  // The ceremony now owns this card's hold until it ends.
+  if (holds.has(input.path)) {
+    const timer = holds.get(input.path);
+    if (timer) clearTimeout(timer);
+    holds.set(input.path, null);
+  }
   const frame: DiceFrameVerdict = legacyVerdict ?? {
     source: input.source === 'character-frame' ? 'character' : 'writer',
     path: input.path,
@@ -308,6 +358,7 @@ export function playCeremony(verdict: DiceFrameVerdict): void {
 
 export function clearCeremony(): void {
   if (snapshot === null) return;
+  liftHold(snapshot.input.path);
   snapshot = null;
   notify();
 }
@@ -317,6 +368,7 @@ export function resetSeenForTest(): void {
   pendingFingerprintByPath.clear();
   inputByFingerprint.clear();
   diceIngressAllocator.reset();
+  for (const path of [...holds.keys()]) liftHold(path);
   snapshot = null;
   key = 0;
 }

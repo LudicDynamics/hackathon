@@ -7,6 +7,8 @@ import './d10-stage.css';
 
 // Registered asset provenance: assets/models/arcane-d10/README.md and validation.json.
 const modelUrl = new URL('../../../../../assets/models/arcane-d10/noctiluca-d10.glb', import.meta.url).href;
+/** Give up on WebGL and show the number if loading and simulating take longer than this. */
+const LOAD_TIMEOUT_MS = 10_000;
 
 interface D10StageProps {
   dice: string;
@@ -22,6 +24,9 @@ export function D10Stage({ dice, rolls, settled, onLanded, integrated = false }:
   const host = useRef<HTMLDivElement>(null);
   const landed = useRef(onLanded);
   landed.current = onLanded;
+  // Read at mount only: settling after the dice land must not rebuild the scene.
+  const settledRef = useRef(settled);
+  settledRef.current = settled;
   const still = useStill();
   const [fallback, setFallback] = useState(false);
   const display = diceStageDisplay(dice, rolls);
@@ -39,10 +44,12 @@ export function D10Stage({ dice, rolls, settled, onLanded, integrated = false }:
       finished = true;
       landed.current?.();
     };
+    const settledAtMount = settledRef.current;
+    // Covers loading and simulation only; it is cleared once the throw plays.
     const watchdog = window.setTimeout(() => {
       setFallback(true);
       complete();
-    }, 6000);
+    }, LOAD_TIMEOUT_MS);
 
     setFallback(false);
     if (!display) {
@@ -243,19 +250,21 @@ export function D10Stage({ dice, rolls, settled, onLanded, integrated = false }:
         collect(rails);
 
         let trajectory: D10Trajectory | undefined;
-        if (rolls && !still && !settled) {
+        if (rolls && !still && !settledAtMount) {
           trajectory = await simulateD10Throw(display.digits, undefined, () => cancelled, display.faces);
         }
-        if (cancelled) {
+        // Timed out while loading: the numeric result is already showing.
+        if (cancelled || finished) {
           teardown();
           return;
         }
+        window.clearTimeout(watchdog);
 
         const started = performance.now();
         const duration = trajectory ? (trajectory.length - 1) / 60 * 1000 : 180;
         const tick = (now: number) => {
           if (cancelled) return;
-          const progress = settled || !rolls ? 1 : Math.max(0, Math.min(1, (now - started) / duration));
+          const progress = settledAtMount || !rolls ? 1 : Math.max(0, Math.min(1, (now - started) / duration));
           objects.forEach(({ pivot, target, x }, index) => {
             if (trajectory && progress < 1) {
               const at = progress * (trajectory.length - 1);
@@ -292,7 +301,7 @@ export function D10Stage({ dice, rolls, settled, onLanded, integrated = false }:
       window.clearTimeout(watchdog);
       teardown();
     };
-  }, [key, still, integrated, settled]);
+  }, [key, still, integrated]);
 
   const reading = display?.reading || rolls?.join(' · ') || 'Result unavailable';
   const numericFallback = fallback || still;
