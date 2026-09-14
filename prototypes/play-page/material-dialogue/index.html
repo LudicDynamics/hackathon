@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Material Dialogue — AIRP play-page prototype</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="material-app" data-effects="on">
+    <header class="topbar" aria-label="World navigation">
+      <div class="brand-lockup"><span class="brand-mark">AIRP</span><span class="brand-rule"></span><span class="brand-note">FIELD NOTE 07</span></div>
+      <nav class="crumbs" aria-label="Breadcrumb"><button type="button">Worlds</button><span>/</span><button type="button">The Room Where Rain Waits</button><span>/</span><strong>Window alcove</strong></nav>
+      <div class="top-actions">
+        <span class="world-state"><i aria-hidden="true"></i> awake</span>
+        <button class="quiet-button" type="button" data-toggle-effects aria-pressed="true">Effects on</button>
+        <button class="icon-button" type="button" data-toggle-journal aria-expanded="false" aria-controls="journal">Journal <span aria-hidden="true">↗</span></button>
+      </div>
+    </header>
+
+    <main class="stage" id="stage" aria-label="Window alcove world canvas">
+      <div class="stage-wash" aria-hidden="true"></div>
+      <div class="stage-grid" aria-hidden="true"></div>
+      <div class="world-window" data-world-window tabindex="0" aria-label="Pannable world window. Use the camera controls to find the second cluster.">
+        <div class="world-space" data-world-space>
+          <div class="thread thread-a" aria-hidden="true"></div>
+          <div class="thread thread-b" aria-hidden="true"></div>
+
+          <section class="world-intro" aria-labelledby="world-title">
+            <p class="eyebrow">03 OCTOBER / DUSK / LAYER 02</p>
+            <h1 id="world-title">The Room Where<br><em>Rain Waits</em></h1>
+            <p class="intro-copy">A borrowed room, a blue hour, and one person who has not left yet.</p>
+            <div class="location-stamp"><span class="stamp-pin" aria-hidden="true"></span><span>WINDOW ALCOVE</span><span class="stamp-line"></span><span>YOU ARE HERE</span></div>
+          </section>
+
+          <article class="material-card chalk-card" aria-label="Chalk world mark">
+            <div class="card-label"><span>CHALK / WORLD MARK</span><span>still wet</span></div>
+            <p class="chalk-copy">leave a little light<br>for whoever returns</p>
+            <div class="chalk-line"></div>
+            <p class="card-foot">A sentence in the room, not a promise from the room.</p>
+          </article>
+
+          <article class="material-card ticket-card" aria-label="Sewn ticket item">
+            <div class="card-label"><span>OBJECT / CARRIED</span><span>01</span></div>
+            <div class="ticket-body"><span class="ticket-hole" aria-hidden="true"></span><div><h2>Brass ticket</h2><p>Warm from somebody else's pocket. It opens nothing yet.</p></div></div>
+            <button class="text-action" type="button" data-item-action>Hold the ticket <span aria-hidden="true">→</span></button>
+            <p class="item-result" data-item-result aria-live="polite"></p>
+          </article>
+
+          <button class="character-card iris-card" id="iris-card" type="button" data-open-dialogue aria-label="Focus on Iris, a person in the room">
+            <span class="portrait portrait-iris" aria-hidden="true"><span>IR</span></span>
+            <span class="character-copy"><span class="card-label"><span>IN THE ROOM</span><span>present</span></span><strong>Iris Vale</strong><span class="role-line">keeper of the unlit side</span><span class="presence-line"><i aria-hidden="true"></i> looking at the weather</span></span>
+            <span class="focus-cue">focus identity <b aria-hidden="true">↗</b></span>
+          </button>
+
+          <button class="character-card noor-card" type="button" aria-label="Noor is away from the room" data-away-character>
+            <span class="portrait portrait-noor" aria-hidden="true"><span>NO</span></span>
+            <span class="character-copy"><span class="card-label"><span>ELSEWHERE</span><span>muted</span></span><strong>Noor Sen</strong><span class="role-line">at the train archive</span><span class="presence-line">last seen 18 min ago</span></span>
+          </button>
+
+          <aside class="activity-slip" aria-label="Activity and world facts">
+            <div class="slip-heading"><span>THREAD / LIVE TRACE</span><button type="button" data-toggle-log aria-expanded="false" aria-controls="activity-log">details</button></div>
+            <div class="activity-row"><span class="activity-dot dot-sage" aria-hidden="true"></span><div><strong>Writer</strong><span>ready for your next mark</span></div><time>now</time></div>
+            <div class="activity-row"><span class="activity-dot dot-blue" aria-hidden="true"></span><div><strong>Iris</strong><span>presence held in this room</span></div><time>2m</time></div>
+            <div class="activity-log" id="activity-log" hidden><p><b>18:42:09</b> identity focus opened</p><p><b>18:41:57</b> brass ticket carried here</p></div>
+            <div class="fixture-routes"><span>FIXTURE ROUTES</span><button type="button" data-route="failure">show a failed mark</button></div>
+          </aside>
+
+          <aside class="carry-strip" aria-label="Belongings">
+            <span class="carry-title">IN HAND</span><button type="button" class="carry-item" data-item-action><span class="mini-ticket" aria-hidden="true"></span><span>Brass ticket</span></button>
+          </aside>
+
+          <section class="second-cluster" aria-label="Second world cluster, beyond the window">
+            <p class="eyebrow">BEYOND THE ALCOVE / CLUSTER 02</p>
+            <h2>Where the rain<br>keeps its archive</h2>
+            <div class="archive-thread" aria-hidden="true"></div>
+            <article class="material-card archive-card"><div class="card-label"><span>PLACE / UNVISITED</span><span>02</span></div><h3>Train archive</h3><p>The lamps are on in another room. Noor's last trace ends here.</p><span class="card-foot">A second cluster, still in the same world.</span></article>
+            <article class="material-card archive-note"><div class="card-label"><span>NOTE / FROM NOOR</span><span>muted</span></div><p>Bring the blue thread when you come. It knows the long way around.</p></article>
+          </section>
+        </div>
+        <div class="window-controls" aria-label="World camera controls">
+          <span>WORLD WINDOW</span><button type="button" data-camera="home" aria-label="Return camera to Window alcove">home</button><button type="button" data-camera="next" aria-label="Pan camera to second world cluster">find next cluster <span aria-hidden="true">→</span></button><button type="button" data-camera="zoom-in" aria-label="Zoom in world window">+</button><button type="button" data-camera="zoom-out" aria-label="Zoom out world window">−</button><output data-camera-readout>camera 01 / alcove</output>
+        </div>
+      </div>
+
+      <section class="writer-dock" aria-labelledby="writer-title">
+        <div class="dock-topline"><div><p class="channel-kicker">PLAYER → WRITER</p><h2 id="writer-title">Make a mark in the world</h2></div><span class="responsibility-note">your words become a request,<br>not a world fact yet</span></div>
+        <form class="writer-form" data-writer-form>
+          <label class="sr-only" for="writer-input">Tell the writer what you do</label>
+          <input id="writer-input" name="writer" autocomplete="off" placeholder="What do you do? Try: move the lantern closer to Iris" required>
+          <button class="send-mark" type="submit"><span>send mark</span><span aria-hidden="true">↗</span></button>
+        </form>
+        <div class="writer-status" data-writer-status data-state="ready" aria-live="polite"><span class="status-led" aria-hidden="true"></span><strong data-status-title>ready</strong><span data-status-copy>Writer is listening. Your next action will pause the room briefly.</span><button type="button" class="stop-button" data-stop hidden>stop</button><button type="button" class="retry-button" data-retry hidden>try again</button></div>
+      </section>
+
+      <aside class="world-receipt" data-receipt aria-live="polite" hidden>
+        <div class="receipt-crest" aria-hidden="true">✓</div><div><p class="receipt-kicker">WORLD / LANDED</p><h2 data-receipt-title>The lantern is closer</h2><p data-receipt-copy>Iris now has a pool of light at her hands. This fact stays on the canvas when the trace fades.</p></div><button type="button" class="receipt-close" data-receipt-close aria-label="Dismiss world receipt">×</button>
+      </aside>
+    </main>
+
+    <aside class="journal" id="journal" hidden aria-label="Story journal">
+      <div class="journal-head"><span>THE STORY SO FAR</span><button type="button" data-toggle-journal aria-label="Close journal">×</button></div>
+      <p class="journal-date">03 OCT / 18:42</p><h2>Rain has found<br>the window again.</h2><p>Iris stayed. The brass ticket is warm. A sentence was written in chalk where the light cannot quite reach.</p><div class="journal-quote">“Leave a little light for whoever returns.”<small>— chalk, not yet attributed</small></div><p class="journal-location">CURRENTLY IN<br><strong>Window alcove / Room 02</strong></p>
+    </aside>
+
+    <div class="dialogue-backdrop" data-dialogue-backdrop hidden></div>
+    <section class="dialogue" data-dialogue hidden role="dialog" aria-modal="true" aria-labelledby="dialogue-name">
+      <button class="dialogue-close" type="button" data-close-dialogue aria-label="Close Iris dialogue">× <span>return to canvas</span></button>
+      <div class="dialogue-identity">
+        <p class="eyebrow">IDENTITY FOCUS / 01</p><span class="portrait portrait-iris portrait-large" aria-hidden="true"><span>IR</span></span><h2 id="dialogue-name">Iris Vale</h2><p>keeper of the unlit side</p><div class="identity-rule"></div><dl><div><dt>presence</dt><dd><i aria-hidden="true"></i> here, listening</dd></div><div><dt>relationship</dt><dd>the room makes space</dd></div></dl><button class="nook-link" type="button" data-open-nook>Visit Iris's nook <span aria-hidden="true">→</span></button>
+      </div>
+      <div class="dialogue-surface">
+        <p class="surface-kicker">IRIS / SPEAKING</p><div class="speech-paper"><p class="speech-text" data-speech-text>“You can hear the rain before it decides to fall,” Iris says. “That is the only warning I trust.”</p><span class="speech-tail" aria-hidden="true"></span></div>
+        <div class="player-dialogue"><p class="surface-kicker">YOU / TO IRIS</p><form data-dialogue-form><label class="sr-only" for="dialogue-input">Say something to Iris</label><input id="dialogue-input" name="dialogue" placeholder="Say something to Iris" autocomplete="off" required><button type="submit" aria-label="Send message to Iris">↗</button></form><p class="dialogue-note">Conversation changes the relationship surface. To ask the Writer to change the room, use the canvas action below.</p></div>
+      </div>
+    </section>
+
+    <section class="nook" data-nook hidden role="dialog" aria-modal="true" aria-labelledby="nook-title">
+      <header class="nook-header"><button type="button" class="nook-return" data-close-nook>← <span>window alcove</span></button><div><p class="eyebrow">IRIS VALE / PRIVATE SPACE</p><h2 id="nook-title">The unlit side</h2></div><span class="nook-state"><i aria-hidden="true"></i> nook open</span></header>
+      <div class="nook-body"><div class="nook-intro"><span class="portrait portrait-iris portrait-medium" aria-hidden="true"><span>IR</span></span><p>Her space is made from things that wait: folded weather, an unused match, a chair turned toward the wall.</p><div class="nook-mark">IRIS'S NOTE<br><b>do not brighten<br>what is still becoming</b></div></div><div class="nook-cards"><article class="nook-paper"><span class="card-label">KEPT HERE / 02</span><h3>Blue thread</h3><p>Coiled around a key with no lock. The colour is the same as the last hour before rain.</p><button type="button" class="text-action">read material <span aria-hidden="true">→</span></button></article><article class="nook-paper note-composer"><span class="card-label">LEAVE A TRACE</span><label for="nook-note">A note for Iris</label><textarea id="nook-note" rows="3" placeholder="Write without asking for an answer"></textarea><button type="button" class="ink-button" data-save-note>pin note to nook</button><p class="note-saved" data-note-saved aria-live="polite"></p></article></div></div>
+    </section>
+
+    <div class="away-toast" data-away-toast hidden role="status">Noor is elsewhere. Their presence is muted; nothing opens from here.</div>
+    <script src="./interaction.js"></script>
+  </div>
+</body>
+</html>

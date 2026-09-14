@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#d8d0bd">
+  <title>档案柜 · 雨后的温室</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="archive-app" id="app">
+    <header class="masthead" aria-label="世界身份">
+      <div class="brand-lockup">
+        <span class="brand-stamp" aria-hidden="true">W</span>
+        <div>
+          <p class="eyebrow">PRIVATE ARCHIVE / 07</p>
+          <h1>雨后的温室</h1>
+        </div>
+      </div>
+      <div class="location-line"><span class="pin-dot" aria-hidden="true"></span> 证物桌 · 东侧窗边 <span class="slash">/</span> 21:40</div>
+      <div class="mast-actions">
+        <button class="quiet-button" type="button" id="effectsToggle" aria-pressed="true">效果 <span class="toggle-mark" aria-hidden="true">●</span></button>
+        <button class="quiet-button" type="button" id="drawerButton" aria-controls="archiveDrawer" aria-expanded="false">抽屉 <span aria-hidden="true">↗</span></button>
+      </div>
+    </header>
+
+    <section class="workspace" aria-label="私人档案柜工作台">
+      <aside class="left-index index-rail" aria-label="档案柜索引">
+        <p class="rail-label">INDEX</p>
+        <button class="index-tab is-active" type="button" data-drawer="objects"><span class="tab-number">01</span><span>物件</span></button>
+        <button class="index-tab" type="button" data-drawer="people"><span class="tab-number">02</span><span>人物</span></button>
+        <button class="index-tab" type="button" data-drawer="story"><span class="tab-number">03</span><span>故事</span></button>
+        <button class="index-tab" type="button" data-drawer="activity"><span class="tab-number">04</span><span>活动</span></button>
+        <span class="rail-rule" aria-hidden="true"></span>
+        <button class="index-tab index-tab--minor" type="button" data-drawer="saves"><span class="tab-number">05</span><span>存档</span></button>
+      </aside>
+
+      <section class="desk-stage" aria-label="证物桌主舞台">
+        <div class="desk-header">
+          <div>
+            <p class="section-kicker">EVIDENCE DESK <span>/</span> CURRENT SCENE</p>
+            <h2>窗边留下的三件东西</h2>
+          </div>
+          <p class="desk-note">可取阅的纸张会留下铅笔痕；<br>未确认的猜测不会进入档案。</p>
+        </div>
+
+        <div class="desk-surface" id="deskSurface">
+          <div class="world-canvas" id="worldCanvas" aria-label="可平移的连续世界桌面">
+          <div class="desk-measure measure-top" aria-hidden="true"><span>18</span><i></i><span>24</span></div>
+          <div class="paper-shadow shadow-one" aria-hidden="true"></div>
+          <div class="paper-shadow shadow-two" aria-hidden="true"></div>
+
+          <button class="evidence-card letter-card" type="button" data-detail="letter" aria-label="打开蓝色封条信件详情">
+            <span class="paper-tag tag-blue">E-014 · 证据</span>
+            <span class="red-thread" aria-hidden="true"></span>
+            <span class="card-corner" aria-hidden="true"></span>
+            <span class="letter-mark" aria-hidden="true">✶</span>
+            <span class="card-title">蓝色封条信件</span>
+            <span class="card-meta">纸张 / 昨日 18:12</span>
+            <span class="card-preview">“如果她再问起窗户，<br>先别告诉她……”</span>
+            <span class="card-foot">已核验一处笔迹 <b>↗</b></span>
+          </button>
+
+          <button class="evidence-card key-card" type="button" data-detail="key" draggable="true" aria-label="选择黄铜钥匙，可拖入行动台">
+            <span class="paper-tag tag-rust">O-003 · 物品</span>
+            <span class="key-illustration" aria-hidden="true"><i></i><b></b></span>
+            <span class="card-title">黄铜小钥匙</span>
+            <span class="card-meta">携带中 / 旧温室</span>
+            <span class="card-preview">齿痕与西侧储物柜吻合。</span>
+            <span class="card-foot">拖入行动台，或按一下选取 <b>↗</b></span>
+          </button>
+
+          <button class="evidence-card map-card" type="button" data-detail="map" aria-label="打开折叠地图详情">
+            <span class="paper-tag tag-sage">M-021 · 记录</span>
+            <span class="map-grid" aria-hidden="true"><i></i><b></b><em></em></span>
+            <span class="card-title">折叠的北墙地图</span>
+            <span class="card-meta">手绘 / 位置不明</span>
+            <span class="card-preview">铅笔圈出一扇不存在的门。</span>
+            <span class="card-foot">一条待确认线索 <b>↗</b></span>
+          </button>
+
+          <div class="desk-caption"><span class="caption-line"></span><span>桌面 01 / 03</span><span class="caption-line"></span></div>
+          <div class="pencil-note"><span>notes:</span> 不要把“看起来像”写成“已经发生”。</div>
+          <section class="second-scene" aria-label="连续世界中的第二片空间">
+            <p class="section-kicker">NORTH WALL / CONTINUATION</p>
+            <h3>封存的西侧储物柜</h3>
+            <p>此处暂未打开。移动桌面后再决定是否靠近。</p>
+            <span class="cabinet-drawing" aria-hidden="true"><i></i><b></b><em></em></span>
+            <span class="far-marker">S-02 · 未探索</span>
+          </section>
+          </div>
+          <div class="world-hud" aria-label="空间导航">
+            <span class="world-coordinates" id="worldCoordinates">桌面坐标 018 / 024</span>
+            <span class="world-hint">拖动桌面探索 · 滚轮缩放</span>
+            <span class="world-zoom" id="worldZoom">100%</span>
+          </div>
+        </div>
+
+        <div class="desk-footer">
+          <div class="legend" aria-label="证据层级图例">
+            <span><i class="legend-dot legend-dot--evidence"></i>已见证据</span>
+            <span><i class="legend-dot legend-dot--fact"></i>已落盘事实</span>
+            <span><i class="legend-dot legend-dot--guess"></i>玩家猜测</span>
+          </div>
+          <p class="desk-updated">最后整理 <strong>21:36</strong> · 由你保存</p>
+        </div>
+      </section>
+
+      <aside class="right-nook" aria-label="人物与行动提示">
+        <div class="nook-card">
+          <p class="section-kicker">PRESENCE / 01</p>
+          <div class="portrait portrait-mara" aria-hidden="true"><span>M</span></div>
+          <h2>林澄</h2>
+          <p class="role-line"><span class="status-dot"></span> 在温室 · 等待回应</p>
+          <p class="nook-copy">她说过自己没有去过北墙。她的手套上却沾着同样的白漆。</p>
+          <button class="ink-button" type="button" id="privateSpaceButton">进入她的私域 <span>→</span></button>
+          <button class="text-button" type="button" data-drawer="people">打开人物索引</button>
+        </div>
+        <div class="right-slip">
+          <span class="slip-clip" aria-hidden="true"></span>
+          <p class="section-kicker">TODAY / 03</p>
+          <strong>已记录 2 件事实</strong>
+          <span>另有 1 条猜测等待验证</span>
+        </div>
+      </aside>
+    </section>
+
+    <section class="action-dock" aria-label="行动台">
+      <div class="action-context">
+        <span class="action-index">ACTION 01</span>
+        <strong>把意图放到桌上</strong>
+        <span id="actionHelper">选中或拖入一个物品，写下你要做的事。</span>
+      </div>
+      <div class="action-drop" id="actionDrop" tabindex="0" role="button" aria-label="行动物品槽，可拖放物品或按回车选中">
+        <span class="drop-plus" aria-hidden="true">+</span>
+        <span id="dropLabel">将物品放在这里</span>
+      </div>
+      <div class="intent-field">
+        <label for="intentInput">你的意图</label>
+        <input id="intentInput" type="text" placeholder="例如：用钥匙试探西侧储物柜" autocomplete="off">
+      </div>
+      <button class="confirm-button" type="button" id="confirmAction" disabled>确认这一个行动 <span>→</span></button>
+    </section>
+
+    <div class="status-strip" id="statusStrip" role="status" aria-live="polite">
+      <span class="status-symbol status-symbol--idle" aria-hidden="true">□</span>
+      <div><strong id="statusTitle">桌面已就绪</strong><span id="statusMessage">先读一件证物，再决定要不要触碰它。</span></div>
+      <button type="button" class="status-close" id="statusClose" aria-label="关闭状态提示">×</button>
+    </div>
+  </main>
+
+  <aside class="detail-sheet" id="detailSheet" aria-labelledby="detailTitle" aria-hidden="true">
+    <div class="sheet-scrim" data-close-sheet></div>
+    <section class="sheet-panel" role="dialog" aria-modal="true" tabindex="-1">
+      <div class="sheet-topline"><span id="detailCode">E-014 / READ</span><button class="close-button" type="button" data-close-sheet aria-label="关闭详情">×</button></div>
+      <div class="sheet-content">
+        <p class="section-kicker" id="detailType">证据 · 可查阅</p>
+        <h2 id="detailTitle">蓝色封条信件</h2>
+        <p class="sheet-subtitle" id="detailSubtitle">纸张 / 昨日 18:12 / 东侧窗边</p>
+        <div class="detail-rule"></div>
+        <p class="sheet-body" id="detailBody">折痕从左上角开始，像是被匆忙地重新封过。墨迹在“窗户”两个字旁停顿了一次。</p>
+        <div class="tier-block tier-block--evidence"><span class="tier-label">证据 · EVIDENCE</span><p id="detailEvidence">你亲眼看见：蓝色封条完整，信纸只写了半页。笔迹与林澄在访客簿上的签名相似。</p></div>
+        <div class="tier-block tier-block--fact"><span class="tier-label">事实 · LANDED FACT</span><p id="detailFact">已落盘：信件于 21:12 被放入“东窗证物”档案，来源已标记为现场拾取。</p></div>
+        <div class="tier-block tier-block--guess"><span class="tier-label">猜测 · PLAYER HUNCH</span><p id="detailGuess">也许信件是在她离开后才被封上的。此句不会写入世界事实。</p></div>
+        <div class="sheet-actions"><button type="button" class="ink-button" id="selectItemButton" hidden>把它放入行动台 <span>→</span></button><button type="button" class="text-button" data-close-sheet>回到证物桌</button></div>
+      </div>
+    </section>
+  </aside>
+
+  <aside class="drawer" id="archiveDrawer" aria-labelledby="drawerTitle" aria-hidden="true">
+    <div class="drawer-scrim" data-close-drawer></div>
+    <section class="drawer-panel" role="dialog" aria-modal="true" tabindex="-1">
+      <div class="drawer-tab" aria-hidden="true"></div>
+      <div class="drawer-header"><div><p class="section-kicker">PULL-OUT FILE / <span id="drawerCode">02</span></p><h2 id="drawerTitle">人物索引</h2></div><button class="close-button" type="button" data-close-drawer aria-label="关闭抽屉">×</button></div>
+      <div class="drawer-content" id="drawerContent"></div>
+    </section>
+  </aside>
+
+  <script src="interaction.js"></script>
+</body>
+</html>

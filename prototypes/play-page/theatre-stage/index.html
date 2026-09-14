@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#171616">
+  <title>Theatre Stage — AIRP play page variant</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="theatre-shell" data-effects="on">
+    <header class="top-lane chrome" aria-label="World navigation">
+      <div class="wordmark" aria-label="Worldlines home"><span class="wordmark-mark">◒</span> worldlines</div>
+      <div class="world-id">
+        <span class="eyebrow">WORLD / ACT II</span>
+        <strong>The Glass Orchard</strong>
+        <span class="status-light"><i aria-hidden="true"></i> awake · dusk</span>
+      </div>
+      <nav class="top-actions" aria-label="Page controls">
+        <button class="text-button" type="button" data-action="journal">Journal <kbd>J</kbd></button>
+        <button class="text-button" type="button" data-action="effects" aria-pressed="true">Effects <span class="toggle-dot" aria-hidden="true"></span></button>
+        <button class="text-button" type="button" data-action="immersive" aria-pressed="false">Immersive <kbd>I</kbd></button>
+        <button class="close-button" type="button" aria-label="Close play page">×</button>
+      </nav>
+    </header>
+
+    <button class="restore-chrome" type="button" data-action="restore" hidden>Show stage controls <kbd>Esc</kbd></button>
+
+    <main class="play-space" aria-label="The Glass Orchard play space">
+      <aside class="left-wing chrome" aria-label="Scene navigation">
+        <button class="wing-button wing-button--active" type="button" aria-label="Explore current scene"><span class="wing-icon">⌁</span><span>Explore</span></button>
+        <button class="wing-button" type="button" data-action="return"><span class="wing-icon">↩</span><span>Return</span></button>
+        <div class="wing-rule"></div>
+        <div class="scene-index" aria-label="Scene index">
+          <span class="eyebrow">ON STAGE</span>
+          <strong>03</strong>
+          <span>objects in view</span>
+        </div>
+      </aside>
+
+      <section class="stage-frame" aria-labelledby="stage-title">
+        <div class="stage-curtain stage-curtain--left" aria-hidden="true"></div>
+        <div class="stage-curtain stage-curtain--right" aria-hidden="true"></div>
+        <div class="stage-header">
+          <div>
+            <span class="eyebrow">CURRENT SET · SOUTH CONSERVATORY</span>
+            <h1 id="stage-title">The glass orchard</h1>
+          </div>
+          <div class="stage-time"><span class="time-dot" aria-hidden="true"></span> 19:42 / the last blue hour</div>
+        </div>
+
+        <div class="world-viewport" id="world-viewport" tabindex="0" aria-label="Continuous world window. Drag to look around; use zoom controls to change scale.">
+          <div class="world-camera-tools" aria-label="World view controls">
+            <span class="camera-hint">DRAG TO LOOK BEYOND THE WINGS</span>
+            <button type="button" data-camera="zoom-out" aria-label="Zoom out">−</button>
+            <output id="zoom-level" aria-label="Zoom level">100%</output>
+            <button type="button" data-camera="zoom-in" aria-label="Zoom in">+</button>
+            <button type="button" data-camera="reset">Recenter</button>
+          </div>
+          <div class="world-plane scene-canvas" id="world-plane" aria-label="Continuous world: south conservatory and the second act beyond it">
+            <div class="light-cone light-cone--one" aria-hidden="true"></div>
+            <div class="light-cone light-cone--two" aria-hidden="true"></div>
+            <div class="backdrop-line backdrop-line--horizon" aria-hidden="true"></div>
+            <div class="backdrop-line backdrop-line--arch" aria-hidden="true"></div>
+            <div class="glass-panel glass-panel--a" aria-hidden="true"></div>
+            <div class="glass-panel glass-panel--b" aria-hidden="true"></div>
+            <div class="botanical botanical--one" aria-hidden="true">✳</div>
+            <div class="botanical botanical--two" aria-hidden="true">╱╲</div>
+            <div class="floor-shadow" aria-hidden="true"></div>
+
+            <button class="scene-entity scene-entity--letter" type="button" data-entity="letter" aria-describedby="letter-hint">
+              <span class="entity-pin" aria-hidden="true"></span>
+              <span class="entity-label">The folded letter</span>
+              <span class="entity-kind">paper / unread</span>
+              <span id="letter-hint" class="visually-hidden">Read the letter from Mira</span>
+            </button>
+            <button class="scene-entity scene-entity--gate" type="button" data-entity="gate" aria-describedby="gate-hint">
+              <span class="gate-mark" aria-hidden="true">◫</span>
+              <span class="entity-label">Service door</span>
+              <span class="entity-kind">threshold / closed</span>
+              <span id="gate-hint" class="visually-hidden">Focus the service door to enter</span>
+            </button>
+            <button class="scene-entity scene-entity--chalk" type="button" data-entity="chalk" aria-describedby="chalk-hint">
+              <span class="chalk-mark" aria-hidden="true">—</span>
+              <span class="entity-label">Chalk on glass</span>
+              <span class="entity-kind">trace / Mira was here</span>
+              <span id="chalk-hint" class="visually-hidden">Read a trace left on the glass</span>
+            </button>
+
+            <section class="offstage-set" aria-label="Second act beyond the conservatory">
+              <span class="offstage-label">ACT III · BEYOND THE WINGS</span>
+              <h2>The ferry landing</h2>
+              <p>fog / first light / 412m east</p>
+              <button class="offstage-entity" type="button" data-entity="ledger"><span class="entity-pin" aria-hidden="true"></span><strong>Ferry ledger</strong><small>object / unopened</small></button>
+              <button class="offstage-entity offstage-entity--bell" type="button" data-entity="bell"><strong>Bell rope</strong><small>cue / still</small></button>
+            </section>
+
+            <div class="player-mark" aria-label="You are here"><span class="player-orb">Y</span><span>you</span></div>
+            <div class="scene-caption"><span class="caption-rule"></span><span>Nothing moves until you make the first cue.</span></div>
+          </div>
+        </div>
+
+        <div class="stage-footer">
+          <span><span class="footer-sigil">◌</span> You are in the south conservatory</span>
+          <span class="camera-readout" id="camera-readout">window 01 / 03 · camera held</span>
+          <button class="quiet-link" type="button" data-action="story">Read story so far →</button>
+        </div>
+      </section>
+
+      <aside class="right-wing chrome" aria-label="Cast and activity">
+        <section class="cast-section">
+          <div class="section-heading"><span class="eyebrow">CAST / PRESENT</span><span class="count">2</span></div>
+          <button class="cast-member cast-member--active" type="button" data-character="mira" aria-describedby="mira-status">
+            <span class="portrait portrait--mira" aria-hidden="true">M</span>
+            <span class="cast-copy"><strong>Mira Vale</strong><span>glasswright · here</span><em id="mira-status">waiting by the east pane</em></span>
+            <span class="cue-dot cue-dot--warm" aria-hidden="true"></span>
+          </button>
+          <button class="cast-member" type="button" data-character="jonah" aria-describedby="jonah-status">
+            <span class="portrait portrait--jonah" aria-hidden="true">J</span>
+            <span class="cast-copy"><strong>Jonah Reed</strong><span>caretaker · elsewhere</span><em id="jonah-status">last seen at the ferry</em></span>
+            <span class="cue-dot cue-dot--cold" aria-hidden="true"></span>
+          </button>
+        </section>
+        <section class="activity-section" aria-labelledby="activity-title">
+          <div class="section-heading"><span class="eyebrow" id="activity-title">CUES / LIVE</span><span class="live-mark">● live</span></div>
+          <ol class="cue-list">
+            <li><span class="cue-time">19:41</span><span><b>Writer</b> noticed the letter on the potting bench.</span></li>
+            <li><span class="cue-time">19:36</span><span><b>Mira</b> entered the conservatory.</span></li>
+            <li class="cue-muted"><span class="cue-time">19:12</span><span>Rain stopped beyond the glass.</span></li>
+          </ol>
+          <button class="quiet-link" type="button" data-action="activity">Open activity log <span aria-hidden="true">↗</span></button>
+        </section>
+        <button class="belongings-tab" type="button" data-action="belongings"><span class="bag-mark">□</span><span>Belongings</span><strong>4</strong></button>
+      </aside>
+    </main>
+
+    <section class="writer-booth chrome" aria-labelledby="writer-title">
+      <div class="booth-label">
+        <span class="spotlight-icon" aria-hidden="true">✦</span>
+        <div><span class="eyebrow">WRITER CUE</span><h2 id="writer-title">Speak into the scene</h2></div>
+      </div>
+      <div class="writer-prompt" aria-live="polite"><span class="prompt-mark">“</span><span>What do you do?</span></div>
+      <form class="writer-form" id="writer-form">
+        <label class="visually-hidden" for="writer-input">Describe what you do</label>
+        <input id="writer-input" name="writer-input" autocomplete="off" placeholder="Try: unfold the letter" type="text">
+        <button class="send-cue" type="submit"><span>Send cue</span><span aria-hidden="true">↗</span></button>
+      </form>
+      <div class="writer-state" aria-live="polite">
+        <span class="state-key state-key--accepted">accepted</span>
+        <span class="state-arrow">→</span>
+        <span class="state-key">processing</span>
+        <span class="state-arrow">→</span>
+        <span class="state-key state-key--landed">landed</span>
+        <span class="state-detail" id="writer-state-detail">Ready for your intention</span>
+      </div>
+      <button class="stop-cue" type="button" data-action="fail">Show failure path</button>
+    </section>
+
+    <aside class="fact-receipt" role="status" aria-live="polite" hidden>
+      <div class="receipt-cap"><span class="eyebrow">SIDE CURTAIN / WORLD RECEIPT</span><button type="button" data-action="dismiss-receipt" aria-label="Dismiss world receipt">×</button></div>
+      <strong id="receipt-title">The letter is now open.</strong>
+      <p id="receipt-copy">A new fact landed in the conservatory: Mira's handwriting names the ferry at dawn.</p>
+      <span class="receipt-next">Next cue: ask Mira what she left behind →</span>
+    </aside>
+
+    <section class="reading-focus" role="dialog" aria-modal="true" aria-labelledby="focus-title" hidden>
+      <div class="focus-backdrop" data-action="close-focus"></div>
+      <div class="focus-panel">
+        <div class="focus-topline"><span class="eyebrow">FOCUS / READING</span><button type="button" data-action="close-focus" aria-label="Close reading focus">Close ×</button></div>
+        <div class="focus-visual" aria-hidden="true"><span>✉</span><small>found on the potting bench</small></div>
+        <div class="focus-content"><h2 id="focus-title">A letter folded twice</h2><p class="focus-byline">Mira Vale · written before the rain stopped</p><blockquote>“If the glass remembers a shape, meet me where the service door refuses the dark.”</blockquote><p class="focus-note"><span class="note-label">READING NOTE</span>The service door is now a meaningful threshold. Nothing has opened yet.</p><button class="primary-cue" type="button" data-action="ask-mira">Ask Mira about the service door <span aria-hidden="true">→</span></button></div>
+      </div>
+    </section>
+
+    <div class="toast-line" id="toast-line" role="status" aria-live="polite"></div>
+  </div>
+  <script src="interaction.js"></script>
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Quiet Canvas — an AIRP play page visual prototype." />
+  <title>Quiet Canvas · Salt Garden</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="quiet-canvas" data-effects="on">
+    <div class="stage-grain" aria-hidden="true"></div>
+    <div class="stage-contours" aria-hidden="true"></div>
+
+    <header class="quiet-nav" aria-label="World navigation">
+      <button class="worlds-trigger quiet-link" type="button" aria-controls="world-drawer" aria-expanded="false">
+        <span aria-hidden="true">←</span> Worlds
+      </button>
+      <p class="brand-mark" aria-label="AIRP, a worldlines prototype">AIRP <span>/</span> quiet canvas</p>
+      <div class="location-mark">
+        <span class="location-mark__dot" aria-hidden="true"></span>
+        <span>salt garden</span>
+        <span class="location-mark__slash" aria-hidden="true">/</span>
+        <span class="location-mark__muted">low tide</span>
+      </div>
+      <button class="wake-trigger quiet-link" type="button" aria-controls="context-chrome" aria-expanded="false">
+        Wake the margins <span aria-hidden="true">↗</span>
+      </button>
+    </header>
+
+    <section class="world-stage" aria-labelledby="world-title">
+      <div class="world-viewport" data-world-viewport tabindex="0" aria-label="World canvas. Drag to pan, use the wheel or camera controls to zoom. Use arrow keys when focused." aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + -">
+        <div class="world-plane" data-world-plane>
+          <div class="local-scene">
+            <div class="stage-contours" aria-hidden="true"></div>
+            <div class="stage-heading">
+              <p class="eyebrow">WORLD 03 · FIELD NOTE 07</p>
+              <h1 id="world-title">Salt Garden</h1>
+              <p class="stage-dek">A place for things left to dry, and words not yet said.</p>
+            </div>
+
+            <p class="stage-coordinate" aria-label="Current place and time">
+              <span>ROOM 02</span><span>17:42</span>
+            </p>
+
+            <div class="entity entity--tide-door">
+              <button class="entity-marker" type="button" data-inspect-door aria-label="Inspect the tide door">
+                <span class="marker-glyph" aria-hidden="true">□</span>
+                <span class="marker-label">tide door</span>
+                <span class="marker-state">quiet / waiting</span>
+              </button>
+            </div>
+
+            <div class="entity entity--mara">
+              <button class="presence-marker" type="button" aria-label="Open a conversation with Mara">
+                <span class="presence-marker__portrait" aria-hidden="true">M</span>
+                <span class="presence-marker__copy"><strong>Mara</strong><small>listening</small></span>
+                <span class="presence-marker__signal" aria-hidden="true"></span>
+              </button>
+            </div>
+
+            <div class="entity entity--key">
+              <details class="quiet-detail">
+                <summary><span class="key-glyph" aria-hidden="true">⌁</span><span>brass key</span></summary>
+                <div class="detail-copy">
+                  <p>A small key, warm from the sun. It fits the tide door.</p>
+                  <button class="text-action" type="button" data-action="key">Use key on tide door</button>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <section class="remote-space" aria-labelledby="remote-title">
+            <p class="eyebrow">OUTSIDE THIS WINDOW · 01</p>
+            <h2 id="remote-title">The windbreak</h2>
+            <p>Farther along the garden wall, where salt turns the hinges white.</p>
+            <button class="remote-marker" type="button" data-remote-object aria-label="Inspect the windbreak ledger"><span aria-hidden="true">—</span> windbreak ledger</button>
+            <div class="remote-figure" aria-hidden="true"></div>
+          </section>
+        </div>
+      </div>
+
+      <div class="camera-tools" aria-label="Camera controls">
+        <p class="camera-readout" data-camera-readout><span>WINDOW 01</span> · center</p>
+        <div class="camera-buttons">
+          <button type="button" data-camera-zoom-out aria-label="Zoom out">−</button>
+          <button type="button" data-camera-reset>Reset view</button>
+          <button type="button" data-camera-zoom-in aria-label="Zoom in">+</button>
+        </div>
+        <p class="camera-hint">drag canvas · wheel to zoom · arrows when focused</p>
+      </div>
+
+      <aside class="fact-receipt" aria-live="polite" aria-label="Latest world fact">
+        <p class="receipt-kicker"><span class="receipt-dot" aria-hidden="true"></span> World fact · landed</p>
+        <p class="receipt-copy" data-receipt-copy>Mara left the brass key by the tide door.</p>
+        <button class="text-action" type="button" data-open-log>Review activity <span aria-hidden="true">↗</span></button>
+      </aside>
+
+      <button class="focus-hint" type="button" aria-controls="context-chrome" aria-expanded="false">
+        <span class="focus-hint__ring" aria-hidden="true"></span> focus to reveal
+      </button>
+    </section>
+
+    <aside id="context-chrome" class="context-chrome" aria-label="Context tools" hidden>
+      <div class="context-chrome__head">
+        <p class="eyebrow">MARGIN TOOLS</p>
+        <button class="quiet-icon" type="button" data-close-context aria-label="Close context tools">×</button>
+      </div>
+      <nav class="context-nav" aria-label="Scene tools">
+        <button type="button" class="context-nav__item is-current" data-open-writer><span>01</span> Speak to the writer</button>
+        <button type="button" class="context-nav__item" data-open-log><span>02</span> Activity log</button>
+        <button type="button" class="context-nav__item" data-open-bag><span>03</span> Belongings <b>1</b></button>
+      </nav>
+      <p class="context-note">The margins stay quiet until you ask them to hold something.</p>
+    </aside>
+
+    <section class="writer-dock" aria-labelledby="writer-title">
+      <div class="writer-dock__collapsed" data-writer-collapsed>
+        <p><span class="writer-pulse" aria-hidden="true"></span><span>Writer channel</span><span class="writer-state-label">ready for a small action</span></p>
+        <button class="writer-open" type="button" data-open-writer aria-expanded="false" aria-controls="writer-panel">What do you do? <span aria-hidden="true">↗</span></button>
+      </div>
+      <div id="writer-panel" class="writer-panel" hidden>
+        <div class="writer-panel__head">
+          <div>
+            <p class="eyebrow">WRITER CHANNEL <span class="accepted-label" data-stage-label>ready</span></p>
+            <h2 id="writer-title">Say the next true thing.</h2>
+          </div>
+          <button class="quiet-icon" type="button" data-close-writer aria-label="Close writer channel">×</button>
+        </div>
+        <p class="writer-guidance" data-writer-guidance>Describe one action in this room. Nothing changes until it lands.</p>
+        <form class="writer-form" data-writer-form>
+          <label class="sr-only" for="writer-input">Your action for the writer</label>
+          <input id="writer-input" name="action" type="text" autocomplete="off" placeholder="I ask Mara about the tide door…" />
+          <button type="submit" class="rust-action">Send action <span aria-hidden="true">↗</span></button>
+        </form>
+        <div class="writer-status" role="status" aria-live="polite" data-writer-status hidden></div>
+        <button class="stop-action" type="button" data-stop-action hidden>Stop this attempt</button>
+      </div>
+    </section>
+
+    <aside class="mobile-rail" aria-label="Quick access">
+      <button type="button" class="mobile-rail__item" data-open-writer><span aria-hidden="true">↗</span><span>Act</span></button>
+      <button type="button" class="mobile-rail__item" data-open-dialogue><span aria-hidden="true">M</span><span>Mara</span></button>
+      <button type="button" class="mobile-rail__item" data-open-bag><span aria-hidden="true">⌁</span><span>Bag</span></button>
+    </aside>
+
+    <dialog class="dialogue-sheet" data-dialogue aria-labelledby="dialogue-title">
+      <div class="dialogue-sheet__inner">
+        <div class="dialogue-identity">
+          <span class="dialogue-portrait" aria-hidden="true">M</span>
+          <div><p class="eyebrow">PRESENCE · SAME ROOM</p><h2 id="dialogue-title">Mara Vale</h2><p>Keeper of the salt garden · listening</p></div>
+          <button class="quiet-icon" type="button" data-close-dialogue aria-label="Close Mara conversation">×</button>
+        </div>
+        <div class="dialogue-copy">
+          <p class="dialogue-line">“You can ask the door to open. It will want to know why.”</p>
+          <p class="dialogue-note">Mara is here. This is a conversation, not a writer result.</p>
+        </div>
+        <form class="dialogue-form" data-dialogue-form>
+          <label class="sr-only" for="dialogue-input">Speak to Mara</label>
+          <input id="dialogue-input" type="text" placeholder="Ask Mara about the key…" />
+          <button type="submit" class="ink-action">Send to Mara <span aria-hidden="true">↗</span></button>
+        </form>
+        <div class="dialogue-actions"><button type="button" class="text-action" data-open-nook>Visit Mara’s nook <span aria-hidden="true">↗</span></button><button type="button" class="text-action" data-close-dialogue>Return to canvas</button></div>
+      </div>
+    </dialog>
+
+    <dialog class="nook-sheet" data-nook aria-labelledby="nook-title">
+      <div class="nook-sheet__inner">
+        <div class="nook-sheet__head"><p class="eyebrow">PRIVATE SPACE · MARA</p><button class="quiet-icon" type="button" data-close-nook aria-label="Close Mara's nook">×</button></div>
+        <h2 id="nook-title">The drying room</h2>
+        <p class="nook-lede">Mara keeps a second kind of weather here: notes, shells, and the names of people who came back.</p>
+        <div class="nook-note"><span class="eyebrow">NOTE · UNCHECKED</span><p>“The door remembers the last honest reason.”</p></div>
+        <form class="nook-form"><label for="nook-note-input">Leave a note for Mara</label><textarea id="nook-note-input" rows="2" placeholder="Write a quiet note…"></textarea><button type="button" class="rust-action" data-note-saved>Leave note</button></form>
+        <p class="nook-saved" data-nook-saved role="status" hidden>Note held here, unsent. Return when you are ready.</p>
+      </div>
+    </dialog>
+
+    <dialog class="drawer-sheet" data-world-drawer aria-labelledby="drawer-title">
+      <div class="drawer-sheet__inner"><div class="drawer-head"><div><p class="eyebrow">WORLD INDEX</p><h2 id="drawer-title">Your worlds</h2></div><button class="quiet-icon" type="button" data-close-drawer aria-label="Close worlds">×</button></div><button type="button" class="world-entry is-active"><span class="world-entry__index">03</span><span><strong>Salt Garden</strong><small>low tide · room 02</small></span><span aria-hidden="true">·</span></button><button type="button" class="world-entry"><span class="world-entry__index">02</span><span><strong>North Window</strong><small>sunrise archive</small></span><span class="world-entry__muted">quiet</span></button><p class="drawer-foot">Worlds are places to return to, not tabs to close.</p></div>
+    </dialog>
+
+    <dialog class="drawer-sheet" data-bag aria-labelledby="bag-title">
+      <div class="drawer-sheet__inner"><div class="drawer-head"><div><p class="eyebrow">CARRIED · 01</p><h2 id="bag-title">Belongings</h2></div><button class="quiet-icon" type="button" data-close-bag aria-label="Close belongings">×</button></div><details open class="bag-item"><summary><span class="key-glyph" aria-hidden="true">⌁</span><span><strong>Brass key</strong><small>fits the tide door</small></span></summary><p>Warm from the sun. Its weight is certain; what it opens is not.</p><button type="button" class="rust-action" data-action="key">Use key on tide door</button></details></div>
+    </dialog>
+
+    <dialog class="log-sheet" data-log aria-labelledby="log-title">
+      <div class="log-sheet__inner"><div class="drawer-head"><div><p class="eyebrow">TRACE · READ ONLY</p><h2 id="log-title">Activity</h2></div><button class="quiet-icon" type="button" data-close-log aria-label="Close activity">×</button></div><ol class="activity-list"><li class="activity-list__item"><span class="activity-list__time">17:42</span><span><strong>Fact landed</strong><small>Mara left the brass key by the tide door.</small></span></li><li class="activity-list__item"><span class="activity-list__time">17:39</span><span><strong>Presence arrived</strong><small>Mara is listening in the salt garden.</small></span></li><li class="activity-list__item"><span class="activity-list__time">17:12</span><span><strong>Reader opened</strong><small>Room 02 became the active place.</small></span></li></ol><p class="drawer-foot">Activity is evidence of what happened, not a promise of what will.</p></div>
+    </dialog>
+
+    <div class="toast" data-toast role="status" aria-live="polite" hidden></div>
+  </main>
+  <script src="./interaction.js"></script>
+</body>
+</html>

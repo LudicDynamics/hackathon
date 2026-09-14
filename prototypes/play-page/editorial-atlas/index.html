@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#d8ccb8">
+  <title>Editorial Atlas — AIRP play page fixture</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="atlas-app" data-state="idle">
+    <main class="atlas-shell">
+      <header class="masthead" aria-label="世界导航">
+        <div class="masthead__issue">
+          <span class="issue-mark">FIELD NOTES</span>
+          <span class="issue-number">NO. 07 / 18 SEPT 1924</span>
+        </div>
+        <div class="masthead__title">
+          <p class="kicker">WORLDLINES EDITORIAL DESK</p>
+          <h1>潮汐之后 <em>After the Tide</em></h1>
+        </div>
+        <div class="masthead__actions">
+          <span class="fixture-badge">FIXTURE · 仅供预览</span>
+          <button class="quiet-button" type="button" id="effects-toggle" aria-pressed="true">墨迹效果 <span aria-hidden="true">●</span></button>
+          <button class="quiet-button" type="button" id="close-page" aria-label="关闭预览">×</button>
+        </div>
+      </header>
+
+      <div class="breadcrumb"><span>WORLD / 潮汐之后</span><span class="breadcrumb__line" aria-hidden="true"></span><span>CHAPTER 03 / 灯塔来信</span><span class="breadcrumb__state" aria-live="polite">WORLD AWAKE</span></div>
+
+      <section class="spread" aria-label="编辑部叙事地图跨页">
+        <aside class="index-column" aria-label="叙事索引">
+          <div class="index-column__topline"><span>CONTENTS</span><span>03—08</span></div>
+          <div class="placeplate">
+            <span class="placeplate__label">YOU ARE HERE</span>
+            <strong>北纬 37° 的<br>旧观测站</strong>
+            <span class="placeplate__rule"></span>
+            <small>边缘海 · 雾季第九日<br>所有标记皆为本次 fixture</small>
+          </div>
+
+          <nav class="chapter-index" aria-label="章节索引">
+            <p class="section-label">叙事索引 / STORY INDEX</p>
+            <a class="chapter-link is-current" href="#map"><span>03</span><span>灯塔来信</span><i>现在</i></a>
+            <a class="chapter-link" href="#archive"><span>02</span><span>盐与回声</span><i>已读</i></a>
+            <a class="chapter-link" href="#archive"><span>01</span><span>渡口的名字</span><i>已读</i></a>
+          </nav>
+
+          <section class="directory" id="archive" aria-labelledby="directory-title">
+            <div class="section-label" id="directory-title">人物 / OBJECTS DIRECTORY</div>
+            <div class="directory-group">
+              <p class="directory-heading">在场人物 <span>02</span></p>
+              <button class="directory-row character-row" type="button" data-dialogue="marrow">
+                <span class="row-index">A1</span><span class="directory-icon portrait-mark">M</span><span class="row-copy"><strong>玛罗 · Marrow</strong><small>灯塔守夜人 · 可对话</small></span><span class="row-arrow">↗</span>
+              </button>
+              <button class="directory-row character-row character-row--muted" type="button" data-dialogue="sable" aria-describedby="sable-status">
+                <span class="row-index">A2</span><span class="directory-icon portrait-mark">S</span><span class="row-copy"><strong>塞布尔 · Sable</strong><small id="sable-status">远在盐场 · 只可阅读记录</small></span><span class="row-arrow">—</span>
+              </button>
+            </div>
+            <div class="directory-group">
+              <p class="directory-heading">携带物 / CARRIED <span>02</span></p>
+              <button class="directory-row" type="button" data-item="compass"><span class="row-index">B1</span><span class="directory-icon item-mark">⌁</span><span class="row-copy"><strong>裂纹罗盘</strong><small>指针停在不该存在的方向</small></span><span class="row-arrow">↗</span></button>
+              <button class="directory-row" type="button" data-item="paper"><span class="row-index">B2</span><span class="directory-icon item-mark">▤</span><span class="row-copy"><strong>蓝边校样</strong><small>一页尚未刊出的报道</small></span><span class="row-arrow">↗</span></button>
+            </div>
+          </section>
+          <p class="index-note">目录是回访入口，不是工具栏。点击人物阅读其页边批注。</p>
+        </aside>
+
+        <section class="world-page" id="map" aria-labelledby="world-title">
+          <div class="world-page__heading">
+            <div>
+              <p class="section-label">PLATE 03 · LIVING CARTOGRAPHY</p>
+              <h2 id="world-title">旧观测站的<br><em>潮线与回声</em></h2>
+            </div>
+            <div class="page-meta"><span>MAP SCALE 1 : 4,000</span><span>LAST MARKED 06:42</span></div>
+          </div>
+
+          <div class="map-board" role="region" aria-label="可平移和缩放的旧观测站世界窗口">
+            <div class="world-window__caption"><span>WORLD WINDOW / 世界视野</span><span>拖拽平移 · 滚轮或按钮缩放</span></div>
+            <div class="world-viewport" id="world-viewport" tabindex="0" aria-describedby="world-instruction">
+              <div class="world-canvas" id="world-canvas">
+                <div class="map-board__wash"></div>
+                <div class="map-grid" aria-hidden="true"></div>
+                <svg class="map-routes" viewBox="0 0 1400 900" preserveAspectRatio="none" aria-hidden="true">
+                  <path d="M120 650 C250 570 270 370 460 360 S700 380 790 230 S1040 250 1240 120" />
+                  <path class="map-routes__rust" d="M460 360 C560 520 730 600 900 610 S1120 530 1310 700" />
+                  <path class="map-routes__dashed" d="M120 650 C380 820 650 820 900 610" />
+                  <path class="map-routes__remote" d="M120 650 C-20 520 -10 290 170 180 M1240 120 C1360 180 1450 260 1510 420" />
+                </svg>
+                <div class="map-coordinate map-coordinate--top">N 37° 04' 12&quot; / W 122° 18' 09&quot;</div>
+                <div class="map-coordinate map-coordinate--bottom">海图不是答案，是下一步的证据</div>
+                <div class="cluster-label cluster-label--west"><span>CLUSTER 01</span><strong>盐场边缘</strong><small>Salt Fields / 视野外</small></div>
+                <div class="cluster-label cluster-label--station"><span>CLUSTER 02</span><strong>旧观测站</strong><small>Observatory / 当前页</small></div>
+                <button class="landmark landmark--salt" type="button" data-reading="salt"><span class="landmark__pin">≈</span><strong>盐场观测点</strong><small>远处仍有灯</small></button>
+                <button class="landmark landmark--lighthouse" type="button" data-reading="lighthouse"><span class="landmark__pin">✦</span><strong>旧灯塔</strong><small>玛罗在这里</small></button>
+                <button class="landmark landmark--tide" type="button" data-reading="tide"><span class="landmark__pin">○</span><strong>潮池 04</strong><small>水退得太快</small></button>
+                <button class="landmark landmark--archive" type="button" data-reading="archive"><span class="landmark__pin">▤</span><strong>档案室</strong><small>蓝边校样</small></button>
+                <button class="landmark landmark--porch" type="button" data-reading="porch"><span class="landmark__pin">⌂</span><strong>北侧门廊</strong><small>未确认入口</small></button>
+                <button class="landmark landmark--wreck" type="button" data-reading="wreck"><span class="landmark__pin">⌁</span><strong>沉船标记</strong><small>视野外 · 未读</small></button>
+                <div class="map-annotation map-annotation--vertical">EDITOR'S NOTE<br><span>把空白留给尚未发生的事</span></div>
+                <div class="map-annotation map-annotation--circle" aria-hidden="true">?</div>
+              </div>
+              <p class="sr-only" id="world-instruction">世界窗口可用鼠标或触屏拖拽平移；使用加减按钮、滚轮或键盘加减号缩放。方向键可以平移，R 回到当前章节视野。打开批注不会重置视野。</p>
+            </div>
+            <div class="world-controls" role="group" aria-label="世界窗口相机控制">
+              <button type="button" id="zoom-out" aria-label="缩小世界视野">−</button>
+              <output id="zoom-level" aria-live="polite">72%</output>
+              <button type="button" id="zoom-in" aria-label="放大世界视野">+</button>
+              <button type="button" id="camera-reset" aria-label="回到当前章节视野">R</button>
+            </div>
+          </div>
+
+          <div class="world-page__lower">
+            <article class="story-column" aria-labelledby="story-title">
+              <div class="story-column__label"><span>THE STORY SO FAR</span><span>09:18 / 雾散</span></div>
+              <h3 id="story-title">海水退去时，灯塔把一封信留在门缝里。</h3>
+              <p>纸上没有署名，只有一条用蓝墨画出的路线：从潮池，绕过档案室，最终停在北侧门廊。玛罗说那不是地图，更像是某人试图记住一件<strong>还没有发生</strong>的事。</p>
+              <blockquote>“别替海浪完成句子。”<cite>— 玛罗，灯塔守夜人</cite></blockquote>
+              <button class="read-dialogue" type="button" data-dialogue="marrow">阅读玛罗的页边批注 <span aria-hidden="true">→</span></button>
+            </article>
+            <aside class="marginalia" aria-label="编辑批注与回执">
+              <div class="marginalia__pin">编辑批注 / RECEIPTS</div>
+              <details class="receipt receipt--activity" open>
+                <summary><span class="receipt__stamp">ACTIVITY</span><span>编辑部活动</span><span class="summary-arrow">⌄</span></summary>
+                <div class="receipt__body"><p class="receipt__state"><i class="dot dot--blue"></i><strong>已接收</strong><span>fixture turn 04</span></p><p>Writer desk 等待玩家下一笔；此行只展示静态演示，不代表后台活动。</p><button class="receipt-link" type="button" id="show-activity">展开原始活动流 →</button></div>
+              </details>
+              <details class="receipt receipt--fact">
+                <summary><span class="receipt__stamp">FACT</span><span>世界事实回执</span><span class="summary-arrow">⌄</span></summary>
+                <div class="receipt__body"><p class="receipt__state"><i class="dot dot--rust"></i><strong>已落定 · landed</strong><span>可回访</span></p><p>“蓝边校样”已在档案室标记为可阅读线索。视觉演出结束不等于事实；这条回执才是 fixture 的事实说明。</p></div>
+              </details>
+              <div class="raw-activity" id="raw-activity" hidden><span>09:18:04</span> writer.received · <span>09:18:07</span> map.marked · <span>09:18:09</span> receipt.landed</div>
+            </aside>
+          </div>
+
+          <section class="action-desk" id="action-desk" aria-labelledby="action-title">
+            <div class="action-desk__topline"><span>WRITER'S DESK / 玩家行动</span><span class="action-desk__state" data-state-label>READY · 可继续书写</span><button type="button" class="wake-button" id="action-wake">唤起行动台 ↘</button></div>
+            <div class="action-desk__body">
+              <div class="action-prompt"><span class="prompt-glyph">↳</span><div><h3 id="action-title">你要把哪一行写进地图？</h3><p data-state-copy>用一句话表达行动；地图会先标记处理，再明确告诉你结果。</p></div></div>
+              <form class="action-form" id="action-form">
+                <label class="sr-only" for="action-input">写下你的下一步行动</label>
+                <input id="action-input" name="action" autocomplete="off" placeholder="例如：我去北侧门廊，沿着蓝墨路线寻找寄信人" maxlength="120">
+                <button type="submit" class="action-submit">写入地图 <span aria-hidden="true">↗</span></button>
+              </form>
+              <div class="action-feedback" aria-live="polite" aria-atomic="true"><span class="feedback-mark" data-feedback-mark>·</span><span data-feedback>输入后按 Enter，或点击“写入地图”。</span></div>
+              <div class="action-controls"><button type="button" id="action-cancel" hidden>停止这次处理</button><button type="button" id="action-retry" hidden>再写一行</button><button type="button" id="action-fail-demo" class="text-button">演示失败回执</button></div>
+            </div>
+          </section>
+        </section>
+      </section>
+
+      <footer class="folio"><span>AIRP / EDITORIAL ATLAS VARIANT</span><span>PAGE 03 <b>·</b> THIS WORLD CONTINUES</span><span>键盘：按 A 唤起行动台 · Esc 关闭页边批注</span></footer>
+    </main>
+
+    <section class="dialogue-sheet" id="dialogue-sheet" role="dialog" aria-modal="false" aria-labelledby="dialogue-title" hidden>
+      <button class="dialogue-sheet__close" type="button" id="dialogue-close" aria-label="关闭对话批注">×</button>
+      <div class="dialogue-sheet__folio">CORRESPONDENCE / A1 / MARGIN NOTE</div>
+      <div class="dialogue-sheet__portrait" aria-hidden="true">M</div>
+      <div class="dialogue-sheet__copy"><p class="section-label">玛罗 · MARROW / 灯塔守夜人</p><h2 id="dialogue-title">给下一位读者的信</h2><p class="dialogue-sheet__time">09:24 · 这是一条静态叙事路径</p><p>“你看见那条蓝线了？”玛罗用指节敲了敲校样的折角，“它不是从灯塔画出去的。有人从海里回来，把终点带到了这里。”</p><p>他把罗盘推回你手边。指针没有移动，但门廊方向的墨迹变深了一点。</p><blockquote>“如果你要走，别把它叫成命运。叫它一次选择。”</blockquote><button class="sheet-action" type="button" id="dialogue-focus-action">把这句话带进行动台 <span aria-hidden="true">↘</span></button></div>
+    </section>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  </div>
+  <script src="interaction.js"></script>
+</body>
+</html>
