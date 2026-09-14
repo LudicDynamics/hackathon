@@ -25,6 +25,8 @@ templates/*-playtest-*/
 assets/**
 !assets/audio/
 !assets/audio/**
+# 需要署名且禁止原样再分发的音乐（魔王魂等）只放本机，不入库（docs/ui/世界Launcher.md）。
+assets/audio/licensed/
 # 素材生产的手艺包（文本，无大二进制）——工具见 tools/motion-clip.mjs
 !assets/skills/
 !assets/skills/**

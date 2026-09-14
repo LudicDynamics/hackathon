@@ -6,6 +6,7 @@ import {
   brickGeometry,
   brickWorld,
   editionLabel,
+  LAUNCHER_CREDIT,
   launcherWorlds,
   visibleBricks,
   worldTitle,
@@ -424,6 +425,7 @@ export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves }
         </div>
       </div>
       <p className="world-launcher__hint" aria-hidden="true">{t('Drag or scroll to wander')}</p>
+      <p className="world-launcher__credit">{LAUNCHER_CREDIT}</p>
     </div>
   );
 }

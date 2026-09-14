@@ -328,6 +328,19 @@ body:has(.world-launcher) .world-directory button {
   pointer-events: none;
 }
 
+/* Music credit required by 魔王魂's terms. */
+.world-launcher__credit {
+  position: absolute;
+  left: var(--edge);
+  bottom: 18px;
+  z-index: 2;
+  margin: 0;
+  font: 500 11px/1 ui-monospace, "SFMono-Regular", monospace;
+  letter-spacing: .12em;
+  opacity: .55;
+  pointer-events: none;
+}
+
 /* The save manager, opened from the launcher, wears the launcher's glass. */
 body:has(.world-launcher) .prototype-world-picker.world-directory {
   z-index: calc(var(--depth-modal) + 30);
