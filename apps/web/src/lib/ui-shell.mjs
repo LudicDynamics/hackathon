@@ -6,14 +6,6 @@ export function transitionShell(state, action) {
   return state;
 }
 
-export function splitCharacters(characters, encounteredIds) {
-  const known = new Set(encounteredIds);
-  return {
-    resident: characters.filter(person => person.role === 'companion'),
-    encountered: characters.filter(person => person.role !== 'companion' && known.has(person.id)),
-  };
-}
-
 export function separateBounds(bounds) {
   const placed = [];
   return bounds.map(box => {

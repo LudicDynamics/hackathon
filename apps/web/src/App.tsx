@@ -68,6 +68,12 @@ interface WorldManifest {
   audio?: { theme: string | null };
   cover?: string;
   player?: { id: string; name: string; avatar?: string };
+  /**
+   * First playable layer declared by world.json (`WorldManifestSchema.entry`).
+   * The server always emits it (schema default `'map'`); the client still falls
+   * back to `'map'` for legacy manifests and unknown layers.
+   */
+  entry?: string;
   layers: Record<string, { name?: string; parent?: string | null; material?: string }>;
   characters: CharacterView[];
 }
@@ -657,7 +663,14 @@ export function App() {
       // `.airpworld/`, so re-read them before entering the world's first layer
       // — `enterLayer` gates the I1 initialiser on `autoWrite`.
       await world.reloadSettings();
-      await enterLayer('map').then(applyFollowFailures);
+      // Enter the layer the world declares as its entry (world.json `entry`);
+      // a manifest that omits it, or names a layer this world does not have,
+      // falls back to the filesystem root `map` (create-char.ts uses the same
+      // rule for a new character's `home`).
+      const entryLayer = result.manifest.entry && result.manifest.layers?.[result.manifest.entry]
+        ? result.manifest.entry
+        : 'map';
+      await enterLayer(entryLayer).then(applyFollowFailures);
       await loadChromeData();
       setWorldPickerOpen(false);
       setAttention('ambient');
