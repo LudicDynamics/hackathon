@@ -14,6 +14,20 @@ export function ok<TDetails>(result: { text: string; details: TDetails }): Agent
   return { content: [{ type: 'text', text: result.text }], details: result.details };
 }
 
+/** Add a real image attachment while retaining truthful structured details. */
+export function okWithImage<TDetails>(
+  result: { text: string; details: TDetails },
+  image: { data: string; mimeType: 'image/png' }
+): AgentToolResult<TDetails> {
+  return {
+    content: [
+      { type: 'text', text: result.text },
+      { type: 'image', data: image.data, mimeType: image.mimeType },
+    ],
+    details: result.details,
+  };
+}
+
 /** `ActionError` → the frozen `isError:true` shape (docs/tools/00 §6.2). */
 export function fail(err: unknown): AgentToolResult<any> {
   if (err instanceof ActionError) return err.toToolResult();

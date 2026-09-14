@@ -20,6 +20,7 @@ import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-age
 // ——— tool shells (each exports a `ToolDefinition` constant) ———
 import { chalkTool } from './toolkit/chalk.js';                    // doc-tools/02
 import { lookAtTool, viewCanvasTool } from './toolkit/look-at.js'; // doc-tools/03
+import { screenshotCanvasTool } from './toolkit/screenshot-canvas.js'; // docs/layout/09
 import { moveTool } from './toolkit/move.js';                      // doc-tools/04
 import { deleteTool } from './toolkit/delete.js';                  // doc-tools/04
 import { moveToTool } from './toolkit/move-to.js';                 // doc-tools/05
@@ -51,6 +52,7 @@ import { registerWriterToolCallGuard } from './toolkit/writer-beat-guard.js'; //
 export const AIRP_TOOLS: ReadonlyArray<{ name: string; tool: ToolDefinition }> = [
   { name: 'look_at', tool: lookAtTool },
   { name: 'view_canvas', tool: viewCanvasTool },
+  { name: 'screenshot_canvas', tool: screenshotCanvasTool },
   { name: 'chalk', tool: chalkTool },
   { name: 'move_to', tool: moveToTool },
   { name: 'move', tool: moveTool },

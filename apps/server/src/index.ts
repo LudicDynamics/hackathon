@@ -17,6 +17,8 @@ import { createLiveRouter } from './routes/live.js';
 import { createConnectionSettingsRouter } from './routes/connection-settings.js';
 import { createSttRouter } from './routes/stt.js';
 import { handleSttStream, STT_STREAM_PATH } from './engine/stt-stream.js';
+import { closeCanvasBrowser } from './engine/canvas-browser.js';
+import { createCanvasPerceptionRouter } from './routes/canvas-perception.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -168,6 +170,8 @@ app.use('/api', createLiveRouter(() => activeStore, liveCalls));
 app.use('/api', createConnectionSettingsRouter(REPO_ROOT));
 // Player voice input (docs/live-voice/语音输入（STT）.md): HTTP-only, no world needed.
 app.use('/api', createSttRouter());
+// Server-side Canvas DOM screenshots: active-world/read-only only, no WS transport.
+app.use('/api', createCanvasPerceptionRouter(() => activeStore));
 
 // Serve static frontend files from apps/web/dist
 app.use(express.static(WEB_DIST));
@@ -352,9 +356,12 @@ server.listen(PORT, HOST, () => {
   console.log(`[AIRP Server] Listening on http://${HOST}:${PORT} and http://localhost:${PORT}`);
 });
 
-// Retire every spawned agent on shutdown — otherwise pi-rp processes outlive the server.
+// Retire every spawned agent and browser on shutdown.
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
-    void lifecycle.stopAll().finally(() => process.exit(0));
+    void lifecycle.stopAll().finally(async () => {
+      await closeCanvasBrowser();
+      process.exit(0);
+    });
   });
 }
