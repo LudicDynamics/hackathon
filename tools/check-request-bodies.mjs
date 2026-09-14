@@ -77,6 +77,12 @@ const BODIES = [
     keys: ['path', 'x', 'y'],
     doc: 'docs/tools/12-工具注册与路由统一.md §6',
   },
+  {
+    route: '/api/following',
+    file: 'apps/web/src/lib/airp-gateway.ts',
+    keys: ['character', 'following'],
+    doc: 'docs/presence/00-共同上下文.md §3.3',
+  },
 ];
 
 /**

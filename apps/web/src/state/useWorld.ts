@@ -59,6 +59,20 @@ export interface PresenceEntry {
   following: boolean;
 }
 
+/**
+ * What `enterLayer` resolves with (docs/presence/00 §3.3 / P-10): the follower
+ * outcome the caller needs in order to make a left-behind character visible.
+ */
+export interface EnterLayerResult {
+  layer: string;
+  name: string;
+  first: boolean;
+  followers: {
+    moved: PresenceEntry[];
+    failures: Array<{ character: string; reason: string }>;
+  };
+}
+
 export interface LayerState {
   layer: string;
   scene: LayerItem | null;
@@ -81,9 +95,14 @@ export interface UseWorldApi {
    *  (docs/init/03 §3.6). null = no ghost. */
   initializingLayer: string | null;
   /** Switch layer + fetch it. When auto-write is on and the target is a stub,
-   *  fires the I1 initialiser (`airp_init`) after the server confirms `first`. */
-  enterLayer(next: string): Promise<void>;
-  /** Re-read the active world's settings (after a world load). */
+   *  fires the I1 initialiser (`airp_init`) after the server confirms `first`.
+   *  The followers that travelled along come back in the result
+   *  (docs/presence/00 P-10); `null` = the same layer or a failed request. */
+  enterLayer(next: string): Promise<EnterLayerResult | null>;
+  /** Sync read of the live layer payload, without triggering a render
+   *  (docs/presence/00 §3.4 — cross-layer navigation needs the NEW layer's
+   *  coordinates right after `enterLayer` resolves, before React flushes). */
+  readLayerState(): LayerState | null;
   reloadSettings(): Promise<void>;
   /** Per-world auto-write preference (docs/settings/00); defaults to `off`. */
   settings: WorldSettings;
@@ -204,14 +223,15 @@ export function useWorld(): UseWorldApi {
   }, [fetchLayer]);
 
   const enterLayer = useCallback(
-    async (next: string) => {
+    async (next: string): Promise<EnterLayerResult | null> => {
       window.dispatchEvent(new CustomEvent('airp:gate-feedback', { detail: null }));
       if (next === layerRef.current) {
         // Same layer: still re-sync (may be an explicit gate re-entry).
         await fetchLayer(next);
-        return;
+        // Nothing entered ⇒ no follower result to report (docs/presence/00 P-16).
+        return null;
       }
-      await airpGateway.enterLayer(next).then(async (result) => {
+      const entered = await airpGateway.enterLayer(next).then(async (result) => {
         layerRef.current = next;
         setLayer(next);
         fpRef.current?.reset(next);
@@ -235,14 +255,25 @@ export function useWorld(): UseWorldApi {
           }
         }
         await fetchLayer(next);
+        return result;
       }).catch(error => {
         const feedback = gateFeedback(error, next, stateRef.current?.items ?? []);
         if (feedback) window.dispatchEvent(new CustomEvent('airp:gate-feedback', { detail: feedback }));
         else window.dispatchEvent(new CustomEvent('airp:notice', { detail: String(error) }));
+        return null;
       });
+      return entered;
     },
     [fetchLayer]
   );
+
+  /**
+   * 同步读取当前层状态（`docs/presence/00 §3.4`）。
+   *
+   * 跨层导航需要「`enterLayer` 解析后」的坐标，但 React state 此刻未必已 flush；
+   * 这里返回内部 `stateRef` 的当前值——只读，不触发渲染、不写状态。
+   */
+  const readLayerState = useCallback((): LayerState | null => stateRef.current, []);
 
   const moveCard = useCallback(async (path: string, x: number, y: number) => {
     const prev = stateRef.current;
@@ -330,12 +361,26 @@ export function useWorld(): UseWorldApi {
     return true;
   }, []);
 
-  /** 命中转发集合才派发 airp:world-event（00 §5 / docs/tools/12 §6.6）。 */
-  const forwardWorldEvent = useCallback((msg: WorldEventFrame): void => {
+  /**
+   * 命中转发集合才派发 airp:world-event（00 §5 / docs/tools/12 §6.6）：
+   * `entity_*` 让背包/角色视图同步；`following_changed` / `character_moved` 让
+   * App 重新取 chrome 数据（右侧角色栏的跨层事实来自 /api/characters，
+   * 见 docs/presence/00 §3.5）。
+   *
+   * ⚠️ 这里的 `.includes()` 形态是 `check:ws` 的约定（见 :444-446）：若改写成对
+   * `ev.type` 的等值比较，`consumedFrom` 会把**事件 type** 读成**帧名**并报 GHOST。
+   */
+  const forwardWorldEvent = useCallback((msg: Record<string, unknown>): void => {
+    const ev = msg.event as { type?: string } | undefined;
     if (
-      ['entity_created', 'entity_edited', 'entity_deleted', 'entity_moved'].includes(
-        msg.event?.type
-      )
+      [
+        'entity_created',
+        'entity_edited',
+        'entity_deleted',
+        'entity_moved',
+        'following_changed',
+        'character_moved',
+      ].includes(ev?.type ?? '')
     ) {
       window.dispatchEvent(new CustomEvent('airp:world-event', { detail: msg }));
     }
@@ -436,6 +481,7 @@ export function useWorld(): UseWorldApi {
               | undefined;
             if (!ev || typeof ev.id !== 'string') break; // 畸形帧不污染去重集合
             if (!noteWorldEvent(ev.id)) break; // 同一行的重复副本到此为止
+            forwardWorldEvent(msg); // 转发集合命中才通知 App（:342）
             worldEventToastStore.ingest(ev as WorldEvent);
             // The I1 initialiser's outcome (docs/init/03 §3.6): clear the ghost.
             // `layer_initialized` -> the refetched product replaces it (handover);
@@ -755,6 +801,7 @@ export function useWorld(): UseWorldApi {
     initializingLayer,
     enterLayer,
     refresh,
+    readLayerState,
     moveCard,
     sendToWriter,
     sendMessage,

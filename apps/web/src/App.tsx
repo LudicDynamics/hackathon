@@ -42,6 +42,9 @@ import { MuteButton } from './components/chrome/MuteButton.js';
 import { useAudio } from './state/useAudio.js';
 import { useCamera } from './state/useCamera.js';
 import { useWorld } from './state/useWorld.js';
+import type { EnterLayerResult } from './state/useWorld.js';
+import { usePresence } from './state/usePresence.js';
+import { CharacterRail } from './components/sidebar/CharacterRail.js';
 import { airpGateway, type AssetMediaKind, type WorldShelf } from './lib/airp-gateway.js';
 import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
 import { BagItemDialog } from './components/BagItemDialog.js';
@@ -88,6 +91,12 @@ interface CharacterView {
    * MotionPortrait fallback.
    */
   emotions?: Record<string, string>;
+  /**
+   * Where this character actually IS (docs/presence/00 §3.2) — the ONE
+   * cross-layer fact. The key is ALWAYS present; `null` = not in the world.
+   * NEVER `home`: that is only the initial layer baked into world.json.
+   */
+  presence: { layer: string; following: boolean } | null;
 }
 
 type Attention = 'ambient' | 'authoring';
@@ -234,6 +243,54 @@ export function App() {
     }, 3000);
   }, []);
 
+  // The single presence projection (§4.1): both the canvas avatars and the
+  // character rail consume THESE views, never a re-derivation of their own.
+  const { views: presenceViews, navigateTo: navigateToCharacter } = usePresence({
+    characters,
+    layer,
+    presence: state?.presence ?? [],
+    readLayerState: world.readLayerState,
+    enterLayer: world.enterLayer,
+    camera,
+    notify,
+  });
+  // Ids whose follow request is in flight. UI only — NOT the follow truth:
+  // nothing reads it as `following` (docs/presence/00 §2.4).
+  const [pendingFollowing, setPendingFollowing] = useState<ReadonlySet<string>>(new Set());
+
+  const toggleFollowing = useCallback(async (id: string, next: boolean) => {
+    setPendingFollowing(current => new Set(current).add(id));
+    try {
+      await airpGateway.setFollowing(id, next);
+      // No optimistic write: `presence.following` is the only truth (§2.4), and
+      // the writer may have flipped it in the meantime. The world event brings
+      // the new projection.
+    } catch {
+      notify(t('Could not change whether {name} follows you.', { name: labelOf(id) }));
+    } finally {
+      setPendingFollowing(current => {
+        const nextPending = new Set(current);
+        nextPending.delete(id);
+        return nextPending;
+      });
+    }
+  }, [notify, t]);
+
+  /**
+   * Surface the characters that could NOT follow into the new layer
+   * (docs/presence/00 §2.3 / P-9). The server reports them in the
+   * `enter-layer` reply; a left-behind character must never be silent.
+   * A `null` result means "same layer or the request failed" — that path is
+   * already surfaced by `airp:gate-feedback` / `airp:notice` in `useWorld`.
+   */
+  const applyFollowFailures = useCallback(
+    (result: EnterLayerResult | null) => {
+      if (!result?.followers?.failures?.length) return;
+      notify(t('Some of the party could not follow you.'));
+    },
+    [notify, t]
+  );
+
   const loadChromeData = async () => {
     try {
       const [nextManifest, nextBackpack, nextCharacters, nextShelf] = await Promise.all([
@@ -247,6 +304,9 @@ export function App() {
       setCharacters(nextCharacters.characters);
       setShelf(nextShelf);
     } catch (error) {
+      // The character rail's ONLY data source: a silent empty rail would read
+      // as "nobody is here" (docs/presence/00 §6, global MUST NOT 6).
+      notify(t('Could not load the world data. Please retry.'));
       console.warn('Could not load AIRP chrome data:', error);
     }
   };
@@ -386,7 +446,7 @@ export function App() {
         if (nookChar !== null) { closeNook(); return; }
         if (shell.header || shell.journal || shell.immersive) { setShell(initialShell); return; }
         if (layer !== 'map') {
-          enterLayer(manifest?.layers?.[layer]?.parent || 'map');
+          void enterLayer(manifest?.layers?.[layer]?.parent || 'map').then(applyFollowFailures);
         }
         return;
       }
@@ -415,8 +475,10 @@ export function App() {
     return state?.items.find((item) => item.path === expected);
   }, [layer, state?.items]);
   const worldReady = Boolean(manifest && state && readme);
-  const encounteredIds = [...(encounters[manifest?.id || ''] || []), ...(state?.presence || []).map(person => person.characterId)];
-  const { resident, encountered } = splitCharacters(characters, encounteredIds);
+  // `encounters` is browser-memory only ("characters you have opened"), NOT
+  // presence: it never decides who is in this scene (docs/presence/00 §2.1).
+  const encounteredIds = encounters[manifest?.id || ''] || [];
+  const { encountered } = splitCharacters(characters, encounteredIds);
   const handItems = backpack.filter((item) => item.filename.toLowerCase() !== 'readme.md');
   useViewpointReport({ camera, layer, bagCount: handItems.length, enabled: nookChar === null });
   const canvasItems = (state?.items || []).filter((item) => item.path !== readme?.path);
@@ -444,7 +506,7 @@ export function App() {
     const onBack = (event: KeyboardEvent) => {
       if (event.altKey && event.key === 'ArrowLeft' && !activeCharacter) {
         event.preventDefault();
-        enterLayer(manifest?.layers?.[layer]?.parent || 'map');
+        void enterLayer(manifest?.layers?.[layer]?.parent || 'map').then(applyFollowFailures);
       }
     };
     window.addEventListener('keydown', onBack);
@@ -470,7 +532,7 @@ export function App() {
       // `.airpworld/`, so re-read them before entering the world's first layer
       // — `enterLayer` gates the I1 initialiser on `autoWrite`.
       await world.reloadSettings();
-      await enterLayer('map');
+      await enterLayer('map').then(applyFollowFailures);
       await loadChromeData();
       setWorldPickerOpen(false);
       setAttention('ambient');
@@ -713,7 +775,9 @@ export function App() {
                   const character = characters.find((item) => item.id === id);
                   if (character) openCharacter(character);
                 }}
-                onItemDropOnTarget={handleItemDrop}
+                presence={presenceViews}
+                assetUrl={assetUrl}
+                onEnterGate={(target) => void enterLayer(target).then(applyFollowFailures)}
                 onDropItemToScene={handleReturnItem}
                 onTakeItem={handleTakeItem}
                 onOpenRadialMenu={(x, y, worldX, worldY) => { if (attention === 'authoring') setRadialState({ x, y, worldX, worldY }); }}
@@ -731,7 +795,7 @@ export function App() {
             <span className="prototype-brand">World<span>lines</span></span>
             <nav className="prototype-crumbs" aria-label={t("Scene path")}>
               {breadcrumbs.map((part) => {
-                return <button key={part} onClick={() => enterLayer(part)}>{part === 'map' ? t('Map') : sceneName(manifest, part)}</button>;
+                return <button key={part} onClick={() => void enterLayer(part).then(applyFollowFailures)}>{part === 'map' ? t('Map') : sceneName(manifest, part)}</button>;
               })}
             </nav>
             <div className="prototype-spacer" />
@@ -825,19 +889,24 @@ export function App() {
             </div>
           )}
 
-          <div className="prototype-residents prototype-chrome" aria-label={t("Resident companions")}>
-          {resident.map(companion => (
-            <button
-              key={companion.id}
-              className="prototype-companion-orb"
-              onClick={() => openCharacter(companion)}
-              aria-label={t('Talk to {name}', { name: companion.name || companion.id })}
-              style={assetUrl(companion.avatar, 'image') ? { backgroundImage: `url("${assetUrl(companion.avatar, 'image')}")` } : undefined}
-            >
-              {!assetUrl(companion.avatar, 'image') && companion.id.charAt(0).toUpperCase()}<i /><small>{companion.name || labelOf(companion.id)}</small>
-            </button>
-          ))}
-          </div>
+          {/* The character rail (docs/presence/00 §4.2.1): RIGHT column, stacked
+              above the belongings, no tabs. It replaced the companion-only
+              `.prototype-residents` row, which could not express "elsewhere"
+              or "absent" and never showed who was following. */}
+          <CharacterRail
+            views={presenceViews}
+            pendingFollowing={pendingFollowing}
+            nookOpen={nookChar !== null}
+            onOpenCharacter={(id) => {
+              const character = characters.find((item) => item.id === id);
+              if (character) openCharacter(character);
+            }}
+            onTravelTo={(id) => void navigateToCharacter(id)}
+            onToggleFollowing={(id, next) => void toggleFollowing(id, next)}
+            onOpenNook={openNook}
+            notify={notify}
+            assetUrl={assetUrl}
+          />
           <button className="prototype-action-toggle prototype-chrome" onClick={() => { if (attention === 'authoring') { setAttention('ambient'); setIsGodHandOpen(false); } else setAttention('authoring'); window.setTimeout(() => writerRef.current?.focus(), 0); }} aria-label={t("Write an action")}><Sparkles size={17} /><span aria-live="polite">{writerWorking ? t('The writer is working…') : t('What do you do?')}</span></button>
           {writerWorking && <button type="button" className="writer-stop-control" disabled={writerState.stopRequested} onClick={() => {
             if (requestWriterStop()) sendMessage({ type: 'writer_abort' });

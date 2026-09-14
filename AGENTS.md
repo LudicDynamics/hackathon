@@ -74,6 +74,7 @@ AIRP（AI Role-Playing Narrative Canvas）是一款 AI 互动叙事游戏：玩�
 | 每轮注入、游标、上下文 | `docs/hooks/00-共同上下文.md` |
 | WS 帧、前端消费、请求体 | `docs/前端接线体检.md`、`docs/wiring/00-共同上下文.md`、`docs/tools/12` |
 | 演出通道、幻影、writer delta | `docs/perform/00-共同上下文.md` |
+| 角色在场、跟随、画布在场头像、右侧角色栏 | `docs/presence/00-共同上下文.md`（跨端冻结契约）、`docs/tools/05-move-to与set-following.md` |
 | 组件骨架屏、`card_writing`、幻影第三档 | `docs/skeleton/00-共同上下文.md`、`docs/perform/00-共同上下文.md` |
 | Agent activity、角色 turn、TTS 动作过滤 | `docs/agent-awareness/00-共同上下文.md` |
 | 初始化器、`airp-init`、空场景 | `docs/init/00-共同上下文.md` |

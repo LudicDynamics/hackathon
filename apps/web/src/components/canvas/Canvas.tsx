@@ -14,13 +14,30 @@ import { whenFontsSettled } from '../../lib/fonts.js';
 import { elementBox, invalidateMeasures } from '../../lib/measure.js';
 import { setParallax } from '../../lib/parallax.js';
 import { portraitPlayStateOf } from '../../lib/motion.js';
+import { PresenceLayer } from './PresenceLayer.js';
+import { PRESENCE_NODE_ATTR } from '../../lib/presence-node.js';
+import type { CharacterPresenceView } from '../../lib/presence.js';
 import type { LayerItem, LayerLink } from '../../state/useWorld.js';
+
+import type { AssetMediaKind } from '../../lib/airp-gateway.js';
+/** Stable identity for the no-presence path (nook never passes one) so the memo
+ *  deps in PresenceLayer do not churn on every Canvas render. */
+const NO_PRESENCE: CharacterPresenceView[] = [];
 
 interface CanvasProps {
   effectsEnabled?: boolean;
   allowChalkDrag?: boolean;
   currentLayer: string;
   items: LayerItem[];
+  /** Same-scene avatars (contract §3.1/§4.1). Only `state === 'in-scene'` characters
+   *  reach here; absent / elsewhere are already filtered by the projection. Absent
+   *  value = no avatars (nook path), matching `/api/nook`'s `presence: []`. */
+  presence?: CharacterPresenceView[];
+  /** World-root-relative asset path → URL, injected from App (contract P-18):
+   *  both existing helpers of this shape are module-private, so the canvas must
+   *  not reach for one itself. Without it, presence avatars fall back to the raw
+   *  `avatar` value (an initial-letter plate) instead of a 404 image. */
+  assetUrl?: (path: string, kind: AssetMediaKind) => string | undefined;
   /** true = no portrait on this canvas may play (global motion preference, nook 03 §③-6). */
   stillPortraits?: boolean;
   links: LayerLink[];
@@ -88,10 +105,12 @@ function readTop(el: HTMLElement): number {
 export const Canvas: React.FC<CanvasProps> = ({
   allowChalkDrag = false,
   effectsEnabled = false,
+  assetUrl,
   currentLayer,
   ghost = null,
   ghostLabel,
   items,
+  presence = NO_PRESENCE,
   stillPortraits = false,
   links,
   bg,
@@ -249,6 +268,9 @@ export const Canvas: React.FC<CanvasProps> = ({
     void unlock(); // idempotent: any interaction start resumes the audio context
     const target = e.target as HTMLElement;
     const obj = target.closest('.object');
+    // Presence avatars are not cards: a click on one is the dialogue entry
+    // (docs/ux/00 §4.3), so it must start neither a card drag nor a viewport pan.
+    if (target.closest(`[${PRESENCE_NODE_ATTR}]`)) return;
     if (obj) {
       const el = obj as HTMLElement;
       const path = el.dataset.path ?? '';
@@ -498,7 +520,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   // World Studio: Right-click on blank canvas summons the Radial Creator Menu
   const handleContextMenu = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
-    if (target.closest('.object') || target.closest('button, a, input')) {
+    if (target.closest('.object') || target.closest('button, a, input') || target.closest(`[${PRESENCE_NODE_ATTR}]`)) {
       return; // Clicking on cards or interactive elements retains native/local behavior
     }
     e.preventDefault();
@@ -556,6 +578,15 @@ export const Canvas: React.FC<CanvasProps> = ({
             still={item.path !== playingPortrait}
           />
         ))}
+        {/* Presence avatars — world-locked, centre-anchored, never `.object` cards.
+            Mounted AFTER the cards (same depth band, avatars on top) and BEFORE the
+            ghost/phantom lanes so provisional shells still draw last. */}
+        <PresenceLayer
+          presence={presence}
+          layerId={currentLayer}
+          onOpenCharacterModal={onOpenCharacterModal}
+          assetUrl={assetUrl}
+        />
         {/* Provisional "taking shape" card (docs/init/03 §3.5). Rendered with
             the `.object--ghost` shell — OUTSIDE `items`, so it never enters
             `itemsByPath`, the drag dispatcher, or footprint measurement, and

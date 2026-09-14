@@ -133,11 +133,11 @@
   },
   "Stopped": {
     "zh-CN": "已停止",
-    "ja": "停止済み"
+    "ja": "停止しました"
   },
   "Took too long": {
-    "zh-CN": "处理时间过长",
-    "ja": "時間切れ"
+    "zh-CN": "等待超时",
+    "ja": "時間がかかりすぎました"
   },
   "{name} · {count} activities · {status}": {
     "zh-CN": "{name} · {count}项活动 · {status}",
@@ -851,14 +851,6 @@
     "zh-CN": "该操作失败了",
     "ja": "その操作は失敗しました"
   },
-  "Took too long": {
-    "zh-CN": "等待超时",
-    "ja": "時間がかかりすぎました"
-  },
-  "Stopped": {
-    "zh-CN": "已停止",
-    "ja": "停止しました"
-  },
   "Writer": {
     "zh-CN": "作家",
     "ja": "作家"
@@ -926,5 +918,81 @@
   "Nothing readable here.": {
     "zh-CN": "这里没有可读取的内容。",
     "ja": "ここには読める内容がありません。"
+  },
+  "Characters": {
+    "zh-CN": "角色",
+    "ja": "登場人物"
+  },
+  "In this scene": {
+    "zh-CN": "在这个场景",
+    "ja": "この場面にいる"
+  },
+  "Elsewhere": {
+    "zh-CN": "在别处",
+    "ja": "別の場所にいる"
+  },
+  "Not here": {
+    "zh-CN": "不在场",
+    "ja": "ここにはいない"
+  },
+  "Following you": {
+    "zh-CN": "跟随中",
+    "ja": "同行中"
+  },
+  "Go to them": {
+    "zh-CN": "去 ta 那里",
+    "ja": "彼のもとへ行く"
+  },
+  "Follow": {
+    "zh-CN": "跟随",
+    "ja": "同行"
+  },
+  "Dismiss": {
+    "zh-CN": "解散",
+    "ja": "解散する"
+  },
+  "Visit their nook": {
+    "zh-CN": "去 ta 的小天地",
+    "ja": "彼の小天地へ"
+  },
+  "Actions for {name}": {
+    "zh-CN": "{name} 的操作",
+    "ja": "{name} の操作"
+  },
+  "They are not here right now.": {
+    "zh-CN": "ta 此刻不在这里。",
+    "ja": "彼は今ここにはいません。"
+  },
+  "They are in another scene. Go to them instead.": {
+    "zh-CN": "ta 在另一个场景。用「去 ta 那里」吧。",
+    "ja": "彼は別の場面にいます。「彼のもとへ行く」を使ってください。"
+  },
+  "We could not travel there right now.": {
+    "zh-CN": "现在无法前往那里。",
+    "ja": "今はそこへ行けませんでした。"
+  },
+  "They moved before you arrived.": {
+    "zh-CN": "你到之前 ta 已经离开了。",
+    "ja": "あなたが着く前に彼は移動していました。"
+  },
+  "Could not change whether {name} follows you.": {
+    "zh-CN": "无法改变 {name} 是否跟随你。",
+    "ja": "{name} の同行状態を変更できませんでした。"
+  },
+  "Could not load the world roster. Please retry.": {
+    "zh-CN": "无法加载角色名单，请重试。",
+    "ja": "登場人物の一覧を読み込めませんでした。再試行してください。"
+  },
+  "Already inside a nook.": {
+    "zh-CN": "已经在某个小天地里了。",
+    "ja": "すでに小天地の中にいます。"
+  },
+  "Some of the party could not follow you.": {
+    "zh-CN": "有一部分同伴没能跟过来。",
+    "ja": "同行者の一部はついて来られませんでした。"
+  },
+  "Could not load the world data. Please retry.": {
+    "zh-CN": "无法加载世界数据，请重试。",
+    "ja": "ワールドデータを読み込めませんでした。再試行してください。"
   }
 }

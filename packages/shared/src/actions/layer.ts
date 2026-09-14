@@ -13,10 +13,12 @@
  * (doc-21 §3.6): the failure IS the fact consumers need.
  */
 import type { WorldEvent } from '../schemas/events.js';
+import type { PresenceRecord } from '../store/world-store.js';
 import { parseFrontmatter } from '../schemas/frontmatter.js';
 import { ActionError } from './errors.js';
 import { registerAction } from './service.js';
 import { actorLabel } from './actor.js';
+import { carryFollowers } from './presence.js';
 import type { ActionContext, ActionResult } from './types.js';
 
 /** The layer id a directory maps to, mirroring store/layers.ts (`world/` → `map`). */
@@ -44,11 +46,22 @@ export interface EnterLayerInput {
   layer: string;
 }
 
+/**
+ * The followers that travelled with the player (05 §3.6.2 / docs/presence/00 §2.3).
+ * `failures` is never swallowed: a character left behind MUST be visible to the
+ * caller (docs/presence/00 §6, global MUST NOT 6), which surfaces it to the player.
+ */
+export interface CarryFollowersResult {
+  moved: PresenceRecord[];
+  failures: Array<{ character: string; reason: string }>;
+}
+
 export interface EnterLayerDetails {
   layer: string;
   name: string;
   first: boolean;
   event: WorldEvent;
+  followers: CarryFollowersResult;
 }
 
 export async function enterLayer(
@@ -78,11 +91,26 @@ export async function enterLayer(
     turn: ctx.turn,
   });
 
+  // Order is NOT swappable (05 §3.6.2): `layer_entered` lands first so the
+  // history reads "the player entered X, then Watson came along" — never the
+  // reverse. An engine failure here must not fail the entry: the player IS in
+  // the new layer and `layer_entered` is already on record, so throwing would
+  // fork the world from the UI. It is folded into `failures` instead.
+  let followers: CarryFollowersResult = { moved: [], failures: [] };
+  try {
+    followers = await carryFollowers(ctx, layer);
+  } catch (err) {
+    followers = {
+      moved: [],
+      failures: [{ character: '*', reason: err instanceof Error ? err.message : String(err) }],
+    };
+  }
+
   return {
     text: first
       ? `${actorLabel(ctx.actor)} stepped into "${name}" for the first time (${layer}).`
       : `${actorLabel(ctx.actor)} moved to "${name}" (${layer}).`,
-    details: { layer, name, first, event },
+    details: { layer, name, first, event, followers },
   };
 }
 

@@ -29,7 +29,7 @@ import {
  * Re-fetch on world changes rides the existing `airp:world-event` forward.
  */
 export interface NookViewProps {
-  /** Character id (ASCII kebab-case, from the RightSidebar's 4th button). */
+  /** Character id (ASCII kebab-case, supplied by the character rail's nook button). */
   characterId: string;
   /** Close the nook, returning to the layer that was showing. App owns it. */
   onClose: () => void;

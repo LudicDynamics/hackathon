@@ -30,7 +30,9 @@
     { "path": "packages/shared/test/roll-dice.test.mjs", "sentinel": "dice" },
     { "path": "packages/shared/test/move.test.mjs", "sentinel": "move" },
     { "path": "packages/shared/test/dice.test.mjs", "sentinel": "dice" },
-    { "path": "apps/server/test/nook-routes.test.mjs", "sentinel": "nook" }
+    { "path": "apps/server/test/nook-routes.test.mjs", "sentinel": "nook" },
+    { "path": "apps/web/src/lib/presence.ts", "sentinel": "export function projectPresence" },
+    { "path": "apps/web/test/presence-projection.test.mjs", "sentinel": "presence" }
   ],
   "visual": [
     {
@@ -192,7 +194,48 @@
       "allow": [],
       "forbid": ["useWorld()", "new WebSocket"],
       "reason": "Nook reuses the Canvas interface and has explicit mutually-exclusive empty/loaded branches."
-    }
+    },
+    {
+      "id": "projection.presence-single-projection",
+      "kind": "projection",
+      "doc": { "path": "docs/presence/04-投影与验收.md", "anchor": "§9.3" },
+      "owner": "lib/presence.ts",
+      "scope": "presence projection owner",
+      "target": "apps/web/src/lib/presence.ts",
+      "expect": {
+        "ownerLiteral": "export function projectPresence",
+        "routeLiteral": "settled",
+        "markerLiteral": "CharacterPresenceView",
+        "branches": ["'in-scene'", "'elsewhere'", "'absent'"]
+      },
+      "allow": ["usePresence is the only call site"],
+      "forbid": ["second projection module"],
+      "reason": "One owner derives §2.2 for both the canvas and the right rail."
+    },
+    {
+      "id": "projection.presence-navigation-seam",
+      "kind": "required-source",
+      "doc": { "path": "docs/presence/04-投影与验收.md", "anchor": "§9.3" },
+      "owner": "lib/presence.ts",
+      "scope": "presence navigation camera seam",
+      "target": "apps/web/src/lib/presence.ts",
+      "expect": { "literals": ["readLayerState", "camera.flyTo", "enterLayer", "nextFrame"] },
+      "allow": ["injected effects"],
+      "forbid": ["camera.save(", "camera.restore(", "fetch("],
+      "reason": "Navigation reads the new layer snapshot and flies the camera after one frame; it never writes camera memory."
+    },
+    {
+      "id": "projection.presence-single-call-site",
+      "kind": "unique-call",
+      "doc": { "path": "docs/presence/04-投影与验收.md", "anchor": "§9.3" },
+      "owner": "usePresence",
+      "scope": "presence projection runtime call",
+      "target": "apps/web/src/state/usePresence.ts",
+      "expect": { "name": "projectPresence", "count": 1 },
+      "allow": ["the one derivation for canvas + rail"],
+      "forbid": ["< 1 call"],
+      "reason": "A second call site would recreate the two-derivations defect the contract forbids."
+     }
   ],
   "fixtures": [
     { "id": "protected-clean", "group": "protected", "status": "clean" },
@@ -203,6 +246,9 @@
     { "id": "ghost-pointer-override", "group": "visual", "status": "failure" },
     { "id": "projection-exclusive-clean", "group": "projection", "status": "clean" },
     { "id": "projection-second-canvas-branch", "group": "projection", "status": "failure" },
+    { "id": "presence-projection-clean", "group": "projection", "status": "clean" },
+    { "id": "presence-projection-second-call", "group": "projection", "status": "failure" },
+    { "id": "presence-navigation-memory-write", "group": "projection", "status": "failure" },
     { "id": "depth-registration-clean", "group": "depth", "status": "clean" },
     { "id": "depth-unregistered-number", "group": "depth", "status": "failure" }
   ]

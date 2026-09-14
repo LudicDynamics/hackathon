@@ -68,11 +68,23 @@ export const airpGateway = {
   choose: (path: string, choice: string) => request('/api/choice', json('POST', { path, choice })),
   // `first` = the target layer had no README (a stub) — the auto-init signal
   // (docs/init/03 §3.2). The server decides it; the client only reads it.
+  // `followers` is the carry-along settlement (docs/presence/00 §2.3 / P-10):
+  // a character left behind must be visible, never silent.
   enterLayer: (layer: string) =>
-    request<{ ok: boolean; layer: string; name: string; first: boolean }>(
-      '/api/enter-layer',
-      json('POST', { layer }),
-    ),
+    request<{
+      ok: boolean;
+      layer: string;
+      name: string;
+      first: boolean;
+      followers: {
+        moved: Array<{ characterId: string; x: number; y: number; following: boolean }>;
+        failures: Array<{ character: string; reason: string }>;
+      };
+    }>('/api/enter-layer', json('POST', { layer })),
+  // Terminal state, not a toggle (docs/tools/05 §3.6.1): the UI inverts, the
+  // action writes. Registered in tools/check-request-bodies.mjs.
+  setFollowing: (character: string, following: boolean) =>
+    request('/api/following', json('POST', { character, following })),
   worldSettings: () => request<WorldSettings>('/api/world-settings'),
   saveWorldSettings: (settings: WorldSettings) =>
     request<WorldSettings>('/api/world-settings', json('POST', settings)),

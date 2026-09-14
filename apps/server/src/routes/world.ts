@@ -414,7 +414,7 @@ export function createWorldRouter(
     if (releasingWorld) {
       try { await releasingWorld; } catch { /* The unavailable world stays detached. */ }
     }
-    const needsWorld = ['/agent-settings', '/manifest', '/nook', '/nook-note', '/layer', '/backpack', '/characters', '/move', '/card/position', '/card/footprint', '/dice', '/use-item', '/choice', '/material-review', '/enter-layer', '/viewpoint', '/freeze', '/god-action', '/asset', '/audio'].includes(req.path);
+    const needsWorld = ['/agent-settings', '/manifest', '/nook', '/nook-note', '/layer', '/backpack', '/characters', '/following', '/move', '/card/position', '/card/footprint', '/dice', '/use-item', '/choice', '/material-review', '/enter-layer', '/viewpoint', '/freeze', '/god-action', '/asset', '/audio'].includes(req.path);
     if (!getActiveStore() && needsWorld) {
       return res.status(409).json({ code: 'no_active_world', error: 'Choose a world or start a new save.' });
     }
@@ -881,10 +881,11 @@ export function createWorldRouter(
       }));
 
       const presence = (store.queryCanvas(
-        'SELECT character_id, x, y, following FROM presence WHERE layer = ?',
+        'SELECT character_id, x, y, following FROM presence WHERE layer = ? ORDER BY character_id',
         [layer]
       ) as Array<Record<string, unknown>>).map((row) => ({
         characterId: String(row.character_id),
+        x: Number(row.x),
         y: Number(row.y),
         following: Number(row.following) === 1,
       }));
@@ -898,7 +899,7 @@ export function createWorldRouter(
   // Get backpack items (player/ directory). The scan lives in shared so the
   // injection-side `bag` section and this route name one fact once
   // (docs/hooks/02 §3.1/§4.2); `BagItem`'s field names are the contract the
-  // sidebar reads (`RightSidebar.tsx`), so they are not this route's to change.
+  // backpack chrome reads, so they are not this route's to change.
   router.get('/backpack', async (_req, res) => {
     const store = getActiveStore();
     if (!store) return res.status(400).json({ error: 'No active world' });
@@ -915,6 +916,13 @@ export function createWorldRouter(
     if (!store) return res.status(400).json({ error: 'No active world' });
     try {
       const manifest = await store.getManifest();
+      // `presence` is the ONE cross-layer fact the character rail needs:
+      // `home` is only the initial layer baked into world.json
+      // (docs/tools/05 §6.5), never "where they are now". Read the whole
+      // presence table once and index it — one query, not one per character.
+      const presenceByCharacter = new Map(
+        store.getPresence().map((row) => [row.characterId, row])
+      );
       const chars = await Promise.all(
         (manifest.characters || []).map(async (c) => {
           let avatar = c.avatar;
@@ -945,11 +953,16 @@ export function createWorldRouter(
             EMOTIONS.map(async (e) => (await store.statKind(portraits[e])) === 'file')
           );
           const emotions = present.every(Boolean) ? portraits : undefined;
+          const row = presenceByCharacter.get(c.id);
           return {
             ...c,
             avatar: avatar || '/assets/characters/portraits/fella_1.png',
             avatarVideo,
             bio,
+            // The key is ALWAYS present; `null` means "not in the world"
+            // (no `presence` row), never "the key is missing"
+            // (docs/presence/00 §3.2 / P-11).
+            presence: row ? { layer: row.layer, following: row.following } : null,
             ...(voice ? { voice } : {}),
             ...(emotions ? { emotions } : {}),
           };
@@ -959,6 +972,26 @@ export function createWorldRouter(
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
+  });
+
+  // Toggle a character's following state (05 §3.6.1 / docs/presence/00 §2.4).
+  // The body carries the TERMINAL state, not a toggle: the UI inverts, the
+  // action writes. A repeat is an idempotent no-op that lands no event — the
+  // writer may have flipped it in the meantime, so the client MUST NOT hold
+  // the truth (`presence.following` is the only source).
+  router.post('/following', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const { character, following } = req.body as { character?: unknown; following?: unknown };
+    if (typeof character !== 'string' || character === '') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'character must be a non-empty character id' });
+    }
+    if (typeof following !== 'boolean') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'following must be a boolean' });
+    }
+    await reply(res, () =>
+      serviceFor(store, { type: 'player' }).setFollowing({ character, following })
+    );
   });
 
   // Move item (backpack <-> scene, etc.) — the single action, no local rules.
