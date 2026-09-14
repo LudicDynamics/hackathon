@@ -31,7 +31,7 @@ function functionalViewCanvasTool(): ToolDefinition {
       }
       try {
         const actor = resolveFunctionalArrangerActor(role, scope);
-        const result = await createActionService(worldStore(ctx), actor.actor, { turn: turnId, agentScope: actor.agentScope }).viewCanvas(params);
+        const result = await createActionService(worldStore(ctx), actor.actor, { turn: turnId, agentScope: actor.agentScope }).viewCanvas(params as Record<string, unknown>);
         return ok(result as { text: string; details: ViewCanvasDetails });
       } catch (error) {
         return fail(error);

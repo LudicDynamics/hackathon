@@ -4,8 +4,13 @@ import type {
   CanvasArrangerRuntime,
 } from '../engine/canvas-arranger-lifecycle.js';
 
-const MODES = new Set(['grid', 'circle', 'row']);
-const SCREENSHOT_POLICIES = new Set(['none', 'before', 'after', 'before_and_after']);
+const MODES: Record<string, true> = { grid: true, circle: true, row: true };
+const SCREENSHOT_POLICIES: Record<string, true> = { none: true, before: true, after: true, before_and_after: true };
+const REQUEST_KEYS: Record<string, true> = {
+  worldId: true, layer: true, mode: true, requestId: true,
+  expectedRevision: true, expectedCanvasVersion: true, snapshotId: true,
+  screenshotPolicy: true,
+};
 
 function validString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
@@ -14,8 +19,9 @@ function validString(value: unknown): value is string {
 function parseRequest(body: unknown): CanvasArrangeRequest {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Canvas arrangement request must be an object.');
   const value = body as Record<string, unknown>;
+  if (Object.keys(value).some((key) => !REQUEST_KEYS[key])) throw new Error('Canvas arrangement request contains unknown fields.');
   if (!validString(value.worldId) || !validString(value.layer) || !validString(value.requestId) || !validString(value.snapshotId)) throw new Error('Canvas arrangement identity is incomplete.');
-  if (!MODES.has(String(value.mode)) || !SCREENSHOT_POLICIES.has(String(value.screenshotPolicy))) throw new Error('Canvas arrangement mode or screenshot policy is invalid.');
+  if (!MODES[String(value.mode)] || !SCREENSHOT_POLICIES[String(value.screenshotPolicy)]) throw new Error('Canvas arrangement mode or screenshot policy is invalid.');
   if (!Number.isInteger(value.expectedRevision) || Number(value.expectedRevision) < 0 || !Number.isInteger(value.expectedCanvasVersion) || Number(value.expectedCanvasVersion) < 0) throw new Error('Canvas version fence is invalid.');
   return {
     worldId: value.worldId,

@@ -2,20 +2,21 @@ import { ActionError } from './errors.js';
 import { characterIdOfPath, characterRootConfigOf, isValidCharacterId } from '../rules/characters.js';
 
 /**
- * The five event originators. `god` is separate from `player` because doc-21
- * §3.2 renders god edits differently ("the world changed by itself") and the
- * history panel filters them.
+ * Event originators. `functional` is a deliberately narrow actor for
+ * player-authorized maintenance agents; it is not an alias for trusted engine.
  */
-export type ActorType = 'player' | 'god' | 'writer' | 'character' | 'engine';
+export type ActorType = 'player' | 'god' | 'writer' | 'character' | 'engine' | 'functional';
 export interface Actor {
   type: ActorType;
-  /** Only `character` carries an id (`characters/<id>/`). */
+  /** character carries its id; functional carries only canvas-arranger. */
   id?: string;
 }
 
 /** The ONLY env var that carries agent identity (00 §3). */
 export const AGENT_ROLE_ENV = 'AIRP_AGENT_ROLE';
 export const CHARACTER_ROLE_PREFIX = 'character:';
+export const FUNCTIONAL_ARRANGER_ROLE = 'functional:canvas-arranger' as const;
+export const FUNCTIONAL_ARRANGER_SCOPE = 'functional-canvas-arranger' as const;
 
 /**
  * Pure. Maps a raw `AIRP_AGENT_ROLE` value onto an Actor.
@@ -28,11 +29,13 @@ export function resolveAgentActor(raw: string | undefined): {
   /** Human-readable warning the caller logs ONCE; null when nothing is off. */
   warning: string | null;
 } {
+  if (raw === FUNCTIONAL_ARRANGER_ROLE) {
+    return { actor: { type: 'functional', id: 'canvas-arranger' }, warning: null };
+  }
   if (raw === undefined || raw === '') {
     return { actor: { type: 'writer' }, warning: 'AIRP_AGENT_ROLE is not set; falling back to writer' };
   }
   if (raw === 'writer' || raw === 'scene-init' || raw === 'nook-init') {
-    // Init subagents inherit the parent's env and legitimately see 'writer'.
     return { actor: { type: 'writer' }, warning: null };
   }
   if (raw.startsWith(CHARACTER_ROLE_PREFIX)) {
@@ -46,6 +49,23 @@ export function resolveAgentActor(raw: string | undefined): {
     return { actor: { type: 'character', id }, warning: null };
   }
   return { actor: { type: 'writer' }, warning: `Unknown AIRP_AGENT_ROLE='${raw}'; falling back to writer` };
+}
+
+/**
+ * Functional arranger identity is a separate fail-closed entry point.  It
+ * intentionally does not call the compatibility resolver above.
+ */
+export function resolveFunctionalArrangerActor(
+  rawRole: string | undefined,
+  rawScope: string | undefined,
+): { actor: { type: 'functional'; id: 'canvas-arranger' }; agentScope: typeof FUNCTIONAL_ARRANGER_SCOPE } {
+  if (rawRole !== FUNCTIONAL_ARRANGER_ROLE || rawScope !== FUNCTIONAL_ARRANGER_SCOPE) {
+    throw new Error('Invalid functional arranger identity or scope.');
+  }
+  return {
+    actor: { type: 'functional', id: 'canvas-arranger' },
+    agentScope: FUNCTIONAL_ARRANGER_SCOPE,
+  };
 }
 
 /**
@@ -80,7 +100,7 @@ export function actorRef(actor: Actor): string {
  * `engine` is reserved for trusted internal callers; it is included here so a
  * native tool hook can distinguish initialization from ordinary writer turns.
  */
-export type AgentScope = 'writer-top-level' | 'character' | 'initializer' | 'player' | 'engine';
+export type AgentScope = 'writer-top-level' | 'character' | 'initializer' | 'player' | 'engine' | typeof FUNCTIONAL_ARRANGER_SCOPE;
 export type NookMutationOperation = 'write' | 'edit' | 'move' | 'delete';
 
 function isLifeTraceMutation(

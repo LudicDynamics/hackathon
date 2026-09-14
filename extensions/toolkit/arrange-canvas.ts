@@ -45,7 +45,7 @@ export const arrangeCanvasTool = defineTool({
     'Use this at most once, except one retry after an uncommitted conflict and a fresh view_canvas(auto).',
   ],
   async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-    if (signal.aborted) {
+    if (signal?.aborted) {
       throw new ActionError({ code: 'conflict', message: 'Canvas arrangement was cancelled before commit.' });
     }
     const role = process.env.AIRP_AGENT_ROLE;

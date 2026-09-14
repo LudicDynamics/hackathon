@@ -27,7 +27,7 @@ export const WORLD_EVENT_TYPES = [
 export const WorldEventTypeSchema = z.enum(WORLD_EVENT_TYPES);
 export type WorldEventType = (typeof WORLD_EVENT_TYPES)[number];
 
-export const ActorTypeSchema = z.enum(['player', 'god', 'writer', 'character', 'engine']);
+export const ActorTypeSchema = z.enum(['player', 'god', 'writer', 'character', 'engine', 'functional']);
 export const ActorSchema = z.object({ type: ActorTypeSchema, id: z.string().optional() });
 export type ActorValue = z.infer<typeof ActorSchema>;
 

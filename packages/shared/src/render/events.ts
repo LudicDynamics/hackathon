@@ -148,6 +148,8 @@ export function actorPhrase(actor: Actor): string {
       return `the character "${actor.id ?? ''}"`;
     case 'engine':
       return 'The engine';
+    case 'functional':
+      return 'The canvas arranger';
   }
 }
 
