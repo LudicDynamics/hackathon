@@ -1223,5 +1223,6 @@
   "The automatic outcome did not run — nothing was taken from you.": { "zh-CN": "自动后果没有执行——没有从你这里拿走任何东西。", "ja": "自動的な結果は実行されませんでした。あなたからは何も失われていません。" },
   "Missing: {target}. The automatic outcome did not run — nothing was taken from you.": { "zh-CN": "缺少：{target}。自动后果没有执行——没有从你这里拿走任何东西。", "ja": "不足：{target}。自動的な結果は実行されませんでした。あなたからは何も失われていません。" },
   "Only part of the automatic outcome could be written. The part that was written stays.": { "zh-CN": "自动后果只写下了一部分。已经写下的部分保留。", "ja": "自動的な結果の一部しか書き込めませんでした。書かれた分はそのまま残ります。" },
-  "{count} outcomes were written into the world.": { "zh-CN": "{count} 项后果已写入世界。", "ja": "{count} 件の結果が世界に書き込まれました。" }
+  "{count} outcomes were written into the world.": { "zh-CN": "{count} 项后果已写入世界。", "ja": "{count} 件の結果が世界に書き込まれました。" },
+  "Retry writing": { "zh-CN": "重新续写", "ja": "執筆をやり直す" }
 }

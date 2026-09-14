@@ -1441,7 +1441,7 @@ export function App() {
               const prompt = retryWriterPrompt();
               if (prompt) void submitWriterText(prompt, undefined, true);
             }}>
-              Retry writing
+              {t('Retry writing')}
             </button>
           )}
           <div className="prototype-dock prototype-chrome">
