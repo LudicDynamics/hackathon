@@ -206,7 +206,12 @@ export function createCanvasPerceptionRouter(getActiveStore: () => LocalWorldSto
       let captured = await capture();
       let observed = await readCanvasSnapshot(store, { layer });
       if (observed.identity.snapshotId !== snapshot.identity.snapshotId) {
-        captured = await capture();
+        try {
+          captured = await capture();
+        } catch {
+          observed = await readCanvasSnapshot(store, { layer });
+          return res.status(409).json(conflictResponse(observed, snapshot.identity.snapshotId).body);
+        }
         observed = await readCanvasSnapshot(store, { layer });
         if (observed.identity.snapshotId !== snapshot.identity.snapshotId) return res.status(409).json(conflictResponse(observed, snapshot.identity.snapshotId).body);
       }
