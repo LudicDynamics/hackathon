@@ -6,6 +6,7 @@ import { existsSync, realpathSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { readWorldSettings, writeWorldSettings } from '../engine/world-settings.js';
+import { runDeclaredChoice, runDeclaredRoll, serialDeclared, prepareMaterialReview } from '../engine/declared-actions.js';
 import {
   ActionError,
   AgentModelSelectionSchema,
@@ -39,7 +40,6 @@ import {
 } from '@airp/shared';
 import type { AgentLifecycleManager } from '../engine/lifecycle.js';
 import type { EventBridge } from '../engine/event-bridge.js';
-import { prepareMaterialReview, runDeclaredChoice, serialDeclared } from '../engine/declared-actions.js';
 import type { LiveCallRegistry } from '../engine/live-session.js';
 
 interface LayerItem {
@@ -1165,12 +1165,8 @@ export function createWorldRouter(
     }
     // Only a forged score is a god action; a plain click is the player's (07 §5.2).
     const actor: Actor = typeof forcedResult === 'number' ? { type: 'god' } : { type: 'player' };
-    await reply(res, () =>
-      serviceFor(store, actor).rollDice({
-        path: dicePath,
-        ...(typeof forcedResult === 'number' ? { forcedResult } : {}),
-      })
-    );
+    await reply(res, () => serialDeclared(store.worldRoot, () =>
+      runDeclaredRoll(serviceFor(store, actor), dicePath, typeof forcedResult === 'number' ? forcedResult : undefined)));
   });
 
   // Use item on target (point-and-click puzzle). No bare frame: the event goes
@@ -1192,23 +1188,10 @@ export function createWorldRouter(
   router.post('/material-review', async (req, res) => {
     const store = getActiveStore();
     if (!store) return res.status(400).json({ error: 'No active world' });
-    await serialDeclared(store.worldRoot, async () => {
-      try {
-        const result = await prepareMaterialReview(serviceFor(store, { type: 'player' }), req.body);
-        res.json({ ok: true, details: result.details });
-      } catch (err) {
-        if (err instanceof ActionError) {
-          const http = err.toHttp();
-          res.status(http.status).json(http.body);
-          return;
-        }
-        res.status(500).json({
-          ok: false,
-          code: 'internal',
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    });
+    // A panel opened before a world switch must not submit into the new world.
+    if (req.body?.world !== store.worldRoot) return res.status(409).json({ error: 'The active world changed. Reopen the materials panel.' });
+    // Flat `{ ok, ...details }` per docs/wiring/00 §6; actionDetailsOf reads both shapes.
+    await reply(res, () => serialDeclared(store.worldRoot, () => prepareMaterialReview(serviceFor(store, { type: 'player' }), req.body)));
   });
 
   router.post('/choice', async (req, res) => {
@@ -1223,7 +1206,10 @@ export function createWorldRouter(
     }
     await reply(res, () => serialDeclared(store.worldRoot, async () => {
       const declared = await runDeclaredChoice(serviceFor(store, { type: 'player' }), choicePath, choice);
-      if (declared) return declared;
+      if (declared) {
+        Object.assign(declared.details.action, { world: store.worldRoot });
+        return declared;
+      }
       const result = await serviceFor(store, { type: 'player' }).chooseOption({ path: choicePath, choice });
       // Auto-turn is opt-in per world (docs/settings/00). `off` — the default —
       // keeps doc-21 §5.5: the event lands, the writer sees it in the injection

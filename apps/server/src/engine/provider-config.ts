@@ -36,7 +36,8 @@ function bundledDefinition(source: unknown): { provider: JsonObject; model: Deep
     rawProvider.api !== 'openai-completions' ||
     !Array.isArray(rawProvider.models)
   ) return undefined;
-  const model = rawProvider.models.find((candidate: unknown) => isObject(candidate) && candidate.id === 'deepseek-flash');
+  const model = rawProvider.models.find((candidate: unknown) => isObject(candidate) && candidate.id === 'deepseek-v4-flash')
+    ?? rawProvider.models.find((candidate: unknown) => isObject(candidate) && candidate.id === 'deepseek-flash');
   if (!isObject(model)) return undefined;
   if (
     typeof model.name !== 'string' ||

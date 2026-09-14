@@ -187,13 +187,36 @@ export function D10Stage({ dice, rolls, settled, onLanded, integrated = false }:
         outline.quadraticCurveTo(-4.5, 2.2, -4.5, 1.8);
         outline.lineTo(-4.5, -1.8);
         outline.quadraticCurveTo(-4.5, -2.2, -4.1, -2.2);
+        // Brown felt box: a procedural nap (no external texture file) on an
+        // opaque floor and walls, so the dice land in a tray, not on a white card.
+        const feltCanvas = document.createElement('canvas');
+        feltCanvas.width = 256;
+        feltCanvas.height = 256;
+        const felt2d = feltCanvas.getContext('2d');
+        if (felt2d) {
+          felt2d.fillStyle = '#6b4a35';
+          felt2d.fillRect(0, 0, 256, 256);
+          for (let fibre = 0; fibre < 9000; fibre += 1) {
+            const angle = Math.random() * Math.PI;
+            const length = 1 + Math.random() * 3;
+            felt2d.fillStyle = Math.random() < 0.5
+              ? `rgba(214, 170, 120, ${0.05 + Math.random() * 0.08})`
+              : `rgba(40, 24, 14, ${0.06 + Math.random() * 0.1})`;
+            felt2d.fillRect(Math.random() * 256, Math.random() * 256, Math.cos(angle) * length + 1, Math.sin(angle) * length + 1);
+          }
+        }
+        const nap = new T.CanvasTexture(feltCanvas);
+        nap.colorSpace = T.SRGBColorSpace;
+        nap.wrapS = nap.wrapT = T.RepeatWrapping;
+        nap.repeat.set(3, 1.5);
         const velvet = new T.MeshPhysicalMaterial({
-          color: 0x7893a2,
+          color: 0xffffff,
+          map: nap,
+          bumpMap: nap,
+          bumpScale: 0.02,
           roughness: 1,
-          transparent: true,
-          opacity: 0.78,
           sheen: 1,
-          sheenColor: new T.Color(0x7893a2),
+          sheenColor: new T.Color(0xa0714d),
           sheenRoughness: 0.85,
           side: T.DoubleSide,
         });
@@ -214,9 +237,8 @@ export function D10Stage({ dice, rolls, settled, onLanded, integrated = false }:
         railGeometry.setAttribute('position', new T.Float32BufferAttribute(railPositions, 3));
         railGeometry.setIndex(railIndices);
         railGeometry.computeVertexNormals();
+        // The felt walls stay visible in the ceremony card too: they make the box.
         const rails = new T.Mesh(railGeometry, velvet.clone());
-        rails.material.opacity = 0.55;
-        rails.visible = !integrated;
         scene.add(rails);
         collect(rails);
 
@@ -241,6 +263,10 @@ export function D10Stage({ dice, rolls, settled, onLanded, integrated = false }:
               const upper = Math.min(lower + 1, trajectory.length - 1);
               const a = trajectory[lower][index];
               const b = trajectory[upper][index];
+              // Interpolate the simulated throw (lost in the a1ac282 migration,
+              // which left the dice frozen until they snapped to the result).
+              pivot.position.fromArray(a.position).lerp(new T.Vector3(...b.position), at - lower);
+              pivot.quaternion.fromArray(a.rotation).slerp(new T.Quaternion(...b.rotation), at - lower);
             } else {
               pivot.position.set(x, 0, 1);
               pivot.quaternion.copy(target);

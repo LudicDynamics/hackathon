@@ -1,0 +1,14 @@
+goal: "填充六个当前体验版的全部已注册角色小天地"
+keyresults:
+  - kr-1: "13位角色都有7张非空、个性化、可在小天地直接读取的内容卡"
+  - kr-2: "人物关系引用稳定路径；不预写本局记忆、结局或别人心事"
+  - kr-3: "编译与已分发模板一致；角色file slot读到自己的资料"
+rules:
+  - id: character-nooks
+    name: complete-opening-interior
+    apply: "tools/experiences/character-nooks.mjs"
+    level: error
+    desc:
+      - "身份、关系、日记、心事、喜恶、近期行动与长远目标缺一不可"
+      - "小天地卡必须是characters/id直接子级；不增加引擎或独立状态"
+      - "幼年Ryo不知未来；Watson不知凶手；初雪不预订恋爱与失约"

@@ -26,7 +26,7 @@ export interface CharacterRailProps {
    * disables the row's follow button and marks it `aria-busy`.
    */
   pendingFollowing: ReadonlySet<string>;
-  /** A nook is already open -> "Visit their nook" is disabled (§6.4). */
+  /** A nook is already open -> "Visit their ikigai" is disabled (§6.4). */
   nookOpen: boolean;
   /** Avatar click. Only called when `state === 'in-scene'` (UF-2). */
   onOpenCharacter(id: string): void;
@@ -34,7 +34,7 @@ export interface CharacterRailProps {
   onTravelTo(id: string): void;
   /** Follow toggle; `next` is the computed terminal state (contract §2.4). */
   onToggleFollowing(id: string, next: boolean): void;
-  /** "Visit their nook"; independent of presence state (UF-4). */
+  /** "Visit their ikigai"; independent of presence state (UF-4). */
   onOpenNook(id: string): void;
   /** Player-visible feedback (contract §6 MUST NOT #6). */
   notify(message: string): void;
@@ -156,9 +156,9 @@ export function CharacterRail({
                 onClick={() => onOpenNook(view.id)}
                 disabled={nookOpen}
                 aria-disabled={nookOpen}
-                aria-label={`${t('Visit their nook')} · ${displayName}`}
+                aria-label={`${t('Visit their ikigai')} · ${displayName}`}
               >
-                {t('Visit their nook')}
+                {t('Visit their ikigai')}
               </button>
             </div>
           </div>

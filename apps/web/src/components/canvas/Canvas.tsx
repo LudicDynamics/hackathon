@@ -176,10 +176,16 @@ export const Canvas: React.FC<CanvasProps> = ({
   }, [items]);
 
   // At most ONE portrait plays per canvas (AGENTS §7.6). `items` is in server
-  // row order (z ascending), so the last portrait is the visual focus.
+  // row order (z ascending), so the last portrait is the visual focus unless
+  // the pointer has hovered another one.
+  const [focusedPortrait, setFocusedPortrait] = React.useState<string | null>(null);
   const playingPortrait = useMemo(
-    () => (stillPortraits ? null : portraitPlayStateOf(items).playing),
-    [items, stillPortraits]
+    () => {
+      if (stillPortraits || reducedMotion || !effectsEnabled) return null;
+      const candidates = items.filter(item => item.kind === 'portrait' || (item.kind === 'sprite' && item.frontmatter?.avatarVideo));
+      return candidates.find(item => item.path === focusedPortrait)?.path ?? candidates.at(-1)?.path ?? null;
+    },
+    [items, stillPortraits, effectsEnabled, focusedPortrait, reducedMotion]
   );
 
 
@@ -582,7 +588,10 @@ export const Canvas: React.FC<CanvasProps> = ({
       {/* World Transform Layer — single transform layer, rAF writes transform.
           Must pin transform-origin to top-left: default is center, which would
           offset every screen↔world mapping by half the content size. */}
-      <div ref={camera.worldRef} className="absolute inset-0 origin-top-left" data-depth-surface={DEPTH_KIND.world}>
+      <div ref={camera.worldRef} className="absolute inset-0 origin-top-left" data-depth-surface={DEPTH_KIND.world} onPointerOver={event => {
+        const object = (event.target as HTMLElement).closest<HTMLElement>('.object[data-path]');
+        if (object) setFocusedPortrait(object.dataset.path ?? null);
+      }}>
         <LinkLayer links={links} />
         <CanvasGrid camera={camera} />
 

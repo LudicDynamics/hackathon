@@ -97,3 +97,56 @@ test('TtsSettings volume changes do not own or alter master mute', () => {
   const source = fs.readFileSync(new URL('../src/components/TtsSettings.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /setMuted|toggleMuted/);
 });
+
+test('voice uses a 5ms click-safe attack while music keeps the 1.5s crossfade', async () => {
+  const gains = [];
+  const previousWindow = globalThis.window;
+  const previousStorage = globalThis.localStorage;
+  const previousFetch = globalThis.fetch;
+  class AudioContext {
+    currentTime = 2;
+    state = 'running';
+    destination = {};
+    createGain() {
+      const events = [];
+      const node = {
+        events,
+        gain: {
+          value: 1,
+          cancelScheduledValues() {},
+          setValueAtTime(value, time) { this.value = value; events.push(['set', value, time]); },
+          linearRampToValueAtTime(value, time) { this.value = value; events.push(['ramp', value, time]); },
+        },
+        connect(target) { this.target = target; },
+        disconnect() {},
+      };
+      gains.push(node);
+      return node;
+    }
+    createBufferSource() {
+      return { buffer: null, loop: false, connect(target) { this.target = target; }, disconnect() {}, start() {}, stop() {}, onended: null };
+    }
+    async decodeAudioData() { return {}; }
+  }
+  globalThis.window = { AudioContext, setTimeout };
+  globalThis.localStorage = { getItem: () => null, setItem() {} };
+  globalThis.fetch = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+  try {
+    const audio = await createJiti(import.meta.url, { moduleCache: false }).import('../src/lib/audio.ts');
+    audio.playVoice('/voice.wav');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const voiceBus = gains[2];
+    const voiceGain = gains.find(node => node.target === voiceBus);
+    assert.deepEqual(voiceGain.events.slice(-2), [['set', 0, 2], ['ramp', 0.85, 2.005]]);
+
+    audio.setTheme('/music.wav');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const musicBus = gains[1];
+    const musicGain = gains.find(node => node.target === musicBus);
+    assert.deepEqual(musicGain.events.slice(-2), [['set', 0, 2], ['ramp', 0.22, 3.5]]);
+  } finally {
+    globalThis.window = previousWindow;
+    globalThis.localStorage = previousStorage;
+    globalThis.fetch = previousFetch;
+  }
+});

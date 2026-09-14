@@ -30,7 +30,7 @@
 步骤 5 把沉默兜底限定在 watchdog 超时后，步骤 6 又在 `handleSend` 同步进 `thinking` 并起 watchdog，§6.2 又要求关闭窗口内的收尾帧不消费。合起来：角色进程真死（`index.ts:145` 回 error 帧、前端不消费）时，玩家看到既无报错、又不可输入、也不知要等 95s 的遮罩。**修法：接 `error` 帧（R3-4）后 watchdog 降为最后兜底。**（已裁决 A-silence：升为本批必做。）
 
 ### R3-6（P3，confidence 0.8）05 §6 的 grep 零命中判据按字面永远不可能通过
-§6 验收第 2 条要求 `grep -rn "sampleReplies" docs/` 为空，但 `docs/` 下实跑 12 处命中（5 文件）：`docs/后端实现计划.md:80`、只读的 `docs/前端接线体检.md`、05 自身、及其它评审产物。即使 R2 改写完成，该 grep 仍不可能为空 → 验收判据字面必然红，实现者只能跳过。**修法：收窄扫描面到被回写目标，显式排除 `docs/wiring/05-*.md` 与 `docs/前端接线体检.md`。**（与 R4-2 同源。）
+§6 验收第 2 条要求 `grep -rn "sampleReplies" docs/` 为空，但 `docs/` 下实跑 12 处命中（5 文件）：`docs/development/后端实现计划.md:80`、只读的 `docs/wiring/前端接线体检.md`、05 自身、及其它评审产物。即使 R2 改写完成，该 grep 仍不可能为空 → 验收判据字面必然红，实现者只能跳过。**修法：收窄扫描面到被回写目标，显式排除 `docs/wiring/05-*.md` 与 `docs/wiring/前端接线体检.md`。**（与 R4-2 同源。）
 
 ### R3-7（P2，confidence 0.85）05 R10 定位不存在
 R10 指向 `docs/hooks/00-共同上下文.md:251` 的 `chalk_landed` 引用——该行不含 `chalk_landed`（全 `docs/hooks/` grep `chalk_landed` 零命中），也不含任何 `useWorld` 引用。真正需随 02 变动的 `useWorld` 行号引用在 `docs/hooks/05-视点链路.md:72,512,524`。**修法：R10 重定向到该三处，或删除。**（与 R1-5 同源。）

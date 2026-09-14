@@ -532,8 +532,8 @@ router.post('/use-item', async (req, res) => {
 | `apps/web/src/App.tsx:161-169` | 发 `{ itemPath, targetPath, targetType: 'card' }` | 发 `{ item, target }`（§8.5） |
 | `apps/web/src/components/canvas/CardRenderer.tsx:97-118` | 拖起时**所有**卡都加 `puzzle-target-ready`；drop 即播开锁音 | 只给合法目标高亮；音效/抖动由响应驱动（§6.3） |
 | `apps/web/src/state/useWorld.ts` 的 WS `onmessage` switch `default` 分支 | `use_item_on` 帧被 `ignored`（`break` 注释明写） | 消费 `world_event`（§6.2） |
-| `docs/doc-06-演出与交互设计.md:265` | 派发名写作 `player_used_item_on_target` | 统一为事件 type `use_item_on`（`doc-21 §4.6` 已退役这类身份×动作名） |
-| `docs/doc-19:165-169` | 派发名写作 `{ type: "player_action", action: "use_item_on" }` | 同上；前端 → 路由 → 动作函数 → 事件表，只有最后一个名字进世界 |
+| `docs/ui/doc-06-演出与交互设计.md:265` | 派发名写作 `player_used_item_on_target` | 统一为事件 type `use_item_on`（`doc-21 §4.6` 已退役这类身份×动作名） |
+| `docs/gameplay/doc-19:165-169` | 派发名写作 `{ type: "player_action", action: "use_item_on" }` | 同上；前端 → 路由 → 动作函数 → 事件表，只有最后一个名字进世界 |
 
 ### 9.2 迁移影响（旧调用点）
 

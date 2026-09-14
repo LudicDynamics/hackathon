@@ -1,6 +1,6 @@
 /**
  * Initialiser briefs — the task text handed to a scene/nook initialiser agent
- * (docs/init/00 §4, docs/doc-11 §2.2).
+ * (docs/init/00 §4, docs/init/doc-11 §2.2).
  *
  * Pure, synchronous, no I/O: the caller (the `airp-init` command, or the server)
  * gathers world facts and passes them in. These build the *dynamic* half of

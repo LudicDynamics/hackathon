@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { experiences } from './experiences/index.mjs';
 import { md } from './experiences/common.mjs';
+import { nookProfilePaths } from './experiences/character-nooks.mjs';
 import { templateArchive } from './world-editions.mjs';
 import { parseFrontmatter, WorldManifestSchema } from '../packages/shared/dist/index.js';
 
@@ -67,7 +68,8 @@ export async function installExperience(repo, pack, { outputRoot = path.join(rep
       items: [
         { kind: 'slot', id: 'character-instruction', slot: 'system-char' },
         { kind: 'block', id: 'world-language', content: pack.locale === 'ja' ? `日本語で話す。記憶は ${root}/${memory}。この人物が実際に見聞きしたことだけ知る。` : `Speak English. Memory lives at ${root}/${memory}. Know only what this character witnessed.` },
-        { kind: 'slot', id: 'profile', slot: 'file', options: { path: ['README.md', identity, memory], baseDir: root, stripFrontmatter: true, onMissing: 'skip' } },
+        { kind: 'slot', id: 'profile', slot: 'file', options: { path: ['README.md', identity, memory, ...nookProfilePaths(pack.base, person)], baseDir: root, stripFrontmatter: true, onMissing: 'skip' } },
+        ...(person.instructions ? [{ kind: 'block', id: 'role-context', content: person.instructions }] : []),
         { kind: 'slot', id: 'chat-history', slot: 'chat-history' },
       ],
     };

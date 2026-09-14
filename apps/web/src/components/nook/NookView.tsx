@@ -6,7 +6,7 @@ import { StubPrompt } from '../chrome/StubPrompt.js';
 import { ghostItemFor } from '../../lib/init-ghost.js';
 import type { LayerState } from '../../state/useWorld.js';
 import { NookNoteComposer } from './NookNoteComposer.js';
-import { UI_COPY, type Locale } from '../../lib/i18n.js';
+import { UI_COPY, translate, type Locale } from '../../lib/i18n.js';
 import { useLiveCall } from '../../lib/live-call.js';
 import type { CharacterFrame } from '../../lib/character-frame-queue.js';
 import { airpGateway, type AssetMediaKind } from '../../lib/airp-gateway.js';
@@ -35,7 +35,7 @@ export interface NookViewProps {
   characterId: string;
   /** Close the nook, returning to the layer that was showing. App owns it. */
   onClose: () => void;
-  locale: Exclude<Locale, 'zh-CN'>;
+  locale: Locale;
   // Forwarded layer callbacks (02 §⑫-2): the nook MUST NOT build its own
   onMoveCard?: (path: string, x: number, y: number) => Promise<void> | void;
   onSelectChoice?: (path: string, choice: string) => void;
@@ -156,7 +156,7 @@ export const NookView: React.FC<NookViewProps> = ({
   const [initializing, setInitializing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const copy = UI_COPY[locale];
+  const copy = Object.fromEntries(Object.entries(UI_COPY.en).map(([key, value]) => [key, locale === 'ja' ? UI_COPY.ja[key as keyof typeof UI_COPY.ja] : translate(locale, value)])) as typeof UI_COPY.en;
 
   // The character's REAL lines during a call, read off the frames `useWorld`
   // already dispatches (docs/live-voice/00 §2.8) — never a second WS, never a
@@ -177,7 +177,7 @@ export const NookView: React.FC<NookViewProps> = ({
   }, []);
   const { state: call, available: callAvailable, start: startCall, stop: stopCall } = useLiveCall({
     characterId,
-    locale,
+    locale: locale === 'ja' ? 'ja' : 'en',
     onCharacterFrame: handleCharacterFrame,
   });
   const callInProgress = call.phase === 'connecting' || call.phase === 'live';

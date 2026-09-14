@@ -4,6 +4,8 @@ import { ActivityRail } from '../chrome/ActivityRail.js';
 import { AgentActivityLog } from '../chrome/AgentActivityLog.js';
 import { canRequestTts, invalidateTts, ttsEnabled } from '../../lib/tts-readiness.js';
 import { useLocale } from '../../lib/i18n.js';
+import { guardImeKey } from '../../lib/ime.js';
+import { VoiceInputButton } from '../chrome/VoiceInputButton.js';
 import { playStinger, playVoice, stopVoice, unlock, type Emotion } from '../../lib/audio.js';
 import { sanitiseTtsText } from '@airp/shared/tts-text';
 import {
@@ -259,7 +261,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 
   /** 页封口即预取（contract §6.5）：同页只发一次（voiceState 门）。
    *  ⚠️ 门禁硬约束：`fetch('/api/tts'` 与 route 同行、body 为内联对象字面量、
-   *  键集恰为 text / voice / language（tools/check-request-bodies.mjs）。 */
+   *  键集由 tools/check-request-bodies.mjs 校验。 */
   const prefetchVoice = useCallback(
     async (page: StagePage, i: number): Promise<void> => {
       if (page.voiceState !== 'idle') return; // 已 pending/ready/failed → 不重发
@@ -284,8 +286,11 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         const res = await fetch('/api/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, voice, language }),
+          body: JSON.stringify({ text, voice, language, characterId, emotion: page.emo }),
         });
+        if (res.headers.get('X-AIRP-TTS-Fallback') === 'local-to-online') {
+          console.warn('[AIRP TTS] Local voice failed; falling back to online TTS.');
+        }
         if (token !== voiceTurnRef.current || sanitiseTtsText(page.text) !== requestedText) return;
         const data = (await res.json()) as { ok?: boolean; url?: string; code?: string };
         if (!res.ok || !data.ok || typeof data.url !== 'string' || data.url === '') {
@@ -304,7 +309,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         onVoiceResolved(page, i);
       }
     },
-    [voice, language, onVoiceResolved]
+    [voice, language, characterId, onVoiceResolved]
   );
 
   /** 语音在途 → 挂起 stinger，到点仍 pending 则响（contract §5.4）。 */
@@ -461,7 +466,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
       setEmo(silence.emo);
       setPhase('done');
     }, TURN_WATCHDOG_MS);
-  }, [clearWatchdog, locale, syncPages, enterPage, cancelStreamTimer]);
+  }, [clearWatchdog, language, syncPages, enterPage, cancelStreamTimer]);
 
   /** 彻底收尾（卸载 / 切角色）：清所有定时器并复位流状态。 */
   const streamTurn = useCallback(() => {
@@ -524,7 +529,8 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     phaseRef.current = 'idle';
     phaseBeforeTurnRef.current = 'idle';
 
-    const key = worldId === undefined ? null : `airp:greeted:${worldId}:${characterId}`;
+    const contentLanguage = language === 'ja' ? 'ja' : 'en';
+    const key = worldId === undefined ? null : `airp:greeted:v2:${worldId}:${characterId}:${contentLanguage}`;
     let greeted: string | null = null;
     if (key !== null) {
       try {
@@ -535,7 +541,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     }
     if (greeted !== null) return;
 
-    const g = GREETING_LINE[locale] ?? GREETING_LINE.en;
+    const g = GREETING_LINE[contentLanguage];
     const mockPage: StagePage = { text: g.text, emo: g.emo, sealed: true, voiceState: 'idle' };
     pagesRef.current = [mockPage];
     mockRef.current = true;
@@ -555,7 +561,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     setPhase('streaming');
     void prefetchVoice(mockPage, 0); // §15.18 B1：mock 页必须走同一语音路径
     enterPage(0, { announce: true }); // 逐字 + 朗读，不响 stinger
-  }, [characterId, locale, worldId, prefetchVoice, enterPage]);
+  }, [characterId, language, worldId, prefetchVoice, enterPage]);
 
   // Frames are drained from the shared FIFO in delivery order. The callback
   // below handles one frame; the effect after it drains every queued frame.
@@ -835,7 +841,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
           className="character-activity-log"
         />
         <div className="name-plate">{displayName || characterId}</div>
-        {onOpenNook && <button type="button" onClick={onOpenNook}>Visit private space</button>}
+        {onOpenNook && <button type="button" onClick={onOpenNook}>{t('Visit ikigai')}</button>}
         <p className="narr-line">{bio ? bio : '(necessary description)'}</p>
 
         <div
@@ -870,12 +876,18 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => {
+              if (guardImeKey(e)) return;
               if (e.key === 'Enter') handleSend();
             }}
             placeholder={locale === 'ja' ? `${characterId}に話す…（Enterで送信）` : `Say something to ${characterId}… (Enter to send)`}
             aria-label={`Message to ${characterId}`}
             disabled={busy}
             className="speech-input"
+          />
+          <VoiceInputButton
+            disabled={busy}
+            getDraft={() => inputText}
+            onDraft={setInputText}
           />
         </div>
       </div>

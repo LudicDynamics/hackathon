@@ -72,7 +72,7 @@ export const chalkTool = defineTool({
       const result = await getActionService(ctx).writeChalk({
         body: params.content,
         title: deriveTitle(params.content),
-        layer: currentLayer(ctx) ?? undefined,
+        layer: currentLayer(ctx) === 'map' ? 'world' : currentLayer(ctx) ?? undefined,
         path: params.path,
         appendTo: params.append_to,
         linkTo: params.link_to,

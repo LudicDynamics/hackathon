@@ -2,7 +2,7 @@
 
 > 状态：**设计稿（2026-09-12）**，待评审。属「作家 / 角色 / 初始化器提示词 + skill 体系」批次（见 `docs/prompts/00-共同上下文.md`，下称 `00`）。
 > 一切落点、命名、语言分层、事实边界以 `00` 为准；本文只写 **skill 层的清单、正文、命名、description 与骨架**。
-> 前置：`00`（冻结契约）、`doc-23`（九条写法）、`docs/hooks/00`（注入什么，本文不重复）、`docs/tools/00` + `docs/doc-20`（工具真相）、`vendor/pi-rp/packages/coding-agent/docs/skills.md`（frontmatter 规则）。
+> 前置：`00`（冻结契约）、`doc-23`（九条写法）、`docs/hooks/00`（注入什么，本文不重复）、`docs/tools/00` + `docs/protocols/doc-20`（工具真相）、`vendor/pi-rp/packages/coding-agent/docs/skills.md`（frontmatter 规则）。
 > 现状核实（2026-09-12）：**全仓不存在任何真正的 `SKILL.md`**（`find . -name SKILL.md -not -path './node_modules/*' -not -path './vendor/*'` 零命中）。现有两块只是占位 README：`skills/README.md`、`templates/holmes-world/skills/README.md`。本文是从零到有的体系设计。
 
 ---
@@ -351,7 +351,7 @@ canvas looks like you forgot.
 | 开篇"resident rules 已管什么" | doc-23 §2.8：说清不归本文管的事 | skill 与常驻层各写一遍"必须用工具落板"（doc-23 §2.9） |
 | chalk 风格表 | 用户原话"用不同字体的 chalk 表达情绪" | 作家只用裸 chalk，场景永远是同一种声音 |
 | 每个风格的"为什么" | doc-23 §2.1：规则跟机制理由 | 只有风格名 → 作家拿 `big` 当"重点"到处用 |
-| 配色一行 | `docs/doc-04:182` 的语义分工 | rust/blue/sage 被当装饰色随机用，世界失去色彩语言 |
+| 配色一行 | `docs/ui/doc-04:182` 的语义分工 | rust/blue/sage 被当装饰色随机用，世界失去色彩语言 |
 | 不要伪造 age | `docs/tools/02:483`（`collapsed`/`aged` 不由工具管） | 作家手写 `aged: true` 把"刚落下就陈年"的假象冻进文件 |
 | `move_to` 判据 + `near` | `extensions/toolkit/move-to.ts:22-24` | 叙事里角色进门、画布上没有他；或误用 `move` 搬了文件夹 |
 | `show` 七演出表 | `packages/shared/src/components/performances.ts:15-100`；`show.ts:64-67` | 用 show 放信 → 卡永不存在；漏 target → 调用直接失败 |

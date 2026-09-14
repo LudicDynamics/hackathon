@@ -13,17 +13,19 @@ test('stage consumes the frozen action snapshot and remains presentation-only be
   assert.match(dialog, /Selecting materials does not submit or execute them/);
 });
 
-test('material slot replacement is exclusive and required-slot readiness is explicit', () => {
-  assert.match(dialog, /Object\.entries\(selected\)\.filter\(\(\[id, selectedPath\]\) => id !== slot && selectedPath !== path\)/);
-  assert.match(dialog, /slots\.length > 0[\s\S]*Object\.values\(selected\)\.some\(Boolean\)[\s\S]*slots\.every\(slot => !slot\.required \|\| !!selected\[slot\.id\]\)/);
+test('a material is used once, a slot holds up to maxItems, and required-slot readiness is explicit', () => {
+  // One slot may hold several files (bb4511f); moving a file removes it from every other slot.
+  assert.match(dialog, /Object\.entries\(selected\)\.map\(\(\[id, paths\]\) => \[id, paths\.filter\(p => p !== path\)\]\)/);
+  assert.match(dialog, /current\.length >= slotCapacity\(slot\)[\s\S]*setError/);
+  assert.match(dialog, /slots\.length > 0[\s\S]*Object\.values\(selected\)\.some\(paths => paths\.length > 0\)[\s\S]*slots\.every\(slot => !slot\.required \|\| \(selected\[slot\.id\]\?\.length \?\? 0\) > 0\)/);
   assert.match(dialog, /if \(!item \|\| !slot \|\| !isSelectable\(item, slot\)\)[\s\S]*setError/);
 });
 
 test('stage retry preserves the draft after an authoritative review failure', () => {
   assert.match(dialog, /try \{[\s\S]*await onSubmit\([\s\S]*catch \(reason\)[\s\S]*setError\([\s\S]*finally \{[\s\S]*setBusy\(false\)/);
   assert.doesNotMatch(dialog, /setSelected\(\{\}\)/);
-  assert.match(entity, /body: JSON\.stringify\(\{ path: action\.source, choice: action\.choice, revision: action\.revision, selections \}\)/);
-  assert.doesNotMatch(entity, /body: JSON\.stringify\(\{ world:/);
+  // `world` lets the server reject a panel opened before a world switch (409).
+  assert.match(entity, /body: JSON\.stringify\(\{ world: action\.world, path: action\.source, choice: action\.choice, revision: action\.revision, selections \}\)/);
 });
 
 test('declared choices are classified through ActionFeedback and never become writer prompts before acceptance', () => {

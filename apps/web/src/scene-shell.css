@@ -5,7 +5,12 @@
 .depth-surface--background { z-index: var(--depth-background); }
 .depth-surface--world { z-index: var(--depth-world); }
 .depth-surface--entity { z-index: var(--depth-entity); }
-.depth-surface--overlay { z-index: var(--depth-overlay); }
+/* The overlay only holds presentational ghosts/phantoms; it sits above the
+   entity surface, so it must not swallow hover/clicks meant for the cards. */
+.depth-surface--overlay { z-index: var(--depth-overlay); pointer-events: none; }
+/* Atmospheric particles are mounted after the world layer and paint above it;
+   they are decorative and must let pointer events through to the cards. */
+[data-depth-surface="background"] { pointer-events: none; }
 .depth-surface--writer { z-index: var(--depth-writer); }
 .depth-surface--modal { z-index: var(--depth-modal); }
 .depth-surface--ui { z-index: var(--depth-ui); }
@@ -46,7 +51,8 @@
 .prototype-immersion-toggle:hover,.prototype-immersion-toggle:focus-visible { opacity: 1; }
 .prototype-world-meta,.is-reading .prototype-world-meta { top: 24px; right: 80px; left: auto; max-width: 350px; text-align: right; }
 .has-header .prototype-world-meta { top: 84px; }
-.prototype-world-meta h1 { font-size: 18px; letter-spacing: .015em; line-height: 1.5; }
+/* One line: a long place name ellipsizes instead of wrapping and shifting the header. */
+.prototype-world-meta h1 { font-size: 18px; letter-spacing: .015em; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .prototype-world-meta p { font: 10px/1.6 var(--ux-font-machine); letter-spacing: .05em; }
 .prototype-world-meta .prototype-eyebrow { font-size: 9px; letter-spacing: .22em; margin-bottom: 4px; }
 .prototype-world-meta .writer-result { position:static; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; max-width:100%; }

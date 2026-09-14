@@ -3,7 +3,8 @@ import fs from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { resolveVoice, sanitiseTtsText, type LocalWorldStore } from '@airp/shared';
+import { resolveVoice, sanitiseTtsText, parseFrontmatter, type LocalWorldStore } from '@airp/shared';
+import { LocalTtsError, characterLocalVoice, isLocalTtsCharacter, localTtsEmotion, localTtsHash, readLocalTtsConfig, synthesiseLocal } from './local-tts.js';
 
 /**
  * Server-side TTS: the ONE synthesis point (docs/tts/00 §1, docs/tts/01).
@@ -251,7 +252,7 @@ export function createTtsRouter(
   router.get('/tts/config', (_req, res) => {
     const config = readTtsConfig();
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ configured: Boolean(config.apiKey.trim()), model: config.model, defaultVoice: config.defaultVoice });
+    res.json({ configured: Boolean(config.apiKey.trim() || readLocalTtsConfig().baseUrl), model: config.model, defaultVoice: config.defaultVoice });
   });
 
   /**
@@ -277,7 +278,9 @@ export function createTtsRouter(
       text: rawText,
       voice: rawVoice,
       language: rawLanguage,
-    } = req.body as { text?: unknown; voice?: unknown; language?: unknown };
+      characterId,
+      emotion: rawEmotion,
+    } = req.body as { text?: unknown; voice?: unknown; language?: unknown; characterId?: unknown; emotion?: unknown };
     if (typeof rawText !== 'string' || rawText.trim() === '') {
       return res
         .status(400)
@@ -331,6 +334,37 @@ export function createTtsRouter(
     // Step 6 — world locale short code → DashScope `language_type`.
     const languageType = typeof rawLanguage === 'string' ? (LANGUAGE_MAP[rawLanguage] ?? 'Auto') : 'Auto';
 
+    // Character-local voice gets first refusal; an unavailable service falls
+    // through to the existing online provider without exposing credentials.
+    const local = readLocalTtsConfig();
+    if (local.baseUrl && typeof characterId === 'string') {
+      try {
+        const manifest = await store.getManifest();
+        const registered = manifest.characters?.some(character => character.id === characterId);
+        let declared: Record<string, unknown> = {};
+        if (registered && /^[a-z0-9][a-z0-9-]*$/.test(characterId)) {
+          try { declared = parseFrontmatter(await store.readFile(`characters/${characterId}/README.md`)).frontmatter ?? {}; } catch { /* legacy */ }
+        }
+        const override = (process.env.AIRP_TTS_CHARACTER_VOICES ?? '').split(',').some(pair => pair.trim().startsWith(`${characterId}=`));
+        const selected = characterLocalVoice(characterId, declared.voice, declared.gender)
+          ?? (!override && isLocalTtsCharacter(manifest.id, characterId) ? local.voice : null);
+        if (registered && selected) {
+          const localConfig = { ...local, voice: selected };
+          const language = typeof rawLanguage === 'string' && rawLanguage in LANGUAGE_MAP ? rawLanguage : 'auto';
+          const emotion = localTtsEmotion(rawEmotion);
+          const localFile = `${localTtsHash(localConfig, text, language, emotion)}.wav`;
+          const localAbs = path.join(store.worldRoot, '.airpworld', 'tts-cache', localFile);
+          const cached = existsSync(localAbs);
+          if (!cached) await writeAtomic(localAbs, await synthesiseLocal(localConfig, text, language, emotion));
+          return res.json({ ok: true, url: `/api/tts/audio/${localFile}`, cached, characters: text.length, truncated });
+        }
+      } catch (error) {
+        const reason = error instanceof LocalTtsError ? error.message : error instanceof Error ? error.name : 'Error';
+        console.warn(`[AIRP TTS] Local character TTS failed (${reason}); falling back to online TTS.`);
+        res.setHeader('X-AIRP-TTS-Fallback', 'local-to-online');
+      }
+    }
+
     // Step 7 — cache lookup. `existsSync` (not `stat`) is enough: atomic writes
     // guarantee "present ⇒ complete".
     const instructions = deliveryInstructions(config.model, voice);
@@ -351,6 +385,7 @@ export function createTtsRouter(
     // Step 8 — key check comes AFTER the cache probe on purpose: an already
     // synthesised page keeps playing even if the key was withdrawn.
     if (!config.apiKey) {
+      console.warn('[AIRP TTS] Online TTS unavailable: DASHSCOPE_API_KEY is not set.');
       return res
         .status(503)
         .json({ ok: false, code: 'tts_unconfigured', error: 'DASHSCOPE_API_KEY is not set' });
@@ -368,6 +403,7 @@ export function createTtsRouter(
       });
     } catch (err) {
       const mapped = mapSynthError(err);
+      console.warn(`[AIRP TTS] Online TTS failed (${mapped.code}).`);
       return res.status(mapped.status).json({ ok: false, code: mapped.code, error: mapped.error });
     }
     try {

@@ -9,6 +9,21 @@
 
 import { flowColumns, type AutoLayoutRect } from '@airp/shared/layout';
 import { getPhantomsSnapshot, type PhantomSeat } from './phantom.js';
+import { makeBox, overlap } from './collide.js';
+import { SEAT_ANCHOR, seatSpiral } from './seat.js';
+
+/** Measure complete provisional text before paint. Only its own DOM moves;
+ * real card seats remain server-owned and win when the file arrives. */
+export function fitPhantom(el: HTMLElement): void {
+  const siblings = el.parentElement?.querySelectorAll<HTMLElement>('.object[data-path], .object--ghost') ?? [];
+  const occupied = [...siblings].filter(other => other !== el)
+    .map(other => makeBox(other.offsetLeft, other.offsetTop, other.offsetWidth, other.offsetHeight));
+  const box = makeBox(el.offsetLeft, el.offsetTop, el.offsetWidth, el.offsetHeight);
+  if (!occupied.some(other => overlap(box, other))) return;
+  const seat = seatSpiral(SEAT_ANCHOR, occupied, box.w, box.h);
+  el.style.left = `${seat.x}px`;
+  el.style.top = `${seat.y}px`;
+}
 
 /** Current layer's rows, published by `useWorld` after each successful fetch. */
 interface SeatItem {

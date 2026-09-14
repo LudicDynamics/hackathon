@@ -37,7 +37,7 @@ const alias = {
 
 const jiti = createJiti(import.meta.url, { moduleCache: false, alias, tryNative: true });
 
-/** docs/doc-20 §1 / docs/tools/00 §6.3 — the frozen tool face. */
+/** docs/protocols/doc-20 §1 / docs/tools/00 §6.3 — the frozen tool face. */
 const EXPECTED_TOOLS = [
   'look_at',
   'view_canvas',
@@ -270,17 +270,11 @@ for (const [name, params] of CALLS) {
 // The one tool not in CALLS: generate_image must fail LOUD when unconfigured.
 delete process.env.AIRP_IMAGE_MODEL;
 delete process.env.OPENROUTER_API_KEY;
-const noKey = await writer.call('generate_image', { prompt: 'a foggy street' });
-check(
-  'generate_image (no key) fails loud, not fake',
-  noKey.isError === true && noKey.details.code === 'unsupported' && /no API key/.test(noKey.content[0].text)
-);
+await assert.rejects(() => writer.call('generate_image', { prompt: 'a foggy street' }), error => error.code === 'unsupported' && /no API key/.test(error.message));
+check('generate_image (no key) throws so engine marks failure', true);
 process.env.AIRP_IMAGE_MODEL = 'openrouter/not-a-real-model';
-const noProvider = await writer.call('generate_image', { prompt: 'a foggy street' });
-check(
-  'generate_image (unknown model) -> no_provider',
-  noProvider.isError === true && noProvider.details.reason === 'no_provider'
-);
+await assert.rejects(() => writer.call('generate_image', { prompt: 'a foggy street' }), error => error.details.reason === 'no_provider');
+check('generate_image (unknown model) throws no_provider', true);
 delete process.env.AIRP_IMAGE_MODEL;
 
 // Identity + turn wiring: the actor must come from the env, the turn from turn.ts.

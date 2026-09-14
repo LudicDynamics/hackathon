@@ -51,23 +51,23 @@ A 全落后的 9 条 DARK 精确名单：
 - **设计原话**：`docs/wiring/05-文档回写.md:159` ——「逐条 grep 原断言文本，**零命中**：例如 `grep -rn "sampleReplies" docs/` 应为空、`grep -rn "character_prompt.*空注释" docs/` 应为空」。
 - **实测**：`grep -rn "sampleReplies" docs/` **今日就非空且回写后必然仍非空**——
   - `docs/wiring/05-文档回写.md:36,39,159`（05 自己逐字引用原断言）；
-  - `docs/前端接线体检.md:165`（只读现状表，原文保留）。
+  - `docs/wiring/前端接线体检.md:165`（只读现状表，原文保留）。
   `character_prompt.*空注释` 同理：05 `:37,67,69,159`、体检 `:165,167`。
 - **为什么核验不了/会误判**：判据要求的是「全 `docs/` 零命中」，但**写下这条判据的文件本身**和**只读的体检报告**都合法地保留了该短语。这条断言**永远为假**，是恒红门禁（`check-ws-contract.test.mjs` 明言恒红门禁「比没有更糟」）。回写是否真的完成，靠这条 grep 判不出来。
 - **替代判据**：把扫描面收窄到**被回写的、且不应再含原断言的**目标文件与语义位置，例如：
   ```bash
-  grep -n "sampleReplies" docs/前端改造计划.md docs/后端实现计划.md   # 应为空
-  grep -n "character_prompt.*空注释" docs/前端改造计划.md             # 应为空（T3.1/T3.7 段）
+  grep -n "sampleReplies" docs/ui/前端改造计划.md docs/development/后端实现计划.md   # 应为空
+  grep -n "character_prompt.*空注释" docs/ui/前端改造计划.md             # 应为空（T3.1/T3.7 段）
   ```
-  明确**排除** `docs/wiring/05-*.md`（引用方）与 `docs/前端接线体检.md`（只读现状）。
+  明确**排除** `docs/wiring/05-*.md`（引用方）与 `docs/wiring/前端接线体检.md`（只读现状）。
 
 ### R4-3（P1，高置信）05 §6.1 的 `check:docs` 对本批回写零覆盖
 
 - **设计原话**：`docs/wiring/05-文档回写.md:158` ——「`pnpm check:docs` 通过（文档门禁：symbol ownership / barrel union / file:line 引用）」。
-- **实测**：`check-hooks-docs.mjs:28` 硬编码 `HOOKS = path.join(REPO, 'docs/hooks')`，`:32` 只 `readdirSync(HOOKS)`。R2/R3/R4/R5 落在 `docs/前端改造计划.md`、R8 在 `docs/doc-21-事件表协议.md`、R9 在 `docs/后端实现计划.md`——**全部不在扫描面**。唯一被覆盖的 R1 已在 `commit ebacd6a` 完成，`docs/hooks/{00,03,06}` 已带「2026-09-12 核实更正」。
+- **实测**：`check-hooks-docs.mjs:28` 硬编码 `HOOKS = path.join(REPO, 'docs/hooks')`，`:32` 只 `readdirSync(HOOKS)`。R2/R3/R4/R5 落在 `docs/ui/前端改造计划.md`、R8 在 `docs/protocols/doc-21-事件表协议.md`、R9 在 `docs/development/后端实现计划.md`——**全部不在扫描面**。唯一被覆盖的 R1 已在 `commit ebacd6a` 完成，`docs/hooks/{00,03,06}` 已带「2026-09-12 核实更正」。
 - **为什么核验不了/会误判**：C 档要求「门禁入检查流程」，但本批 C1 的 9 条里 **8 条没有任何门禁**；`check:docs` 覆盖不到 R2–R9，却让 `05 §6` 读起来像「回写有门禁」。R2–R9 若漏写，`check:docs` 依然 clean（今日即 clean）。
 - **替代判据（具体可行）**：在 `check-hooks-docs.mjs` 旁加一节**「被推翻短语黑名单」**并让 `DOCH` 扩到 `docs/**`（该文件已具备通用文本扫描骨架）：
-  - 常量表 `{ file, phrase }`：如 `{ 'docs/前端改造计划.md', 'sampleReplies' }`、`{ 'docs/后端实现计划.md', '只广播 file_changed' }`、`{ 'docs/doc-21-事件表协议.md', '按准入第 3 问删除' }`；
+  - 常量表 `{ file, phrase }`：如 `{ 'docs/ui/前端改造计划.md', 'sampleReplies' }`、`{ 'docs/development/后端实现计划.md', '只广播 file_changed' }`、`{ 'docs/protocols/doc-21-事件表协议.md', '按准入第 3 问删除' }`；
   - 扫描时**跳过白名单**（05 自身、体检、任何标注为「原断言」的引用块）。
   成本约 25–40 行，复用现有 report/summary 结构；收益是把 R2–R9 从「靠人 grep」变成可失败门禁。
 
@@ -145,8 +145,8 @@ A 全落后的 9 条 DARK 精确名单：
 | G2 | `node tools/check-hooks-docs.mjs` | `clean` | exit 0（本批落 `docs/wiring/**`，不在扫描面） |
 | G3 | `pnpm --filter @airp/server build && node --test apps/server/test/map-engine-event.test.mjs` | 全部 pass；**必须先 build**（测试 import dist） | exit 0（见 R4-4） |
 | G4 | `node --test tools/check-ws-contract.test.mjs` | 全部 pass（门禁非空性证明） | exit 0 |
-| G5 | `grep -n "sampleReplies" docs/前端改造计划.md docs/后端实现计划.md` | **零命中**（**排除** `docs/wiring/05-*.md`、`docs/前端接线体检.md`） | 0 行（见 R4-2） |
-| G6 | `grep -n "character_prompt.*空注释" docs/前端改造计划.md` | 零命中 | 0 行 |
+| G5 | `grep -n "sampleReplies" docs/ui/前端改造计划.md docs/development/后端实现计划.md` | **零命中**（**排除** `docs/wiring/05-*.md`、`docs/wiring/前端接线体检.md`） | 0 行（见 R4-2） |
+| G6 | `grep -n "character_prompt.*空注释" docs/ui/前端改造计划.md` | 零命中 | 0 行 |
 | G7 | `grep -rn "world/baker-street/evening.md" templates/holmes-world/...` 存在性（前置核对） | 文件含 `roll_dice` | 已核 ✅ |
 | G8 | 手测 S1/S2/S4/S5/S6（04）、V1–V7（03）、01 §10.3 | 见各表；**S3 与 V8 需按 R4-5/R4-6 修正后才能计为判据** | — |
 

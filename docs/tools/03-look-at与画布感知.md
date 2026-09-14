@@ -6,13 +6,13 @@
 > 权威层级（`00 §0`）：00 契约 > doc-21 / doc-22 > doc-20（工具语义）> doc-10 > doc-19 > 本文。
 >
 > 关联：
-> - `docs/doc-20-agent工具与互动字段协议.md` §1.1（能力分发）/ §2（互动字段属于所有实体）/ §3（`look_at` 的格式化管线与输出示例）——**本文的主判据**；
-> - `docs/doc-21-事件表协议.md` §1（准入三问）/ §1.1（状态不是事件）/ §5.2（路径即指路牌）；
-> - `docs/doc-22-Hook注入协议.md` §2 第 9 条（**一份措辞，两处复用**）/ §3.1（`viewpoint` / `layer_files` 节）/ §5 第 3 闸（人话化即量化）/ §9（方位 formatter 的落地）；
-> - `docs/doc-05-AIRP产品构想.md` §3.2（层级画布）/ §9.1（共享创作能力）/ §8.5（状态两分法）；
-> - `docs/doc-10-组件协议与官方组件清单.md` E0 / E5 / E6（`bg` 是 README 字段、`BAG_TYPES`、组件进感知的形态）；
-> - `docs/doc-07-AIRP黑客松作战计划.md` §4.2（`view_canvas` 截图链路「参赛不做」的定案）；
-> - `docs/后端实现计划.md` §4（B1 施工单里 `look_at` 一行）。
+> - `docs/protocols/doc-20-agent工具与互动字段协议.md` §1.1（能力分发）/ §2（互动字段属于所有实体）/ §3（`look_at` 的格式化管线与输出示例）——**本文的主判据**；
+> - `docs/protocols/doc-21-事件表协议.md` §1（准入三问）/ §1.1（状态不是事件）/ §5.2（路径即指路牌）；
+> - `docs/agents/doc-22-Hook注入协议.md` §2 第 9 条（**一份措辞，两处复用**）/ §3.1（`viewpoint` / `layer_files` 节）/ §5 第 3 闸（人话化即量化）/ §9（方位 formatter 的落地）；
+> - `docs/product/doc-05-AIRP产品构想.md` §3.2（层级画布）/ §9.1（共享创作能力）/ §8.5（状态两分法）；
+> - `docs/protocols/doc-10-组件协议与官方组件清单.md` E0 / E5 / E6（`bg` 是 README 字段、`BAG_TYPES`、组件进感知的形态）；
+> - `docs/development/doc-07-AIRP黑客松作战计划.md` §4.2（`view_canvas` 截图链路「参赛不做」的定案）；
+> - `docs/development/后端实现计划.md` §4（B1 施工单里 `look_at` 一行）。
 
 ---
 

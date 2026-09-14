@@ -39,7 +39,10 @@
   background: var(--ux-surface-stage);
 }
 
-.prototype-world > .relative:first-child {
+.prototype-world > .relative:first-child,
+.prototype-world > [data-airp-projection] {
+  /* The canvas mounts inside a projection wrapper (ed71622); without this the
+     wrapper has no height and the h-full canvas collapses to zero. */
   position: absolute;
   inset: 0;
 }
@@ -47,6 +50,121 @@
 
 .airp-prototype.is-dusk .canvas-grid {
   opacity: 0.08;
+}
+
+/* Dusk legibility (restored from niko): paper cards stay paper, but bare text
+   that sits directly on a dark scene photo needs light ink and a dark halo. */
+.prototype-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 12;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(29, 20, 37, 0.2) 145%);
+}
+
+.airp-prototype.is-dusk .prototype-vignette {
+  background:
+    linear-gradient(180deg, rgba(16, 12, 24, 0.36), transparent 20%, transparent 70%, rgba(16, 12, 24, 0.48)),
+    radial-gradient(ellipse at 50% 42%, transparent 28%, rgba(15, 10, 22, 0.5) 100%);
+}
+
+.airp-prototype.is-dusk .chalk {
+  color: var(--ux-color-paper);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.8), 0 0 26px rgba(217, 176, 106, 0.2);
+}
+
+.airp-prototype.is-dusk .chalk button {
+  background: rgba(44, 36, 59, 0.85);
+  color: var(--ux-color-paper);
+  border: 1px solid rgba(177, 156, 195, 0.33);
+  text-shadow: none;
+}
+
+.airp-prototype.is-dusk .chalk button:hover {
+  background: var(--ux-color-paper);
+  color: var(--ux-color-ink);
+}
+
+.is-dusk .prototype-world-meta {
+  color: var(--ux-color-paper);
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.75);
+}
+
+.is-dusk .prototype-world-meta p,
+.is-dusk .prototype-world-meta .prototype-eyebrow {
+  color: #d9cbe6;
+}
+
+/* Hover action panels float beside cards over the dark photo, not on paper. */
+.airp-prototype.is-dusk .entity-interactions {
+  color: var(--ux-color-paper);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+}
+
+.airp-prototype.is-dusk .entity-action-arrows button,
+.airp-prototype.is-dusk .entity-interactions .fm-body button {
+  background: rgba(44, 36, 59, 0.78);
+  color: var(--ux-color-paper);
+  border-color: rgba(177, 156, 195, 0.33);
+  text-shadow: none;
+}
+
+.airp-prototype.is-dusk .entity-action-arrows button:hover,
+.airp-prototype.is-dusk .entity-interactions .fm-body button:hover {
+  background: var(--ux-color-rust);
+  color: var(--ux-color-paper);
+}
+
+/* Player voice input (docs/live-voice/语音输入（STT）.md). */
+.voice-input-button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--ux-color-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ux-color-paper) 72%, transparent);
+  color: var(--ux-color-ink);
+  cursor: pointer;
+}
+
+.voice-input-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.voice-input-button[data-state='recording'] {
+  background: var(--ux-color-rust);
+  border-color: var(--ux-color-rust);
+  color: var(--ux-color-paper);
+  animation: voiceInputPulse 1.2s ease-in-out infinite;
+}
+
+.voice-input-button__spin {
+  animation: voiceInputSpin 0.9s linear infinite;
+}
+
+.voice-input-error {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--ux-color-rust);
+}
+
+@keyframes voiceInputPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 111, 76, 0.45); }
+  50% { box-shadow: 0 0 0 6px rgba(201, 111, 76, 0); }
+}
+
+@keyframes voiceInputSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-input-button[data-state='recording'],
+  .voice-input-button__spin { animation: none; }
 }
 
 

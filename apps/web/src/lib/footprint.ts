@@ -35,7 +35,7 @@ export interface FootprintSchedulerOptions {
   isBusy: () => boolean;
   /** A card drag session is running (F3③). */
   isDragging: () => boolean;
-  /** Default: some `.object` is hovered (F3⑥). */
+  /** Optional whole-canvas gate. Inflated cards are individually omitted by measureHeights. */
   isHovering?: () => boolean;
   /** Default: `document.hidden` (F3④). */
   isHidden?: () => boolean;
@@ -106,9 +106,7 @@ export function createFootprintScheduler(opts: FootprintSchedulerOptions): Footp
   const clearTimer = opts.clearTimeout ?? clearTimeout;
   // Same predicate as `measureHeights`: inflated shells must not be frozen into
   // `cards.height` (contract §3.5).
-  const isHovering =
-    opts.isHovering ??
-    (() => Array.from(document.querySelectorAll<HTMLElement>('.object[data-path]')).some(isInflated));
+  const isHovering = opts.isHovering ?? (() => false);
   const isHidden = opts.isHidden ?? (() => document.hidden);
 
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -178,6 +176,9 @@ export function createFootprintScheduler(opts: FootprintSchedulerOptions): Footp
     pending = false;
     const heights = opts.measure();
     const widths = opts.widths();
+    // Keep retrying omitted (hovered/reading) cards without starving new cards
+    // elsewhere. Their height may not change when the pointer leaves.
+    if ([...widths.keys()].some(path => !heights.has(path))) arm(opts.layer());
     const boxes: FootprintBox[] = [];
     for (const [path, h] of heights) {
       const w = widths.get(path);

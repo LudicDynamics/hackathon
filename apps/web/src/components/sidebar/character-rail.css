@@ -107,6 +107,16 @@
   opacity: 1;
   pointer-events: auto;
 }
+/* Invisible bridge across the 10px gap to the avatar: it belongs to the panel,
+   so moving the pointer from the avatar to a key never drops the row's hover. */
+.character-rail__actions::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 12px;
+}
 
 .character-rail__action {
   padding: 7px 11px;

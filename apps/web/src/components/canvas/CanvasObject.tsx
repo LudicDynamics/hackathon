@@ -51,7 +51,7 @@ export function pruneLifts(paths: Set<string>): void {
 }
 
 /** Presence figure — the world's people. Ink sketch + a name strip (proto `.sprite`). */
-const SpriteFig: React.FC<{ avatar?: string; name: string }> = ({ avatar, name }) => {
+const SpriteFig: React.FC<{ avatar?: string; video?: string; name: string; still: boolean }> = ({ avatar, video, name, still }) => {
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => setFailed(false), [avatar]);
   const src = avatar && (/^(?:https?:|data:|blob:)/.test(avatar) ? avatar : assetUrl(avatar, 'image'));
@@ -325,7 +325,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             onDrop={handleSpriteDrop}
             className={`sprite cursor-pointer transition-transform duration-200 ${chalkStyleOf(item.frontmatter).aged ? ' chalk--aged' : ''} ${spritePuzzleClasses}`}
           >
-            <SpriteFig avatar={item.frontmatter?.avatar} name={item.frontmatter?.title || item.filename.replace('.md', '')} />
+            <SpriteFig avatar={item.frontmatter?.avatar} video={item.frontmatter?.avatarVideo} still={still} name={item.frontmatter?.title || item.filename.replace('.md', '')} />
             <div className="sprite__name">
               {item.frontmatter?.title || item.filename.replace('.md', '')}
             </div>

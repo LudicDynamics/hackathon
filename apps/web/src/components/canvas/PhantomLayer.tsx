@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import { usePhantoms, evict, drop } from '../../lib/phantom.js';
 import type { PhantomEntry } from '../../lib/phantom.js';
 import { ghostVisibleOn, LANDED_DWELL_MS, REUSED_DWELL_MS } from '../../lib/ghost.js';

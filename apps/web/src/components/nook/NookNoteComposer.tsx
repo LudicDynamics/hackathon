@@ -39,7 +39,7 @@ export const NookNoteComposer: React.FC<NookNoteComposerProps> = ({ characterId,
       }
       setTitle('');
       setBody('');
-      setMessage('Note left in this nook.');
+      setMessage('Note left in this ikigai.');
       onCreated?.();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not leave this note.');
@@ -61,7 +61,7 @@ export const NookNoteComposer: React.FC<NookNoteComposerProps> = ({ characterId,
       <textarea
         value={body}
         onChange={event => setBody(event.target.value)}
-        placeholder="Write something for this nook…"
+        placeholder="Write something for this ikigai…"
         aria-label="Note body"
         disabled={disabled || busy}
         rows={3}

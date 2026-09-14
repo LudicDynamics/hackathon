@@ -2,8 +2,9 @@ import { Router, type Request } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { readLocalTtsConfig, parseCharacterVoices } from './local-tts.js';
 
-const fields = ['DASHSCOPE_API_KEY', 'AIRP_TTS_BASE_URL', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'FLOW_API_KEY', 'FLOW_API_BASE', 'DEEPSEEK_API_KEY'] as const;
+const fields = ['DASHSCOPE_API_KEY', 'AIRP_TTS_BASE_URL', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'FLOW_API_KEY', 'FLOW_API_BASE', 'DEEPSEEK_API_KEY', 'AIRP_TTS_LOCAL_BASE_URL', 'AIRP_TTS_LOCAL_VOICE', 'AIRP_TTS_LOCAL_TIMEOUT_MS', 'AIRP_TTS_LOCAL_API_KEY', 'AIRP_TTS_CHARACTER_VOICES'] as const;
 const defaults: Record<string, string> = {
   AIRP_TTS_BASE_URL: 'https://dashscope-intl.aliyuncs.com/api/v1',
   OPENAI_BASE_URL: 'https://api.openai.com/v1',
@@ -26,16 +27,28 @@ export function saveConnectionSettings(repoRoot: string, input: unknown) {
   for (const [key, raw] of Object.entries(input)) {
     if (!fields.includes(key as typeof fields[number]) || typeof raw !== 'string') throw new Error('Unknown setting');
     const value = raw.trim();
-    if (!value) continue;
+    // An explicitly empty local URL disables this optional provider. Empty
+    // credentials still mean "keep", as for every existing service setting.
+    if (!value) {
+      if (key === 'AIRP_TTS_LOCAL_BASE_URL' || key === 'AIRP_TTS_CHARACTER_VOICES') updates[key] = '';
+      continue;
+    }
     if (value.length > 4096 || /[\r\n"'\\\x00]/.test(value)) throw new Error('Invalid setting value');
-    if (!key.endsWith('_KEY')) {
+    if (key === 'AIRP_TTS_CHARACTER_VOICES') {
+      parseCharacterVoices(value);
+    } else if (key === 'AIRP_TTS_LOCAL_VOICE') {
+      if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(value)) throw new Error('Invalid local voice ID');
+    } else if (key === 'AIRP_TTS_LOCAL_TIMEOUT_MS') {
+      if (!/^\d+$/.test(value) || Number(value) < 1000 || Number(value) > 120000) throw new Error('Invalid local TTS timeout');
+    } else if (!key.endsWith('_KEY')) {
       const url = new URL(value);
       if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('Invalid service URL');
     }
     updates[key] = value;
   }
   if (!Object.keys(updates).length) return;
-  const file = path.join(repoRoot, '.env.local');
+  const preferred = path.join(repoRoot, '.local.env');
+  const file = fs.existsSync(preferred) ? preferred : path.join(repoRoot, '.env.local');
   if (fs.existsSync(file) && !fs.lstatSync(file).isFile()) throw new Error('Unsafe configuration file');
   let content = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
   for (const [key, value] of Object.entries(updates)) {
@@ -63,7 +76,10 @@ export function createConnectionSettingsRouter(repoRoot: string): Router {
     next();
   });
   router.get('/connection-settings', (_req, res) => {
-    res.json(Object.fromEntries(fields.map(key => [key, key.endsWith('_KEY') ? Boolean(process.env[key]?.trim()) : process.env[key] ?? defaults[key]])));
+    const local = readLocalTtsConfig();
+    const currentDefaults: Record<string, string> = { ...defaults, AIRP_TTS_LOCAL_BASE_URL: local.baseUrl,
+      AIRP_TTS_LOCAL_VOICE: local.voice, AIRP_TTS_LOCAL_TIMEOUT_MS: String(local.timeoutMs) };
+    res.json(Object.fromEntries(fields.map(key => [key, key.endsWith('_KEY') ? Boolean(process.env[key]?.trim()) : process.env[key] ?? currentDefaults[key]])));
   });
   router.post('/connection-settings', (req, res) => {
     if (!req.is('application/json') || req.headers['x-airp-settings'] !== '1') return res.status(403).json({ error: 'Invalid settings request' });

@@ -635,7 +635,8 @@ function playClip(
   dest: AudioNode,
   buffer: AudioBuffer,
   loop: boolean,
-  level: number
+  level: number,
+  attack = AMBIENT_FADE
 ): { src: AudioBufferSourceNode; gain: GainNode } | null {
   const c = ctx;
   if (!c) return null;
@@ -650,7 +651,8 @@ function playClip(
 
   const t = c.currentTime;
   src.start(t); // start() is once-only per source
-  gain.gain.linearRampToValueAtTime(level, t + AMBIENT_FADE);
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(level, t + attack);
 
   if (!loop) {
     src.onended = (): void => {
@@ -998,6 +1000,9 @@ export function audioDebugState(): {
  *  crossfade: a dialogue switch must feel immediate (0.12s kills the click,
  *  nothing more). */
 const VOICE_FADE = 0.12;
+/** Seconds — click-safe voice attack. Speech must reach its intended level
+ *  before the first word, unlike the 1.5s music crossfade. */
+const VOICE_ATTACK = 0.005;
 
 let voiceClip: Clip | null = null; // what is sounding now (loop is always false)
 let voiceToken = 0; // async-race guard (same discipline as tracks[id].token)
@@ -1028,7 +1033,7 @@ export function playVoice(url: string): void {
     ) return; // superseded by a newer call / stop / hidden transition
     if (!buf || !master || !ctx) return; // load failed → silence (no fallback)
     if (ctx.state !== 'running') return; // suspended again during decode → drop
-    const nodes = playClip(voiceBus!, buf, /* loop */ false, VOICE_SAMPLE_LEVEL);
+    const nodes = playClip(voiceBus!, buf, /* loop */ false, VOICE_SAMPLE_LEVEL, VOICE_ATTACK);
     if (!nodes) return;
     nodes.src.onended = (): void => {
       // Past playClip's own disconnect; add the slot clear so isVoicing()

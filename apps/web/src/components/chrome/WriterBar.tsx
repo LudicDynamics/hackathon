@@ -6,9 +6,11 @@
  * for the Nook empty-state fallback. Writer lifecycle and public status always
  * come from writer-state; this component never mirrors websocket frames.
  */
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useLocale } from '../../lib/i18n.js';
+import { guardImeKey } from '../../lib/ime.js';
 import { useWriterState } from '../../lib/writer-state.js';
+import { VoiceInputButton } from './VoiceInputButton.js';
 
 export interface WriterBarProps {
   /** Receives the trimmed prompt text. Return false to keep an unaccepted draft. */
@@ -50,6 +52,8 @@ export const WriterBar: React.FC<WriterBarProps> = ({
   const writer = useWriterState();
   const [uncontrolledText, setUncontrolledText] = useState('');
   const text = value ?? uncontrolledText;
+  const textRef = useRef(text);
+  textRef.current = text;
   const writing = writer.phase === 'writing';
   const locked = disabled || writing;
   const publicState = writer.error
@@ -100,6 +104,7 @@ export const WriterBar: React.FC<WriterBarProps> = ({
         disabled={locked}
         onChange={(e) => updateText(e.target.value)}
         onKeyDown={(e) => {
+          if (guardImeKey(e)) return;
           if (e.key === 'Enter') {
             e.preventDefault();
             if (!e.nativeEvent.isComposing) submit();
@@ -107,6 +112,11 @@ export const WriterBar: React.FC<WriterBarProps> = ({
           }
           onKeyDown?.(e);
         }}
+      />
+      <VoiceInputButton
+        disabled={locked}
+        getDraft={() => textRef.current}
+        onDraft={updateText}
       />
       <button
         className="writer-bar__send"

@@ -8,6 +8,23 @@ export const SETTLE_MS = 1300;
 export const FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 import { ingestPlayerRoll, parsePlayerDiceResponse, type DiceCeremonyInput } from '../../lib/dice-ceremony.js';
 
+interface DiceVerdict {
+  dice: string;
+  rolls: number[];
+  result: number;
+  passed: boolean;
+  crit: boolean;
+  fumble: boolean;
+  outcomeGrade?: string;
+}
+export function parseDiceVerdict(raw: unknown): DiceVerdict | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.result !== 'number' || !Number.isFinite(o.result) || typeof o.passed !== 'boolean'
+    || typeof o.dice !== 'string' || !Array.isArray(o.rolls) || !o.rolls.length
+    || !o.rolls.every(r => typeof r === 'number' && Number.isFinite(r))) return null;
+  return { dice: o.dice, rolls: o.rolls, result: o.result, passed: o.passed, crit: o.crit === true, fumble: o.fumble === true, ...(typeof o.outcomeGrade === 'string' ? { outcomeGrade: o.outcomeGrade } : {}) };
+}
 interface DiceRollerProps {
   filePath: string;
   rollDice: {

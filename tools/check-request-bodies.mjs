@@ -36,6 +36,12 @@ const JSON_OUT = process.argv.includes('--json');
  */
 const BODIES = [
   {
+    route: '/api/material-review',
+    file: 'apps/web/src/components/narrative/EntityInteractions.tsx',
+    keys: ['world', 'path', 'choice', 'revision', 'selections'],
+    doc: 'docs/gameplay/多槽材料与统一行动入口.md',
+  },
+  {
     route: '/api/dice',
     file: 'apps/web/src/components/narrative/DiceRoller.tsx',
     keys: ['path'],
@@ -44,7 +50,7 @@ const BODIES = [
   {
     route: '/api/tts',
     file: 'apps/web/src/components/overlay/CharacterModal.tsx',
-    keys: ['text', 'voice', 'language'],
+    keys: ['text', 'voice', 'language', 'characterId', 'emotion'],
     doc: 'docs/wiring/00-共同上下文.md §6',
   },
   // The gateway (`airp-gateway.ts`) wraps bodies in `json('POST', {...})` rather

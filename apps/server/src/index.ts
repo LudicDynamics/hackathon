@@ -15,12 +15,17 @@ import { LiveCallRegistry } from './engine/live-session.js';
 import { createTtsRouter } from './routes/tts.js';
 import { createLiveRouter } from './routes/live.js';
 import { createConnectionSettingsRouter } from './routes/connection-settings.js';
+import { createSttRouter } from './routes/stt.js';
+import { handleSttStream, STT_STREAM_PATH } from './engine/stt-stream.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const REPO_ROOT = path.resolve(__dirname, '../../..');
+const REPO_ROOT = process.env.AIRP_REPO_ROOT || path.resolve(__dirname, '../../..');
 const VENDOR_CLI = path.join(REPO_ROOT, 'vendor/pi-rp/packages/coding-agent/dist/cli.js');
 const WEB_DIST = path.join(REPO_ROOT, 'apps/web/dist');
+// Explicit local overrides precede the legacy local file; ambient env still wins.
+const localOverrides = path.join(REPO_ROOT, '.local.env');
+if (existsSync(localOverrides)) process.loadEnvFile(localOverrides);
 const localEnv = path.join(REPO_ROOT, '.env.local');
 if (existsSync(localEnv)) process.loadEnvFile(localEnv);
 
@@ -37,7 +42,7 @@ try {
 // startup warn is a convenience, not the only signal (docs/tts/00 §4.5).
 if (!process.env.DASHSCOPE_API_KEY) {
   console.warn(
-    '[AIRP TTS] DASHSCOPE_API_KEY not set; /api/tts returns 503 (character voice disabled).'
+    '[AIRP TTS] DASHSCOPE_API_KEY not set; online TTS and local voice fallback are unavailable.'
   );
 }
 
@@ -138,6 +143,8 @@ app.use('/api', createTtsRouter(REPO_ROOT, () => activeStore));
 // while `/api/live/session` does its own nook check.
 app.use('/api', createLiveRouter(() => activeStore, liveCalls));
 app.use('/api', createConnectionSettingsRouter(REPO_ROOT));
+// Player voice input (docs/live-voice/语音输入（STT）.md): HTTP-only, no world needed.
+app.use('/api', createSttRouter());
 
 // Serve static frontend files from apps/web/dist
 app.use(express.static(WEB_DIST));
@@ -151,7 +158,12 @@ app.get('*', (req, res, next) => {
 });
 
 // WebSocket client connection handling
-wss.on('connection', (ws: WebSocket) => {
+wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
+  // Live voice input has its own socket; it never joins the event fan-out.
+  if (req.url?.startsWith(STT_STREAM_PATH)) {
+    handleSttStream(ws);
+    return;
+  }
   console.log('[AIRP WS] Client connected');
 
   ws.send(JSON.stringify({ type: 'connected', timestamp: new Date().toISOString() }));
@@ -312,8 +324,9 @@ wss.on('connection', (ws: WebSocket) => {
 });
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`[AIRP Server] Listening on http://0.0.0.0:${PORT} and http://localhost:${PORT}`);
+const HOST = process.env.AIRP_HOST || '0.0.0.0';
+server.listen(PORT, HOST, () => {
+  console.log(`[AIRP Server] Listening on http://${HOST}:${PORT} and http://localhost:${PORT}`);
 });
 
 // Retire every spawned agent on shutdown — otherwise pi-rp processes outlive the server.

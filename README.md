@@ -1,7 +1,7 @@
 # AIRP (AI Role-Playing Narrative Canvas)
 
 > 一个让玩家像角色一样活在“活的无限画布世界”里的 AI 互动叙事游戏。
-> 设计文档见 **[`docs/`](docs/)**（入口 [`docs/00-文档骨架.md`](docs/00-文档骨架.md)；2026-09-11 从已退休的 `infini-canvas` 项目迁入）。开发手册见 **[`AGENTS.md`](AGENTS.md)**。
+> 设计文档见 **[`docs/`](docs)**（入口 [`docs/00-文档骨架.md`](docs/00-文档骨架.md)；2026-09-11 从已退休的 `infini-canvas` 项目迁入）。开发手册见 **[`AGENTS.md`](AGENTS.md)**。
 
 ---
 
@@ -19,7 +19,7 @@
    - 角色通过台词句首 `[emo: normal|smile|shock|sad|angry|thinking]` 驱动 6 情绪差分立绘即时平滑切换。
 5. **文件即真相（File as Source of Truth）**：
    - 世界目录就是真相源（无独立状态文件），状态收编在叙事 frontmatter 中（`status.data` / `choice` / `roll_dice`），分层存储：内容走文件系统、架构状态与历史走 SQLite（`canvas.db` + `history.db`）。
-   - **`status` 只是某个实体（含 chalk）的一份快照，读它 = 读那个文件；永不引入 state 系统**（`get_state` / `set_state` / `state_update` / `watch_state` / 状态文件 / 状态栏）——那会造成第二个真相源，绕过 `edit` 与事件表。详见 `docs/doc-20` §2.3。
+   - **`status` 只是某个实体（含 chalk）的一份快照，读它 = 读那个文件；永不引入 state 系统**（`get_state` / `set_state` / `state_update` / `watch_state` / 状态文件 / 状态栏）——那会造成第二个真相源，绕过 `edit` 与事件表。详见 `docs/protocols/doc-20` §2.3。
 
 ---
 

@@ -48,7 +48,7 @@ export function AgentSettings({ settings, onSaveSettings, focus }: {
   const current = status?.preferences[role];
   const actual = role === 'writer' ? status?.writer : status?.characters[0];
   useEffect(() => {
-    setModel(current ? `${current.provider}/${current.model}` : actual?.model ? `${actual.model.provider}/${actual.model.id}` : '');
+    setModel(current ? `${current.provider}/${current.model}` : actual?.model ? `${actual.model.provider}/${actual.model.id}` : 'deepseek/deepseek-v4-flash');
     setThinking(current?.thinking ?? actual?.thinking ?? 'low');
   }, [role, current?.model, current?.provider, current?.thinking, actual?.model?.id, actual?.model?.provider, actual?.thinking]);
   const save = async () => {
