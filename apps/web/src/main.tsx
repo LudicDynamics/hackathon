@@ -1,3 +1,5 @@
+// Must run before any module that builds `/api` or `/ws` URLs.
+import './lib/base-path.js';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App.js';

@@ -34,6 +34,9 @@
 .prototype-effects-toggle[aria-checked="true"] > span { background: var(--ux-color-rust); }
 .prototype-effects-toggle[aria-checked="true"] > span::after { transform: translateX(11px); }
 .prototype-worldtop button { background: transparent; border-color: var(--ux-color-line); }
+/* Belongings and the residents rail share the writer band, so DOM order let the
+   later residents rail cover the opened bag. Opened, the bag must be on top. */
+.prototype-belongings:has(.prototype-bag-content) { z-index: var(--depth-chrome-open-drawer); }
 .prototype-narrative { top: 76px; bottom: 100px; left: 14px; width: 300px; border: 1px solid var(--ux-color-line); border-radius: var(--ux-radius-touch) var(--ux-radius-panel) var(--ux-radius-panel) var(--ux-radius-touch); box-shadow: var(--ux-shadow-soft); }
 .prototype-narrhead { padding: 20px 22px 12px; }
 .prototype-journal { padding: 0 22px 24px; }

@@ -1,0 +1,52 @@
+# AIRP on the shared xserver VPS: one container per player seat, a seat
+# gateway in front, bound to localhost for the host nginx. Seats keep saves in
+# tmpfs, so a restart (the gateway's handoff to a new player) starts clean.
+# Sizing: a seat peaks ~320 MiB during a writer turn and idles ~100 MiB; the
+# host has ~2.3 GiB free next to other production services.
+name: airp
+
+x-seat: &seat
+  image: airp-vps:latest
+  restart: unless-stopped
+  env_file: ./airp.env
+  environment:
+    PORT: "80"
+  tmpfs:
+    - /tmp:size=512m
+  mem_limit: 640m
+  cpus: 1.0
+
+services:
+  seat-1:
+    <<: *seat
+    container_name: airp-seat-1
+  seat-2:
+    <<: *seat
+    container_name: airp-seat-2
+  seat-3:
+    <<: *seat
+    container_name: airp-seat-3
+  seat-4:
+    <<: *seat
+    container_name: airp-seat-4
+  seat-5:
+    <<: *seat
+    container_name: airp-seat-5
+  gateway:
+    # Reuses the app image for its Node runtime; no extra pull on the VPS.
+    image: airp-vps:latest
+    container_name: airp-gateway
+    restart: unless-stopped
+    command: ["node", "/gw/seat-gateway.mjs"]
+    environment:
+      PORT: "8870"
+      SEATS: airp-seat-1:80,airp-seat-2:80,airp-seat-3:80,airp-seat-4:80,airp-seat-5:80
+      COOKIE_PATH: /airp-infini-canvas/
+    volumes:
+      - ./seat-gateway.mjs:/gw/seat-gateway.mjs:ro
+      # Needed only to restart a seat before handing it to a new player.
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "127.0.0.1:8870:8870"
+    mem_limit: 128m
+    depends_on: [seat-1, seat-2, seat-3, seat-4, seat-5]

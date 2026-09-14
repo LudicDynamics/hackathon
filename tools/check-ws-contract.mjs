@@ -68,7 +68,6 @@ const INTENTIONALLY_UNCONSUMED = new Map([
   ['error', 'diagnostics go to the server console; a UI surface is unbuilt (frontend plan T3.x)'],
   ['turn_aborted', 'writer/character lane; the browser has no busy-state machine yet'],
   ['replay_entry', 'session replay recovery; unbuilt (frontend plan has no task for it)'],
-  ['tool_start', 'debug panel is optional (docs/tools/12 §6.2)'],
   ['writer_message', 'retained for a non-streaming client; _delta is the live path'],
   ['character_message', 'retained for a non-streaming client; _delta is the live path'],
 ]);

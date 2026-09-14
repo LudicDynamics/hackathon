@@ -1,0 +1,82 @@
+{
+  "id": "whitechapel-zh",
+  "audio": {
+    "theme": "canvas-whitechapel"
+  },
+  "name": "福尔摩斯：第四件案子 · 中文",
+  "version": "1.2.0",
+  "schema": 1,
+  "description": "你是福尔摩斯。事件照着小说一件件发生。查出是谁把故事变成了犯罪，阻止今天的第四起事件。",
+  "author": "Worldlines Canvas / AIRP",
+  "genre": "故事体验",
+  "tags": [
+    "短篇故事",
+    "生成世界"
+  ],
+  "material": "kraft",
+  "cover": "assets/scenes/intro.webp",
+  "extensions": [
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
+  ],
+  "characters": [
+    {
+      "id": "watson",
+      "home": "world/london-map",
+      "role": "companion",
+      "avatar": "assets/motion/seedance/characters/watson-transparent.webp",
+      "description": "医生，福尔摩斯的朋友。答应过要保护伊迪丝。今早确认第三起事件与插图一致，请求阻止今天的第四起。提供医学观察和人情上的担忧，尊重福尔摩斯的推理。",
+      "avatarVideo": "assets/motion/seedance/characters/watson-transparent.webm",
+      "name": "华生"
+    },
+    {
+      "id": "edith",
+      "home": "world/london-map/edith-room",
+      "role": "npc",
+      "description": "华生的病人，小说家。亲手订正了第四章地址的人。虽然害怕，但想用自己的话清楚地说明。",
+      "avatar": "assets/characters/edith.webp",
+      "name": "伊迪丝·韦尔"
+    },
+    {
+      "id": "tom",
+      "home": "world/london-map/print-shop",
+      "role": "npc",
+      "description": "印刷所的排字工。黑乎乎的手指和值班簿。为人直爽，按记录说出日期时间。",
+      "avatar": "assets/characters/tom.webp",
+      "name": "汤姆·黑尔"
+    },
+    {
+      "id": "blackburn",
+      "home": "world/london-map/print-shop/editor-office",
+      "role": "npc",
+      "description": "管理原稿和校样的编辑。对日期和时间的说明很准确，在意报纸的信誉。",
+      "avatar": "assets/characters/blackburn.webp",
+      "name": "布莱克本主编"
+    },
+    {
+      "id": "wayne",
+      "home": "world/london-map/print-shop/illustration-room",
+      "role": "npc",
+      "description": "连载小说的插画师。袖口沾着群青，护着右手腕，对批评很敏感。",
+      "avatar": "assets/characters/wayne.webp",
+      "name": "亚瑟·韦恩"
+    }
+  ],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "player": {
+    "id": "player",
+    "name": "夏洛克·福尔摩斯",
+    "avatar": "assets/characters/sherlock-holmes.webp"
+  },
+  "locale": "zh-CN",
+  "entry": "map"
+}

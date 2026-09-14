@@ -33,7 +33,7 @@ const VOICE_RE = /^[A-Za-z0-9][A-Za-z0-9 _-]*$/;
 /** Content-addressed cache file: `hashOf(...)` output (docs/tts/00 §2.2/§3.2). */
 const FILE_RE = /^[a-f0-9]{20}\.wav$/;
 /** World locale short code → DashScope `language_type` (docs/tts/00 §4.4). */
-const LANGUAGE_MAP: Record<string, string> = { ja: 'Japanese', en: 'English' };
+const LANGUAGE_MAP: Record<string, string> = { ja: 'Japanese', en: 'English', zh: 'Chinese', 'zh-CN': 'Chinese' };
 
 const DEFAULTS = {
   model: 'qwen3-tts-flash-2025-11-27',

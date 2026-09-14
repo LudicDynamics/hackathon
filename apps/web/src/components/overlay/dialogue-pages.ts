@@ -184,7 +184,9 @@ export function consumeCharacterFrame(
 }
 
 /** mock greeting line (contract §7.1, frozen copy — do not change). */
-export const GREETING_LINE: Record<'en' | 'ja', { text: string; emo: Emotion }> = {
+export const GREETING_LINE: Record<'en' | 'ja' | 'zh-CN', { text: string; emo: Emotion }> = {
   en: { text: 'Something on your mind?', emo: 'normal' },
   ja: { text: 'どうしたの？', emo: 'normal' },
+  // Chinese editions (tools/world-editions.mjs); the en/ja copy above is unchanged.
+  'zh-CN': { text: '怎么了？', emo: 'normal' },
 };

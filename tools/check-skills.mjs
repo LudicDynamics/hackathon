@@ -197,16 +197,17 @@ for (const { world, dir } of worldDirs) {
       break;
     }
   }
-  const isJapanese = locale === 'ja';
+  // Japanese and Chinese (`zh-CN`) editions both write their skills in CJK.
+  const isCjkWorld = locale === 'ja' || locale === 'zh-CN';
   for (const file of skillFiles(dir)) {
     const { frontmatter, body } = parseFrontmatter(read(file));
     const name = frontmatter.name;
     // The name is a program identifier — always ASCII, whatever the locale (00 §4.3).
     check(`${rel(file)}: name is ASCII even in a ${locale ?? 'default'} world`, typeof name === 'string' && !CJK.test(name), name);
-    if (isJapanese) {
-      check(`${rel(file)}: a locale:ja world's description and body are Japanese (04 A3/A4)`, CJK.test(frontmatter.description) && CJK.test(body));
+    if (isCjkWorld) {
+      check(`${rel(file)}: a locale:${locale} world's description and body are in its language (04 A3/A4)`, CJK.test(frontmatter.description) && CJK.test(body));
     } else {
-      check(`${rel(file)}: a non-Japanese world's description and body are not CJK (04 A4)`, !CJK.test(frontmatter.description) && !CJK.test(body));
+      check(`${rel(file)}: a non-CJK world's description and body are not CJK (04 A4)`, !CJK.test(frontmatter.description) && !CJK.test(body));
     }
   }
 }

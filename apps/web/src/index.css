@@ -83,6 +83,9 @@
   --depth-chrome-badge: calc(var(--depth-writer) + 10);
   --depth-chrome-carried-reader: var(--depth-writer);
   --depth-chrome-gate-threshold: calc(var(--depth-writer) + 8);
+  /* An opened chrome drawer (belongings) sits above every resting chrome rail
+     (residents, activity log/minimap/badge), still below modal dialogs. */
+  --depth-chrome-open-drawer: calc(var(--depth-writer) + 12);
   --depth-dialogue-root: var(--depth-modal);
   --depth-dialogue-media-back: var(--depth-modal);
   --depth-dialogue-portrait: var(--depth-modal);

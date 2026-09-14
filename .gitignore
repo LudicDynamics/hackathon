@@ -25,6 +25,8 @@ templates/*-playtest-*/
 assets/**
 !assets/audio/
 !assets/audio/**
+# 需要署名且禁止原样再分发的音乐（魔王魂等）只放本机，不入库（docs/ui/世界Launcher.md）。
+assets/audio/licensed/
 # 素材生产的手艺包（文本，无大二进制）——工具见 tools/motion-clip.mjs
 !assets/skills/
 !assets/skills/**
@@ -90,3 +92,15 @@ assets/**
 # World design documents are source, unlike runtime worlds/.
 !docs/worlds/
 !docs/worlds/**
+
+# Launch video (large media; public/ assets are copied from templates by video/remotion/scripts/sync-assets.sh)
+video/footage/
+video/remotion/out/
+video/remotion/public/cast/
+video/remotion/public/bg/
+video/remotion/public/scenes/
+video/remotion/public/portraits/
+video/remotion/public/sfx/
+video/remotion/public/footage/
+# Placeholder score renders (the mp3 is kept; the 25MB wav is a local intermediate).
+video/remotion/public/music/*.wav

@@ -1,4 +1,5 @@
 import { useLocale } from './lib/i18n.js';
+import { withBase } from './lib/base-path.js';
 import { AgentSettings } from './components/AgentSettings.js';
 import { TtsSettings } from './components/TtsSettings.js';
 import { WriterBar } from './components/chrome/WriterBar.js';
@@ -36,6 +37,7 @@ import { useWriterState, requestWriterStop, resetForReconnect, retryWriterPrompt
 import { buildItemActionPrompt, appendItemAction } from './lib/item-action-draft.js';
 import { PLAY_HINT_REQUEST } from './lib/play-hints.js';
 import { agentActivityStore } from './lib/agent-activity-store.js';
+import { agentCursorStore } from './lib/agent-cursor.js';
 import { worldEventToastStore } from './lib/world-event-toast.js';
 import { GodModeToolbar } from './components/god/GodModeToolbar.js';
 import { RadialMenu, type RadialItemType } from './components/god/RadialMenu.js';
@@ -48,6 +50,8 @@ import { CharacterRail } from './components/sidebar/CharacterRail.js';
 import { usePresence } from './state/usePresence.js';
 import { airpGateway, onWorldUnavailable, AirpRequestError, type AssetMediaKind, type WorldShelf } from './lib/airp-gateway.js';
 import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
+import { WorldLauncher } from './components/WorldLauncher.js';
+import { LAUNCHER_THEME } from './lib/world-launcher.js';
 import { BagItemDialog } from './components/BagItemDialog.js';
 import { guardImeKey } from './lib/ime.js';
 import { initialShell, transitionShell } from './lib/ui-shell.mjs';
@@ -142,7 +146,7 @@ export function App() {
   const { locale, setLocale, t } = useLocale();
   const [manifest, setManifest] = useState<WorldManifest | null>(null);
   useEffect(() => {
-    if (manifest?.locale === 'ja') setLocale('ja');
+    if (manifest?.locale === 'ja' || manifest?.locale === 'zh-CN') setLocale(manifest.locale);
   }, [manifest?.id, manifest?.locale, setLocale]);
   const [backpack, setBackpack] = useState<BackpackItem[]>([]);
   const [characters, setCharacters] = useState<CharacterView[]>([]);
@@ -188,6 +192,11 @@ export function App() {
   const [radialState, setRadialState] = useState<{ x: number; y: number; worldX: number; worldY: number } | null>(null);
   const toggleShell = (action: 'header' | 'journal' | 'immersion') => setShell(current => transitionShell(current, action));
   const [worldPickerOpen, setWorldPickerOpen] = useState(false);
+  // Every session opens on the launcher, and every world returns to it.
+  const [launcherOpen, setLauncherOpen] = useState(true);
+  useEffect(() => {
+    if (launcherOpen) void airpGateway.worlds().then(setShelf).catch(() => {});
+  }, [launcherOpen]);
   const [profileOpen, setProfileOpen] = useState(false);
   const [activeCharacter, setActiveCharacter] = useState<CharacterView | null>(null);
   const [nookChar, setNookChar] = useState<string | null>(null);
@@ -298,6 +307,8 @@ export function App() {
   useEffect(() => { syncFocus('world-shelf', worldPickerOpen); }, [syncFocus, worldPickerOpen]);
   useEffect(() => { syncFocus('nook', nookChar !== null); }, [nookChar, syncFocus]);
   useEffect(() => { syncFocus('character-dialogue', activeCharacter !== null); }, [activeCharacter, syncFocus]);
+  // The dialogue dims the canvas: the character's pointer records, then replays on close.
+  useEffect(() => { agentCursorStore.setDialogue(activeCharacter?.id ?? null); }, [activeCharacter?.id]);
   useEffect(() => { syncFocus('belongings', bagOpen || selectedBagItem !== undefined); }, [bagOpen, selectedBagItem, syncFocus]);
   useEffect(() => { syncFocus('profile', profileOpen); }, [profileOpen, syncFocus]);
   useEffect(() => { syncFocus('writer', attention === 'authoring' && !shell.immersive); }, [attention, shell.immersive, syncFocus]);
@@ -487,16 +498,24 @@ export function App() {
   }, []);
 
   const themeUrl = manifest?.audio?.theme ?? null;
+  // While the launcher is open the world's beds stay silent under its own music;
+  // closing it re-runs these and brings the world's sound back.
   useEffect(() => {
-    if (!state) return;
+    if (!state || launcherOpen) return;
     setAmbient(state.audio.ambient ?? null);
     setBGM(state.audio.bgm ?? null);
     const urls = [state.audio.ambient, state.audio.bgm, themeUrl].filter(
       (url): url is string => typeof url === 'string' && url.length > 0
     );
     if (urls.length) void preloadAudio(urls);
-  }, [state?.audio?.ambient, state?.audio?.bgm, themeUrl, setAmbient, setBGM]);
-  useEffect(() => { setTheme(themeUrl); }, [themeUrl, setTheme]);
+  }, [state?.audio?.ambient, state?.audio?.bgm, themeUrl, setAmbient, setBGM, launcherOpen]);
+  useEffect(() => { if (!launcherOpen) setTheme(themeUrl); }, [themeUrl, setTheme, launcherOpen]);
+  useEffect(() => {
+    if (!launcherOpen) return;
+    setAmbient(null);
+    setBGM(null);
+    setTheme(LAUNCHER_THEME);
+  }, [launcherOpen, setAmbient, setBGM, setTheme]);
 
   useEffect(() => {
     const src = state?.bg?.src;
@@ -673,6 +692,7 @@ export function App() {
       await enterLayer(entryLayer).then(applyFollowFailures);
       await loadChromeData();
       setWorldPickerOpen(false);
+      setLauncherOpen(false);
       setAttention('ambient');
       setIsGodHandOpen(false);
       setShell(initialShell);
@@ -977,12 +997,15 @@ export function App() {
             <span className="prototype-brand">World<span>lines</span></span>
             <nav className="prototype-crumbs" aria-label={t("Scene path")}>
               {breadcrumbs.map((part) => {
-                return <button key={part} onClick={() => void enterLayer(part).then(applyFollowFailures)}>{part === 'map' ? t('Map') : sceneName(manifest, part)}</button>;
+                const label = part === 'map' ? t('Map') : sceneName(manifest, part);
+                // One line, ellipsised: a wrapped crumb breaks the fixed-height header.
+                return <button key={part} title={label} onClick={() => void enterLayer(part).then(applyFollowFailures)}><span className="prototype-crumb-label">{label}</span></button>;
               })}
             </nav>
             <div className="prototype-spacer" />
             <span className="prototype-freeze">{state?.worldFrozen ? t('WORLD PAUSED') : t('WORLD AWAKE')}</span>
             <span className="prototype-status">{t('{items} ITEMS · {people} PEOPLE', { items: handItems.length, people: characters.length })}</span>
+            <button className="prototype-pill" onClick={() => setLauncherOpen(true)}>{t('World launcher')}</button>
             <button className="prototype-pill" onClick={() => setWorldPickerOpen(true)}>{t("Worlds")}</button>
             <label className="prototype-language"><span className="sr-only">{t('Language')}</span><select aria-label={t('Language')} value={locale} onChange={event => setLocale(event.target.value as 'en' | 'zh-CN' | 'ja')}><option value="en">English</option><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
             <AgentSettings settings={world.settings} onSaveSettings={world.saveSettings} focus={focusCoordinator} />
@@ -1046,7 +1069,7 @@ export function App() {
             })}</div>}
           </div>
 
-          <button className="prototype-player-orb prototype-chrome" style={playerAvatar ? { backgroundImage: `url("${playerAvatar}")`, backgroundSize: 'cover', backgroundPosition: 'center 25%' } : undefined} onClick={() => setProfileOpen((open) => !open)} aria-label={t("Open player profile")} aria-expanded={profileOpen}>{!playerAvatar && <UserRound size={25} />}<span className="prototype-player-label"><small>{t("YOU")}</small>{playerRole}</span></button>
+          <button className="prototype-player-orb prototype-chrome" style={playerAvatar ? { backgroundImage: `url("${withBase(playerAvatar)}")`, backgroundSize: 'cover', backgroundPosition: 'center 25%' } : undefined} onClick={() => setProfileOpen((open) => !open)} aria-label={t("Open player profile")} aria-expanded={profileOpen}>{!playerAvatar && <UserRound size={25} />}<span className="prototype-player-label"><small>{t("YOU")}</small>{playerRole}</span></button>
           {profileOpen && chromeVisible && (
             <div className="prototype-profile">
               <b>{playerRole}</b>
@@ -1145,6 +1168,15 @@ export function App() {
       </main>
 
       {loadingWorld && <div role="status" className="prototype-world-loading">{t(' · opening…')}</div>}
+      {launcherOpen && (
+        <WorldLauncher
+          shelf={shelf}
+          loading={loadingWorld}
+          onLoad={path => void loadWorld(path)}
+          onClose={manifest ? () => setLauncherOpen(false) : undefined}
+          onManageSaves={() => setWorldPickerOpen(true)}
+        />
+      )}
       {worldPickerOpen && (
         <WorldShelfDialog shelf={shelf} loading={loadingWorld} onLoad={path => void loadWorld(path)} onClose={() => setWorldPickerOpen(false)} onRefresh={async () => { setShelf(await airpGateway.worlds()); }} />
       )}
@@ -1181,7 +1213,7 @@ export function App() {
           worldId={manifest?.id}
           voice={activeCharacter.voice}
           onClose={closeCharacter}
-          language={manifest?.locale === 'ja' || manifest?.locale === 'en' ? manifest.locale : 'en'}
+          language={manifest?.locale === 'ja' || manifest?.locale === 'en' || manifest?.locale === 'zh-CN' ? manifest.locale : 'en'}
           onOpenNook={() => { const id = activeCharacter.id; closeCharacter(); openNook(id); }}
           onSendMessage={(message) => sendMessage({ type: 'character_prompt', characterId: activeCharacter.id, message })}
         />

@@ -1,0 +1,67 @@
+{
+  "id": "wuwu-zh",
+  "audio": {
+    "theme": "canvas-wuwu"
+  },
+  "name": "雾坞镇 · 中文",
+  "version": "1.2.0",
+  "schema": 1,
+  "description": "找到第二艘船。雾散开后，通往一座尚无名字的小镇的道路就会出现。",
+  "author": "Worldlines Canvas / AIRP",
+  "genre": "故事体验",
+  "tags": [
+    "短篇故事",
+    "生成世界"
+  ],
+  "material": "parchment",
+  "cover": "assets/scenes/intro.webp",
+  "extensions": [
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
+  ],
+  "characters": [
+    {
+      "id": "vera",
+      "home": "world/harbor-chart/workshop",
+      "role": "companion",
+      "avatar": "assets/motion/seedance/characters/viola-transparent.webp",
+      "description": "义手泛着紫光的技师。对舵的扣件有私人的关注。爱说俏皮话，但不谈自己没看到的罪行。",
+      "avatarVideo": "assets/motion/seedance/characters/viola-transparent.webm",
+      "name": "薇拉"
+    },
+    {
+      "id": "silver-kite",
+      "home": "world/harbor-chart/seventh-berth",
+      "role": "npc",
+      "avatar": "assets/motion/seedance/characters/silverkite-transparent.webp",
+      "description": "守护空箱与舷门的精灵骑士。根据证据选择措辞。",
+      "avatarVideo": "assets/motion/seedance/characters/silverkite-transparent.webm",
+      "name": "银鸢"
+    },
+    {
+      "id": "old-mo",
+      "home": "world/harbor-chart/old-lighthouse",
+      "role": "npc",
+      "avatar": "assets/characters/old-mo.webp",
+      "description": "带着伤疤的灯塔看守。承认那十二分钟的熄灯是自己所为，但说不清他并不知道的追踪船。",
+      "name": "老莫"
+    }
+  ],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "player": {
+    "id": "player",
+    "name": "港口调查员",
+    "avatar": "assets/characters/investigator.webp"
+  },
+  "locale": "zh-CN",
+  "entry": "map"
+}

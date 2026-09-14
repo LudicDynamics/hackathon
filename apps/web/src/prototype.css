@@ -329,25 +329,45 @@
   flex: 1;
 }
 
+/* Crumbs never wrap: the header has a fixed height, so a long place name is
+   ellipsised instead (full name in the button's title). Ancestors give way
+   first; the current place keeps the most room. */
 .prototype-crumbs {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .prototype-crumbs button {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 3 auto;
+  min-width: 3.5em;
+  max-width: 12em;
+  white-space: nowrap;
   background: color-mix(in srgb, var(--ux-color-paper) 70%, transparent);
   border-color: transparent;
   font-size: 12px;
 }
 
+.prototype-crumb-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .prototype-crumbs button::after {
   content: ' /';
+  flex: none;
   margin-left: 8px;
   opacity: 0.35;
 }
 
 .prototype-crumbs button:last-child {
+  flex-shrink: 1;
+  max-width: 20em;
   color: var(--ux-color-rust);
   font-weight: 700;
 }

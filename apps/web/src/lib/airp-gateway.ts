@@ -4,7 +4,18 @@ export type AssetMediaKind = 'image' | 'video' | 'audio';
 export interface WorldShelf {
   templates: string[];
   worlds: string[];
-  groups?: { id: string; name: string; templatePath: string | null; saves: { id: string; path: string; updatedAt: string; active: boolean }[] }[];
+  groups?: {
+    id: string;
+    name: string;
+    templatePath: string | null;
+    /** Launcher cover URL (`/api/worlds/cover`); templates only. */
+    cover?: string | null;
+    /** Launcher video URL; templates with an intro video only. */
+    coverVideo?: string | null;
+    locale?: string | null;
+    description?: string;
+    saves: { id: string; path: string; updatedAt: string; active: boolean }[];
+  }[];
 }
 
 export interface WorldLoadResult<TManifest = Record<string, unknown>> {

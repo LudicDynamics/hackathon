@@ -120,6 +120,20 @@ effect cannot overlap. The older Freesound files below are retained.
 > Not yet produced. Once wired, `playStinger(emo)` maps to `stinger/<emo>.mp3`; a
 > missing file is a silent no-op (it never touches the BGM main track).
 
+## 8. Licensed, local only — `licensed/` (gitignored, **not in the repository**)
+
+| File | Use | Title | Artist | Source | Dur | License |
+|---|---|---|---|---|---|---|
+| `licensed/launcher.mp3` | World launcher theme (`LAUNCHER_THEME`) | ヒーリング17 (loudness-matched, −23.9 LUFS) | 魔王魂 (森田交一) | https://maou.audio/bgm_healing17/ | 178s | 魔王魂 terms |
+| `licensed/maou_bgm_healing17.mp3` | original of the above | ヒーリング17 | 魔王魂 | https://maou.audio/bgm_healing17/ | 178s | 魔王魂 terms |
+| `licensed/maou_bgm_fantasy06.mp3` | alternative (grand opening) | ファンタジー06 | 魔王魂 | https://maou.audio/bgm_fantasy06/ | 100s | 魔王魂 terms |
+| `licensed/maou_bgm_piano41.mp3` | alternative (quiet, mysterious piano) | ピアノ41 Last daily sound 2 | 魔王魂 | https://maou.audio/bgm_piano41/ | 85s | 魔王魂 terms |
+
+> 魔王魂 terms (https://maou.audio/rule/): free for personal and commercial use;
+> **credit required** — the launcher shows 「音楽：魔王魂」; **redistributing the
+> track files themselves is prohibited**, so this folder stays out of git. Download
+> the files from the pages above on each machine; without them the launcher is silent.
+
 ---
 
 ## Notes

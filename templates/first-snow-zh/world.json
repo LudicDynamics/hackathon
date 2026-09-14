@@ -1,0 +1,48 @@
+{
+  "id": "first-snow-zh",
+  "audio": {
+    "theme": "canvas-firstsnow"
+  },
+  "locale": "zh-CN",
+  "entry": "map",
+  "name": "初雪电台 · 中文",
+  "version": "1.2.0",
+  "schema": 1,
+  "description": "今夜，你要说些什么？去哪里、许下什么约定、如何回应。这一夜的结局，会从你的话语中诞生。",
+  "author": "Worldlines / AIRP",
+  "genre": "故事体验",
+  "tags": [
+    "短篇故事",
+    "生成世界"
+  ],
+  "material": "warm",
+  "cover": "assets/scenes/intro.webp",
+  "extensions": [],
+  "player": {
+    "id": "player",
+    "name": "你 · 学生导播",
+    "avatar": "assets/characters/radio-director.webp"
+  },
+  "characters": [
+    {
+      "id": "nanami",
+      "name": "七海",
+      "home": "world/tonight-promises/radio-studio",
+      "role": "companion",
+      "avatar": "assets/motion/seedance/characters/nanami-transparent.webp",
+      "description": "认识十年的朋友，「初雪时间」的主持人。记得天台上的约定。会具体地接住玩家说出的话。",
+      "avatarVideo": "assets/motion/seedance/characters/nanami-transparent.webm"
+    },
+    {
+      "id": "sumi-yukimura",
+      "name": "雪村澄",
+      "home": "world/tonight-promises/amber-cafe",
+      "role": "npc",
+      "avatar": "assets/motion/seedance/characters/sumi-transparent.webp",
+      "description": "刚出道的歌手。想在巡演前度过一段与工作无关的时间。不会自动知道与七海之间的私下对话。",
+      "avatarVideo": "assets/motion/seedance/characters/sumi-transparent.webm"
+    }
+  ],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z"
+}

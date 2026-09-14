@@ -274,7 +274,9 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
       <div className="entity-action-arrows" aria-label={t('Entity actions')}>
         {actions.map((action: string, index: number) => <button type="button" key={`${index}-${action}`} disabled={!onChoice} onClick={() => send(action)}><span aria-hidden="true">→ </span>{action}</button>)}
         {collectable && <button type="button" onClick={() => void runGatewayAction('move', item.path, () => airpGateway.move(item.path, `player/${item.path.split('/').pop()}`), t('Added to belongings.'))}>{t('→ Take along')}</button>}
-        <button type="button" onClick={inspect}>{t('→ Look closer')}</button>
+        {/* Only where there is something to read: gates, sprites and empty
+            bodies have no reader, and a button that shows nothing reads as broken. */}
+        {canRead && <button type="button" onClick={inspect}>{t('→ Look closer')}</button>}
         {isGate && onEnterGate && <button type="button" onClick={() => onEnterGate(typeof fm?.target === 'string' ? fm.target : item.path.replace(/\/README\.md$/, ''))}>{t('→ Enter scene')}</button>}
         {isPerson && onOpenCharacter && <button type="button" onClick={() => onOpenCharacter(fm?.characterId || fm?.id || item.path.split('/').pop()!.replace(/\.md$/, ''))}>{t('→ Talk')}</button>}
       </div>

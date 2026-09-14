@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FocusCoordinator } from '../lib/focus-coordinator.js';
 import type { AutoWrite, WorldSettings } from '@airp/shared/world-settings';
 import { useWriterState } from '../lib/writer-state.js';
+import { useLocale } from '../lib/i18n.js';
 type Model = { provider: string; id: string; name?: string };
 type Status = { world: string; active: string[]; models: Model[]; writer: { model: Model | null; thinking: string }; characters: { id: string; model: Model | null; thinking: string }[]; preferences: Partial<Record<'writer' | 'character', { provider: string; model: string; thinking: string }>> };
 export function AgentSettings({ settings, onSaveSettings, focus }: {
@@ -9,6 +10,7 @@ export function AgentSettings({ settings, onSaveSettings, focus }: {
   onSaveSettings: (next: WorldSettings) => Promise<void>;
   focus?: FocusCoordinator;
 }) {
+  const { t } = useLocale();
   const [open, setOpen] = useState(false);
   const focusTokenRef = useRef<string | null>(null);
   const setOpenState = (next: boolean): void => {
@@ -63,15 +65,15 @@ export function AgentSettings({ settings, onSaveSettings, focus }: {
   const writing = writer.phase === 'writing';
   const seconds = writer.startedAt ? Math.max(0, Math.floor((Date.now() - writer.startedAt) / 1000)) : 0;
   const summary = !status
-    ? 'Connecting'
+    ? t('Connecting')
     : writer.error
-      ? 'Attention'
+      ? t('Attention')
       : writing
-        ? `${seconds}s`
-    : 'Ready';
+        ? t('{seconds}s', { seconds })
+    : t('Ready');
   return <div className="agent-settings" data-focus-owner={open ? 'workspace' : undefined}>
-    <button onClick={() => setOpenState(!open)} aria-expanded={open}>Agents · {summary}</button>
-    {open && <section className="agent-settings-panel" aria-label="Agent models and progress" onKeyDown={event => {
+    <button onClick={() => setOpenState(!open)} aria-expanded={open}>{t('Agents · {summary}', { summary })}</button>
+    {open && <section className="agent-settings-panel" aria-label={t('Agent models and progress')} onKeyDown={event => {
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -79,19 +81,19 @@ export function AgentSettings({ settings, onSaveSettings, focus }: {
       }
     }}>
       <p role="status">
-        {!status ? 'Connecting to the engine' : writing ? writer.stage ?? 'Preparing the response' : 'Ready for your next action'}
-        {writer.stopRequested ? ' · Stop requested' : ''}
+        {!status ? t('Connecting to the engine') : writing ? writer.stage ?? t('Preparing the response') : t('Ready for your next action')}
+        {writer.stopRequested ? t(' · Stop requested') : ''}
       </p>
-      <p>Writer: {status?.writer.model?.id ?? 'Unknown'} · {status?.writer.thinking ?? '—'}<br />{status?.characters.map(c => <span key={c.id}>{c.id}: {c.model?.id ?? 'Unknown'} · {c.thinking}<br /></span>)}</p>
-      {writing && <p>{seconds}s elapsed · You can browse while waiting.</p>}
+      <p>{t('Writer')}: {status?.writer.model?.id ?? t('Unknown')} · {status?.writer.thinking ?? '—'}<br />{status?.characters.map(c => <span key={c.id}>{c.id}: {c.model?.id ?? t('Unknown')} · {c.thinking}<br /></span>)}</p>
+      {writing && <p>{t('{seconds}s elapsed · You can browse while waiting.', { seconds })}</p>}
       {writer.error && <p role="alert">{writer.error.message}</p>}
-      <label>Auto-write<select value={settings.autoWrite} onChange={e => void onSaveSettings({ autoWrite: e.target.value as AutoWrite })}><option value="off">Off · the writer waits for you</option><option value="scenes">Scenes · write unwritten scenes on entry</option><option value="scenes-and-choices">Scenes + choices · also advance on each choice</option></select></label>
-      <label>Agent<select value={role} onChange={e => setRole(e.target.value as typeof role)}><option value="writer">Writer</option><option value="character">Characters</option></select></label>
-      <label>Model<select value={model} onChange={e => setModel(e.target.value)}><option value="">Choose a model</option>{status?.models.map(m => <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>{m.provider} / {m.name || m.id}</option>)}</select></label>
-      <label>Reasoning<select value={thinking} onChange={e => setThinking(e.target.value)}><option value="off">Off · fastest</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
-      <p>Saved for this world save. Character memory is kept. Model availability does not guarantee account access.</p>
-      <button disabled={saving || !status || writing || !model} onClick={() => void save()}>{saving ? 'Applying…' : 'Apply model'}</button>
-      {writing && <p>Wait for the current turn before changing models.</p>}
+      <label>{t('Auto-write')}<select value={settings.autoWrite} onChange={e => void onSaveSettings({ autoWrite: e.target.value as AutoWrite })}><option value="off">{t('Off · the writer waits for you')}</option><option value="scenes">{t('Scenes · write unwritten scenes on entry')}</option><option value="scenes-and-choices">{t('Scenes + choices · also advance on each choice')}</option></select></label>
+      <label>{t('Agent')}<select value={role} onChange={e => setRole(e.target.value as typeof role)}><option value="writer">{t('Writer')}</option><option value="character">{t('Characters')}</option></select></label>
+      <label>{t('Model')}<select value={model} onChange={e => setModel(e.target.value)}><option value="">{t('Choose a model')}</option>{status?.models.map(m => <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>{m.provider} / {m.name || m.id}</option>)}</select></label>
+      <label>{t('Reasoning')}<select value={thinking} onChange={e => setThinking(e.target.value)}><option value="off">{t('Off · fastest')}</option><option value="low">{t('Low')}</option><option value="medium">{t('Medium')}</option><option value="high">{t('High')}</option></select></label>
+      <p>{t('Saved for this world save. Character memory is kept. Model availability does not guarantee account access.')}</p>
+      <button disabled={saving || !status || writing || !model} onClick={() => void save()}>{saving ? t('Applying…') : t('Apply model')}</button>
+      {writing && <p>{t('Wait for the current turn before changing models.')}</p>}
       {error && <p role="alert">{error}</p>}
     </section>}
   </div>;

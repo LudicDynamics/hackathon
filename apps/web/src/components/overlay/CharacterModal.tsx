@@ -529,7 +529,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     phaseRef.current = 'idle';
     phaseBeforeTurnRef.current = 'idle';
 
-    const contentLanguage = language === 'ja' ? 'ja' : 'en';
+    const contentLanguage = language === 'ja' || language === 'zh-CN' ? language : 'en';
     const key = worldId === undefined ? null : `airp:greeted:v2:${worldId}:${characterId}:${contentLanguage}`;
     let greeted: string | null = null;
     if (key !== null) {

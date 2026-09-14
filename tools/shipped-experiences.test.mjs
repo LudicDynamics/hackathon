@@ -5,12 +5,12 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { filesUnder } from './localize-world-editions.mjs';
-import { editionFamilies, editionId } from './world-editions.mjs';
+import { editionFamilies, editionId, editionLocales } from './world-editions.mjs';
 const repo = fileURLToPath(new URL('../', import.meta.url));
 
-test('all fourteen editions and every dependency are tracked, without save data', async () => {
+test('every edition and every dependency are tracked, without save data', async () => {
   const tracked = new Set(execFileSync('git', ['ls-files', '-z', '--', 'templates'], { cwd: repo, encoding: 'utf8' }).split('\0').filter(Boolean));
-  for (const family of editionFamilies) for (const locale of ['en', 'ja']) {
+  for (const family of editionFamilies) for (const locale of editionLocales) {
     const prefix = `templates/${editionId(family, locale)}`;
     for (const file of await filesUnder(path.join(repo, prefix))) assert.ok(tracked.has(`${prefix}/${file}`), `Untracked dependency: ${prefix}/${file}`);
     const shipped = [...tracked].filter(f => f.startsWith(prefix + '/'));

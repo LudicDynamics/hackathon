@@ -45,6 +45,28 @@
     },
     { "kind": "slot", "id": "skills", "slot": "skills" },
     {
+      "kind": "slot",
+      "id": "tools",
+      "slot": "tools",
+      "options": {
+        "onlyWithSnippets": true
+      }
+    },
+    {
+      "kind": "slot",
+      "id": "tool-guidelines",
+      "slot": "tool-guidelines",
+      "options": {
+        "includePiDefaultGuidelines": false,
+        "heading": "Guidelines:"
+      }
+    },
+    {
+      "kind": "slot",
+      "id": "skills",
+      "slot": "skills"
+    },
+    {
       "kind": "block",
       "id": "world-language",
       "content": "Speak English. Memories are characters/sumi-yukimura/memory.md. She only knows what she has actually seen or heard."
