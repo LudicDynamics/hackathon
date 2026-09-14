@@ -19,6 +19,7 @@ import {
   EMOTIONS,
   emotionPortraitsOf,
   createActionService,
+  initializeMissingCharacterPresence,
   isValidCharacterId,
   listBackpack,
   nookCardPaths,
@@ -569,6 +570,7 @@ export function createWorldRouter(
     if (lifecycle.isModelSwitching()) return res.status(409).json({ error: 'Wait for model settings to finish applying.' });
     if (shelfBusy) return res.status(409).json({ error: 'A world operation is in progress.' });
     shelfBusy = true;
+    let store: LocalWorldStore | null = null;
     try {
       const { worldPath } = req.body;
       let resolvedPath = path.isAbsolute(worldPath) ? worldPath : path.join(repoRoot, worldPath);
@@ -599,18 +601,26 @@ export function createWorldRouter(
         await serviceFor(current, { type: 'engine' })
           .snapshotWorld({ reason: 'session end' })
           .catch((err) => console.warn('[Snapshot Warning]', err instanceof Error ? err.message : String(err)));
+        eventBridge.close?.();
         current.close();
+        // Detach before any later request can hit the closed database while the
+        // replacement store is being reconciled.
+        setActiveStore(null);
       }
 
-      const store = new LocalWorldStore(resolvedPath);
-      setActiveStore(store);
-
+      // Reconcile missing character presence before activating the store or
+      // starting its event tail. Initial positions come from manifest home and
+      // are written through the existing move action only.
+      store = new LocalWorldStore(resolvedPath);
+      await initializeMissingCharacterPresence(store, { turn: `init:${randomUUID()}` });
       const manifest = await clientManifest(store);
       // Re-align lastSeq against the NEW history.db before watching: the old
       // cursor belongs to another sequence and could permanently skip events
       // (docs/tools/12 §8.6 / §8 "index.ts 的接线").
       eventBridge.startTailReader(store);
       eventBridge.watchWorld(resolvedPath);
+      setActiveStore(store);
+      store = null;
 
       // Start writer process (reused when the same world is already loaded)
       lifecycle.startWriter(resolvedPath).catch((err) => {
@@ -619,6 +629,10 @@ export function createWorldRouter(
 
       res.json({ ok: true, manifest, path: resolvedPath });
     } catch (err) {
+      eventBridge.close?.();
+      if (store) {
+        try { store.close(); } catch { /* The load failure is already reported below. */ }
+      }
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     } finally {
       shelfBusy = false;
@@ -824,9 +838,13 @@ export function createWorldRouter(
           }
         }),
       ]);
+      // Character presence is rendered from canvas.db, not from legacy world
+      // cards. Filter old saves as well as new templates so loading a save made
+      // before the migration cannot paint a duplicate character component.
+      const nonCharacterItems = allItems.filter((it) => !['character', 'spirit'].includes(String(it.frontmatter?.type ?? '')));
       // An authored gate replaces the automatic child directory sign.
-      const targets = new Set(allItems.filter(it => it.frontmatter?.type === 'gate').map(it => it.frontmatter?.target));
-      const items = allItems.filter(it => it.filename !== 'README.md' || !targets.has(it.path.replace(/\/README\.md$/, '')));
+      const targets = new Set(nonCharacterItems.filter(it => it.frontmatter?.type === 'gate').map(it => it.frontmatter?.target));
+      const items = nonCharacterItems.filter(it => it.filename !== 'README.md' || !targets.has(it.path.replace(/\/README\.md$/, '')));
       const mdFiles = items.map((it) => it.path);
 
       // Store seating receives the complete page, including existing rows and
@@ -1052,12 +1070,11 @@ export function createWorldRouter(
           const row = presenceByCharacter.get(c.id);
           return {
             ...c,
-            avatar: avatar || '/assets/characters/portraits/fella_1.png',
-            avatarVideo,
+            ...(avatar ? { avatar } : {}),
+            ...(avatarVideo ? { avatarVideo } : {}),
             bio,
             // The key is ALWAYS present; `null` means "not in the world"
-            // (no `presence` row), never "the key is missing"
-            // (docs/presence/00 §3.2 / P-11).
+            // (no `presence` row), never "the key is missing".
             presence: row ? { layer: row.layer, following: row.following } : null,
             ...(voice ? { voice } : {}),
             ...(emotions ? { emotions } : {}),

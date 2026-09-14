@@ -51,6 +51,7 @@ export * from './actions/delete.js';
 export * from './actions/edit-character-config.js';
 export * from './actions/presence.js';
 export * from './actions/move-to.js';
+export * from './actions/initial-presence.js';
 export * from './actions/look-at.js';
 export * from './actions/following.js';
 export * from './actions/use-item.js';

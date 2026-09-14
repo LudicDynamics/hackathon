@@ -74,7 +74,6 @@ export async function installExperience(repo, pack, { outputRoot = path.join(rep
       ],
     };
     await write(destination, `${root}/preset.json`, JSON.stringify(preset, null, 2) + '\n');
-    await write(destination, `${person.home}/${person.id}.md`, md({ type: 'character', characterId: person.id, title: person.name, portable: false, ...(profile.avatar ? { avatar: profile.avatar } : {}), ...(profile.avatarVideo ? { avatarVideo: profile.avatarVideo } : {}) }, person.body));
   }
   // Reuse matching motion backgrounds without importing the old English prose.
   const byBackground = new Map();

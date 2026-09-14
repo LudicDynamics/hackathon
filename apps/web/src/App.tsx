@@ -947,6 +947,8 @@ export function App() {
             >
               <NookView
                 characterId={nookChar!}
+                character={characters.find((item) => item.id === nookChar) ?? { id: nookChar! }}
+                effectsEnabled={effectsEnabled}
                 locale={locale === 'ja' ? 'ja' : 'en'}
                 onClose={closeNook}
                 inactive={activeCharacter !== null}

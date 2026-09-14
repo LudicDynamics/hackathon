@@ -1596,11 +1596,15 @@ export class LocalWorldStore implements WorldStore {
     opts: { near?: string; excludeCharacter?: string } = {}
   ): Promise<SeatPresenceResult> {
     const { w, h } = CARD_FORMS.sprite;
+    const manifest = await this.getManifest();
+    const legacyCharacterCards = new Set(
+      manifest.characters.map((character) => `${character.home}/${character.id}.md`),
+    );
     const cards = (
-      this.queryCanvas('SELECT x, y, width, height FROM cards WHERE layer = ?', [
+      this.queryCanvas('SELECT id, x, y, width, height FROM cards WHERE layer = ?', [
         layerId,
       ]) as Array<Record<string, unknown>>
-    ).map((r) => ({
+    ).filter((r) => !legacyCharacterCards.has(String(r.id))).map((r) => ({
       cx: Number(r.x) + Number(r.width) / 2,
       cy: Number(r.y) + Number(r.height) / 2,
       w: Number(r.width),
@@ -1692,6 +1696,17 @@ export class LocalWorldStore implements WorldStore {
       characterId,
     ]) as Array<Record<string, unknown>>;
     return rows.length > 0 ? this.rowToPresence(rows[0]) : null;
+  }
+  /**
+   * Compensating cleanup for a failed initial-presence action. Normal movement
+   * never uses this path; callers must only pass a character that had no row
+   * before their initialization batch.
+   */
+  async deletePresence(characterId: string): Promise<boolean> {
+    const before = this.getPresenceOf(characterId) !== null;
+    if (!before) return false;
+    this.execCanvas('DELETE FROM presence WHERE character_id = ?', [characterId]);
+    return true;
   }
 
   private rowToPresence(row: Record<string, unknown>): PresenceRecord {

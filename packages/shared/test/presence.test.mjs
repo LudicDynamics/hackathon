@@ -15,6 +15,7 @@ import { test } from 'node:test';
 import { ActionError } from '../dist/actions/errors.js';
 import { createActionService } from '../dist/actions/service.js';
 import { carryFollowers, resolveDestinationLayer } from '../dist/actions/presence.js';
+import { initializeMissingCharacterPresence } from '../dist/actions/initial-presence.js';
 // Import the action modules for their registration side effect (the service
 // registry is populated at module load, 01 §2.6).
 import '../dist/actions/move-to.js';
@@ -439,4 +440,41 @@ test('§3.4: the presence table gets UNIQUE(character_id) + idx_presence_layer, 
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+test('initial world load fills missing presence at home and is idempotent', async () => {
+  const { store } = await tempWorld();
+  const first = await initializeMissingCharacterPresence(store, { turn: 'init:test' });
+  assert.equal(first.initialized.length, 3);
+  assert.equal(store.getPresence().length, 3);
+  assert.deepEqual(
+    Object.fromEntries(store.getPresence().map((row) => [row.characterId, row.layer])),
+    { constable: 'world/baker-street', homeless: 'map', watson: 'world/baker-street' },
+  );
+  const positions = Object.fromEntries(
+    store.getPresence().map((row) => [row.characterId, { x: row.x, y: row.y, following: row.following }]),
+  );
+  const eventCount = (await store.getEventsSince(0)).length;
+  const second = await initializeMissingCharacterPresence(store, { turn: 'init:retry' });
+  assert.equal(second.initialized.length, 0);
+  assert.deepEqual(
+    Object.fromEntries(store.getPresence().map((row) => [row.characterId, { x: row.x, y: row.y, following: row.following }])),
+    positions,
+  );
+  assert.equal((await store.getEventsSince(0)).length, eventCount);
+});
+
+test('initial presence retries after its event append fails', async () => {
+  const { store } = await tempWorld();
+  const appendEvent = store.appendEvent.bind(store);
+  store.appendEvent = async () => { throw new Error('db locked'); };
+  await assert.rejects(
+    () => initializeMissingCharacterPresence(store, { turn: 'init:failed' }),
+    /db locked/,
+  );
+  assert.equal(store.getPresence().length, 0, 'failed initialization must not leave a presence row');
+  store.appendEvent = appendEvent;
+  const retry = await initializeMissingCharacterPresence(store, { turn: 'init:retry' });
+  assert.equal(retry.initialized.length, 3);
+  assert.equal(store.getPresence().length, 3);
 });

@@ -1,0 +1,51 @@
+.nook-character-media {
+  position: absolute;
+  right: clamp(1rem, 12vw, 10rem);
+  bottom: clamp(1.25rem, 8vh, 5rem);
+  z-index: var(--depth-entity-base);
+  display: flex;
+  width: min(34vw, 25rem);
+  height: min(70vh, 38rem);
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.nook-character-media__asset {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  filter: drop-shadow(0 1rem 1.75rem rgb(45 38 28 / 18%));
+}
+
+.nook-character-media__fallback {
+  display: grid;
+  width: min(14rem, 48vw);
+  height: min(22rem, 55vh);
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--ux-radius-panel);
+  background: color-mix(in srgb, var(--paper) 84%, transparent);
+  color: var(--muted);
+  font-family: var(--ux-font-human);
+  font-size: clamp(2rem, 6vw, 4rem);
+  box-shadow: var(--ux-shadow-soft);
+}
+
+@media (max-width: 700px) {
+  .nook-character-media {
+    right: 50%;
+    bottom: clamp(1rem, 17vh, 7rem);
+    width: min(62vw, 20rem);
+    height: min(50vh, 25rem);
+    transform: translateX(50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nook-character-media__asset {
+    filter: none;
+  }
+}

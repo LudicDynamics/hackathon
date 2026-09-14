@@ -187,6 +187,7 @@ test('PF-A4 GET /api/characters presence is always a key: object when in-world, 
     assert.ok('presence' in byId.edith, 'absent must still carry the key');
     assert.equal(byId.edith.presence, null, 'no presence row => null');
     assert.equal(byId.edith.home, 'world/a', 'home remains the initial layer, untouched');
+    assert.equal('avatar' in byId.edith, false, 'missing media must not use an invalid generic avatar');
   } finally {
     await h.close();
   }

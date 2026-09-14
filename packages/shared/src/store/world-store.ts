@@ -215,6 +215,8 @@ export interface WorldStore {
   getPresence(layer?: string): PresenceRecord[];
   /** One character's row, or null when they have never been placed. */
   getPresenceOf(characterId: string): PresenceRecord | null;
+  /** Remove a row created by a failed world-load initialization retry. */
+  deletePresence(characterId: string): Promise<boolean>;
   /**
    * The singleton viewpoint row, or null when the table is absent / empty / stale
    * (05 §2.3). SYNCHRONOUS: the only synchronous store read, matching

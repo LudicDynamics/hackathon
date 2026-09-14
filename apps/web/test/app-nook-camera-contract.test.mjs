@@ -46,6 +46,17 @@ test('Nook note composer posts the top-level gateway path and locks transport', 
   assert.match(composer, /onCreated\?\.\(\)/);
 });
 
+test('Nook projects the character metadata media outside the card canvas', () => {
+  assert.match(nook, /character: CharacterMediaSnapshot/);
+  assert.match(nook, /effectsEnabled: boolean/);
+  assert.match(nook, /data-nook-zone="character-media"/);
+  assert.match(nook, /video=\{avatarVideo \?\? undefined\}/);
+  assert.match(nook, /poster=\{avatar \?\? undefined\}/);
+  assert.match(nook, /stillPortraits/);
+  assert.match(nook, /className="nook-character-media__asset"/);
+  assert.doesNotMatch(nook, /sceneFrontmatter\?\.avatar/);
+});
+
 
 test('camera slots use Canvas layer keys and clear remembered slots', () => {
   assert.match(camera, /export function cameraSlot/);

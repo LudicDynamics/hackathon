@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Loader2, Mic, PhoneOff } from 'lucide-react';
+import { CharacterMedia } from '../media/CharacterMedia.js';
 import { Canvas } from '../canvas/Canvas.js';
 import { WriterBar } from '../chrome/WriterBar.js';
 import { StubPrompt } from '../chrome/StubPrompt.js';
@@ -18,6 +19,7 @@ import {
   measureHeights,
   type FootprintScheduler,
 } from '../../lib/footprint.js';
+import './nook-character-media.css';
 
 /**
  * NookView — a character's private space (docs/nook/00 §3, 02 §2.2).
@@ -30,9 +32,20 @@ import {
  * WebSocket and a second layer footprint scheduler (00 §6 anti-pattern 3).
  * Re-fetch on world changes rides the existing `airp:world-event` forward.
  */
+export interface CharacterMediaSnapshot {
+  id: string;
+  name?: string;
+  avatar?: string;
+  avatarVideo?: string;
+}
+
 export interface NookViewProps {
   /** Character id (ASCII kebab-case, supplied by the character rail's nook button). */
   characterId: string;
+  /** Metadata from the single `/api/characters` chrome request. */
+  character: CharacterMediaSnapshot;
+  /** Effects toggle controls character motion, never Nook data or presence. */
+  effectsEnabled: boolean;
   /** Close the nook, returning to the layer that was showing. App owns it. */
   onClose: () => void;
   locale: Locale;
@@ -136,6 +149,8 @@ async function fetchNook(characterId: string): Promise<FetchResult> {
 }
 export const NookView: React.FC<NookViewProps> = ({
   characterId,
+  character,
+  effectsEnabled,
   onClose,
   locale,
   onMoveCard,
@@ -411,11 +426,11 @@ export const NookView: React.FC<NookViewProps> = ({
   }, [state?.items]);
 
   const sceneFrontmatter: Record<string, any> | null = state?.scene?.frontmatter ?? null;
-  const avatar = assetUrl(sceneFrontmatter?.avatar, 'image');
-  const displayName =
-    typeof sceneFrontmatter?.name === 'string' && sceneFrontmatter.name.trim() !== ''
-      ? sceneFrontmatter.name
-      : characterId;
+  // Character identity media comes from the `/api/characters` snapshot. The
+  // Nook README remains the facade/status source, not a second media authority.
+  const avatar = assetUrl(character.avatar, 'image');
+  const avatarVideo = assetUrl(character.avatarVideo, 'video');
+  const displayName = character.name?.trim() || character.id || characterId;
   const statusLine = statusLineOf(sceneFrontmatter);
   const isEmpty = state !== null && state.items.length === 0 && state.scene === null;
   const canRetry = error !== null && (error.status === 0 || error.status >= 500);
@@ -478,6 +493,24 @@ export const NookView: React.FC<NookViewProps> = ({
       {/* Canvas is the only content on the world stage. Every other nook
           surface is an anchored lane above it and cannot move its origin. */}
       <main data-nook-zone="canvas" className="absolute inset-0" aria-label={`${displayName} canvas`}>
+        <div
+          data-nook-zone="character-media"
+          className="nook-character-media"
+          aria-label={`${displayName} portrait`}
+        >
+          <CharacterMedia
+            video={avatarVideo ?? undefined}
+            poster={avatar ?? undefined}
+            enabled={effectsEnabled}
+            name={displayName}
+            className="nook-character-media__asset"
+            fallback={
+              <div className="nook-character-media__fallback" role="img" aria-label={displayName}>
+                {displayName.slice(0, 1)}
+              </div>
+            }
+          />
+        </div>
         {loading && state === null && !error && (
           <div className="absolute inset-0 flex items-center justify-center font-mono text-xs text-ink/40">
             …
@@ -531,6 +564,7 @@ export const NookView: React.FC<NookViewProps> = ({
           <Canvas
             currentLayer={state.layer}
             items={state.items}
+            stillPortraits
             links={[]}
             bg={state.bg}
             ghostCopy={{

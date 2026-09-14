@@ -7,7 +7,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { experiences } from './experiences/index.mjs';
 import { installExperience } from './install-experiences.mjs';
-import { LocalWorldStore, parseFrontmatter } from '../packages/shared/dist/index.js';
+import { LocalWorldStore, initializeMissingCharacterPresence, parseFrontmatter } from '../packages/shared/dist/index.js';
 import { createWorldRouter } from '../apps/server/dist/routes/world.js';
 import { HOLMES_SUBMISSION_INTENT, HOLMES_RESOLUTION_RULES } from './experiences/holmes-resolution.mjs';
 const pack = experiences.find(p => p.base === 'whitechapel');
@@ -49,14 +49,16 @@ test('clear opening motive, distributed evidence and no public culprit declarati
   assert.doesNotMatch(pack.files[`${map}/02-deduction-and-plan.md`], /推論を書く|作戦計画を書く|二つの文章を提出する/);
 });
 
-test('all five NPCs have unique sprites, real assets and world-specific profiles; four restored nooks do not spoil the culprit', async () => {
+test('all five NPCs retain profiles/media and are initialized as presence, not sprites', async () => {
   const manifest = JSON.parse(await fs.readFile(`${root}/world.json`, 'utf8'));
   assert.deepEqual(manifest.characters.map(c => c.id).sort(), Object.keys(expectedHomes).sort());
   for (const c of manifest.characters) {
     assert.equal(c.home, expectedHomes[c.id]);
-    const fm = parseFrontmatter(await fs.readFile(`${root}/${c.home}/${c.id}.md`, 'utf8')).frontmatter;
-    assert.equal(fm.type, 'character'); assert.equal(fm.characterId, c.id);
-    assert.equal(fm.avatar, c.avatar); await fs.access(`${root}/${c.avatar}`);
+    const fm = parseFrontmatter(await fs.readFile(`${root}/characters/${c.id}/README.md`, 'utf8')).frontmatter;
+    assert.equal(fm.type, 'readme');
+    assert.equal(fm.name, c.name);
+    if (c.avatar) assert.equal(fm.avatar, c.avatar);
+    await fs.access(`${root}/${c.avatar}`);
     const preset = JSON.parse(await fs.readFile(`${root}/characters/${c.id}/preset.json`, 'utf8'));
     assert.equal(preset.items.find(i => i.id === 'profile').options.baseDir, `characters/${c.id}`);
     if (c.id !== 'watson') assert.ok(preset.items.find(i => i.id === 'role-context')?.content);
@@ -68,18 +70,17 @@ test('all five NPCs have unique sprites, real assets and world-specific profiles
   for (const key of ['identity', 'relationships', 'diary', 'unspoken', 'likes-and-fears', 'near-term', 'long-term']) assert.doesNotMatch(await fs.readFile(`${root}/characters/wayne/${key}.md`, 'utf8'), /非公開演技指示|犯人は|事件を起こしている/);
 });
 
-test('fresh compile and isolated layer API expose the restored sprites only in their own rooms', async () => {
+test('fresh compile and isolated layer API expose presence in their own rooms, not sprites', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'airp-holmes-npcs-'));
   const result = await installExperience(process.cwd(), pack, { outputRoot: tmp });
   // The archive under `root` is a declared historical fixture (see
   // archive/templates/pre-bilingual-2026-09-14/README.md); the compiler has moved
-  // on since (the Holmes investigation card migrated 2d10 → 1d100), so comparing a
-  // fresh compile against that frozen snapshot is no longer a contract. Current
-  // bilingual coverage lives in world-editions.test.mjs; this test keeps only the
-  // fresh-compile sprite/layer assertion below.
+  // on since (the Holmes investigation card migrated 2d10 → 1d100), so comparing
+  // a fresh compile against that frozen snapshot is not a contract.
+  const store = new LocalWorldStore(result.path);
+  await initializeMissingCharacterPresence(store, { turn: 'init:holmes-test' });
   const require = createRequire(new URL('../apps/server/package.json', import.meta.url));
   const app = require('express')();
-  const store = new LocalWorldStore(result.path);
   app.use('/api', createWorldRouter(process.cwd(), {}, { broadcast() {} }, () => store, () => {}));
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
@@ -88,8 +89,12 @@ test('fresh compile and isolated layer API expose the restored sprites only in t
       const response = await fetch(`http://127.0.0.1:${server.address().port}/api/layer?layer=${encodeURIComponent(home)}`);
       assert.equal(response.status, 200);
       const data = await response.json();
-      const sprites = data.items.filter(i => i.frontmatter?.type === 'character');
-      assert.deepEqual(sprites.map(i => i.frontmatter.characterId), [id]);
+      assert.equal(data.items.some(i => i.frontmatter?.type === 'character'), false);
+      const row = data.presence.find(p => p.characterId === id);
+      assert.ok(row, `${id} must be initialized in its home layer`);
+      assert.equal(typeof row.x, 'number');
+      assert.equal(typeof row.y, 'number');
+      assert.equal(row.following, false);
     }
     assert.equal((await store.getManifest()).layers[expectedHomes.wayne].parent, `${map}/print-shop`);
   } finally { await new Promise(resolve => server.close(resolve)); store.close(); }

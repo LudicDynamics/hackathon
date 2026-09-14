@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import { cpSync, existsSync } from 'node:fs';
 import { WebSocketServer, WebSocket } from 'ws';
-import { LocalWorldStore, createActionService, settleTurnCursor } from '@airp/shared';
+import { LocalWorldStore, createActionService, initializeMissingCharacterPresence, settleTurnCursor } from '@airp/shared';
 import { AgentLifecycleManager } from './engine/lifecycle.js';
 import { assertCharacterLaunchable } from './engine/launch.js';
 import { EventBridge } from './engine/event-bridge.js';
@@ -109,6 +109,7 @@ const TEMPLATES_ROOT = path.join(REPO_ROOT, 'templates') + path.sep;
 const DEFAULT_WORLD = DEFAULT_SOURCE.startsWith(TEMPLATES_ROOT)
   ? path.join(REPO_ROOT, 'worlds', `${path.basename(DEFAULT_SOURCE)}-default`)
   : DEFAULT_SOURCE;
+let bootStore: LocalWorldStore | null = null;
 try {
   if (!existsSync(path.join(DEFAULT_SOURCE, 'world.json'))) throw new Error('Default world is unavailable');
   if (DEFAULT_WORLD !== DEFAULT_SOURCE && !existsSync(path.join(DEFAULT_WORLD, 'world.json'))) {
@@ -117,11 +118,14 @@ try {
       filter: (source) => !['.airpworld', '.pi'].includes(path.relative(DEFAULT_SOURCE, source).split(path.sep)[0]),
     });
   }
-  activeStore = new LocalWorldStore(DEFAULT_WORLD);
-  // Align the tail cursor BEFORE watching — the watcher kicks `drain()`, and
-  // aligning first keeps "align, then listen" unambiguous (docs/tools/12 §8.6).
-  eventBridge.startTailReader(activeStore);
+  bootStore = new LocalWorldStore(DEFAULT_WORLD);
+  await initializeMissingCharacterPresence(bootStore, { turn: `init:${randomUUID()}` });
+  // Align the tail cursor BEFORE exposing or watching the store. Initial
+  // presence events stay in history and are not replayed to the old world.
+  eventBridge.startTailReader(bootStore);
   eventBridge.watchWorld(DEFAULT_WORLD);
+  activeStore = bootStore;
+  bootStore = null;
   console.log(`[AIRP Server] Default world loaded: ${DEFAULT_WORLD}`);
   // The frontend never calls /api/worlds/load, so without this the writer process
   // simply would not exist on the default path.
@@ -129,6 +133,12 @@ try {
     console.warn('[AIRP Server] writer start failed:', err);
   });
 } catch (err) {
+  if (bootStore) {
+    try { bootStore.close(); } catch { /* The startup failure is already reported below. */ }
+    bootStore = null;
+  }
+  eventBridge.close();
+  activeStore = null;
   console.warn('[AIRP Server] No default world found, waiting for user selection.');
 }
 
