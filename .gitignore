@@ -90,3 +90,13 @@ assets/**
 # World design documents are source, unlike runtime worlds/.
 !docs/worlds/
 !docs/worlds/**
+
+# Launch video (large media; public/ assets are copied from templates by video/remotion/scripts/sync-assets.sh)
+video/footage/
+video/remotion/out/
+video/remotion/public/cast/
+video/remotion/public/bg/
+video/remotion/public/scenes/
+video/remotion/public/portraits/
+video/remotion/public/sfx/
+video/remotion/public/footage/

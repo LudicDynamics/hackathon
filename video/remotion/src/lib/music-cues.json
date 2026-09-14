@@ -1,0 +1,129 @@
+{
+  "file": "music/placeholder-120.wav",
+  "bpm": 120,
+  "beatSec": 0.5,
+  "barSec": 2,
+  "fps": 30,
+  "framesPerBeat": 15,
+  "framesPerBar": 60,
+  "durationSec": 150,
+  "gridNote": "Beats fall on multiples of 0.5 s from t=0. Chord bars restart at each section start.",
+  "sections": [
+    {
+      "id": "S0",
+      "name": "cold-open-riser",
+      "start": 0,
+      "end": 3
+    },
+    {
+      "id": "S1",
+      "name": "cast-drop",
+      "start": 3,
+      "end": 15
+    },
+    {
+      "id": "S2",
+      "name": "one-canvas-halftime",
+      "start": 15,
+      "end": 27
+    },
+    {
+      "id": "S3",
+      "name": "voice-ducked",
+      "start": 27,
+      "end": 39
+    },
+    {
+      "id": "S4",
+      "name": "four-worlds-build",
+      "start": 39,
+      "end": 87,
+      "blocks": [
+        39,
+        51,
+        63,
+        75
+      ]
+    },
+    {
+      "id": "S5",
+      "name": "infinite-exploration-melodic",
+      "start": 87,
+      "end": 112
+    },
+    {
+      "id": "S6",
+      "name": "vision-second-drop",
+      "start": 112,
+      "end": 137
+    },
+    {
+      "id": "S7",
+      "name": "formula-hits",
+      "start": 137,
+      "end": 150
+    }
+  ],
+  "impacts": [
+    3,
+    112,
+    138,
+    139,
+    140,
+    141,
+    143,
+    148
+  ],
+  "crashes": [
+    39,
+    51,
+    63,
+    75,
+    87,
+    122
+  ],
+  "fills": [
+    {
+      "start": 50.5,
+      "end": 51
+    },
+    {
+      "start": 62.5,
+      "end": 63
+    },
+    {
+      "start": 74.5,
+      "end": 75
+    },
+    {
+      "start": 86.5,
+      "end": 87,
+      "kind": "roll"
+    }
+  ],
+  "risers": [
+    {
+      "start": 0,
+      "end": 3
+    },
+    {
+      "start": 110,
+      "end": 112
+    },
+    {
+      "start": 141,
+      "end": 143
+    }
+  ],
+  "silence": {
+    "start": 137,
+    "end": 137.5
+  },
+  "formulaHits": [
+    138,
+    139,
+    140,
+    141
+  ],
+  "finalHit": 148
+}
