@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-
+import React, { useEffect, useRef, useState } from 'react';
+import { createImeGuard } from '../../lib/ime.js';
 export interface NookNoteComposerProps {
   characterId: string;
   onCreated?: () => void;
@@ -23,7 +23,7 @@ export const NookNoteComposer: React.FC<NookNoteComposerProps> = ({ characterId,
   const [message, setMessage] = useState<string | null>(null);
   const [narrow, setNarrow] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-
+  const imeGuardRef = useRef(createImeGuard());
   // The host owns the lane position. This local media state only controls
   // whether the panel is folded on narrow viewports; it never changes Canvas.
   useEffect(() => {
@@ -84,6 +84,9 @@ export const NookNoteComposer: React.FC<NookNoteComposerProps> = ({ characterId,
         <input
           value={title}
           onChange={event => setTitle(event.target.value)}
+          onCompositionStart={imeGuardRef.current.onCompositionStart}
+          onCompositionEnd={imeGuardRef.current.onCompositionEnd}
+          onKeyDown={event => { imeGuardRef.current.guardKey(event); }}
           placeholder="Title"
           aria-label="Note title"
           disabled={disabled || busy}
@@ -92,6 +95,9 @@ export const NookNoteComposer: React.FC<NookNoteComposerProps> = ({ characterId,
         <textarea
           value={body}
           onChange={event => setBody(event.target.value)}
+          onCompositionStart={imeGuardRef.current.onCompositionStart}
+          onCompositionEnd={imeGuardRef.current.onCompositionEnd}
+          onKeyDown={event => { imeGuardRef.current.guardKey(event); }}
           placeholder="Write something for this ikigai…"
           aria-label="Note body"
           disabled={disabled || busy}
