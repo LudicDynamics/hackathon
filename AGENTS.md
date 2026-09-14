@@ -12,7 +12,7 @@ D10 演出：`D10Stage` 按需加载夜辉 GLB，玩家与 Agent 共用；1d100 
 
 语音设置：`GET /api/tts/config` 仅暴露配置就绪状态、模型和默认音色；前端 Voice settings 控制本浏览器语音开关，未配置时停止合成请求并单次提醒，详情见 `docs/tts/TTS设置面板.md`。
 
-初雪七海本机语音：`AIRP_TTS_LOCAL_BASE_URL` 启用 first-snow / first-snow-jp 与旧 firstsnow 存档中 nanami 的 Fish TTS 优先路由。角色请求附带 `characterId` / `emotion`；本机失败 console 警告并回落原线上音色，双来源缓存隔离，恢复后重新优先本机。见 `docs/tts/10-本机角色语音与线上兜底.md`。
+七海本机语音：`AIRP_TTS_LOCAL_BASE_URL` 启用 first-snow / first-snow-jp、旧 firstsnow 及 school-romance（世界 ID `sakura-academy`）与其派生存档中 nanami 的 Fish TTS 优先路由。角色请求附带 `characterId` / `emotion`；本机失败 console 警告并回落原线上音色，双来源缓存隔离，恢复后重新优先本机。见 `docs/tts/10-本机角色语音与线上兜底.md`。
 
 图片适配边界：`extensions/toolkit/image-openai-provider.ts` 在项目内实现 `ImageProvider`，直接请求 OpenAI-compatible Images 接口；OpenRouter 继续复用 pi-rp。图片供应商接入不修改引擎内建注册表，动作层仍负责素材落盘与复用。
 

@@ -169,6 +169,19 @@ test('Other characters and legacy requests remain online', async t => {
   assert.equal(h.ds.calls.length, 1);
 });
 
+for (const worldId of ['sakura-academy', 'sakura-academy-saved-game']) {
+  test(`School romance Nanami uses local TTS in ${worldId}`, async t => {
+    const h = await localHarness(t, worldId);
+    delete process.env.DASHSCOPE_API_KEY;
+    const response = await post(h.base, { ...localLine, voice: 'shy-sweet' });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).ok, true);
+    assert.equal(h.local.calls.length, 1);
+    assert.equal(h.local.calls[0].voice, 'setsuna');
+    assert.equal(h.ds.calls.length, 0);
+  });
+}
+
 test('Same character ID in another world remains online', async t => {
   const h = await localHarness(t, 'magic-academy-jp');
   assert.equal((await (await post(h.base, localLine)).json()).ok, true);

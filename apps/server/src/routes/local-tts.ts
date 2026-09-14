@@ -15,7 +15,7 @@ export function readLocalTtsConfig() {
 }
 
 export function isLocalTtsCharacter(worldId: string, characterId: unknown): boolean {
-  return characterId === 'nanami' && /^(?:first-snow|firstsnow)(?:-|$)/.test(worldId);
+  return characterId === 'nanami' && /^(?:first-snow|firstsnow|sakura-academy)(?:-|$)/.test(worldId);
 }
 
 const EMOTIONS: Record<string, string> = {
