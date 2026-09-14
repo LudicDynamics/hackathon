@@ -1,6 +1,6 @@
 # Nook 立绘拖拽设计
 
-> 状态：**已实现**（2026-09-15）。几何与持久化落在 `apps/web/src/lib/nook-portrait.ts`，组件落在 `apps/web/src/components/nook/NookPortrait.tsx`；行为测试 `apps/web/test/nook-portrait.test.mjs`。
+> 状态：**已实现**（2026-09-15）。几何与持久化落在 `apps/web/src/lib/nook-portrait.ts`，状态提取在 `apps/web/src/lib/nook-status.ts`，组件落在 `apps/web/src/components/nook/NookPortrait.tsx`；行为测试 `apps/web/test/nook-portrait.test.mjs`、`apps/web/test/nook-status.test.mjs`。
 >
 > 本文服从 `docs/ux/15-下一批共同上下文.md`、`docs/ux/17-Nook演出与投影生命周期设计.md` 和 `skill://airp-natural-flow-direct-manipulation`。立绘是 Nook 中的高级头像与可移动表现层，不是世界事实，不进入动作层、事件账或 WS。
 
@@ -25,6 +25,8 @@ interface NookPortraitProps {
   worldId: string;
   characterId: string;
   displayName: string;
+  /** Real status only; the nameplate never falls back to the README title. */
+  statusLine?: string | null;
   video?: string;
   poster?: string;
   enabled: boolean;
@@ -32,6 +34,12 @@ interface NookPortraitProps {
   fallback: React.ReactNode;
 }
 ```
+
+### 2.1 名牌（2026-09-15 追加）
+
+立绘结构为「媒体舞台 + 名牌」两段：`.nook-character-media` 纵向排列 `.nook-character-media__stage`（媒体，尺寸由 `--nook-portrait-w/h` 控制）与 `.nook-character-media__nameplate`（单行纸片）。名牌文案 = `displayName`，有真状态时追加 `, <status>`，形如 `Nanami, mid-thought.`；无状态时只显示名字。
+
+状态只取角色的**真实** `status.data`（`lib/nook-status.ts: portraitStatusOf`），**不**回退到 README title——名牌已打印显示名，再回显 title 等于把同一身份写两遍。顶部存在核心条仍用 `statusLineOf`（真状态 → title → 省略）保持原契约。
 
 > 落地差异（2026-09-15）：`reducedMotion` 与 `resolveAssetUrl` 未采纳。媒体 readiness 与 reduced-motion 由 `CharacterMedia`（`useStill`）与 CSS media query 承担，组件本身不再持有该 seam；按 §3「reduced/Effects off 不得禁用拖拽」，保留一个只读 prop 反而会诱导误用。
 

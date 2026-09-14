@@ -5,6 +5,7 @@ import { Canvas } from '../canvas/Canvas.js';
 import { WriterBar } from '../chrome/WriterBar.js';
 import { StubPrompt } from '../chrome/StubPrompt.js';
 import { ghostItemFor } from '../../lib/init-ghost.js';
+import { portraitStatusOf, statusLineOf } from '../../lib/nook-status.js';
 import type { LayerState } from '../../state/useWorld.js';
 import { NookNoteComposer } from './NookNoteComposer.js';
 import { UI_COPY, translate, type Locale } from '../../lib/i18n.js';
@@ -104,26 +105,6 @@ export function assetUrl(value: unknown, mediaKind: AssetMediaKind = 'image'): s
   return airpGateway.assetUrl(value.replace(/^\/+/, ''), undefined, mediaKind);
 }
 
-/**
- * One honest status line from the character README frontmatter (02 §⑫-8).
- * Returns null when there is nothing to say — the caller then omits the row
- * rather than inventing copy.
- */
-export function statusLineOf(frontmatter: Record<string, any> | null | undefined): string | null {
-  const data = frontmatter?.status?.data;
-  if (typeof data === 'string' && data.trim() !== '') return data.trim();
-  if (data && typeof data === 'object') {
-    const parts = Object.entries(data as Record<string, unknown>)
-      .filter(([, v]) => v !== null && v !== undefined && v !== '')
-      .map(([k, v]) => `${k}: ${String(v)}`);
-    if (parts.length > 0) return parts.join(' · ');
-  }
-  // Second choice per 02 §⑫-8: the README title. Nothing beyond that —
-  // a made-up "currently rearranging a thought" would be fabricated copy.
-  const title = frontmatter?.title;
-  if (typeof title === 'string' && title.trim() !== '') return title.trim();
-  return null;
-}
 
 async function fetchNook(characterId: string): Promise<FetchResult> {
   try {
@@ -486,6 +467,9 @@ export const NookView: React.FC<NookViewProps> = ({
   const avatarVideo = assetUrl(character.avatarVideo, 'video');
   const displayName = character.name?.trim() || character.id || characterId;
   const statusLine = statusLineOf(sceneFrontmatter);
+  // The nameplate already prints the display name, so it takes only the real
+  // status — never the README-title fallback that would repeat the identity.
+  const portraitStatus = portraitStatusOf(sceneFrontmatter);
   const isEmpty = state !== null && state.items.length === 0 && state.scene === null;
   const canRetry = error !== null && (error.status === 0 || error.status >= 500);
 
@@ -556,6 +540,7 @@ export const NookView: React.FC<NookViewProps> = ({
             worldId={worldId}
             characterId={characterId}
             displayName={displayName}
+            statusLine={portraitStatus}
             video={avatarVideo ?? undefined}
             poster={avatar ?? undefined}
             enabled={effectsEnabled}
@@ -808,7 +793,7 @@ export const NookView: React.FC<NookViewProps> = ({
       >
         <div
           data-nook-note="composer"
-          className="pointer-events-auto max-h-[min(42dvh,300px)] w-[min(18rem,calc(100vw-1.5rem))] max-w-full overflow-y-auto"
+          className="pointer-events-auto max-h-[min(42dvh,300px)] w-fit max-w-[min(18rem,calc(100vw-1.5rem))] overflow-y-auto"
         >
           <NookNoteComposer
             characterId={characterId}

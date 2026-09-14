@@ -296,6 +296,15 @@
 .airp-prototype:has([data-nook-zone="note"]) .prototype-action-toggle {
   display: none;
 }
+
+/* Narrow viewports cannot fit the expanded composer beside the lower-left
+   live lane, so the composer stacks above it. The collapsed pill is content
+   sized (NookNoteComposer) and needs no offset. */
+@media (max-width: 700px) {
+  .airp-prototype:has(#nook-note-form:not([hidden])) [data-nook-zone="note"] {
+    bottom: calc(env(safe-area-inset-bottom) + 4.5rem);
+  }
+}
 .agent-activity-log__toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 34px;
   padding: 7px 12px; border: 1px solid var(--ux-color-line); border-radius: var(--ux-radius-toolbar); color: var(--ux-color-paper);
   background: color-mix(in srgb, var(--ux-color-ink) 90%, transparent); box-shadow: var(--ux-shadow-soft); cursor: pointer; }

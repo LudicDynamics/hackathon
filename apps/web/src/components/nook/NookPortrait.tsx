@@ -15,6 +15,8 @@ export interface NookPortraitProps {
   worldId: string;
   characterId: string;
   displayName: string;
+  /** Live status line (nook 02 §⑫-8), shown on the nameplate below the figure. */
+  statusLine?: string | null;
   video?: string;
   poster?: string;
   enabled: boolean;
@@ -58,6 +60,7 @@ export function NookPortrait({
   worldId,
   characterId,
   displayName,
+  statusLine,
   video,
   poster,
   enabled,
@@ -259,14 +262,23 @@ export function NookPortrait({
       onLostPointerCapture={onLostPointerCapture}
       onKeyDown={onKeyDown}
     >
-      <CharacterMedia
-        video={video}
-        poster={poster}
-        enabled={enabled}
-        name={displayName}
-        className="nook-character-media__asset"
-        fallback={fallback}
-      />
+      <div className="nook-character-media__stage">
+        <CharacterMedia
+          video={video}
+          poster={poster}
+          enabled={enabled}
+          name={displayName}
+          className="nook-character-media__asset"
+          fallback={fallback}
+        />
+      </div>
+      {/* Nameplate: one line naming who is standing there and what they are
+          doing, like the reference caption chip — "Nanami, mid-thought." */}
+      <div className="nook-character-media__nameplate">
+        {statusLine
+          ? <span className="nook-character-media__name">{displayName}, <span className="nook-character-media__status">{statusLine}</span></span>
+          : <span className="nook-character-media__name">{displayName}</span>}
+      </div>
       <span id={`${characterId}-portrait-saved`} className="sr-only" aria-live="polite">
         {saveState === 'saved' ? 'Portrait position saved.' : saveState === 'unsaved' ? 'Portrait position could not be saved.' : ''}
       </span>

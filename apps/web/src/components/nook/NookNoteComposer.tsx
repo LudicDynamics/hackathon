@@ -66,8 +66,13 @@ export const NookNoteComposer: React.FC<NookNoteComposerProps> = ({ characterId,
 
   const toggleLabel = collapsed ? 'Leave a note' : narrow ? 'Hide note form' : 'Fold note form';
 
+  // Collapsed is a compact pill, not a full-width panel: at 390px a fixed
+  // 18rem width reaches the lower-left live lane and overlaps its control.
+  // Only the open form needs the reading width.
+  const widthClass = collapsed ? 'w-fit' : 'w-[min(18rem,calc(100vw-1.5rem))]';
+
   return (
-    <section className="w-full rounded-2xl border border-ink/10 bg-paper-card/95 p-2 shadow-soft backdrop-blur-md" aria-label="Leave a note">
+    <section className={`${widthClass} max-w-full rounded-2xl border border-ink/10 bg-paper-card/95 p-2 shadow-soft backdrop-blur-md`} aria-label="Leave a note">
       <button
         type="button"
         aria-expanded={!collapsed}

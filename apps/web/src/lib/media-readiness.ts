@@ -104,11 +104,18 @@ export function createMediaReadinessAdapter(): MediaReadinessAdapter {
       for (const listener of listeners) listener();
     },
     markReady(owner, key, epoch = snapshot(owner, key).epoch) {
-      if (epoch < currentEpoch) return { ...snapshot(owner, key), state: 'failed', errorCode: 'stale' };
+      // Staleness is per (owner, key): an entry is stale when the epoch stored
+      // against it has moved on — a newer request for the same key, or a global
+      // `invalidate`. Comparing against the adapter-wide `currentEpoch` instead
+      // lets an unrelated owner's request (audio, background) reject a perfectly
+      // current portrait ready event and strand it at `loading` forever.
+      const current = states.get(idOf(owner, key));
+      if (current && current.epoch !== epoch) return { ...current, state: 'failed', errorCode: 'stale' };
       return finish({ owner, key, state: 'ready', epoch });
     },
     markFailed(owner, key, epoch = snapshot(owner, key).epoch, errorCode = 'media-error') {
-      if (epoch < currentEpoch) return { ...snapshot(owner, key), state: 'failed', epoch, errorCode };
+      const current = states.get(idOf(owner, key));
+      if (current && current.epoch !== epoch) return { ...current, state: 'failed', errorCode: 'stale' };
       return finish({ owner, key, state: 'failed', epoch, errorCode });
     },
     subscribe(listener) {
