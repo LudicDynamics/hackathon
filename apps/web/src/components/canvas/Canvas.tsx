@@ -21,8 +21,8 @@ import { depthClassFor } from '../../lib/depth-surface.js';
 import { useStill } from '../../lib/motion.js';
 import type { CharacterPresenceView } from '../../lib/presence.js';
 import type { LayerItem, LayerLink } from '../../state/useWorld.js';
-
 import type { AssetMediaKind } from '../../lib/airp-gateway.js';
+import { movedBeyondCardThreshold } from '../../lib/card-interaction.js';
 /** Stable identity for the no-presence path (nook never passes one) so the memo
  *  deps in PresenceLayer do not churn on every Canvas render. */
 const NO_PRESENCE: CharacterPresenceView[] = [];
@@ -94,7 +94,7 @@ interface PanDragState {
  * Card drag session — the viewport's pointer handlers drive this state machine
  * (plan §6.2: all pointer logic in the single viewport handler; CanvasObject
  * roots never attach their own listeners). Capture is taken only after the
- * 4px gate passes, so a bare click on a card (choice/dice/gate) is never
+ * 5px gate passes, so a bare click on a card (choice/dice/gate) is never
  * retargeted away from its interactive child.
  */
 interface CardDragSession {
@@ -420,7 +420,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       const dx = e.clientX - s.sx;
       const dy = e.clientY - s.sy;
       if (!s.moved) {
-        if (Math.hypot(dx, dy) <= 4) return; // 4px gate: small jitter ≠ drag
+        if (!movedBeyondCardThreshold(s.sx, s.sy, e.clientX, e.clientY)) return;
         s.moved = true;
         try {
           s.el.setPointerCapture(e.pointerId);
@@ -494,7 +494,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     const dx = e.clientX - d.sx;
     const dy = e.clientY - d.sy;
     d.moved = Math.max(d.moved, Math.hypot(dx, dy));
-    if (d.moved > 4) {
+    if (movedBeyondCardThreshold(d.sx, d.sy, e.clientX, e.clientY)) {
       const z = camera.getCam().z;
       camera.flyTo(d.cx - dx / z, d.cy - dy / z);
     }

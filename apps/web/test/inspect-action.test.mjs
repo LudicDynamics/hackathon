@@ -2,36 +2,39 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 
+const canvas = await readFile(new URL('../src/components/canvas/CanvasObject.tsx', import.meta.url), 'utf8');
+const card = await readFile(new URL('../src/components/canvas/CardRenderer.tsx', import.meta.url), 'utf8');
+const prop = await readFile(new URL('../src/components/canvas/PropCard.tsx', import.meta.url), 'utf8');
+const photo = await readFile(new URL('../src/components/canvas/PhotoCard.tsx', import.meta.url), 'utf8');
 const entity = await readFile(new URL('../src/components/narrative/EntityInteractions.tsx', import.meta.url), 'utf8');
 
-test('Look closer opens the real reading projection with the entity body', () => {
-  assert.match(entity, /import \{ BagItemDialog \} from '\.\.\/BagItemDialog\.js'/);
-  assert.match(entity, /body: item\.body \?\? ''/);
-  assert.match(entity, /const readingProjection = <>[\s\S]*<BagItemDialog[\s\S]*body: canRead \? readingItem\.body : ''/);
-  assert.match(entity, /onClick=\{inspect\}/);
+test('CanvasObject is the single owner of card reading', () => {
+  assert.match(canvas, /import \{ BagItemDialog \} from '\.\.\/BagItemDialog\.js'/);
+  assert.match(canvas, /setReading\(value => !value\)/);
+  assert.match(canvas, /onClose=\{\(\) => setReading\(false\)\}/);
+  assert.doesNotMatch(card, /BagItemDialog|letterOpen/);
+  assert.doesNotMatch(entity, /BagItemDialog|Look closer|readingProjection/);
 });
 
-test('Take along remains an authoritative move action', () => {
+test('Take along remains the only authoritative card action region', () => {
   assert.match(entity, /collectable && <button[\s\S]*runGatewayAction\('move', item\.path, \(\) => airpGateway\.move\(item\.path/);
   assert.match(entity, /t\('Added to belongings\.'\)/);
+  assert.doesNotMatch(card, /onTakeItem|note__take|take_label/);
+  assert.doesNotMatch(photo, /onTakeItem|photo-card__take|take_label/);
 });
 
-test('Look closer re-enters CanvasObject reading without a writer request', () => {
-  assert.match(entity, /object\.dispatchEvent\(new KeyboardEvent\('keydown'/);
-  assert.match(entity, /key: 'Enter'/);
-  const lookCloser = entity.match(/<button type="button" onClick=\{inspect\}>\{t\('\u2192 Look closer'\)\}<\/button>/)?.[0] ?? '';
-  assert.notEqual(lookCloser, '', 'Look closer button must remain wired');
-  assert.doesNotMatch(lookCloser, /send\(|onChoice\?\.\(/);
-  assert.doesNotMatch(lookCloser, /Inspecting/);
+test('Reading does not send a writer request and has an equivalent keyboard path', () => {
+  assert.match(canvas, /if \(event\.key === 'Enter'\)/);
+  assert.match(canvas, /setReading\(value => !value\)/);
+  assert.doesNotMatch(entity, /Look closer/);
+  assert.doesNotMatch(entity, /requestCanvasReading|dispatchEvent\(new KeyboardEvent/);
 });
 
-test('Look closer remains available without a writer callback', () => {
-  assert.match(entity, /<button type="button" onClick=\{inspect\}>/);
-  assert.doesNotMatch(entity, /\{onChoice && <button type="button" onClick=\{inspect\}/);
-});
-
-test('Inspect does not fabricate an Inspecting status', () => {
-  assert.doesNotMatch(entity, /Inspecting[\u2026.]/);
-  assert.match(entity, /setFeedbackStatus\(null\)/);
-  assert.match(entity, /setFeedback\(''\)/);
+test('Gate and door keep inspect on click with desktop double-click and focused Enter enter paths', () => {
+  assert.match(canvas, /if \(isGate \|\| isDoor\) \{\s*setInspected\(true\)/);
+  assert.match(canvas, /onDoubleClick=\{event => \{[\s\S]*requestEnter\(gateTarget\)/);
+  assert.match(canvas, /if \(isGate \|\| isDoor\) \{\s*requestEnter\(gateTarget\)/);
+  assert.match(entity, /\(isGate \|\| isDoor\) && onEnterGate/);
+  assert.match(prop, /DOUBLE-CLICK TO ENTER/);
+  assert.doesNotMatch(prop, /clickTimer|onDoubleClick|onKeyDown/);
 });

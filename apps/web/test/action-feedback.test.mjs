@@ -83,17 +83,16 @@ test('action UI keeps domain choices out of the Writer prompt callback', async (
   assert.doesNotMatch(entity, /Look closer[\s\S]{0,300}send\(/);
   assert.match(dialog, /runAction\(/);
 });
-test('gate pointer semantics reserve single click for inspect and one second click for enter', async () => {
+test('gate and door pointer semantics reserve click for inspect and desktop double-click for enter', async () => {
   const card = await readFile(new URL('../src/components/canvas/CardRenderer.tsx', import.meta.url), 'utf8');
   const prop = await readFile(new URL('../src/components/canvas/PropCard.tsx', import.meta.url), 'utf8');
   const canvas = await readFile(new URL('../src/components/canvas/CanvasObject.tsx', import.meta.url), 'utf8');
-  assert.match(card, /onClick=\{handleGateClick\}/);
-  assert.match(card, /setGateInspected\(true\)/);
-  assert.match(card, /onEnterGate\?\.\(gateTarget\)/);
-  assert.match(prop, /clickTimer/);
-  assert.match(canvas, /onEnterGate=\{onEnterGate \? requestEnter : undefined\}/);
-  assert.match(prop, /onEnter\?\.\(\)/);
-  assert.match(canvas, /if \(isGate\) \{\s*requestEnter\(gateTarget\)/);
+  assert.match(canvas, /if \(isGate \|\| isDoor\) \{\s*setInspected\(true\)/);
+  assert.match(canvas, /onDoubleClick=\{event => \{[\s\S]*requestEnter\(gateTarget\)/);
+  assert.match(canvas, /if \(isGate \|\| isDoor\) \{\s*requestEnter\(gateTarget\)/);
+  assert.match(prop, /DOUBLE-CLICK TO ENTER/);
+  assert.doesNotMatch(prop, /clickTimer|onDoubleClick|onKeyDown/);
+  assert.doesNotMatch(card, /handleGateClick|handleGateDoubleClick|clickTimer/);
 });
 
 test('target drops do not perform success-only unlock presentation before authority', async () => {

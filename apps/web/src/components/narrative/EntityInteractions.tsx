@@ -1,6 +1,5 @@
 import { useLocale } from '../../lib/i18n.js';
 import React from 'react';
-import { BagItemDialog } from '../BagItemDialog.js';
 import { DeclaredActionDialog, type DeclaredResponse, type MaterialSelection } from './DeclaredActionDialog.js';
 import './declared-actions.css';
 import { airpGateway, AirpRequestError } from '../../lib/airp-gateway.js';
@@ -45,18 +44,6 @@ function declaredActionOf(value: unknown): DeclaredResponse | null {
 }
 
 
-/** Shared by every Markdown form; visual form never decides interaction support. */
-function requestCanvasReading(source: HTMLElement): void {
-  const object = source.closest<HTMLElement>('.object');
-  if (!object) return;
-  // CanvasObject already owns the reading projection and its keyboard seam.
-  // Re-enter that seam rather than sending an action or fabricating feedback.
-  object.dispatchEvent(new KeyboardEvent('keydown', {
-    key: 'Enter',
-    bubbles: true,
-    cancelable: true,
-  }));
-}
 export function EntityInteractions({ item, active = false, onChoice, onDiceRolled, onEnterGate, onOpenCharacter, onActionResult, pendingChoice, onPendingChoiceHandled }: Props) {
   const { t } = useLocale();
   const [busy, setBusy] = React.useState(false);
@@ -67,7 +54,6 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
   const running = React.useRef(false);
   const feedbackStore = React.useMemo(() => new ActionFeedbackStore(), []);
   const [side, setSide] = React.useState('right');
-  const [inspecting, setInspecting] = React.useState(false);
   const [direct, setDirect] = React.useState<DeclaredResponse | null>(null);
 
   React.useLayoutEffect(() => {
@@ -117,8 +103,7 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
     observer.observe(viewport);
     viewport.addEventListener('wheel', schedule, { passive: true });
     return () => { cancelAnimationFrame(frame); observer.disconnect(); viewport.removeEventListener('wheel', schedule); };
-    // Opening the reading paper widens the panel: choose the side again for it.
-  }, [active, inspecting]);
+  }, [active]);
 
   const publish = (result: ActionFeedback, acceptedMessage?: string) => {
     onActionResult?.(result);
@@ -158,11 +143,9 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
     : [];
   const fm = item.frontmatter;
   const isGate = fm?.type === 'gate' || item.path.endsWith('/README.md');
+  const isDoor = fm?.visual === 'door';
   const isPerson = fm?.type === 'character' || fm?.type === 'sprite';
-  const collectable = !isGate && !isPerson && fm?.type !== 'chalk' && item.path.startsWith('world/') && fm?.portable !== false;
-  const hasBody = typeof item.body === 'string' && item.body.trim().length > 0;
-  const canvasReadingAllowed = !isGate && fm?.type !== 'sprite';
-  const canRead = hasBody && canvasReadingAllowed;
+  const collectable = !isGate && !isDoor && !isPerson && fm?.type !== 'chalk' && item.path.startsWith('world/') && fm?.portable !== false;
   // A declared roll that has not landed yet: its result is written before the ceremony plays.
   const rollPending = Boolean(fm?.dice_outcomes) && !/<!--\s*resolved-dice:/.test(item.body ?? '');
 
@@ -245,27 +228,9 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
 
   const submitMaterialReview = async (selections: MaterialSelection[]): Promise<string> => {
     if (!direct) throw new Error('The action snapshot is no longer available. Reopen the panel.');
-    if (!onChoice) throw new Error('The writer input is unavailable. Return to the scene.');
     const result = await runGatewayAction<MaterialReviewDetails>('present', direct.source, () => requestMaterialReview(direct, selections));
     if (result?.outcome !== 'accepted' || !result.details) throw new Error(result?.message ?? 'The review draft was not accepted.');
     return result.details.prompt;
-  };
-  const inspect = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    setError('');
-    setFeedback('');
-    setFeedbackStatus(null);
-    setInspecting(true);
-    // A body-bearing, readable CanvasObject owns the canonical projection.
-    // Empty/non-readable entities stay local so they still get a visible
-    // read-only empty state instead of a no-op or fabricated status.
-    if (canRead) requestCanvasReading(event.currentTarget);
-  };
-  const readingItem = {
-    path: item.path,
-    filename: item.filename ?? item.path.split('/').pop() ?? item.path,
-    body: item.body ?? '',
-    frontmatter: item.frontmatter,
   };
 
   const actionsPanel = <>
@@ -274,10 +239,7 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
       <div className="entity-action-arrows" aria-label={t('Entity actions')}>
         {actions.map((action: string, index: number) => <button type="button" key={`${index}-${action}`} disabled={!onChoice} onClick={() => send(action)}><span aria-hidden="true">→ </span>{action}</button>)}
         {collectable && <button type="button" onClick={() => void runGatewayAction('move', item.path, () => airpGateway.move(item.path, `player/${item.path.split('/').pop()}`), t('Added to belongings.'))}>{t('→ Take along')}</button>}
-        {/* Only where there is something to read: gates, sprites and empty
-            bodies have no reader, and a button that shows nothing reads as broken. */}
-        {canRead && <button type="button" onClick={inspect}>{t('→ Look closer')}</button>}
-        {isGate && onEnterGate && <button type="button" onClick={() => onEnterGate(typeof fm?.target === 'string' ? fm.target : item.path.replace(/\/README\.md$/, ''))}>{t('→ Enter scene')}</button>}
+        {(isGate || isDoor) && onEnterGate && <button type="button" onClick={() => onEnterGate(typeof fm?.target === 'string' ? fm.target : item.path.replace(/\/README\.md$/, ''))}>{t('→ Enter scene')}</button>}
         {isPerson && onOpenCharacter && <button type="button" onClick={() => onOpenCharacter(fm?.characterId || fm?.id || item.path.split('/').pop()!.replace(/\.md$/, ''))}>{t('→ Talk')}</button>}
       </div>
     </fieldset>
@@ -286,17 +248,9 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
     {error && <small className="entity-action-error" role="alert" data-action-status={feedbackStatus ?? 'failed'}>{error}</small>}
   </>;
 
-  const readingProjection = <>
-    <BagItemDialog
-      inline
-      item={{ ...readingItem, body: canRead ? readingItem.body : '' }}
-      onClose={() => setInspecting(false)}
-    />
-    {!canRead && <small role="status">{t('Nothing readable here.')}</small>}
-  </>;
 
   return <div ref={ref} className={`entity-interactions entity-interactions--${side}`} data-no-drag onClick={event => event.stopPropagation()}>
-    {inspecting ? readingProjection : actionsPanel}
+    {actionsPanel}
     {direct && <DeclaredActionDialog
       key={`${direct.source}:${String(direct.choice)}:${direct.revision}`}
       value={direct}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 export interface NookNoteComposerProps {
   characterId: string;
@@ -6,6 +6,7 @@ export interface NookNoteComposerProps {
   disabled?: boolean;
   lockMessage?: string;
 }
+
 function clientRefOf(): string {
   try {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -20,6 +21,23 @@ export const NookNoteComposer: React.FC<NookNoteComposerProps> = ({ characterId,
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [narrow, setNarrow] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
+  // The host owns the lane position. This local media state only controls
+  // whether the panel is folded on narrow viewports; it never changes Canvas.
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const media = window.matchMedia('(max-width: 700px)');
+    const sync = () => {
+      const matches = media.matches;
+      setNarrow(matches);
+      setCollapsed(matches);
+    };
+    sync();
+    media.addEventListener?.('change', sync);
+    return () => media.removeEventListener?.('change', sync);
+  }, []);
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -48,30 +66,56 @@ export const NookNoteComposer: React.FC<NookNoteComposerProps> = ({ characterId,
     }
   };
 
+  const toggleLabel = collapsed ? 'Leave a note' : narrow ? 'Hide note form' : 'Fold note form';
+
   return (
-    <form onSubmit={submit} className="absolute bottom-4 right-4 z-20 w-72 rounded-xl border border-ink/10 bg-paper-card/95 p-3 shadow-soft backdrop-blur-md" aria-label="Leave a note">
-      <input
-        value={title}
-        onChange={event => setTitle(event.target.value)}
-        placeholder="Title"
-        aria-label="Note title"
-        disabled={disabled || busy}
-        className="mb-2 w-full rounded-lg border border-ink/10 bg-paper-wall/60 px-2 py-1.5 text-xs text-ink outline-none"
-      />
-      <textarea
-        value={body}
-        onChange={event => setBody(event.target.value)}
-        placeholder="Write something for this ikigai…"
-        aria-label="Note body"
-        disabled={disabled || busy}
-        rows={3}
-        className="mb-2 w-full resize-none rounded-lg border border-ink/10 bg-paper-wall/60 px-2 py-1.5 text-xs text-ink outline-none"
-      />
-      <button type="submit" disabled={disabled || busy || !title.trim() || !body.trim()} className="rounded-lg bg-ink px-3 py-1.5 text-xs text-white disabled:opacity-40">
-        {busy ? 'Leaving note…' : 'Leave note'}
+    <section className="w-full rounded-xl border border-ink/10 bg-paper-card/95 p-3 shadow-soft backdrop-blur-md" aria-label="Leave a note">
+      <button
+        type="button"
+        aria-expanded={!collapsed}
+        aria-controls="nook-note-form"
+        onClick={() => setCollapsed(value => !value)}
+        className="mb-2 flex min-h-8 w-full items-center justify-between gap-2 rounded-lg border border-ink/10 bg-paper-wall/50 px-2 py-1.5 text-left text-xs text-ink transition-colors hover:bg-paper-wall"
+      >
+        <span>{toggleLabel}</span>
+        <span aria-hidden className="font-mono text-[10px] text-ink/50">{collapsed ? '+' : '−'}</span>
       </button>
-      {disabled && <div role="status" className="mt-2 text-[10px] text-ink/60">{lockMessage || 'Notes are unavailable while the world is busy.'}</div>}
-      {message && <div role="status" className="mt-2 text-[10px] text-ink/70">{message}</div>}
-    </form>
+      <form id="nook-note-form" hidden={collapsed} onSubmit={submit}>
+        <input
+          value={title}
+          onChange={event => setTitle(event.target.value)}
+          placeholder="Title"
+          aria-label="Note title"
+          disabled={disabled || busy}
+          className="mb-2 w-full rounded-lg border border-ink/10 bg-paper-wall/60 px-2 py-1.5 text-xs text-ink outline-none"
+        />
+        <textarea
+          value={body}
+          onChange={event => setBody(event.target.value)}
+          placeholder="Write something for this ikigai…"
+          aria-label="Note body"
+          disabled={disabled || busy}
+          rows={3}
+          className="mb-2 w-full resize-none rounded-lg border border-ink/10 bg-paper-wall/60 px-2 py-1.5 text-xs text-ink outline-none"
+        />
+        <button
+          type="submit"
+          disabled={disabled || busy || !title.trim() || !body.trim()}
+          className="rounded-lg bg-ink px-3 py-1.5 text-xs text-white disabled:opacity-40"
+        >
+          {busy ? 'Leaving note…' : 'Leave note'}
+        </button>
+      </form>
+      {disabled && (
+        <div role="status" className="mt-2 text-[10px] text-ink/60">
+          {lockMessage || 'Notes are unavailable while the world is busy.'}
+        </div>
+      )}
+      {message && (
+        <div role="status" className="mt-2 text-[10px] text-ink/70">
+          {message}
+        </div>
+      )}
+    </section>
   );
 };

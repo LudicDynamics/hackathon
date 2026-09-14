@@ -2,29 +2,44 @@
    Positioning lives in the EXISTING `.prototype-residents` rule
    (`scene-shell.css:110`); this file only adds the rail's own hooks.
    No new z-index numbers, no left/top transitions (contract §4.3). */
+/* The parent already occupies the writer/chrome depth surface. Child panels stay
+   in that stacking context rather than inventing another z-index tier. */
+.character-rail {
+  --character-rail-row-height: 114px;
+}
 
 .character-rail__item {
   position: relative;
   display: flex;
+  flex: 0 0 var(--character-rail-row-height);
   flex-direction: column;
   align-items: center;
+  block-size: var(--character-rail-row-height);
+  min-block-size: var(--character-rail-row-height);
   gap: 4px;
+  box-sizing: border-box;
 }
 
 /* Avatar orb: geometry comes from `.prototype-residents .prototype-companion-orb`
    (58px); only the tone + follow icon are ours. */
-.character-rail__orb {
+.character-rail .character-rail__orb {
   overflow: visible;
+}
+
+/* The global companion hover lift is useful for world avatars, but would make
+   this fixed rail feel like its row moved. Keep this rail's focus feedback in
+   border/background/opacity instead of moving the target. */
+.character-rail .prototype-companion-orb:hover,
+.character-rail .prototype-companion-orb:focus-visible {
+  transform: none;
 }
 
 /* Muted tier = `elsewhere` + `absent` (contract §2.2). Same tier for both so the
    status label is the only thing that separates them. */
-.character-rail__orb--muted {
-  filter: grayscale(1) contrast(.82) brightness(.78);
-}
+.character-rail__orb--muted,
 .character-rail__orb--muted:hover,
 .character-rail__orb--muted:focus-visible {
-  filter: grayscale(.6) contrast(.9) brightness(.9);
+  filter: grayscale(1) contrast(.82) brightness(.78);
 }
 
 /* Follow icon = bottom-right dot (U-2, aligned with 02's status slot). */
@@ -64,7 +79,12 @@
    visible. It is a SEPARATE focus stop from the avatar, so the keyboard can
    reveal the keys without talking to the character (UF-7d). */
 .character-rail__expander {
-  display: none;
+  position: absolute;
+  top: 2px;
+  right: -30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 24px;
   height: 20px;
   padding: 0;
@@ -74,13 +94,21 @@
   color: #e6d9f0;
   font: 11px/1 system-ui, sans-serif;
   cursor: pointer;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
 }
 .character-rail__expander:focus-visible { outline: 2px solid #e8c78b; outline-offset: 2px; }
 
 /* Desktop fast path: hover or keyboard focus within the row. */
 .character-rail__item:hover .character-rail__expander,
 .character-rail__item:focus-within .character-rail__expander,
-.character-rail__item--expanded .character-rail__expander { display: inline-flex; align-items: center; justify-content: center; }
+.character-rail__item--expanded .character-rail__expander {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
 
 /* The three keys are ALWAYS in the DOM (UF-3a); CSS decides visibility. */
 .character-rail__actions {
@@ -138,13 +166,26 @@
 /* Touch: no hover exists, so the expander MUST be reachable without it
    (contract §2.2 ★). Its tap is the only way to open the keys. */
 @media (hover: none) {
-  .character-rail__expander { display: inline-flex; align-items: center; justify-content: center; }
-  .character-rail__item--expanded .character-rail__actions { visibility: visible; opacity: 1; pointer-events: auto; }
+  .character-rail__expander {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .character-rail__item--expanded .character-rail__actions {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 /* Narrow screens follow the existing 44px orb (scene-shell.css:161-163). */
 @media (max-width: 700px) {
+  .character-rail {
+    --character-rail-row-height: 99px;
+  }
   .character-rail__label { max-width: 72px; font-size: 10px; }
+  .character-rail__expander { right: -28px; }
+  .character-rail__actions { right: calc(100% + 8px); }
 }
 
 /* Mobile (≤390px): the column is height-capped and scrollable so it never
@@ -158,6 +199,4 @@
     scrollbar-width: thin;
     padding-left: 8px;
   }
-  .character-rail__actions { position: static; flex-direction: row; flex-wrap: wrap; visibility: hidden; }
-  .character-rail__item--expanded .character-rail__actions { visibility: visible; opacity: 1; pointer-events: auto; }
 }

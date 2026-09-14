@@ -9,6 +9,7 @@ import type { LayerItem } from '../../state/useWorld.js';
 import { UserRound } from 'lucide-react';
 import { EntityInteractions } from '../narrative/EntityInteractions.js';
 import { highlightChalkAnchor } from '../../lib/chalk-anchor.js';
+import { movedBeyondCardThreshold } from '../../lib/card-interaction.js';
 import { airpGateway, type AssetMediaKind } from '../../lib/airp-gateway.js';
 
 /**
@@ -16,11 +17,10 @@ import { airpGateway, type AssetMediaKind } from '../../lib/airp-gateway.js';
  * semantics). Renders CardRenderer (whose root width comes from `item.w` via
  * `w-full`), rotates by the server-derived `--target-rot`, and exposes
  * `data-path` for the LinkLayer registry.
- *
- * Pointer handling lives ENTIRELY in the viewport (Canvas) dispatcher — this
- * component only hooks hover highlights and the README drag lock (styling).
- * It is deliberately NOT draggable (plan §6.7: HTML5 dnd stays exclusive to
- * backpack sources).
+ * Pointer movement/drag handling lives ENTIRELY in the viewport (Canvas)
+ * dispatcher; this shell owns the read and keyboard seams while card visuals
+ * remain presentational. It is deliberately NOT draggable (plan §6.7: HTML5
+ * dnd stays exclusive to backpack sources).
  */
 
 /** Session z-lift registry: path → raised zIndex, survives the drop re-render
@@ -201,15 +201,20 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   // adapter, so re-renders cost nothing; a missing resolution simply means legacy defaults.
   const appearance = item.appearance ? appearanceViewOf(item.appearance) : null;
   const isGate = kind === 'gate' || item.frontmatter?.type === 'gate' || item.path.endsWith('/README.md');
-  const readable = kind !== 'sprite' && !isGate;
+  const isDoor = item.frontmatter?.visual === 'door';
+  const readable = kind !== 'sprite' && !isGate && !isDoor;
   const isPhoto = kind === 'photo' && item.frontmatter?.component === 'photo';
   const photoDialogId = `photo-detail-${item.path.replace(/[^A-Za-z0-9_-]/g, '-')}`;
   const [isDragOver, setIsDragOver] = React.useState(false);
+  const readerBody = item.frontmatter?.component === 'letter' && typeof item.frontmatter.body === 'string'
+    ? item.frontmatter.body
+    : item.body;
   const [isItemDragging, setIsItemDragging] = React.useState(false);
   const anchorCleanup = React.useRef<(() => void) | undefined>(undefined);
   const enterPendingKey = React.useRef<string | null>(null);
   const enterPendingTimer = React.useRef<number | null>(null);
   const [hovered, setHovered] = React.useState(false);
+  const [inspected, setInspected] = React.useState(false);
   const [focused, setFocused] = React.useState(false);
   React.useEffect(() => () => {
     anchorCleanup.current?.();
@@ -269,16 +274,27 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
       aria-controls={isPhoto && reading ? photoDialogId : undefined}
       onPointerDownCapture={event => { pointerStart.current = { x: event.clientX, y: event.clientY }; }}
       onClick={event => {
-        if (!readable || (event.target as HTMLElement).closest('button,a,input,textarea,select,.entity-interactions,.cabin-prop,[role="dialog"]')) return;
-        if (Math.hypot(event.clientX - pointerStart.current.x, event.clientY - pointerStart.current.y) > 6) return;
-        setReading(value => !value);
+        const target = event.target as HTMLElement;
+        if (target.closest('button,a,input,textarea,select,.entity-interactions,[role="dialog"]')) return;
+        if (movedBeyondCardThreshold(pointerStart.current.x, pointerStart.current.y, event.clientX, event.clientY)) return;
+        if (isGate || isDoor) {
+          setInspected(true);
+          return;
+        }
+        if (readable) setReading(value => !value);
+      }}
+      onDoubleClick={event => {
+        if (!isGate && !isDoor) return;
+        event.preventDefault();
+        event.stopPropagation();
+        requestEnter(gateTarget);
       }}
       onKeyDown={event => {
         if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter') {
           event.preventDefault();
           event.stopPropagation();
-          if (isGate) {
+          if (isGate || isDoor) {
             requestEnter(gateTarget);
           } else if (readable) {
             setReading(value => !value);
@@ -307,8 +323,7 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
         ) : reading ? (
           <BagItemDialog
             inline
-            item={item}
-            appearance={appearance}
+            item={{ ...item, body: readerBody }}
             onClose={() => setReading(false)}
             onChoose={choice => { setReading(false); setPendingChoice(choice); }}
           />
@@ -344,15 +359,14 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
             item={item}
             appearance={appearance}
             index={index}
+            gateInspected={inspected}
             onSelectChoice={onSelectChoice}
             onDiceRolled={onDiceRolled}
-            onEnterGate={onEnterGate ? requestEnter : undefined}
             onOpenCharacterModal={onOpenCharacterModal}
             onItemDropOnTarget={onItemDropOnTarget}
-            onTakeItem={onTakeItem}
           />
         )}
-        {!reading && <EntityInteractions item={item} active={hovered || focused} onChoice={onEntityAction} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate ? requestEnter : undefined} onOpenCharacter={onOpenCharacterModal} pendingChoice={pendingChoice} onPendingChoiceHandled={() => setPendingChoice(null)} />}
+        {!reading && <EntityInteractions item={item} active={hovered || focused || inspected} onChoice={onEntityAction} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate ? requestEnter : undefined} onOpenCharacter={onOpenCharacterModal} pendingChoice={pendingChoice} onPendingChoiceHandled={() => setPendingChoice(null)} />}
     </div>
   );
 };

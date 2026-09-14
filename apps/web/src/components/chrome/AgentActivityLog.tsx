@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   activityAriaText,
   activityLabel,
@@ -35,20 +35,41 @@ export const AgentActivityLog: React.FC<AgentActivityLogProps> = ({ query, sessi
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const panelId = useId();
+  const toggleRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
   const focusTokenRef = useRef<string | null>(null);
-  const setOpenState = (next: boolean): void => {
+  const wasOpenRef = useRef(false);
+  const setOpenState = useCallback((next: boolean): void => {
     setOpen(next);
     const token = focusTokenRef.current;
     if (next && focus && !token) focusTokenRef.current = focus.acquire('workspace');
     if (!next && token && focus) {
+      focusTokenRef.current = null;
+      focus.release(token);
+    }
+  }, [focus]);
+  useEffect(() => {
+    if (open) {
+      // Move focus into the detail surface after it has mounted so keyboard
+      // users can reach Escape/close without traversing the canvas chrome.
+      panelRef.current?.focus();
+    } else if (wasOpenRef.current) {
+      // Closing by Escape or the explicit close control returns to the
+      // disclosure that opened this surface, rather than losing the user.
+      toggleRef.current?.focus();
+    }
+    wasOpenRef.current = open;
+  }, [open]);
+  useEffect(() => () => {
+    const token = focusTokenRef.current;
+    if (token && focus) {
       focus.release(token);
       focusTokenRef.current = null;
     }
-  };
-  useEffect(() => () => {
-    const token = focusTokenRef.current;
-    if (token && focus) focus.release(token);
   }, [focus]);
+  useEffect(() => {
+    if (entryCount === 0 && open) setOpenState(false);
+  }, [entryCount, open, setOpenState]);
 
   if (entryCount === 0) return null;
 
@@ -69,17 +90,24 @@ export const AgentActivityLog: React.FC<AgentActivityLogProps> = ({ query, sessi
   };
   const expandAll = () => setExpanded(new Set(turns.map(turnKey)));
   const collapseAll = () => setExpanded(new Set());
-
   return (
     <div className={`agent-activity-log${className ? ` ${className}` : ''}`} data-focus-owner={open ? 'workspace' : undefined}>
       <p className="sr-only" aria-live="off">{aria}</p>
       <button
+        ref={toggleRef}
         type="button"
         className="agent-activity-log__toggle"
         aria-expanded={open}
         aria-controls={panelId}
         aria-label={t('Activity details')}
         onClick={toggleOpen}
+        onKeyDown={event => {
+          if (event.key === 'Escape' && open) {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpenState(false);
+          }
+        }}
       >
         <span className="agent-activity-log__toggle-mark" aria-hidden="true">≡</span>
         <span>{t('Activity details')}</span>
@@ -87,13 +115,20 @@ export const AgentActivityLog: React.FC<AgentActivityLogProps> = ({ query, sessi
       </button>
 
       {open && (
-        <section id={panelId} className="agent-activity-log__panel" aria-label={sessionLabel ? t('Activity details for {name}', { name: sessionLabel }) : t('Activity details')} onKeyDown={event => {
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            event.stopPropagation();
-            setOpenState(false);
-          }
-        }}>
+        <section
+          ref={panelRef}
+          id={panelId}
+          className="agent-activity-log__panel"
+          tabIndex={-1}
+          aria-label={sessionLabel ? t('Activity details for {name}', { name: sessionLabel }) : t('Activity details')}
+          onKeyDown={event => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              event.stopPropagation();
+              setOpenState(false);
+            }
+          }}
+        >
           <header className="agent-activity-log__header">
             <strong>{sessionLabel ?? t('Activity details')}</strong>
             <div className="agent-activity-log__actions">

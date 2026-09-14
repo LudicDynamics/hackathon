@@ -37,7 +37,10 @@ test('declared choices are classified through ActionFeedback and never become wr
 });
 
 test('dice reward cards are read-only persisted outcome displays', () => {
-  const outcome = card.slice(card.indexOf('if (frontmatter?.dice_reward)'), card.indexOf('// 1. Chalk Card'));
+  // Bound the persisted-reward branch at the next renderer branch so a
+  // renamed legacy comment cannot accidentally make this test inspect a
+  // different card's interaction authority.
+  const outcome = card.slice(card.indexOf('if (frontmatter?.dice_reward)'), card.indexOf('if (frontmatter?.visual'));
   assert.match(outcome, /className="dice-outcome-letter"/);
   assert.match(outcome, /<MarkdownText text=\{body\}/);
   assert.doesNotMatch(outcome, /onDiceRolled|airpGateway|fetch\(/);
@@ -47,8 +50,21 @@ test('Prepare does not send to the writer; the separate Send review control does
   const submit = dialog.slice(dialog.indexOf('const submit ='), dialog.indexOf('return createPortal'));
   assert.doesNotMatch(submit, /onChoice|onSendReview/);
   assert.match(dialog, /onSendReview\(reviewPrompt\)/);
-  const materialSubmit = entity.slice(entity.indexOf('const submitMaterialReview'), entity.indexOf('const inspect'));
-  assert.doesNotMatch(materialSubmit, /onChoice\(/);
-  const sendReview = entity.slice(entity.indexOf('onSendReview={prompt =>'), entity.indexOf('/>}\n  </div>'));
+
+  // Stop at the actions-panel declaration: its widget callback intentionally
+  // contains `onChoice`, while Prepare must only present material selections.
+  // This boundary prevents the test from confusing the later writer handoff
+  // with the authoritative material-review request.
+  const materialSubmit = entity.slice(
+    entity.indexOf('const submitMaterialReview'),
+    entity.indexOf('  const actionsPanel = <>'),
+  );
+  assert.match(materialSubmit, /runGatewayAction<MaterialReviewDetails>\('present'/);
+  assert.doesNotMatch(materialSubmit, /onChoice\s*\(/);
+
+  // Inspect only the Send review callback so a future refactor cannot leave
+  // the visible control inert while another unrelated callback satisfies it.
+  const sendStart = entity.indexOf('onSendReview={prompt =>');
+  const sendReview = entity.slice(sendStart, entity.indexOf('\n      }}', sendStart));
   assert.match(sendReview, /onChoice\(prompt\)/);
 });

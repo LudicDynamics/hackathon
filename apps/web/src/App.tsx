@@ -3,7 +3,6 @@ import { withBase } from './lib/base-path.js';
 import { AgentSettings } from './components/AgentSettings.js';
 import { TtsSettings } from './components/TtsSettings.js';
 import { WriterBar } from './components/chrome/WriterBar.js';
-import { WriterResult } from './components/WriterResult.js';
 import { ActivityRail } from './components/chrome/ActivityRail.js';
 import { AgentActivityLog } from './components/chrome/AgentActivityLog.js';
 import { ConnectedWorldToastRegion } from './components/chrome/WorldToast.js';
@@ -208,6 +207,18 @@ export function App() {
   const [backdropReady, setBackdropReady] = useState(false);
   const writerState = useWriterState();
   const writerWorking = writerState.phase === 'writing';
+  const writerStatusText = writerState.error
+    ? writerState.error.message
+    : writerState.phase === 'writing'
+      ? writerState.stopRequested
+        ? t('Stop requested')
+        : writerState.stage ?? t('Waiting for the writer…')
+      : writerState.stage ?? t('Ready for your next action');
+  const writerStatusKind = writerState.error
+    ? 'error'
+    : writerState.phase === 'writing'
+      ? 'working'
+      : 'ready';
   const [writerSubmitPending, setWriterSubmitPending] = useState(false);
   const writerRef = useRef<HTMLInputElement>(null);
   const activeSavePath = shelf.groups?.flatMap(group => group.saves).find(save => save.active)?.path;
@@ -273,7 +284,12 @@ export function App() {
       setWriterSubmitPending(false);
     }
   }, [writerWorking]);
-  const openNook = useCallback((characterId: string) => {
+  const openPrivateSpace = useCallback((characterId: string) => {
+    // Dialogue and rail use one App-owned transition. Closing an active
+    // dialogue first restores its caller projection, then this transition
+    // pushes the private-space target without asking either child to own
+    // camera, focus, or fetching.
+    if (activeCharacter) closeCharacterRef.current();
     const caller: ProjectionTarget = nookChar
       ? projectionTarget('nook', nookChar)
       : projectionTarget('layer', layer);
@@ -283,7 +299,11 @@ export function App() {
     callerProjectionRef.current = caller;
     frameQueue.clear('switch');
     setNookChar(characterId);
-  }, [cameraStack, callerProjectionRef, frameQueue, layer, nookChar]);
+    setBagOpen(false);
+    setSelectedBagPath(null);
+    setProfileOpen(false);
+    setShell(current => current.header || current.journal || current.immersive ? { ...current, header: false, journal: false, immersive: false } : current);
+  }, [activeCharacter, cameraStack, frameQueue, layer, nookChar]);
 
   const closeNook = useCallback(() => {
     const caller = callerProjectionRef.current;
@@ -303,6 +323,19 @@ export function App() {
       toastTimer.current = null;
       setToast(null);
     }, 3000);
+  }, []);
+  // Workspace disclosures own their open state, but the App remains the
+  // top-level Escape router. Clicking the disclosure trigger preserves the
+  // component's cleanup and returns focus to the control that opened it.
+  const closeWorkspaceDisclosure = useCallback((): boolean => {
+    const active = document.activeElement as HTMLElement | null;
+    const owner = active?.closest<HTMLElement>('.agent-settings, .agent-activity-log');
+    if (!owner) return false;
+    const trigger = owner.querySelector<HTMLButtonElement>('button[aria-expanded="true"]');
+    if (!trigger) return false;
+    trigger.click();
+    window.requestAnimationFrame(() => trigger.focus());
+    return true;
   }, []);
   useEffect(() => { syncFocus('world-shelf', worldPickerOpen); }, [syncFocus, worldPickerOpen]);
   useEffect(() => { syncFocus('nook', nookChar !== null); }, [nookChar, syncFocus]);
@@ -535,6 +568,11 @@ export function App() {
       const target = event.target as HTMLElement | null;
       const typing = target?.closest('input, textarea, select, button, a, [role="switch"], [contenteditable="true"]');
       if (event.key === 'Escape') {
+        if (closeWorkspaceDisclosure()) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         if (radialState || radialAdmissionRef.current) {
@@ -594,7 +632,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [activeCharacter, ceremony, clearAdmittedCeremony, closeNook, enterLayer, focusCoordinator, layer, manifest, overlayAdmission, radialState, selectedBagPath, shell]);
+  }, [activeCharacter, ceremony, clearAdmittedCeremony, closeNook, closeWorkspaceDisclosure, enterLayer, focusCoordinator, layer, manifest, overlayAdmission, radialState, selectedBagPath, shell]);
 
   const chalks = useMemo(
     () => (state?.items || []).filter((item) => item.frontmatter?.type === 'chalk'),
@@ -641,7 +679,6 @@ export function App() {
   const currentName = readme?.frontmatter?.title || sceneName(manifest, layer);
   const playerRole = manifest?.player?.name || (manifest?.id === 'wuwu' ? 'Harbor Investigator' : 'Traveler');
   const playerAvatar = assetUrl(manifest?.player?.avatar, 'image');
-  const sceneStatus = chalks.flatMap(chalk => Object.entries(chalk.frontmatter?.status?.data || {})).slice(0, 3);
   const breadcrumbs: string[] = [];
   let crumb: string | null = layer;
   while (crumb && !breadcrumbs.includes(crumb)) {
@@ -765,7 +802,6 @@ export function App() {
     try {
       await airpGateway.useItem(itemPath, targetPath);
       await refresh();
-      notify('The world noticed what you used.');
     } catch (error) {
       notify(error instanceof Error ? error.message : 'The item could not be used');
     }
@@ -853,7 +889,6 @@ export function App() {
       await airpGateway.godAction('create', filePath, `---\ntype: ${form}\ntitle: ${JSON.stringify(title)}\n---\n${content}`);
       await refresh();
       closeRadial();
-      notify(`Created “${title}”`);
     } catch (error) { notify(error instanceof Error ? error.message : 'Could not create the object'); }
   };
   const closeCharacter = () => {
@@ -876,9 +911,9 @@ export function App() {
   closeCharacterRef.current = closeCharacter;
 
   return (
-    <div data-depth-surface="ui" className={`airp-prototype${isDusk ? ' is-dusk' : ''}${shell.immersive ? ' is-immersive' : ''}${shell.journal ? ' is-reading' : ''}${shell.header ? ' has-header' : ''}${attention === 'authoring' ? ' is-authoring' : ''}`}>
+    <div data-depth-surface="ui" className={`airp-prototype${isDusk ? ' is-dusk' : ''}${shell.immersive ? ' is-immersive' : ''}${shell.journal && !nookChar ? ' is-reading' : ''}${shell.header ? ' has-header' : ''}${attention === 'authoring' ? ' is-authoring' : ''}`}>
       <main className="prototype-workspace">
-        <aside className={`prototype-narrative${shell.journal ? ' is-open' : ''}`} aria-label={t("Story journal")} aria-hidden={!shell.journal} inert={!shell.journal}>
+        <aside className={`prototype-narrative${shell.journal && !nookChar ? ' is-open' : ''}`} aria-label={t("Story journal")} aria-hidden={!shell.journal || nookChar !== null} inert={!shell.journal || nookChar !== null}>
           <div className="prototype-narrhead">
             <span className="prototype-eyebrow">{t("THE STORY SO FAR")}</span>
             <button className="prototype-quiet" onClick={() => toggleShell('journal')} aria-label={t("Close story page")}>‹</button>
@@ -993,7 +1028,7 @@ export function App() {
 
           <div className="prototype-vignette" aria-hidden="true" />
 
-          <header className="prototype-worldtop prototype-chrome" aria-label={t("World header")} inert={!shell.header || shell.immersive}>
+          <header className="prototype-worldtop prototype-chrome" hidden={nookChar !== null} aria-label={t("World header")} inert={!shell.header || shell.immersive || nookChar !== null}>
             <span className="prototype-brand">World<span>lines</span></span>
             <nav className="prototype-crumbs" aria-label={t("Scene path")}>
               {breadcrumbs.map((part) => {
@@ -1003,8 +1038,8 @@ export function App() {
               })}
             </nav>
             <div className="prototype-spacer" />
-            <span className="prototype-freeze">{state?.worldFrozen ? t('WORLD PAUSED') : t('WORLD AWAKE')}</span>
-            <span className="prototype-status">{t('{items} ITEMS · {people} PEOPLE', { items: handItems.length, people: characters.length })}</span>
+            <span className="prototype-freeze" aria-label={state?.worldFrozen ? t('World paused') : t('World awake')}>{state?.worldFrozen ? t('WORLD PAUSED') : t('WORLD AWAKE')}</span>
+            <span className="prototype-status" aria-label={t('{items} items · {people} people', { items: handItems.length, people: characters.length })}>{t('{items} ITEMS · {people} PEOPLE', { items: handItems.length, people: characters.length })}</span>
             <button className="prototype-pill" onClick={() => setLauncherOpen(true)}>{t('World launcher')}</button>
             <button className="prototype-pill" onClick={() => setWorldPickerOpen(true)}>{t("Worlds")}</button>
             <label className="prototype-language"><span className="sr-only">{t('Language')}</span><select aria-label={t('Language')} value={locale} onChange={event => setLocale(event.target.value as 'en' | 'zh-CN' | 'ja')}><option value="en">English</option><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
@@ -1012,29 +1047,29 @@ export function App() {
             <TtsSettings focus={focusCoordinator} />
             <MuteButton />
             <button className="prototype-effects-toggle" role="switch" aria-label={t("Visual effects")} aria-checked={effectsEnabled} onClick={() => setEffectsEnabled(value => !value)} title={t("Particles, parallax and animated backgrounds")}><span aria-hidden="true" />{t(effectsEnabled ? 'Effects on' : 'Effects off')}</button>
-            <button className="prototype-quiet" onClick={() => toggleShell('header')} aria-label={t("Close header")}><ChevronUp size={16} /></button>
+            <button className="prototype-quiet prototype-header-close" onClick={() => toggleShell('header')} aria-label={t("Close header")}><ChevronUp size={16} /></button>
           </header>
 
-          <div className="prototype-edge-controls prototype-chrome">
-            <button onClick={() => toggleShell('journal')} aria-label={t("Toggle story journal")} aria-expanded={shell.journal}><BookOpen size={17} /></button>
-            <button onClick={() => toggleShell('header')} aria-label={t("Toggle header")} aria-expanded={shell.header}><ChevronDown size={17} /></button>
-          </div>
+          {!nookChar && (
+            <div className="prototype-edge-controls prototype-chrome">
+              <button onClick={() => toggleShell('journal')} aria-label={t("Toggle story journal")} aria-expanded={shell.journal}><BookOpen size={17} /></button>
+              <button onClick={() => toggleShell('header')} aria-label={t("Toggle header")} aria-expanded={shell.header}><ChevronDown size={17} /></button>
+            </div>
+          )}
 
-          <button className="prototype-immersion-toggle" onClick={() => toggleShell('immersion')} aria-label={shell.immersive ? t('Show interface') : t('Hide interface')} title={t("Toggle immersion · Tab")}>{shell.immersive ? <Minimize size={17} /> : <Maximize size={17} />}</button>
-
-          <div className="prototype-world-meta prototype-chrome">
-            <div className="prototype-eyebrow">{manifest?.name}</div>
-            <h1>{currentName}</h1>
-            <p>{layer === 'map' ? t('The first moment') : t('The story continues')} · {state?.worldFrozen ? t('Time stands still') : t('Time flows')}</p>
-            {sceneStatus.map(([key, value]) => <span className="prototype-stat" key={key}>{labelOf(key)} · {String(value)}</span>)}
-            <WriterResult
-              worldKey={`${manifest?.id}:${layer}`}
-              worldReady={worldReady}
-              worldFrozen={state?.worldFrozen === true}
-              submitPending={writerSubmitPending}
-              onContinue={prepareWriterHint}
+          {!nookChar && (
+            <button className="prototype-immersion-toggle" onClick={() => toggleShell('immersion')} aria-label={shell.immersive ? t('Show interface') : t('Hide interface')} title={t("Toggle immersion · Tab")}>{shell.immersive ? <Minimize size={17} /> : <Maximize size={17} />}</button>
+          )}
+          {!nookChar && shell.immersive && (
+            <button
+              type="button"
+              className="prototype-edge-wake"
+              onClick={() => toggleShell('immersion')}
+              aria-label={t('Show interface')}
+              title={t('Show interface')}
             />
-          </div>
+          )}
+
 
           {/* 全局 activity rail（契约 §7.1）：writer/functional 在角色或小天地
               打开时也必须可见；character 只进入 CharacterModal 自己的 surface，
@@ -1043,13 +1078,14 @@ export function App() {
           <ConnectedWorldToastRegion className="prototype-chrome" />
           <AgentActivityLog query={{ surface: 'rail' }} className="prototype-chrome" focus={focusCoordinator} />
 
-          <div className="prototype-tools prototype-chrome" aria-label={t("Canvas tools")}>
-            <button className="active" title={t("Explore")}>↖</button>
-            <button onClick={() => setAttention('authoring')} title={t("God Hand")}>◯</button>
-            <button onClick={() => cameraStack.restoreTarget(projectionTarget('layer', layer))} title={t("Return to scene")}>⌖</button>
-          </div>
+          {!nookChar && (
+            <div className="prototype-tools prototype-chrome" aria-label={t("Canvas tools")}>
+              <button className="active" title={t("Explore")} aria-label={t("Explore")}><span aria-hidden="true">↖</span><span className="prototype-tools__label">{t("Explore")}</span></button>
+              <button onClick={() => cameraStack.restoreTarget(projectionTarget('layer', layer))} title={t("Return to scene")} aria-label={t("Return to scene")}><span aria-hidden="true">⌖</span><span className="prototype-tools__label">{t("Return")}</span></button>
+            </div>
+          )}
 
-          <div className="prototype-belongings prototype-chrome" aria-label={t("Belongings")}>
+          <div className="prototype-belongings prototype-chrome" aria-label={t("Belongings")} hidden={nookChar !== null} aria-hidden={nookChar !== null}>
             <button className="prototype-bag-toggle" onClick={() => setBagOpen(open => !open)} aria-label={t("Open belongings")} aria-expanded={bagOpen}><Backpack size={19} /><span>{handItems.length}</span></button>
             {bagOpen && <div className="prototype-bag-content"><div className="inventory-heading"><span>{t("BELONGINGS")}</span><button type="button" onClick={() => setBagOpen(false)} aria-label={t('Close')}>×</button></div>{handItems.length === 0 && <p>{t("Nothing carried yet.")}</p>}{handItems.map((item) => {
               return (
@@ -1069,8 +1105,8 @@ export function App() {
             })}</div>}
           </div>
 
-          <button className="prototype-player-orb prototype-chrome" style={playerAvatar ? { backgroundImage: `url("${withBase(playerAvatar)}")`, backgroundSize: 'cover', backgroundPosition: 'center 25%' } : undefined} onClick={() => setProfileOpen((open) => !open)} aria-label={t("Open player profile")} aria-expanded={profileOpen}>{!playerAvatar && <UserRound size={25} />}<span className="prototype-player-label"><small>{t("YOU")}</small>{playerRole}</span></button>
-          {profileOpen && chromeVisible && (
+          <button className="prototype-player-orb prototype-chrome" hidden={nookChar !== null} aria-hidden={nookChar !== null} style={playerAvatar ? { backgroundImage: `url("${withBase(playerAvatar)}")`, backgroundSize: 'cover', backgroundPosition: 'center 25%' } : undefined} onClick={() => setProfileOpen((open) => !open)} aria-label={t("Open player profile")} aria-expanded={profileOpen}>{!playerAvatar && <UserRound size={25} />}<span className="prototype-player-label"><small>{t("YOU")}</small>{playerRole}</span></button>
+          {profileOpen && chromeVisible && !nookChar && (
             <div className="prototype-profile">
               <b>{playerRole}</b>
               <div className="prototype-small">{t("PLAYER CHARACTER")}</div>
@@ -1082,6 +1118,7 @@ export function App() {
               above the belongings, no tabs. It replaced the companion-only
               `.prototype-residents` row, which could not express "elsewhere"
               or "absent" and never showed who was following. */}
+          {!nookChar && (
           <CharacterRail
             views={presenceViews}
             pendingFollowing={pendingFollowing}
@@ -1092,10 +1129,11 @@ export function App() {
             }}
             onTravelTo={(id) => void navigateToCharacter(id)}
             onToggleFollowing={(id, next) => void toggleFollowing(id, next)}
-            onOpenNook={openNook}
+            onOpenNook={openPrivateSpace}
             notify={notify}
             assetUrl={assetUrl}
           />
+          )}
           <button className="prototype-action-toggle prototype-chrome" onClick={() => {
             if (attention === 'authoring') {
               closeRadial();
@@ -1106,7 +1144,7 @@ export function App() {
             setAttention('authoring');
             setShell(current => ({ ...current, immersive: false }));
             window.setTimeout(() => writerRef.current?.focus(), 0);
-          }} aria-label={t("Write an action")}><Sparkles size={17} /><span aria-live="polite">{writerWorking ? t('The writer is working…') : t('What do you do?')}</span></button>
+          }} aria-label={t("Write an action")}><Sparkles size={17} /><span>{t('What do you do?')}</span></button>
           {writerWorking && <button type="button" className="writer-stop-control" data-writer-stop disabled={writerState.stopRequested} onClick={() => {
             if (requestWriterStop()) sendMessage({ type: 'writer_abort' });
           }} aria-label={t(writerState.stopRequested ? 'Stop requested' : 'Stop writing')}>
@@ -1124,6 +1162,7 @@ export function App() {
             <div className="prototype-docktop">
               <b>{t("✧ SPEAK TO THE WRITER")}</b>
               <span>{state?.worldFrozen ? t('The world is paused') : t('Your action moves the world forward')}</span>
+              <span className="prototype-dock-status" data-state={writerStatusKind} aria-live="polite">{writerStatusText}</span>
               <div className="prototype-spacer" />
               <span>↵</span>
             </div>
@@ -1214,7 +1253,7 @@ export function App() {
           voice={activeCharacter.voice}
           onClose={closeCharacter}
           language={manifest?.locale === 'ja' || manifest?.locale === 'en' || manifest?.locale === 'zh-CN' ? manifest.locale : 'en'}
-          onOpenNook={() => { const id = activeCharacter.id; closeCharacter(); openNook(id); }}
+          onOpenNook={() => openPrivateSpace(activeCharacter.id)}
           onSendMessage={(message) => sendMessage({ type: 'character_prompt', characterId: activeCharacter.id, message })}
         />
       )}

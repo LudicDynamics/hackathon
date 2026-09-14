@@ -9,7 +9,6 @@ export interface PhotoCardProps {
   onDragOver?: React.DragEventHandler<HTMLElement>;
   onDragLeave?: React.DragEventHandler<HTMLElement>;
   onDrop?: React.DragEventHandler<HTMLElement>;
-  onTakeItem?: (path: string) => void;
 }
 
 export function PhotoCard({
@@ -19,7 +18,6 @@ export function PhotoCard({
   onDragLeave,
   onDrop,
   appearance,
-  onTakeItem,
 }: PhotoCardProps): React.ReactElement {
   const frontmatter = item.frontmatter;
   const title = typeof frontmatter?.title === 'string' && frontmatter.title.trim()
@@ -27,7 +25,6 @@ export function PhotoCard({
     : item.filename.replace(/\.md$/, '');
   const preview = typeof frontmatter?.preview === 'string' ? frontmatter.preview : '';
   const image = typeof frontmatter?.image === 'string' ? frontmatter.image : undefined;
-  const portable = frontmatter?.portable === true && !!onTakeItem;
 
   return (
     <figure
@@ -43,19 +40,6 @@ export function PhotoCard({
       <figcaption className="photo-card__caption">
         <strong className="photo-card__title">{title}</strong>
         <span className="photo-card__preview">{preview || 'Open to read the photo note.'}</span>
-        {portable && (
-          <button
-            type="button"
-            data-no-drag
-            className="photo-card__take"
-            onClick={event => {
-              event.stopPropagation();
-              onTakeItem?.(item.path);
-            }}
-          >
-            {typeof frontmatter?.take_label === 'string' ? frontmatter.take_label : 'Take'}
-          </button>
-        )}
       </figcaption>
     </figure>
   );

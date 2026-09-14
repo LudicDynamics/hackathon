@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChalkCard } from '../narrative/ChalkCard.js';
 import { MarkdownText, plainExcerpt, stripLeadingTitle, leadingTitleOf } from '../../lib/md.js';
 import { DoorOpen } from 'lucide-react';
@@ -15,17 +15,15 @@ interface CardRendererProps {
     frontmatter: Record<string, any> | null;
     body: string;
   };
-  /** The SAME verified view CanvasObject injected into `.object` (04 §:86): the letter
-   *  overlay and PropCard inspect reuse it instead of resolving a second time. */
+  /** Appearance injected by CanvasObject; readers reuse the same verified view. */
   appearance?: AppearanceView | null;
   /** Ordinal of this gate among the layer's gates (Main computes it). */
   index?: number;
   onSelectChoice?: (path: string, choice: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
-  onEnterGate?: (targetLayer: string) => void;
   onOpenCharacterModal?: (charId: string) => void;
   onItemDropOnTarget?: (draggedItemPath: string, targetPath: string) => void;
-  onTakeItem?: (path: string) => void;
+  gateInspected?: boolean;
 }
 
 /** Hand-drawn ordinal seal (prototype `numCircle`, L692-695). */
@@ -63,27 +61,21 @@ const GatePin: React.FC = () => (
     <circle cx="9" cy="7" r="2.4" fill="#FFFEF6" />
   </svg>
 );
-
 export const CardRenderer: React.FC<CardRendererProps> = ({
   item,
   index = 1,
   appearance,
   onSelectChoice,
   onDiceRolled,
-  onEnterGate,
   onOpenCharacterModal,
   onItemDropOnTarget,
-  onTakeItem,
+  gateInspected = false,
 }) => {
   const { frontmatter, body, filename, path } = item;
   const { locale } = useLocale();
   const ja = locale === 'ja';
-  const [letterOpen, setLetterOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isItemDragging, setIsItemDragging] = useState(false);
-  const [gateInspected, setGateInspected] = useState(false);
-  const gateClickTimer = useRef<number | null>(null);
-  const enterGestureIssued = useRef(false);
 
   useEffect(() => {
     const onDragStart = () => setIsItemDragging(true);
@@ -96,44 +88,9 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
     return () => {
       window.removeEventListener('airp:item-drag-start', onDragStart);
       window.removeEventListener('airp:item-drag-end', onDragEnd);
-      clearTimeout(gateClickTimer.current ?? undefined);
-      gateClickTimer.current = null;
     };
   }, []);
 
-  const gateTarget = typeof frontmatter?.target === 'string' && frontmatter.target.trim()
-    ? frontmatter.target
-    : path.replace(/\/README\.md$/, '');
-  const handleGateClick = () => {
-    if (gateClickTimer.current !== null) {
-      clearTimeout(gateClickTimer.current ?? undefined);
-      gateClickTimer.current = null;
-      setGateInspected(false);
-      enterGestureIssued.current = true;
-      onEnterGate?.(gateTarget);
-      return;
-    }
-    // The first click is a local inspect. Keep it immediate while retaining a
-    // 500ms inclusive window for the second click to become enter.
-    setGateInspected(true);
-    gateClickTimer.current = window.setTimeout(() => {
-      gateClickTimer.current = null;
-    }, 500);
-  };
-
-  const handleGateDoubleClick = () => {
-    // Browsers emit click, click, dblclick. The second click already submitted
-    // this intent; this guard keeps the browser's dblclick notification from
-    // submitting a second request while also supporting direct dblclick events.
-    if (enterGestureIssued.current) {
-      enterGestureIssued.current = false;
-      return;
-    }
-    clearTimeout(gateClickTimer.current ?? undefined);
-    gateClickTimer.current = null;
-    setGateInspected(false);
-    onEnterGate?.(gateTarget);
-  };
 
   const handleTargetDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -160,15 +117,24 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
     return <PropCard visual={frontmatter.visual} path={path} filename={filename} title={frontmatter.title || filename} body={body}
       frontmatter={frontmatter}
       image={typeof frontmatter.image === 'string' ? frontmatter.image : undefined}
-      onEnter={frontmatter.visual === 'door' ? () => onEnterGate?.(gateTarget) : undefined} appearance={appearance} />;
+      inspected={gateInspected}
+      appearance={appearance} />;
   }
 
   if (frontmatter?.type === 'chalk') {
     // Widgets (choice/status/dice) are owned by EntityInteractions on canvas
     // (CanvasObject), so the inline ChalkCard must not also render them — that
     // double-renders. Keep the canvas entity as the single interaction owner.
-    return <ChalkCard item={item} appearance={appearance} />;
+    return <ChalkCard
+      item={item}
+      appearance={appearance}
+      puzzleClasses={puzzleClasses}
+      onDragOver={event => { event.preventDefault(); setIsDragOver(true); }}
+      onDragLeave={() => setIsDragOver(false)}
+      onDrop={handleTargetDrop}
+    />;
   }
+
 
   // 2. Gate Card (sub-scene portal) — a sub-directory's README, the door that
   //    walks into that scene. The current layer's own README is never a card
@@ -198,8 +164,6 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
     const excerpt = plainExcerpt(body);
     return (
       <div
-        onClick={handleGateClick}
-        onDoubleClick={handleGateDoubleClick}
         onDragOver={(e) => {
           e.preventDefault();
           setIsDragOver(true);
@@ -229,85 +193,32 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
     );
   }
 
-  // 3. Letter component — a sealed sheet; click opens the reading overlay.
+  // 3. Letter component — the card face is presentation; CanvasObject owns reading.
   if (frontmatter?.type === 'component' && frontmatter?.component === 'letter') {
     return (
-      <>
-        <div
-          onClick={() => setLetterOpen(true)}
-          className={`letter ${puzzleClasses}`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setIsDragOver(true);
-          }}
-          onDragLeave={() => setIsDragOver(false)}
-          onDrop={handleTargetDrop}
-        >
-          <div className="letter__head">
-            <span className="letter__seal" />
-            {frontmatter.title || (ja ? '手紙' : 'Letter')}
-          </div>
-          <div className="letter__preview">
-            {/* frontmatter.preview is authored copy; the body fallback is raw
-                markdown, so flatten it — a card face never shows source. */}
-            {frontmatter.preview || plainExcerpt(body)}
-          </div>
-          <div className="letter__meta">
-            <span>{frontmatter.sign || (ja ? '開いて読む' : 'Click to open and read')}</span>
-          </div>
+      <div
+        className={`letter ${puzzleClasses}`}
+        onDragOver={event => { event.preventDefault(); setIsDragOver(true); }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={handleTargetDrop}
+      >
+        <div className="letter__head">
+          <span className="letter__seal" />
+          {frontmatter.title || (ja ? '手紙' : 'Letter')}
         </div>
-        {letterOpen && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: 'rgba(41, 40, 32, 0.35)', backdropFilter: 'blur(2px)' }}
-            role="dialog"
-            aria-modal="true"
-            aria-label={String(frontmatter.title || filename)}
-            onClick={() => setLetterOpen(false)}
-          >
-            <div
-              className="w-full max-w-lg p-8 text-ink relative"
-              // The SAME verified resolution as the card face (04 §:86,183): the reading
-              // layer never resolves a second time, and absent tokens keep the cream sheet.
-              {...appearance?.attrs}
-              style={{
-                ...appearance?.style,
-                background: 'var(--appearance-surface, var(--cream))',
-                color: 'var(--appearance-ink, var(--ink))',
-                borderRadius: 'var(--appearance-radius, 3px)',
-                boxShadow: '0 20px 70px rgba(41,40,32,0.25)',
-                fontFamily: 'var(--appearance-font-family, inherit)',
-                transform: 'rotate(-1deg)',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3 className="font-serif text-2xl mb-4">{frontmatter.title}</h3>
-              <div className="font-serif text-base leading-loose whitespace-pre-line mb-6">
-                {frontmatter.body || body}
-              </div>
-              {frontmatter.sign && (
-                <div className="text-right font-serif text-sm text-ink/60">
-                  —— {frontmatter.sign}
-                </div>
-              )}
-              <div className="mt-6 text-center">
-                <button
-                  autoFocus
-                  onClick={() => setLetterOpen(false)}
-                  className="px-6 py-2 text-xs font-mono transition-all border border-ink/20 hover:bg-ink hover:text-cream"
-                >
-                  {ja ? 'たたんでしまう' : 'Fold & Put Away'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </>
+        <div className="letter__preview">
+          {/* frontmatter.preview is authored copy; the body fallback is raw
+              markdown, so flatten it — a card face never shows source. */}
+          {frontmatter.preview || plainExcerpt(body)}
+        </div>
+        <div className="letter__meta">
+          <span>{frontmatter.sign || (ja ? '開いて読む' : 'Click to open and read')}</span>
+        </div>
+      </div>
     );
   }
   // 4. Photo component — the image is the card's visual focus. Reading is
-  //    owned by CanvasObject so this branch only paints and wires existing
-  //    drop/Take callbacks.
+  //    owned by CanvasObject; this branch only paints and wires target drops.
   if (frontmatter?.type === 'component' && frontmatter?.component === 'photo') {
     return (
       <PhotoCard
@@ -320,7 +231,6 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
         }}
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleTargetDrop}
-        onTakeItem={onTakeItem}
       />
     );
   }
@@ -341,16 +251,6 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
       <span className="note__clip" />
       <div className="note__title">{noteTitle}</div>
       <MarkdownText text={stripLeadingTitle(body)} className="note__body" />
-      {frontmatter?.portable === true && onTakeItem && (
-        <button
-          type="button"
-          data-no-drag
-          className="note__take"
-          onClick={() => onTakeItem?.(path)}
-        >
-          {typeof frontmatter.take_label === 'string' ? frontmatter.take_label : 'Take'}
-        </button>
-      )}
     </div>
   );
 };

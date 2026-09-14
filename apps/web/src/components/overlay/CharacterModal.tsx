@@ -31,10 +31,10 @@ import {
  *
  * Full rewrite from the v1 IM/bubble-transcript layout:
  *  - the canvas itself is dimmed + blurred behind a warm-ink tint (no black sheet)
- *  - a bottom-pinned split portrait stage (lit speaker / dimmed counterpart)
- *  - a slightly tilted paper dialog at the bottom: name plate, quadrille
- *    narration line, the current dialogue page, and a bottom input row that
- *    stays hidden until the pages are exhausted.
+ *  - a single bottom-pinned portrait slot with a shared safe baseline
+ *  - a slightly tilted paper dialog at the bottom: current dialogue page,
+ *    advance prompt, and a bottom input row that stays hidden until the
+ *    pages are exhausted; identity/status lives in a separate sibling.
  *
  * No chat bubbles, no scrollable history, no HUD. The character's reply is
  * paginated one non-empty line per page (contract §6); each page types itself
@@ -128,19 +128,21 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const [pages, setPages] = useState<DialoguePage[]>([]); // read-only projection of pagesRef
   const [pageIndex, setPageIndex] = useState(0); // render mirror of pageIndexRef
   const [pageShown, setPageShown] = useState(''); // prefix of the CURRENT page shown so far
-  const [playerEcho, setPlayerEcho] = useState(''); // last player line, echoed without history
   const [inputText, setInputText] = useState('');
   const [avatarError, setAvatarError] = useState(false);
   const [closing, setClosing] = useState(false);
   const [activitySessionStartedAt, setActivitySessionStartedAt] = useState(() => Date.now());
+  const modalRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     setActivitySessionStartedAt(Date.now());
   }, [characterId]);
+  useEffect(() => {
+    modalRef.current?.focus();
+  }, []);
 
   const streamTimer = useRef<number | null>(null);
   const closeTimer = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  // 流式驱动器的唯一状态（全是 ref：帧回调读 state 会拿到闭包旧值）。
   const turnBufferRef = useRef<CharacterTurnBuffer | null>(null); // turn/message aggregation truth
   const pagesRef = useRef<StagePage[]>([]); // 页数组（命令式真相源）
   const pageIndexRef = useRef(0); // 当前页下标，恒在 [0, max(0,len-1)]
@@ -512,7 +514,6 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     mockSeededRef.current = true;
     setEmo('normal');
     setPhase('idle');
-    setPlayerEcho('');
     turnBufferRef.current = resetCharacterTurn();
     pagesRef.current = [];
     pageIndexRef.current = 0;
@@ -719,18 +720,6 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   // Unmount: cancel every pending timer + stop the voice channel.
   useEffect(() => streamTurn, [streamTurn]);
 
-  // Space advances (Enter stays for send); App owns the document Escape path.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== ' ' && e.code !== 'Space') return;
-      if (e.target instanceof HTMLInputElement) return; // never steal typing
-      if (document.activeElement === inputRef.current) return;
-      e.preventDefault();
-      advance();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [advance]);
 
   // Reset the monogram fallback if the avatar path changes.
   useEffect(() => setAvatarError(false), [avatar, emo]);
@@ -749,7 +738,6 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     // does not alter the character_prompt payload or claim that stop succeeded.
     frameQueue.clear('stop');
     setInputText('');
-    setPlayerEcho(msg); // kept on the paper, not a history list
     // 乐观占位：真实首帧要等 agent 启动 + 首个 token，期间不能露出"可再发一条"的窗口。
     phaseBeforeTurnRef.current = phaseRef.current;
     streamingRef.current = false;
@@ -786,24 +774,26 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const currentPage = pages[pageIndex];
   // ▼ 提示仅在「有页可推、非沉思、且还没到该玩家输入」时出现（contract §16.2）。
   const canAdvance = phase !== 'thinking' && pages.length > 0 && !inputReady;
+  const dialogTitleId = `character-modal-title-${characterId.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  const dialogDescriptionId = `character-modal-description-${characterId.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
   return (
     <div
+      ref={modalRef}
       data-depth-surface="modal"
       className={`character-modal-layer${closing ? ' modal-closing' : ''}`}
       role="dialog"
       aria-modal="true"
-      aria-label={locale === 'ja' ? `${characterId}との会話` : `Dialogue with ${characterId}`}
+      aria-labelledby={dialogTitleId}
+      aria-describedby={dialogDescriptionId}
+      tabIndex={-1}
     >
       <button type="button" className="modal-close" onClick={handleClose} aria-label={t('Close dialog')}>
         ×
       </button>
 
-      {/* Split portrait stage. Single-character world: watson owns the right
-          slot, closest to the paper's input side; the left slot stays empty
-          per spec (silhouette placeholder unnecessary without a 2nd portrait). */}
-      <div className="portrait-stage">
-        <div className="portrait-slot" aria-hidden="true" />
+      {/* One portrait slot, anchored to the shared bottom safe baseline. */}
+      <div className="portrait-stage" aria-label={locale === 'ja' ? `${characterId}の肖像` : `${characterId} portrait`}>
         <div className="portrait-slot lit">
           <div className="portrait-breathe">
             <div className={`portrait-emo emo-${emo}${emo === 'shock' ? ' emo-shock-shake' : ''}`}>
@@ -830,28 +820,44 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         </div>
       </div>
 
-      {/* Bottom tilted paper dialog: name plate, narration, the current page, input. */}
-      <div className={`speech-paper${closing ? ' speech-paper-closing' : ''}`}>
-        {/* 角色 activity rail（契约 §7.2）：挂在纸上沿之外的独立流式带，作为第一个
-            子节点、absolute 定位（bottom:100%）故不进纸的文档流、不改纸高。按
-            agentId 过滤，只显示本角色的动作。 */}
-        <ActivityRail surface="character-modal" agentId={`character:${characterId}`} />
-        <AgentActivityLog
-          query={{ surface: 'character-modal', agentId: `character:${characterId}`, since: activitySessionStartedAt }}
-          className="character-activity-log"
-        />
-        <div className="name-plate">{displayName || characterId}</div>
-        {onOpenNook && <button type="button" onClick={onOpenNook}>{t('Visit ikigai')}</button>}
-        <p className="narr-line">{bio ? bio : '(necessary description)'}</p>
+      {/* Identity and activity stay outside the speech paper so the paper
+          remains a focused line/advance/input surface. */}
+      <aside className="identity-status" aria-labelledby={dialogTitleId}>
+        <div className="identity-heading">
+          <h2 id={dialogTitleId} className="identity-name">{displayName || characterId}</h2>
+          {onOpenNook && (
+            <button type="button" onClick={onOpenNook}>
+              {locale === 'ja' ? t('Visit ikigai') : 'Visit private space'}
+            </button>
+          )}
+        </div>
+        <p id={dialogDescriptionId} className="identity-bio">{bio || '(necessary description)'}</p>
+        <div className="identity-activity" aria-label={locale === 'ja' ? '活動状況' : 'Activity status'}>
+          <ActivityRail surface="character-modal" agentId={`character:${characterId}`} />
+          <AgentActivityLog
+            query={{ surface: 'character-modal', agentId: `character:${characterId}`, since: activitySessionStartedAt }}
+            className="character-activity-log"
+            sessionLabel={displayName || characterId}
+          />
+        </div>
+      </aside>
 
+      {/* Bottom tilted paper: current line, advance prompt, player input. */}
+      <div className={`speech-paper${closing ? ' speech-paper-closing' : ''}`}>
         <div
           className={`line-stage${canAdvance ? ' is-advanceable' : ''}`}
           role="button"
           tabIndex={0}
-          aria-label={locale === 'ja' ? '続ける' : 'Continue'}
+          aria-label={locale === 'ja' ? '続ける' : 'Continue dialogue'}
+          aria-keyshortcuts="Enter Space"
+          aria-describedby={dialogDescriptionId}
           onClick={advance}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' && event.key !== ' ' && event.code !== 'Space') return;
+            event.preventDefault();
+            advance();
+          }}
         >
-          {playerEcho && <span className="player-echo">“{playerEcho}”</span>}
           {phase === 'thinking' && (
             <span className="thinking-hint">{locale === 'ja' ? `${characterId}は考えている…` : `${characterId} is thinking…`}</span>
           )}
@@ -892,5 +898,6 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         </div>
       </div>
     </div>
+
   );
 };

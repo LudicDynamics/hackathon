@@ -19,6 +19,11 @@ interface ChalkCardProps {
    * tone / `card` classes below are skipped whenever the resolution chose that axis.
    */
   appearance?: AppearanceView | null;
+  /** Target-drop handlers are presentation wiring; action authority stays in CanvasObject. */
+  puzzleClasses?: string;
+  onDragOver?: React.DragEventHandler<HTMLDivElement>;
+  onDragLeave?: React.DragEventHandler<HTMLDivElement>;
+  onDrop?: React.DragEventHandler<HTMLDivElement>;
   /** When supplied, the card renders its own status/choice/dice widgets. */
   onSelectChoice?: (choiceText: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
@@ -37,6 +42,10 @@ interface ChalkCardProps {
 export const ChalkCard: React.FC<ChalkCardProps> = ({
   item,
   appearance,
+  puzzleClasses = '',
+  onDragOver,
+  onDragLeave,
+  onDrop,
   onSelectChoice,
   onDiceRolled,
 }) => {
@@ -81,7 +90,14 @@ export const ChalkCard: React.FC<ChalkCardProps> = ({
   };
 
   return (
-    <div className={classes.join(' ')} {...appearance?.attrs} style={{ ...(appearance?.style ?? {}), ...sizeStyle }}>
+    <div
+      className={[...classes, puzzleClasses].filter(Boolean).join(' ')}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      {...appearance?.attrs}
+      style={{ ...(appearance?.style ?? {}), ...sizeStyle }}
+    >
       {/* Chalk narration body — transparent ink, pre-wrap preserved. */}
       {resolved ? <details className="dice-outcome-letter" data-no-drag onClick={e => e.stopPropagation()}><summary>✉ {locale === 'ja' ? '結果の記録を開く' : locale === 'zh-CN' ? '展开结果记录' : 'Open outcome record'}</summary><MarkdownText text={narrative} className="chalk__body" /></details> : <MarkdownText text={narrative} className="chalk__body" />}
       {!held && typeof roll?.result === 'number' && typeof roll.passed === 'boolean' && (

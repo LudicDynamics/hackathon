@@ -87,6 +87,7 @@ export function CharacterRail({
         const pending = pendingFollowing.has(view.id);
         const isExpanded = expanded.has(view.id);
         const actionsId = `character-actions-${view.id}`;
+        const statusId = `character-status-${view.id}`;
         const statusLabel = view.following
           ? `${t(entry.statusKey)} · ${t('Following you')}`
           : t(entry.statusKey);
@@ -106,6 +107,7 @@ export function CharacterRail({
                 else if (entry.talkHintKey) notify(t(entry.talkHintKey));
               }}
               aria-label={entry.canTalk ? t('Talk to {name}', { name: displayName }) : displayName}
+              aria-describedby={entry.canTalk ? undefined : statusId}
               style={avatarUrl ? { backgroundImage: `url("${withBase(avatarUrl)}")` } : undefined}
             >
               {!avatarUrl && <span aria-hidden="true">{view.id.charAt(0).toUpperCase()}</span>}
@@ -113,7 +115,7 @@ export function CharacterRail({
             </button>
 
             <small className="character-rail__label">{displayName}</small>
-            <span className="character-rail__status">{statusLabel}</span>
+            <span id={statusId} className="character-rail__status">{statusLabel}</span>
 
             {/* Independent, focusable expander -> the three keys (§3.6). On touch
                 it is always visible; on desktop hover is only the fast path. */}

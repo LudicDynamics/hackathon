@@ -55,6 +55,8 @@
   --depth-overlay: 30;
   --depth-writer: 40;
   --depth-modal: 50;
+  /* Notice and activity receipts stay above ordinary chrome but below modal/dialogue. */
+  --depth-notice: calc(var(--depth-modal) - 1);
   --depth-ui: 60;
 
   /* Legacy aliases. Local offsets remain finite and semantic; they do not
@@ -78,8 +80,8 @@
   --depth-modal-dialogue: calc(var(--depth-modal) + 1);
   --depth-chrome-writer: var(--depth-writer);
   --depth-chrome-stub: calc(var(--depth-writer) + 5);
-  --depth-chrome-hint: calc(var(--depth-writer) + 10);
-  --depth-chrome-minimap: calc(var(--depth-writer) + 10);
+  --depth-chrome-hint: var(--depth-notice);
+  --depth-chrome-minimap: var(--depth-notice);
   --depth-chrome-badge: calc(var(--depth-writer) + 10);
   --depth-chrome-carried-reader: var(--depth-writer);
   --depth-chrome-gate-threshold: calc(var(--depth-writer) + 8);
@@ -394,8 +396,8 @@ body:before {
    Appended at the end of the cascade on purpose. Uses the v2
    ink-canvas tokens (--ink/--rust/--sage/--blue/--paper/--cream/
    --wall/--muted/--line) declared in :root above. Layout spec in
-   doc-06 §3: dimmed canvas behind, split portrait stage, tilted
-   paper dialog, streaming line — no bubbles, no scroll history.
+   doc-06 §3: dimmed canvas behind, one bottom-pinned portrait,
+   tilted paper dialog, streaming line — no bubbles, no scroll history.
    ============================================================ */
 
 /* ---- full-screen layer: the canvas itself dims + blurs behind a
@@ -404,11 +406,16 @@ body:before {
 .character-modal-layer {
   position: fixed;
   inset: 0;
-  z-index: var(--depth-dialogue-root); /* above canvas + grain */
+  min-height: 100dvh;
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  --dialogue-bottom-safe: max(1rem, env(safe-area-inset-bottom));
+  --dialogue-paper-offset: clamp(1.25rem, 5.5vh, 3rem);
+  z-index: var(--depth-dialogue-root);
   overflow: hidden;
   backdrop-filter: brightness(0.35) blur(6px);
   -webkit-backdrop-filter: brightness(0.35) blur(6px);
-  background: rgba(41, 40, 32, 0.25); /* warm-ink tint over the dimmed canvas */
+  background: rgba(41, 40, 32, 0.25);
   animation: modalEnter 0.3s ease-out;
 }
 
@@ -427,29 +434,32 @@ body:before {
   }
 }
 
-/* ---- portrait stage: two bottom-pinned slots, lit vs dimmed ---- */
+/* ---- one bottom-pinned portrait slot, sharing the paper safe baseline ---- */
 .portrait-stage {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: flex-end;
-  justify-content: space-between;
-  padding: 0 6vw 20vh;
+  justify-content: center;
+  padding: 0 max(1rem, 6vw) calc(var(--dialogue-bottom-safe) + var(--dialogue-paper-offset));
+  box-sizing: border-box;
   z-index: var(--depth-dialogue-portrait);
+  pointer-events: none;
 }
 
 .portrait-slot {
   flex: none;
   width: min(40vh, 26vw, 360px);
   height: min(64vh, 560px);
-  filter: saturate(0.35) brightness(0.6); /* non-speaking default */
+  filter: saturate(0.35) brightness(0.6);
   transform: translateY(12px);
   transition: filter 0.35s ease, transform 0.35s ease;
 }
 
+
 .portrait-slot.lit {
   filter: none;
-  transform: none; /* the speaker returns to full light */
+  transform: none;
 }
 
 /* Breathing scale lives on the inner wrapper (its animation owns the
@@ -537,7 +547,7 @@ body:before {
 .speech-paper {
   position: absolute;
   left: 50%;
-  bottom: 5.5vh;
+  bottom: calc(var(--dialogue-bottom-safe) + var(--dialogue-paper-offset));
   z-index: var(--depth-dialogue-speech);
   width: min(720px, 78vw);
   padding: 1.2rem 1.6rem 1.1rem;
@@ -567,32 +577,65 @@ body:before {
   }
 }
 
-/* name plate — overlaps the paper's top-left edge, rust-outlined */
-.name-plate {
+/* ---- identity/status sibling: never part of the speech paper flow ---- */
+.identity-status {
   position: absolute;
-  top: -0.95em;
-  left: 1.6em;
-  padding: 0.16em 0.9em 0.2em;
-  background: var(--cream);
-  border: 1.5px solid var(--rust);
+  top: max(4.5rem, calc(env(safe-area-inset-top) + 2.5rem));
+  left: max(1rem, calc(6vw + env(safe-area-inset-left)));
+  z-index: var(--depth-dialogue-caption);
+  width: min(320px, calc(100vw - 2rem));
+  box-sizing: border-box;
+  padding: 0.85rem 1rem;
   color: var(--ink);
-  font-family: 'LXGW WenKai', 'KaiTi', serif;
-  font-style: italic;
-  font-weight: 700;
-  font-size: 1.05rem;
-  letter-spacing: 0.04em;
-  transform: rotate(-1.2deg);
-  box-shadow: 2px 2px 0 rgba(41, 40, 32, 0.18);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  border: 1px solid rgba(41, 40, 32, 0.2);
+  box-shadow: 0 8px 22px rgba(41, 40, 32, 0.2);
+  backdrop-filter: blur(3px);
+  pointer-events: auto;
 }
 
-/* quadrille narration line — italic small type, never mixed with lines */
-.narr-line {
-  margin: 0.55rem 0 0.4rem;
-  font-style: italic;
-  font-size: 0.8rem;
+.identity-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.identity-name {
+  margin: 0;
+  font-family: 'LXGW WenKai', 'KaiTi', serif;
+  font-size: 1.15rem;
+  line-height: 1.3;
+}
+
+.identity-heading > button {
+  flex: none;
+  border: 1px solid var(--rust);
+  padding: 0.3rem 0.55rem;
+  color: var(--ink);
+  background: var(--cream);
+  font: 0.76rem/1.2 'Manrope', system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.identity-heading > button:hover,
+.identity-heading > button:focus-visible {
+  color: var(--paper);
+  background: var(--rust);
+}
+
+.identity-bio {
+  margin: 0.45rem 0 0;
   color: var(--muted);
-  line-height: 1.4;
-  min-height: 1.1em;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.identity-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
 }
 
 /* fixed streaming stage: min-height 3.2em with line-height 2, per spec */
@@ -606,29 +649,24 @@ body:before {
   font-family: 'LXGW WenKai', 'KaiTi', serif;
   font-size: 1.12rem;
   color: var(--ink);
+  cursor: pointer;
+  border-radius: 0.2rem;
+}
+
+.line-stage:focus-visible {
+  outline: 2px solid var(--rust);
+  outline-offset: 3px;
 }
 
 /* clickable advance affordance — pure visual hint, logic lives in `advance` */
-.line-stage.is-advanceable {
-  cursor: pointer;
-}
-
 .line-stage.is-advanceable:hover {
   background: rgba(41, 40, 32, 0.03);
 }
 
 .speech-line {
-  display: block; /* the streamed character line sits under the player echo */
+  display: block;
 }
 
-.player-echo {
-  display: block;
-  font-family: 'Manrope', system-ui, sans-serif;
-  font-style: italic;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  color: var(--muted);
-}
 
 .thinking-hint {
   font-style: italic;
@@ -731,25 +769,83 @@ body:before {
   cursor: not-allowed;
 }
 
-/* Character activity rail (docs/agent-awareness/03 §6.2) — sits above the paper's
-   top edge via bottom:100%, so it never enters the paper's flow or changes its
-   height. Cream/ink material deliberately differs from the global dark glass. */
-.speech-paper .activity-rail { position: absolute; bottom: 100%; left: 0; margin-bottom: .55rem;
-  display: flex; flex-direction: column; gap: 4px; max-width: 100%; pointer-events: none; }
-.speech-paper .activity-rail__list { display: flex; flex-direction: column; gap: 4px;
-  margin: 0; padding: 0; list-style: none; }
-.speech-paper .activity-rail__item { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
-  padding: 3px 10px; border-radius: 9999px; background: var(--cream); color: var(--muted);
-  border: 1px solid rgba(41, 40, 32, 0.18); box-shadow: 0 1px 4px rgba(41, 40, 32, 0.12);
-  font-family: 'Manrope', system-ui, sans-serif; font-size: .78rem;
-  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.speech-paper .activity-rail__item[data-state='running'] { color: var(--ink); }
-.speech-paper .activity-rail__item[data-state='error'] { color: var(--ink); border-color: rgba(201, 111, 76, 0.55); background: #f9ece4; }
-.speech-paper .activity-rail__dot { width: 5px; height: 5px; border-radius: 50%; flex: none; background: var(--sage); }
-.speech-paper .activity-rail__item[data-state='running'] .activity-rail__dot { background: var(--blue); animation: activity-pulse 1.6s ease-out infinite; }
-.speech-paper .activity-rail__item[data-state='error'] .activity-rail__dot { background: var(--rust); }
+/* Character activity status stays in the identity sibling, not on the paper. */
+.identity-status .activity-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 100%;
+  pointer-events: none;
+}
+.identity-status .activity-rail__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.identity-status .activity-rail__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: var(--cream);
+  color: var(--muted);
+  border: 1px solid rgba(41, 40, 32, 0.18);
+  box-shadow: 0 1px 4px rgba(41, 40, 32, 0.12);
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: .78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.identity-status .activity-rail__item[data-state='running'] { color: var(--ink); }
+.identity-status .activity-rail__item[data-state='error'] { color: var(--ink); border-color: rgba(201, 111, 76, 0.55); background: #f9ece4; }
+.identity-status .activity-rail__dot { width: 5px; height: 5px; border-radius: 50%; flex: none; background: var(--sage); }
+.identity-status .activity-rail__item[data-state='running'] .activity-rail__dot { background: var(--blue); animation: activity-pulse 1.6s ease-out infinite; }
+.identity-status .activity-rail__item[data-state='error'] .activity-rail__dot { background: var(--rust); }
 @media (prefers-reduced-motion: reduce) {
-  .speech-paper .activity-rail__item[data-state='running'] .activity-rail__dot { animation: none; }
+  .identity-status .activity-rail__item[data-state='running'] .activity-rail__dot { animation: none; }
+}
+
+@media (max-width: 700px) {
+  .identity-status {
+    top: max(3.75rem, calc(env(safe-area-inset-top) + 2rem));
+    left: max(0.75rem, calc(env(safe-area-inset-left) + 0.75rem));
+    right: max(0.75rem, calc(env(safe-area-inset-right) + 0.75rem));
+    width: auto;
+  }
+  .identity-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .identity-heading > button {
+    align-self: flex-start;
+  }
+
+  .portrait-stage {
+    padding-right: max(0.75rem, calc(env(safe-area-inset-right) + 0.75rem));
+    padding-left: max(0.75rem, calc(env(safe-area-inset-left) + 0.75rem));
+  }
+
+  .portrait-slot {
+    width: min(58vw, 280px);
+    height: min(48vh, 420px);
+  }
+
+  .speech-paper {
+    width: calc(100vw - max(1.5rem, env(safe-area-inset-left) + env(safe-area-inset-right) + 1.5rem));
+    max-height: 48dvh;
+    overflow-y: auto;
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
 }
 
 /* Visually hidden but screen-reader available (App.tsx already used the class). */
@@ -759,8 +855,8 @@ body:before {
 /* minimal top-right close affordance (Esc also closes) */
 .modal-close {
   position: absolute;
-  top: 1.4rem;
-  right: 1.6rem;
+  top: max(0.75rem, calc(env(safe-area-inset-top) + 0.75rem));
+  right: max(0.75rem, calc(env(safe-area-inset-right) + 0.75rem));
   z-index: var(--depth-dialogue-close);
   width: 2.2rem;
   height: 2.2rem;

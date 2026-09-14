@@ -15,7 +15,7 @@
   --accent: #c9f27a;
   position: fixed;
   inset: 0;
-  z-index: calc(var(--depth-modal) + 20);
+  z-index: var(--depth-modal);
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -42,7 +42,7 @@
 
 .world-launcher__top {
   position: relative;
-  z-index: 2;
+  z-index: var(--depth-entity);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -86,7 +86,7 @@
    inside the layer, which the pan moves. */
 .world-launcher__stage {
   position: relative;
-  z-index: 1;
+  z-index: var(--depth-world);
   flex: 1;
   min-height: 0;
   margin-inline: calc(-1 * var(--edge));
@@ -150,7 +150,7 @@
 .world-launcher__tile::after {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: var(--depth-background);
   background: linear-gradient(to top, rgba(4, 5, 12, .8), rgba(4, 5, 12, .12) 50%, transparent 72%);
   pointer-events: none;
 }
@@ -160,7 +160,7 @@
 .world-launcher__rim {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: var(--depth-world);
   box-sizing: border-box;
   padding: clamp(12px, 4cqw, 20px);
   border-radius: inherit;
@@ -182,7 +182,7 @@
 .world-launcher__fringe {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: var(--depth-entity);
   box-sizing: border-box;
   padding: 5px;
   border-radius: inherit;
@@ -200,7 +200,7 @@
 .world-launcher__sheen {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: var(--depth-overlay);
   border-radius: inherit;
   background: radial-gradient(55% 38% at 28% 8%, rgba(255, 255, 255, .2), transparent 70%);
   box-shadow:
@@ -238,7 +238,7 @@
 .world-launcher__hit {
   position: absolute;
   inset: 0;
-  z-index: 4;
+  z-index: var(--depth-writer);
   border: 0;
   border-radius: inherit;
   background: transparent;
@@ -250,7 +250,7 @@
   top: 8%;
   left: 7%;
   right: 7%;
-  z-index: 5;
+  z-index: var(--depth-ui);
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -268,7 +268,7 @@
   left: 7%;
   right: 7%;
   bottom: 9%;
-  z-index: 5;
+  z-index: var(--depth-ui);
   display: grid;
   gap: 8px;
   pointer-events: none;
@@ -315,7 +315,7 @@ body:has(.world-launcher) .world-directory button {
   position: absolute;
   left: 50%;
   bottom: 16px;
-  z-index: 2;
+  z-index: var(--depth-entity);
   margin: 0;
   padding: 7px 14px;
   border-radius: 999px;
@@ -333,7 +333,7 @@ body:has(.world-launcher) .world-directory button {
   position: absolute;
   left: var(--edge);
   bottom: 18px;
-  z-index: 2;
+  z-index: var(--depth-entity);
   margin: 0;
   font: 500 11px/1 ui-monospace, "SFMono-Regular", monospace;
   letter-spacing: .12em;
@@ -343,7 +343,7 @@ body:has(.world-launcher) .world-directory button {
 
 /* The save manager, opened from the launcher, wears the launcher's glass. */
 body:has(.world-launcher) .prototype-world-picker.world-directory {
-  z-index: calc(var(--depth-modal) + 30);
+  z-index: var(--depth-ui);
   left: auto;
   right: clamp(16px, 2.4vw, 36px);
   top: 70px;

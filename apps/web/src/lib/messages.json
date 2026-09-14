@@ -478,6 +478,14 @@
     "zh-CN": "世界正在流动",
     "ja": "世界は進行中"
   },
+  "World paused": {
+    "zh-CN": "世界已暂停",
+    "ja": "世界は停止中"
+  },
+  "World awake": {
+    "zh-CN": "世界正在流动",
+    "ja": "世界は進行中"
+  },
   "Show interface": {
     "zh-CN": "显示界面",
     "ja": "UIを表示"
@@ -521,6 +529,10 @@
   "Return to scene": {
     "zh-CN": "回到场景",
     "ja": "場面に戻る"
+  },
+  "Return": {
+    "zh-CN": "返回",
+    "ja": "戻る"
   },
   "Encountered characters": {
     "zh-CN": "相识的人",
@@ -683,6 +695,10 @@
     "ja": "{name} と話す"
   },
   "{items} ITEMS · {people} PEOPLE": {
+    "zh-CN": "{items} 件物品 · {people} 位人物",
+    "ja": "持ち物 {items} · 人物 {people}"
+  },
+  "{items} items · {people} people": {
     "zh-CN": "{items} 件物品 · {people} 位人物",
     "ja": "持ち物 {items} · 人物 {people}"
   },

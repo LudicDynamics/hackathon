@@ -423,7 +423,7 @@ export const NookView: React.FC<NookViewProps> = ({
   return (
     <div
       ref={rootRef}
-      className="relative w-full h-full overflow-hidden"
+      className="relative h-full w-full overflow-hidden"
       data-nook={characterId}
       data-airp-projection={`nook:${characterId}`}
       data-airp-projection-active="true"
@@ -431,257 +431,296 @@ export const NookView: React.FC<NookViewProps> = ({
       inert={inactive || undefined}
       aria-label={`Nook projection for ${displayName}`}
     >
-      {/* Character existence core — always visible, read-only (00 §4.2). */}
-      <div
-        role="group"
-        aria-label={copy.nookCoreStatus}
-        className="absolute top-4 left-4 z-20 flex items-center gap-3 pl-2 pr-4 py-2 rounded-2xl bg-paper-card/90 border border-ink/10 shadow-soft backdrop-blur-md"
+      <header
+        data-nook-zone="topbar"
+        className="depth-surface--writer pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3"
+        style={{
+          paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+          paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
+          paddingRight: 'max(0.75rem, env(safe-area-inset-right))',
+        }}
       >
-        {avatar ? (
-          <img
-            src={avatar}
-            alt={displayName}
-            className="w-10 h-10 rounded-full object-cover border border-rust/30 shadow-sm shrink-0"
-          />
-        ) : (
-          <div className="w-10 h-10 rounded-full bg-paper-wall border border-ink/10 shrink-0 flex items-center justify-center font-serif text-sm text-ink/60">
-            {displayName.slice(0, 1)}
-          </div>
-        )}
-        <div className="min-w-0">
-          <div className="font-serif text-sm font-bold text-ink truncate">{displayName}</div>
-          {statusLine && (
-            <div className="font-mono text-[10px] text-ink/50 truncate">{statusLine}</div>
-          )}
-        </div>
-      </div>
-
-      {/* Back to the layer the player came from. */}
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute top-4 right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-paper-card/90 border border-ink/10 shadow-soft backdrop-blur-md text-xs text-ink/70 hover:bg-ink hover:text-white transition-all"
-        title={copy.nookBack}
-      >
-        <ArrowLeft className="w-3.5 h-3.5" />
-        <span>{copy.nookBack}</span>
-      </button>
-
-      {error && (
+        {/* Character existence core — always visible, read-only (00 §4.2). */}
         <div
-          role="alert"
-          className="absolute bottom-4 left-4 z-20 max-w-md p-3 rounded-xl bg-rust/10 border border-rust/40 text-xs text-ink shadow-soft"
+          role="group"
+          aria-label={copy.nookCoreStatus}
+          className="pointer-events-auto flex min-w-0 items-center gap-3 rounded-2xl border border-ink/10 bg-paper-card/90 py-2 pl-2 pr-4 shadow-soft backdrop-blur-md"
         >
-          <div className="font-semibold text-rust">{copy.nookError}</div>
-          <div className="font-mono text-[10px] text-ink/60 mt-1">
-            {error.code ? `${error.code} · ` : ''}
-            {error.status > 0 ? `${error.status} · ` : ''}
-            {error.message}
-          </div>
-          <details className="mt-1">
-            <summary className="cursor-pointer text-[10px] text-ink/50">response</summary>
-            <pre className="whitespace-pre-wrap break-all text-[10px] text-ink/60 mt-1">
-              {JSON.stringify(error, null, 2)}
-            </pre>
-          </details>
-          {canRetry && (
-            <button
-              type="button"
-              onClick={() => void load(characterId)}
-              className="mt-2 px-3 py-1 rounded-lg bg-rust text-white hover:bg-rust-light transition-all"
-            >
-              {copy.nookRetry}
-            </button>
-          )}
-        </div>
-      )}
-
-      {loading && state === null && !error && (
-        <div className="absolute inset-0 flex items-center justify-center font-mono text-xs text-ink/40">
-          …
-        </div>
-      )}
-
-      {isEmpty ? (
-        /* Empty room (doc-11 §4.1): a room nothing has moved into yet. While an
-           initialiser runs, the ghost card occupies the room instead of the
-           prompt (docs/init/03 §3.5); otherwise the prompt collects the one-line
-           intent — an EMPTY submit is a valid meaning ("leave it blank"). */
-        <div className="w-full h-full">
-          {initializing ? (
-            <Canvas
-              currentLayer={state.layer}
-              items={[]}
-              links={[]}
-              bg={state.bg}
-              ghost={ghostItemFor(state.layer, copy.nookGenerating)}
-              ghostLabel={copy.nookGenerating}
-              ghostCopy={{
-                reused: copy.ghostReused,
-                failed: copy.ghostFailed,
-                unreachable: copy.ghostUnreachable,
-              }}
-              stillPortraits={reduceMotion}
+          {avatar ? (
+            <img
+              src={avatar}
+              alt={displayName}
+              className="h-10 w-10 shrink-0 rounded-full border border-rust/30 object-cover shadow-sm"
             />
           ) : (
-            <>
-              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 px-8 text-center">
-                <div className="font-serif text-lg text-ink/70">{copy.nookEmptyTitle}</div>
-                <div className="font-mono text-xs text-ink/50">{copy.nookEmptyBody}</div>
-              </div>
-              {onRequestInit ? (
-                <StubPrompt
-                  kind="nook"
-                  copy={{
-                    label: copy.nookEmptyPrompt,
-                    placeholder: copy.nookEmptyHint,
-                    skip: copy.nookInitSkip,
-                  }}
-                  onResolve={resolveInit}
-                />
-              ) : (
-                <WriterBar disabled onSend={() => {}} placeholder={copy.nookEmptyPrompt} sendLabel="⏎" />
-              )}
-            </>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-ink/10 bg-paper-wall font-serif text-sm text-ink/60">
+              {displayName.slice(0, 1)}
+            </div>
           )}
-        </div>
-      ) : state ? (
-        <Canvas
-          currentLayer={state.layer}
-          items={state.items}
-          links={[]}
-          bg={state.bg}
-          ghostCopy={{
-            reused: copy.ghostReused,
-            failed: copy.ghostFailed,
-            unreachable: copy.ghostUnreachable,
-          }}
-          onMoveCard={handleMoveCard}
-          onSelectChoice={onSelectChoice}
-          onEntityAction={handleEntityAction}
-          onDiceRolled={onDiceRolled}
-          onOpenCharacterModal={handleOpenCharacterModal}
-          onDropItemToScene={handleDropItemToScene}
-          onItemDropOnTarget={onItemDropOnTarget}
-          onTakeItem={onTakeItem}
-        />
-      ) : null}
-      {/* One visible notice lane for the whole nook (init failure, a blocked
-          dialogue while a call is running). Root-level so a furnished nook
-          shows it too — the empty-room branch is not the only state. */}
-      {notice && (
-        <div
-          role="alert"
-          className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 px-3 py-2 rounded-lg bg-rust/10 border border-rust/40 font-mono text-[11px] text-ink shadow-soft"
-        >
-          {notice}
-        </div>
-      )}
-      {/* Realtime call entry (docs/live-voice/00 §2.3, §15.4). It lives on the
-          nook root, beside the note composer. When the server has no key the
-          button is NOT rendered — a visible-absent control, never a click that
-          errors (§2.9). */}
-      {callAvailable && (
-        <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (call.phase === 'idle' || call.phase === 'error') void startCall();
-              else void stopCall();
-            }}
-            disabled={inactive}
-            aria-label={callInProgress ? copy.liveCallStop : copy.liveCallStart}
-            title={callInProgress ? copy.liveCallStop : copy.liveCallStart}
-            className={
-              callInProgress
-                ? 'flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rust/90 border border-rust text-xs text-white shadow-soft backdrop-blur-md hover:bg-rust transition-all'
-                : 'flex items-center gap-1.5 px-3 py-2 rounded-xl bg-paper-card/95 border border-ink/10 text-xs text-ink/80 shadow-soft backdrop-blur-md hover:bg-ink hover:text-white transition-all'
-            }
-          >
-            {call.phase === 'connecting' ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : callInProgress ? (
-              <PhoneOff className="w-3.5 h-3.5" />
-            ) : (
-              <Mic className="w-3.5 h-3.5" />
-            )}
-            <span>
-              {call.phase === 'connecting'
-                ? copy.liveCallConnecting
-                : callInProgress
-                  ? copy.liveCallStop
-                  : copy.liveCallStart}
-            </span>
-          </button>
-          {call.phase === 'live' && (
-            <span
-              role="status"
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-rust/10 border border-rust/30 font-mono text-[10px] text-rust"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-rust animate-pulse" />
-              {copy.liveCallLive}
-            </span>
-          )}
-          {call.phase === 'error' && call.error && (
-            <span
-              role="alert"
-              className="max-w-xs px-2 py-1 rounded-lg bg-rust/10 border border-rust/40 font-mono text-[10px] text-ink"
-            >
-              {call.error}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Subtitles: the player's words and the character's, both straight from
-          the transcript deltas (docs/live-voice/00 §2.3). The list of committed
-          lines is the character's real `character_message` text — the same
-          source the canvas trusts. */}
-      {callInProgress && (
-        <div className="absolute bottom-20 left-4 z-10 w-80 max-w-[60vw] rounded-xl border border-ink/10 bg-paper-card/90 p-3 shadow-soft backdrop-blur-md">
-          <div className="max-h-32 overflow-y-auto space-y-1.5">
-            {callLines.lines.length === 0 &&
-              callLines.streaming === '' &&
-              call.outputText === '' &&
-              call.inputText === '' && (
-              <div className="font-mono text-[10px] text-ink/40">{copy.liveCallConnecting}</div>
-            )}
-            {callLines.lines.map((line, index) => (
-              <div key={index} className="text-xs text-ink leading-snug">
-                <span className="font-serif font-bold text-rust mr-1">{copy.liveCallThem}</span>
-                {line}
-              </div>
-            ))}
-            {callLines.streaming !== '' && (
-              <div className="text-xs text-ink/70 leading-snug">
-                <span className="font-serif font-bold text-rust mr-1">{copy.liveCallThem}</span>
-                {callLines.streaming}
-              </div>
-            )}
-            {/* The voice front-end's own spoken transcript. Shown only when no
-                character line is streaming, so the same sentence is never
-                printed twice (docs/live-voice/00 §2.7: an append is accepted,
-                not proof it was spoken). */}
-            {callLines.streaming === '' && call.outputText !== '' && (
-              <div className="text-xs text-ink/60 leading-snug">
-                <span className="font-mono mr-1">{copy.liveCallThem}</span>
-                {call.outputText}
-              </div>
-            )}
-            {call.inputText !== '' && (
-              <div className="text-xs text-ink/50 leading-snug italic">
-                <span className="font-mono not-italic mr-1">{copy.liveCallYou}</span>
-                {call.inputText}
-              </div>
-            )}
+          <div className="min-w-0">
+            <div className="truncate font-serif text-sm font-bold text-ink">{displayName}</div>
+            {statusLine && <div className="truncate font-mono text-[10px] text-ink/50">{statusLine}</div>}
           </div>
         </div>
-      )}
-      <NookNoteComposer
-        characterId={characterId}
-        disabled={inactive || writerLocked || state?.worldFrozen === true}
-        lockMessage={writerLocked ? 'The writer is working.' : undefined}
-      />
+
+        {/* Back to the layer the player came from. */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="pointer-events-auto flex shrink-0 items-center gap-1.5 rounded-xl border border-ink/10 bg-paper-card/90 px-3 py-1.5 text-xs text-ink/70 shadow-soft backdrop-blur-md transition-all hover:bg-ink hover:text-white"
+          title={copy.nookBack}
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>{copy.nookBack}</span>
+        </button>
+      </header>
+
+      {/* Canvas is the only content on the world stage. Every other nook
+          surface is an anchored lane above it and cannot move its origin. */}
+      <main data-nook-zone="canvas" className="absolute inset-0" aria-label={`${displayName} canvas`}>
+        {loading && state === null && !error && (
+          <div className="absolute inset-0 flex items-center justify-center font-mono text-xs text-ink/40">
+            …
+          </div>
+        )}
+
+        {isEmpty ? (
+          /* Empty room (doc-11 §4.1): a room nothing has moved into yet. While an
+             initialiser runs, the ghost card occupies the room instead of the
+             prompt (docs/init/03 §3.5); otherwise the prompt collects the one-line
+             intent — an EMPTY submit is a valid meaning ("leave it blank"). */
+          <div className="h-full w-full">
+            {initializing ? (
+              <Canvas
+                currentLayer={state.layer}
+                items={[]}
+                links={[]}
+                bg={state.bg}
+                ghost={ghostItemFor(state.layer, copy.nookGenerating)}
+                ghostLabel={copy.nookGenerating}
+                ghostCopy={{
+                  reused: copy.ghostReused,
+                  failed: copy.ghostFailed,
+                  unreachable: copy.ghostUnreachable,
+                }}
+                stillPortraits={reduceMotion}
+              />
+            ) : (
+              <>
+                <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 flex-col items-center gap-2 px-8 text-center">
+                  <div className="font-serif text-lg text-ink/70">{copy.nookEmptyTitle}</div>
+                  <div className="font-mono text-xs text-ink/50">{copy.nookEmptyBody}</div>
+                </div>
+                {onRequestInit ? (
+                  <StubPrompt
+                    kind="nook"
+                    copy={{
+                      label: copy.nookEmptyPrompt,
+                      placeholder: copy.nookEmptyHint,
+                      skip: copy.nookInitSkip,
+                    }}
+                    onResolve={resolveInit}
+                  />
+                ) : (
+                  <WriterBar disabled onSend={() => {}} placeholder={copy.nookEmptyPrompt} sendLabel="⏎" />
+                )}
+              </>
+            )}
+          </div>
+        ) : state ? (
+          <Canvas
+            currentLayer={state.layer}
+            items={state.items}
+            links={[]}
+            bg={state.bg}
+            ghostCopy={{
+              reused: copy.ghostReused,
+              failed: copy.ghostFailed,
+              unreachable: copy.ghostUnreachable,
+            }}
+            onMoveCard={handleMoveCard}
+            onSelectChoice={onSelectChoice}
+            onEntityAction={handleEntityAction}
+            onDiceRolled={onDiceRolled}
+            onOpenCharacterModal={handleOpenCharacterModal}
+            onDropItemToScene={handleDropItemToScene}
+            onItemDropOnTarget={onItemDropOnTarget}
+            onTakeItem={onTakeItem}
+          />
+        ) : null}
+      </main>
+
+      {/* One lower-left lane owns every transient/error surface. Keeping these
+          in one column prevents notices, call controls, and transcript from
+          competing for the same bottom coordinates. */}
+      <div
+        data-nook-zone="left-lane"
+        className="pointer-events-none depth-surface--writer absolute bottom-0 left-0 flex max-w-[min(30rem,calc(100%_-_1.5rem))] flex-col items-start gap-2"
+        style={{
+          paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+          paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
+        }}
+      >
+        {error && (
+          <div
+            data-nook-zone="notice"
+            role="alert"
+            className="pointer-events-auto order-1 max-w-full rounded-xl border border-rust/40 bg-rust/10 p-3 text-xs text-ink shadow-soft"
+          >
+            <div className="font-semibold text-rust">{copy.nookError}</div>
+            <div className="mt-1 font-mono text-[10px] text-ink/60">
+              {error.code ? `${error.code} · ` : ''}
+              {error.status > 0 ? `${error.status} · ` : ''}
+              {error.message}
+            </div>
+            <details className="mt-1">
+              <summary className="cursor-pointer text-[10px] text-ink/50">response</summary>
+              <pre className="mt-1 whitespace-pre-wrap break-all text-[10px] text-ink/60">
+                {JSON.stringify(error, null, 2)}
+              </pre>
+            </details>
+            {canRetry && (
+              <button
+                type="button"
+                onClick={() => void load(characterId)}
+                className="mt-2 rounded-lg bg-rust px-3 py-1 text-white transition-all hover:bg-rust-light"
+              >
+                {copy.nookRetry}
+              </button>
+            )}
+          </div>
+        )}
+
+        {notice && (
+          <div
+            data-nook-zone="notice"
+            role="alert"
+            className="pointer-events-auto order-2 max-w-full rounded-lg border border-rust/40 bg-rust/10 px-3 py-2 font-mono text-[11px] text-ink shadow-soft"
+          >
+            {notice}
+          </div>
+        )}
+
+        {callAvailable && (
+          <div data-nook-zone="call" className="pointer-events-auto order-4 flex max-w-full flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (call.phase === 'idle' || call.phase === 'error') void startCall();
+                else void stopCall();
+              }}
+              disabled={inactive}
+              aria-label={callInProgress ? copy.liveCallStop : copy.liveCallStart}
+              title={callInProgress ? copy.liveCallStop : copy.liveCallStart}
+              className={
+                callInProgress
+                  ? 'flex items-center gap-1.5 rounded-xl border border-rust bg-rust/90 px-3 py-2 text-xs text-white shadow-soft backdrop-blur-md transition-all hover:bg-rust'
+                  : 'flex items-center gap-1.5 rounded-xl border border-ink/10 bg-paper-card/95 px-3 py-2 text-xs text-ink/80 shadow-soft backdrop-blur-md transition-all hover:bg-ink hover:text-white'
+              }
+            >
+              {call.phase === 'connecting' ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : callInProgress ? (
+                <PhoneOff className="h-3.5 w-3.5" />
+              ) : (
+                <Mic className="h-3.5 w-3.5" />
+              )}
+              <span>
+                {call.phase === 'connecting'
+                  ? copy.liveCallConnecting
+                  : callInProgress
+                    ? copy.liveCallStop
+                    : copy.liveCallStart}
+              </span>
+            </button>
+            {call.phase === 'live' && (
+              <span
+                role="status"
+                className="flex items-center gap-1.5 rounded-lg border border-rust/30 bg-rust/10 px-2 py-1 font-mono text-[10px] text-rust"
+              >
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rust" />
+                {copy.liveCallLive}
+              </span>
+            )}
+            {call.phase === 'error' && call.error && (
+              <span
+                role="alert"
+                className="max-w-full rounded-lg border border-rust/40 bg-rust/10 px-2 py-1 font-mono text-[10px] text-ink"
+              >
+                {call.error}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Subtitles are sourced from the existing live-call transcript; this
+            is a presentation lane only and never a second transport. */}
+        {callInProgress && (
+          <div
+            data-nook-zone="transcript"
+            className="pointer-events-auto order-3 w-80 max-w-full rounded-xl border border-ink/10 bg-paper-card/90 p-3 shadow-soft backdrop-blur-md"
+          >
+            <div className="max-h-32 space-y-1.5 overflow-y-auto">
+              {callLines.lines.length === 0 &&
+                callLines.streaming === '' &&
+                call.outputText === '' &&
+                call.inputText === '' && (
+                  <div className="font-mono text-[10px] text-ink/40">{copy.liveCallConnecting}</div>
+                )}
+              {callLines.lines.map((line, index) => (
+                <div key={index} className="text-xs leading-snug text-ink">
+                  <span className="mr-1 font-serif font-bold text-rust">{copy.liveCallThem}</span>
+                  {line}
+                </div>
+              ))}
+              {callLines.streaming !== '' && (
+                <div className="text-xs leading-snug text-ink/70">
+                  <span className="mr-1 font-serif font-bold text-rust">{copy.liveCallThem}</span>
+                  {callLines.streaming}
+                </div>
+              )}
+              {/* The voice front-end's own spoken transcript. Shown only when no
+                  character line is streaming, so the same sentence is never
+                  printed twice (docs/live-voice/00 §2.7). */}
+              {callLines.streaming === '' && call.outputText !== '' && (
+                <div className="text-xs leading-snug text-ink/60">
+                  <span className="mr-1 font-mono">{copy.liveCallThem}</span>
+                  {call.outputText}
+                </div>
+              )}
+              {call.inputText !== '' && (
+                <div className="text-xs italic leading-snug text-ink/50">
+                  <span className="mr-1 font-mono not-italic">{copy.liveCallYou}</span>
+                  {call.inputText}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* The host owns this lane's placement. Composer itself is a normal
+          panel, so ShellIntegration can reserve space around activity, Bag,
+          toast, dock, and the mobile keyboard without fighting fixed offsets. */}
+      <div
+        data-nook-zone="note"
+        className="pointer-events-none depth-surface--writer absolute inset-x-3 bottom-2 flex justify-end sm:inset-x-4 sm:bottom-4"
+        style={{
+          paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))',
+          paddingRight: 'max(0.25rem, env(safe-area-inset-right))',
+        }}
+      >
+        <div
+          data-nook-note="composer"
+          className="pointer-events-auto max-h-[min(42dvh,300px)] w-[min(18rem,calc(100vw-1.5rem))] max-w-full overflow-y-auto"
+        >
+          <NookNoteComposer
+            characterId={characterId}
+            disabled={inactive || writerLocked || state?.worldFrozen === true}
+            lockMessage={writerLocked ? 'The writer is working.' : undefined}
+          />
+        </div>
+      </div>
     </div>
   );
 };
