@@ -122,10 +122,23 @@ export function skillArgs(repoRoot: string, worldRoot: string): string[] {
 }
 
 /**
+ * Extensions under `extensions/` that the generic discovery MUST NOT load.
+ *
+ * `canvas-arranger.ts` is an ISOLATED functional extension: only
+ * `canvasArrangerLaunch` may load it, via an explicit `--extension` under
+ * `--no-extensions` (docs/layout/08 §5.2/§6). It registers `view_canvas` /
+ * `screenshot_canvas` / `arrange_canvas`; the Writer/Character processes get
+ * those same names from `tools.ts`, so discovering it here make pi-rp throw
+ * `Tool "screenshot_canvas" conflicts with …` and EVERY agent launch fails.
+ * Keep this the single source of truth: `canvasArrangerLaunch` references it.
+ */
+export const ISOLATED_EXTENSIONS = ['canvas-arranger.ts'] as const;
+
+/**
  * Extension paths handed to pi-rp via `--extension` (repeatable; accepts a file or directory).
  *
  * Discovers project-level extensions under `<repoRoot>/extensions/` and world-level extensions
- * under `<worldRoot>/extensions/`.
+ * under `<worldRoot>/extensions/`, minus `ISOLATED_EXTENSIONS`.
  */
 export function extensionArgs(repoRoot: string, worldRoot?: string): string[] {
   const args: string[] = [];
@@ -146,6 +159,9 @@ export function extensionArgs(repoRoot: string, worldRoot?: string): string[] {
           const isJs = file.endsWith('.js') && !file.endsWith('.d.ts');
           if (!isTs && !isJs) continue;
           if (file.endsWith('.test.ts') || file.endsWith('.spec.ts')) continue;
+          // Isolated extensions belong to their own launch spec only; the
+          // generic scan must not add them (see ISOLATED_EXTENSIONS).
+          if ((ISOLATED_EXTENSIONS as readonly string[]).includes(file)) continue;
           if (isJs && fs.existsSync(path.join(dir, `${file.slice(0, -3)}.ts`))) continue;
           args.push('--extension', path.join(dir, file));
         }

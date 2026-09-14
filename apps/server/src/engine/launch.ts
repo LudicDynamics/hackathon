@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { ensureProviderConfig } from './provider-config.js';
 import { modelPreferenceArgs } from './model-preferences.js';
 import path from 'node:path';
-import { airpEnv, extensionArgs, installPreset, skillArgs } from './presets.js';
+import { airpEnv, extensionArgs, ISOLATED_EXTENSIONS, installPreset, skillArgs } from './presets.js';
 import { CHARACTER_ROLE_PREFIX, isValidCharacterId } from '@airp/shared';
 
 /**
@@ -231,7 +231,9 @@ export function canvasArrangerLaunch(
   if (!Number.isInteger(attempt) || attempt < 1) throw new Error('Canvas arranger launch attempt must be a positive integer.');
 
   const presetPath = path.join(repoRoot, 'presets', 'canvas-arranger.json');
-  const extensionPath = path.join(repoRoot, 'extensions', 'canvas-arranger.ts');
+  // Derived from ISOLATED_EXTENSIONS so the file the generic scan excludes and
+  // the file this isolated spec loads can never drift apart.
+  const extensionPath = path.join(repoRoot, 'extensions', ISOLATED_EXTENSIONS[0]);
   if (!fs.statSync(presetPath, { throwIfNoEntry: false })?.isFile()) {
     throw new Error('Canvas arranger preset is unavailable.');
   }
