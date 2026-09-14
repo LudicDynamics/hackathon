@@ -84,6 +84,12 @@ async function reply(
       res.status(http.status).json(http.body);
       return;
     }
+    // The store's own no-clobber guard (a concurrent move won the race) is a
+    // conflict, not a server fault.
+    if ((err as NodeJS.ErrnoException | null)?.code === 'EEXIST') {
+      res.status(409).json({ ok: false, code: 'already_exists', error: err instanceof Error ? err.message : String(err) });
+      return;
+    }
     res.status(500).json({
       ok: false,
       code: 'internal',

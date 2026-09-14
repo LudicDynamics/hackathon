@@ -752,9 +752,21 @@ export function App() {
     }
   };
 
+  // One move per item at a time: a double-click sent two moves, the second
+  // failing with "destination already exists" while the card still showed.
+  const takingRef = useRef(new Set<string>());
   const handleTakeItem = async (itemPath: string) => {
-    try { await airpGateway.move(itemPath, `player/${itemPath.split('/').pop()}`); await loadChromeData(); }
-    catch (error) { notify(String(error)); }
+    if (takingRef.current.has(itemPath)) return;
+    takingRef.current.add(itemPath);
+    try {
+      await airpGateway.move(itemPath, `player/${itemPath.split('/').pop()}`);
+      await refresh();
+      await loadChromeData();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'The item could not be taken');
+    } finally {
+      takingRef.current.delete(itemPath);
+    }
   };
 
   const handleToggleFreeze = async () => {
