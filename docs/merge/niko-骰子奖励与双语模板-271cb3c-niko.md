@@ -28,6 +28,8 @@
 | `routes/world.ts` `/choice`、`/material-review` | niko：`/choice` 回填 `world`，`/material-review` 世界不符返回 409；main：无此校验，响应为嵌套 `{ ok, details }` | 补回回填与 409；响应改走 `reply()` 平铺 | 防止换世界后旧面板串档；`docs/wiring/00` §6 响应体为 `{ ok, ...details }`，前端 `actionDetailsOf` 两种形状都读 |
 | `EntityInteractions.tsx`、`DeclaredActionDialog.tsx` | main 版一槽一件，请求体没有 `world` | 补回 `world` 字段与同槽多份（`slotCapacity`、逐件移除）；删除没人传的 `inline` 残留 | 与服务端、`check:bodies` 的 5 键契约一致 |
 | `overlay/CharacterModal.tsx` | 取 main 版，`/api/tts` 请求体丢了 `characterId`/`emotion` | 补回两键和本机回落告警 | `check:bodies` 5 键契约；本机音色路由依赖 `characterId` |
+| `routes/tts.ts` | 混合后保留 main 的清洗与步骤编号，丢了 niko 的 `local-tts` import 与「七海本机优先」分支，`readLocalTtsConfig` 引用悬空，server 编译失败 | 在 main 版上补回 import 与本机分支（放在缓存查找之前） | 8 项本机 TTS 测试在 niko 侧通过、合并后失败 |
+| `routes/connection-settings.ts` | 字段表取 main 那一行，丢了 niko 的 4 个 `AIRP_TTS_LOCAL_*` 字段，七海本机配置存不进去 | 补回 4 个字段 | `local-tts-settings` 测试在 niko 侧通过、合并后失败 |
 | `TtsSettings.tsx` | 取 main 版，`NanamiTtsSettings` 不再挂载；`refresh` 残留 niko 的 `setHasError` | 挂回七海面板；`refresh` 用 main 的 `setError` | 组件还在、消费端没了，是合丢了一半 |
 | `lib/messages.json` | 冲突解决丢了 niko 独有的 68 个键 | 补回现有代码仍在用的 37 键，加上 stash 里七海角色音色在途的 8 键；其余 31 键所属 UI 已被 main 替换，不补 | `check:i18n` 两个父提交都绿、合并后变红 |
 | App、WriterBar、ChalkCard、NookView、phantom-seat、DiceCeremony、Canvas、BagItemDialog、`dice-preview.tsx` | 混合时丢了声明或 import，web 有 31 个 TS 错误 | 逐个补回来源侧的声明；Canvas 补回 niko 的悬停聚焦肖像 | 机械 |
@@ -62,14 +64,16 @@ pnpm check:ws && pnpm check:bodies           # → PASS / PASS（11 条路由）
 pnpm check:i18n && pnpm check:voices         # → PASS（183 键）/ PASS
 pnpm check:docs                              # → PASS
 node --test apps/server/test/*.test.mjs apps/web/test/*.test.mjs \
-  packages/shared/test/*.test.mjs tools/*.test.mjs   # → 1034 项：1001 通过 / 33 失败
+  packages/shared/test/*.test.mjs tools/*.test.mjs   # → 1032 项：1000 通过 / 32 失败
+pnpm check:merge                             # → PASS
 ```
 
-- **比对基线**：在临时 worktree 对两个父提交跑同一套测试（worktree 缺 `vendor/pi-rp` 产物，server 编译失败，失败数只作参照）：`65fa09d` 923 项中 729 通过、12 失败；`aad5bf3` 740 项中 618 通过、39 失败。原 `271cb3c` 修好编译后首轮 40 项失败；修复后 33 项，没有新增失败。
-- **33 项失败的归属**：
-  - 18 项是 §2.3 的待裁决分歧；
-  - 7 项在两个父提交上也失败，不归本次合并：`choice-draft-ui` 带标签草稿、`first-snow-ending-contract` 2 项、`holmes-playtest` 独立图层、`character-nooks` 91 张卡、`nanami-tts-settings` 本地化、`unwritten-door` 作家排队；
-  - 1 项 DeepSeek 模型形状，是工作区在途改动 `deepseek-v4-flash` 引起的，与合并无关。
+- **验证环境**：以上结果都在干净 worktree（只含提交内容，不含工作区在途改动）里跑出；`vendor/pi-rp` 链接到主工作区的子模块，它比已提交的子模块指针新一点。
+- **比对基线**：在临时 worktree 对两个父提交跑同一套测试（该 worktree 缺 `vendor/pi-rp` 产物，server 编译失败，失败数只作参照）：`65fa09d` 923 项中 729 通过、12 失败；`aad5bf3` 740 项中 618 通过、39 失败。原 `271cb3c` 修好编译后首轮 40 项失败；修复后 32 项，没有新增失败。
+- **32 项失败的归属**：
+  - 25 项是 §2.3 的待裁决分歧（初雪命名 4、小天地卡片 13、小天地入口 1、选项传值 1、内容 6）；
+  - 7 项在两个父提交上也失败，不归本次合并：`choice-draft-ui` 带标签草稿、`first-snow-ending-contract` 2 项、`holmes-playtest` 独立图层、`character-nooks` 91 张卡、`nanami-tts-settings` 本地化、`unwritten-door` 作家排队。
+- **工作区另有 1 项**：DeepSeek 模型形状测试只在带在途改动 `deepseek-v4-flash` 的工作区里失败，与合并无关。
 - **浏览器冒烟**：未做。
 - **未决/遗留**：
   - §2.3 五项待裁决；

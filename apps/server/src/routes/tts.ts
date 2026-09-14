@@ -4,6 +4,7 @@ import { existsSync, realpathSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { resolveVoice, sanitiseTtsText, type LocalWorldStore } from '@airp/shared';
+import { LocalTtsError, isLocalTtsCharacter, localTtsEmotion, localTtsHash, readLocalTtsConfig, synthesiseLocal } from './local-tts.js';
 
 /**
  * Server-side TTS: the ONE synthesis point (docs/tts/00 §1, docs/tts/01).
@@ -332,6 +333,29 @@ export function createTtsRouter(
 
     // Step 6 — world locale short code → DashScope `language_type`.
     const languageType = typeof rawLanguage === 'string' ? (LANGUAGE_MAP[rawLanguage] ?? 'Auto') : 'Auto';
+
+    // Local Nanami audio always gets first refusal, even if an online fallback
+    // for this line is cached. A recovered local service must regain its voice.
+    const local = readLocalTtsConfig();
+    if (local.baseUrl && characterId === 'nanami') {
+      try {
+        const manifest = await store.getManifest();
+        if (isLocalTtsCharacter(manifest.id, characterId) && manifest.characters?.some(c => c.id === characterId)) {
+          const language = typeof rawLanguage === 'string' && rawLanguage in LANGUAGE_MAP ? rawLanguage : 'auto';
+          const emotion = localTtsEmotion(rawEmotion);
+          const file = `${localTtsHash(local, text, language, emotion)}.wav`;
+          const abs = path.join(store.worldRoot, '.airpworld', 'tts-cache', file);
+          const cached = existsSync(abs);
+          if (!cached) await writeAtomic(abs, await synthesiseLocal(local, text, language, emotion));
+          return res.json({ ok: true, url: `/api/tts/audio/${file}`, cached, characters: text.length, truncated });
+        }
+      } catch (err) {
+        // Only a safe diagnostic is exposed; never log keys, URLs or dialogue.
+        const reason = err instanceof LocalTtsError ? err.message : err instanceof Error ? err.name : 'Error';
+        console.warn(`[AIRP TTS] Local TTS failed for nanami (${reason}); falling back to online TTS.`);
+        res.setHeader('X-AIRP-TTS-Fallback', 'local-to-online');
+      }
+    }
 
     // Step 7 — cache lookup. `existsSync` (not `stat`) is enough: atomic writes
     // guarantee "present ⇒ complete".

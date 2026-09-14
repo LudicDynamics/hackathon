@@ -1,4 +1,7 @@
 {
+  "Nanami local voice": { "zh-CN": "七海本机语音", "ja": "七海のローカル音声" },
+  "Nanami uses this local voice when available. If it fails, AIRP automatically falls back to the online voice.": { "zh-CN": "七海会优先使用此本机语音；服务失败时，AIRP 会自动回落到线上音色。", "ja": "七海は利用可能なとき、このローカル音声を優先します。失敗した場合は AIRP が自動でオンライン音声に切り替えます。" },
+  "Save Nanami voice": { "zh-CN": "保存七海语音", "ja": "七海の音声を保存" },
   "Dismiss voice notice": { "zh-CN": "关闭语音提示", "ja": "音声のお知らせを閉じる" },
   "Configured · availability is checked when speaking": { "zh-CN": "已配置 · 实际可用性将在朗读时确认", "ja": "設定済み · 利用できるかは再生時に確認します" },
   "Checking configuration…": { "zh-CN": "正在检查配置……", "ja": "設定を確認しています…" },
