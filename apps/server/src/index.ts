@@ -15,6 +15,7 @@ import { LiveCallRegistry } from './engine/live-session.js';
 import { createTtsRouter } from './routes/tts.js';
 import { createLiveRouter } from './routes/live.js';
 import { createConnectionSettingsRouter } from './routes/connection-settings.js';
+import { createSttRouter } from './routes/stt.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -141,6 +142,8 @@ app.use('/api', createTtsRouter(REPO_ROOT, () => activeStore));
 // while `/api/live/session` does its own nook check.
 app.use('/api', createLiveRouter(() => activeStore, liveCalls));
 app.use('/api', createConnectionSettingsRouter(REPO_ROOT));
+// Player voice input (docs/live-voice/语音输入（STT）.md): HTTP-only, no world needed.
+app.use('/api', createSttRouter());
 
 // Serve static frontend files from apps/web/dist
 app.use(express.static(WEB_DIST));

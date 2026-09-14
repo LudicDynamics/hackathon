@@ -1,4 +1,11 @@
 {
+  "Voice input": { "zh-CN": "语音输入", "ja": "音声入力" },
+  "Stop recording": { "zh-CN": "停止录音", "ja": "録音を止める" },
+  "Transcribing…": { "zh-CN": "正在转写…", "ja": "文字に起こしています…" },
+  "Microphone access was refused. Allow it, then try again.": { "zh-CN": "麦克风权限被拒绝。请允许后再试。", "ja": "マイクの使用が拒否されました。許可してから再試行してください。" },
+  "This browser cannot record from a microphone.": { "zh-CN": "此浏览器无法使用麦克风录音。", "ja": "このブラウザではマイク録音ができません。" },
+  "Voice input is not configured on this server.": { "zh-CN": "服务器尚未配置语音输入。", "ja": "このサーバーでは音声入力が設定されていません。" },
+  "Could not transcribe the recording. Please try again.": { "zh-CN": "无法转写这段录音，请重试。", "ja": "録音を文字に起こせませんでした。もう一度お試しください。" },
   "Ikigai": { "zh-CN": "小天地", "ja": "心象風景" },
   "This character has no ikigai to call from.": { "zh-CN": "这个角色没有可以通话的小天地。", "ja": "このキャラクターには通話できる心象風景がありません。" },
   "Nanami local voice": { "zh-CN": "七海本机语音", "ja": "七海のローカル音声" },

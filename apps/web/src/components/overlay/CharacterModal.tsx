@@ -5,6 +5,7 @@ import { AgentActivityLog } from '../chrome/AgentActivityLog.js';
 import { canRequestTts, invalidateTts, ttsEnabled } from '../../lib/tts-readiness.js';
 import { useLocale } from '../../lib/i18n.js';
 import { guardImeKey } from '../../lib/ime.js';
+import { VoiceInputButton } from '../chrome/VoiceInputButton.js';
 import { playStinger, playVoice, stopVoice, unlock, type Emotion } from '../../lib/audio.js';
 import { sanitiseTtsText } from '@airp/shared/tts-text';
 import {
@@ -882,6 +883,10 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
             aria-label={`Message to ${characterId}`}
             disabled={busy}
             className="speech-input"
+          />
+          <VoiceInputButton
+            disabled={busy}
+            onText={(spoken) => setInputText((previous) => (previous ? `${previous} ${spoken}` : spoken))}
           />
         </div>
       </div>

@@ -115,6 +115,58 @@
   color: var(--ux-color-paper);
 }
 
+/* Player voice input (docs/live-voice/语音输入（STT）.md). */
+.voice-input-button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--ux-color-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ux-color-paper) 72%, transparent);
+  color: var(--ux-color-ink);
+  cursor: pointer;
+}
+
+.voice-input-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.voice-input-button[data-state='recording'] {
+  background: var(--ux-color-rust);
+  border-color: var(--ux-color-rust);
+  color: var(--ux-color-paper);
+  animation: voiceInputPulse 1.2s ease-in-out infinite;
+}
+
+.voice-input-button__spin {
+  animation: voiceInputSpin 0.9s linear infinite;
+}
+
+.voice-input-error {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--ux-color-rust);
+}
+
+@keyframes voiceInputPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 111, 76, 0.45); }
+  50% { box-shadow: 0 0 0 6px rgba(201, 111, 76, 0); }
+}
+
+@keyframes voiceInputSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-input-button[data-state='recording'],
+  .voice-input-button__spin { animation: none; }
+}
+
 
 .prototype-chrome {
   transition: opacity 220ms ease, transform 300ms cubic-bezier(0.16, 1, 0.3, 1), visibility 220ms;
