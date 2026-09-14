@@ -48,8 +48,8 @@ import { CharacterRail } from './components/sidebar/CharacterRail.js';
 import { usePresence } from './state/usePresence.js';
 import { airpGateway, onWorldUnavailable, AirpRequestError, type AssetMediaKind, type WorldShelf } from './lib/airp-gateway.js';
 import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
-import { BagItemDialog } from './components/BagItemDialog.js';
 import { WorldLauncher } from './components/WorldLauncher.js';
+import { BagItemDialog } from './components/BagItemDialog.js';
 import { guardImeKey } from './lib/ime.js';
 import { initialShell, transitionShell } from './lib/ui-shell.mjs';
 import { MarkdownText } from './lib/md.js';
@@ -183,12 +183,12 @@ export function App() {
   const [radialState, setRadialState] = useState<{ x: number; y: number; worldX: number; worldY: number } | null>(null);
   const toggleShell = (action: 'header' | 'journal' | 'immersion') => setShell(current => transitionShell(current, action));
   const [worldPickerOpen, setWorldPickerOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
   // Every session opens on the launcher, and every world returns to it.
   const [launcherOpen, setLauncherOpen] = useState(true);
   useEffect(() => {
     if (launcherOpen) void airpGateway.worlds().then(setShelf).catch(() => {});
   }, [launcherOpen]);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [activeCharacter, setActiveCharacter] = useState<CharacterView | null>(null);
   const [nookChar, setNookChar] = useState<string | null>(null);
   const [preparedAction, setPreparedAction] = useState('');
@@ -666,10 +666,10 @@ export function App() {
       await enterLayer('map').then(applyFollowFailures);
       await loadChromeData();
       setWorldPickerOpen(false);
+      setLauncherOpen(false);
       setAttention('ambient');
       setIsGodHandOpen(false);
       setShell(initialShell);
-      setLauncherOpen(false);
       setProfileOpen(false);
       setBagOpen(false);
       notify(`Entered ${result.manifest.name}`);
@@ -977,12 +977,12 @@ export function App() {
             <div className="prototype-spacer" />
             <span className="prototype-freeze">{state?.worldFrozen ? t('WORLD PAUSED') : t('WORLD AWAKE')}</span>
             <span className="prototype-status">{t('{items} ITEMS · {people} PEOPLE', { items: handItems.length, people: characters.length })}</span>
+            <button className="prototype-pill" onClick={() => setLauncherOpen(true)}>{t('World launcher')}</button>
             <button className="prototype-pill" onClick={() => setWorldPickerOpen(true)}>{t("Worlds")}</button>
             <label className="prototype-language"><span className="sr-only">{t('Language')}</span><select aria-label={t('Language')} value={locale} onChange={event => setLocale(event.target.value as 'en' | 'zh-CN' | 'ja')}><option value="en">English</option><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
             <AgentSettings settings={world.settings} onSaveSettings={world.saveSettings} focus={focusCoordinator} />
             <TtsSettings focus={focusCoordinator} />
             <MuteButton />
-            <button className="prototype-pill" onClick={() => setLauncherOpen(true)}>{t('World launcher')}</button>
             <button className="prototype-effects-toggle" role="switch" aria-label={t("Visual effects")} aria-checked={effectsEnabled} onClick={() => setEffectsEnabled(value => !value)} title={t("Particles, parallax and animated backgrounds")}><span aria-hidden="true" />{t(effectsEnabled ? 'Effects on' : 'Effects off')}</button>
             <button className="prototype-quiet" onClick={() => toggleShell('header')} aria-label={t("Close header")}><ChevronUp size={16} /></button>
           </header>
@@ -1140,11 +1140,6 @@ export function App() {
       </main>
 
       {loadingWorld && <div role="status" className="prototype-world-loading">{t(' · opening…')}</div>}
-      {worldPickerOpen && (
-        <WorldShelfDialog shelf={shelf} loading={loadingWorld} onLoad={path => void loadWorld(path)} onClose={() => setWorldPickerOpen(false)} onRefresh={async () => { setShelf(await airpGateway.worlds()); }} />
-      )}
-
-      {selectedBagItem && (
       {launcherOpen && (
         <WorldLauncher
           shelf={shelf}
@@ -1154,6 +1149,11 @@ export function App() {
           onManageSaves={() => setWorldPickerOpen(true)}
         />
       )}
+      {worldPickerOpen && (
+        <WorldShelfDialog shelf={shelf} loading={loadingWorld} onLoad={path => void loadWorld(path)} onClose={() => setWorldPickerOpen(false)} onRefresh={async () => { setShelf(await airpGateway.worlds()); }} />
+      )}
+
+      {selectedBagItem && (
         <BagItemDialog
           item={selectedBagItem}
           onClose={() => setSelectedBagPath(null)}
