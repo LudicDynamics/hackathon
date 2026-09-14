@@ -20,7 +20,7 @@ If a real, direct `README.md` already exists, stop and report `already initializ
 Deliver all five items:
 
 - A direct `README.md` with `type: readme`, stable `name`, and only known `material`/`bg` facts. Describe the space and its relation to the parent; do not reveal an outcome.
-- 每个场景最好都有与场景内容匹配的背景图片；将图片路径挂在该场景目录 `README.md` 的 frontmatter 的 `bg` 字段中（例如 `bg: assets/scenes/example.webp`），不要只写在正文里。
+- Match the scene with a background image: put its path in the directory's `README.md` frontmatter `bg` field (for example `bg: assets/scenes/example.webp`); do not leave the image reference only in the body prose.
 - One to three object components. First call `get_component` for each kind, then write the real frontmatter and a short, sensory introduction. Give each object a short chalk introduction (or a same-layer `link_to` from an opening). Make objects observable, usable, or carryable; do not add props merely to reach a count.
 - One or two authored opening chalks. New authored files use `01-opening.md` and, only when useful, `02-opening.md`; each has `type: chalk`, stays brief, and gives the arrival beat without deciding for the player.
 - At least one interaction option and one action option. Use existing `choice` with stable ids/labels, and use existing actions such as `choose`, `use_item_on`, or `roll_dice` when the declared interaction calls for them. An interaction option is what the player selects; an action option is the concrete operation the Writer performs afterward.
