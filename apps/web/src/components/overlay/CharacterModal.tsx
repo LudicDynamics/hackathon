@@ -840,7 +840,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
           className="character-activity-log"
         />
         <div className="name-plate">{displayName || characterId}</div>
-        {onOpenNook && <button type="button" onClick={onOpenNook}>{t('Visit private space')}</button>}
+        {onOpenNook && <button type="button" onClick={onOpenNook}>{t('Visit ikigai')}</button>}
         <p className="narr-line">{bio ? bio : '(necessary description)'}</p>
 
         <div

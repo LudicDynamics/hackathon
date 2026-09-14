@@ -1,4 +1,6 @@
 {
+  "Ikigai": { "zh-CN": "小天地", "ja": "心象風景" },
+  "This character has no ikigai to call from.": { "zh-CN": "这个角色没有可以通话的小天地。", "ja": "このキャラクターには通話できる心象風景がありません。" },
   "Nanami local voice": { "zh-CN": "七海本机语音", "ja": "七海のローカル音声" },
   "Nanami uses this local voice when available. If it fails, AIRP automatically falls back to the online voice.": { "zh-CN": "七海会优先使用此本机语音；服务失败时，AIRP 会自动回落到线上音色。", "ja": "七海は利用可能なとき、このローカル音声を優先します。失敗した場合は AIRP が自動でオンライン音声に切り替えます。" },
   "Save Nanami voice": { "zh-CN": "保存七海语音", "ja": "七海の音声を保存" },
@@ -31,12 +33,12 @@
   "Enter a valid local TTS base URL without /v1/tts.": { "zh-CN": "请输入有效的本机 TTS 基址，且不要包含 /v1/tts。", "ja": "/v1/tts を含まない有効なローカル TTS ベース URL を入力してください。" },
   "Voice ID must use letters, numbers, underscores, or hyphens.": { "zh-CN": "音色 ID 只能使用字母、数字、下划线或连字符。", "ja": "音声 ID には英数字、アンダースコア、ハイフンだけを使用してください。" },
   "Timeout must be between 1 and 120 seconds.": { "zh-CN": "超时必须在 1 至 120 秒之间。", "ja": "タイムアウトは 1〜120 秒で入力してください。" },
-  "Visit private space": { "zh-CN": "进入小天地", "ja": "小天地に入る" },
-  "Leave the nook": { "zh-CN": "离开小天地", "ja": "小天地を出る" },
+  "Visit ikigai": { "zh-CN": "进入小天地", "ja": "心象風景に入る" },
+  "Leave ikigai": { "zh-CN": "离开小天地", "ja": "心象風景を出る" },
   "Nothing here yet": { "zh-CN": "这里还没有内容", "ja": "まだ何もない部屋" },
   "Traces of moving in, and nothing else.": { "zh-CN": "这里只留下搬进来的痕迹。", "ja": "引っ越してきた跡だけが残っている。" },
   "Leave it blank — what fits their history will appear.": { "zh-CN": "点击初始化，根据角色的经历布置这里。", "ja": "初期化を押すと、来歴に合う空間を作ります。" },
-  "Could not open this nook": { "zh-CN": "无法打开小天地", "ja": "小天地を開けませんでした" },
+  "Could not open this ikigai": { "zh-CN": "无法打开小天地", "ja": "心象風景を開けませんでした" },
   "Try again": { "zh-CN": "重试", "ja": "再試行" },
   "Currently here": { "zh-CN": "此刻在这里", "ja": "ここに居る" },
   "Local character voices": { "zh-CN": "本机角色音色", "ja": "ローカルのキャラクター音声" },
@@ -1048,9 +1050,9 @@
     "zh-CN": "解散",
     "ja": "解散する"
   },
-  "Visit their nook": {
+  "Visit their ikigai": {
     "zh-CN": "去 ta 的小天地",
-    "ja": "彼の小天地へ"
+    "ja": "彼の心象風景へ"
   },
   "Actions for {name}": {
     "zh-CN": "{name} 的操作",
@@ -1080,9 +1082,9 @@
     "zh-CN": "无法加载角色名单，请重试。",
     "ja": "登場人物の一覧を読み込めませんでした。再試行してください。"
   },
-  "Already inside a nook.": {
+  "Already inside an ikigai.": {
     "zh-CN": "已经在某个小天地里了。",
-    "ja": "すでに小天地の中にいます。"
+    "ja": "すでに心象風景の中にいます。"
   },
   "Some of the party could not follow you.": {
     "zh-CN": "有一部分同伴没能跟过来。",

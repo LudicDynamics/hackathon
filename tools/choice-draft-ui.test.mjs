@@ -19,7 +19,7 @@ test('nook entry and initialization use translated labels and the existing expli
   assert.match(app, /resident-actions/);
   assert.match(app, /type: 'airp_init', kind: 'nook'/);
   assert.match(app, /NookView characterId=\{nookChar\} locale=\{locale\}/);
-  for (const key of ['Visit private space', 'Initialize private space', 'Ready to send: {action}']) {
+  for (const key of ['Visit ikigai', 'Initialize private space', 'Ready to send: {action}']) {
     assert.ok(copy[key]['zh-CN']); assert.ok(copy[key].ja);
   }
 });

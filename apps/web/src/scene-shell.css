@@ -5,7 +5,12 @@
 .depth-surface--background { z-index: var(--depth-background); }
 .depth-surface--world { z-index: var(--depth-world); }
 .depth-surface--entity { z-index: var(--depth-entity); }
-.depth-surface--overlay { z-index: var(--depth-overlay); }
+/* The overlay only holds presentational ghosts/phantoms; it sits above the
+   entity surface, so it must not swallow hover/clicks meant for the cards. */
+.depth-surface--overlay { z-index: var(--depth-overlay); pointer-events: none; }
+/* Atmospheric particles are mounted after the world layer and paint above it;
+   they are decorative and must let pointer events through to the cards. */
+[data-depth-surface="background"] { pointer-events: none; }
 .depth-surface--writer { z-index: var(--depth-writer); }
 .depth-surface--modal { z-index: var(--depth-modal); }
 .depth-surface--ui { z-index: var(--depth-ui); }

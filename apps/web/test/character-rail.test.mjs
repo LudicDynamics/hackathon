@@ -157,7 +157,7 @@ test('UF-3a (non-emptiness): all three keys are always in the DOM, even for abse
   const html = render([view({ state: 'absent', layer: null, position: null })]);
   assert.match(html, />Go to them</);
   assert.match(html, />Follow</);
-  assert.match(html, />Visit their nook</);
+  assert.match(html, />Visit their ikigai</);
   // Not a conditional-mount tier: exactly three action buttons exist in markup
   // (anchored on the button class so the `character-rail__actions` wrapper, whose
   // name contains the same prefix, is not miscounted).
@@ -211,7 +211,7 @@ test('UF-7b: every action label is distinct and carries the character name', { s
   assert.match(html, /aria-label="Follow · Alpha"/);
   assert.match(html, /aria-label="Follow · Beta"/);
   assert.match(html, /aria-label="Go to them · Beta"/);
-  assert.match(html, /aria-label="Visit their nook · Beta"/);
+  assert.match(html, /aria-label="Visit their ikigai · Beta"/);
 });
 
 test('UF-7c: rows render in the given array order, never re-sorted', { skip }, () => {
@@ -227,10 +227,10 @@ test('UF-7c: rows render in the given array order, never re-sorted', { skip }, (
 
 test('UF-4: the nook key is offered regardless of presence state, disabled while a nook is open', { skip }, () => {
   for (const state of ['in-scene', 'elsewhere', 'absent']) {
-    assert.match(render([view({ state })]), />Visit their nook</, `${state} must keep the nook key`);
+    assert.match(render([view({ state })]), />Visit their ikigai</, `${state} must keep the nook key`);
   }
   const open = render([view({ state: 'in-scene' })], { nookOpen: true });
-  assert.match(open, /Visit their nook/);
+  assert.match(open, /Visit their ikigai/);
   assert.match(open, /disabled=""/);
 });
 

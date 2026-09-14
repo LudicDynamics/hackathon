@@ -52,6 +52,69 @@
   opacity: 0.08;
 }
 
+/* Dusk legibility (restored from niko): paper cards stay paper, but bare text
+   that sits directly on a dark scene photo needs light ink and a dark halo. */
+.prototype-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 12;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(29, 20, 37, 0.2) 145%);
+}
+
+.airp-prototype.is-dusk .prototype-vignette {
+  background:
+    linear-gradient(180deg, rgba(16, 12, 24, 0.36), transparent 20%, transparent 70%, rgba(16, 12, 24, 0.48)),
+    radial-gradient(ellipse at 50% 42%, transparent 28%, rgba(15, 10, 22, 0.5) 100%);
+}
+
+.airp-prototype.is-dusk .chalk {
+  color: var(--ux-color-paper);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.8), 0 0 26px rgba(217, 176, 106, 0.2);
+}
+
+.airp-prototype.is-dusk .chalk button {
+  background: rgba(44, 36, 59, 0.85);
+  color: var(--ux-color-paper);
+  border: 1px solid rgba(177, 156, 195, 0.33);
+  text-shadow: none;
+}
+
+.airp-prototype.is-dusk .chalk button:hover {
+  background: var(--ux-color-paper);
+  color: var(--ux-color-ink);
+}
+
+.is-dusk .prototype-world-meta {
+  color: var(--ux-color-paper);
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.75);
+}
+
+.is-dusk .prototype-world-meta p,
+.is-dusk .prototype-world-meta .prototype-eyebrow {
+  color: #d9cbe6;
+}
+
+/* Hover action panels float beside cards over the dark photo, not on paper. */
+.airp-prototype.is-dusk .entity-interactions {
+  color: var(--ux-color-paper);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+}
+
+.airp-prototype.is-dusk .entity-action-arrows button,
+.airp-prototype.is-dusk .entity-interactions .fm-body button {
+  background: rgba(44, 36, 59, 0.78);
+  color: var(--ux-color-paper);
+  border-color: rgba(177, 156, 195, 0.33);
+  text-shadow: none;
+}
+
+.airp-prototype.is-dusk .entity-action-arrows button:hover,
+.airp-prototype.is-dusk .entity-interactions .fm-body button:hover {
+  background: var(--ux-color-rust);
+  color: var(--ux-color-paper);
+}
+
 
 .prototype-chrome {
   transition: opacity 220ms ease, transform 300ms cubic-bezier(0.16, 1, 0.3, 1), visibility 220ms;

@@ -70,7 +70,12 @@ export function EntityInteractions({ item, active = false, onChoice, onDiceRolle
     if (!active || !ref.current) return;
     const el = ref.current;
     const object = el.closest<HTMLElement>('.object');
-    const viewport = object?.closest<HTMLElement>('[aria-label="Infinite canvas"]') || object?.parentElement?.parentElement;
+    // The canvas root carries the world depth marker; the old aria-label hook no
+    // longer exists, and the fallback (the camera-transformed world layer) moves
+    // with the camera, which shrank max-height and clipped the panel.
+    const viewport = object?.closest<HTMLElement>('.depth-surface--world')
+      || object?.closest<HTMLElement>('[aria-label="Infinite canvas"]')
+      || object?.parentElement?.parentElement;
     if (!object || !viewport) return;
     // Placement is locked for this hover session. Changing side changes the
     // panel's padding/height, so observing it and choosing again feeds back.
