@@ -39,6 +39,7 @@ export type BGMood = 'calm' | 'tense' | 'crisis';
 // (docs/assets/00 §3.1). Re-exported here because audio.ts was its long-time
 // home and existing importers read it from `lib/audio.js`.
 import type { Emotion } from '@airp/shared';
+import { mediaReadiness } from './media-readiness.js';
 export type { Emotion };
 
 type ToneKey = 'rain' | 'fireplace' | 'drip';
@@ -73,6 +74,7 @@ let mutedState = false;
 // completes; this prevents an old stinger/voice from landing off-beat.
 let visibilityEpoch = 0;
 let visibilityListenerAttached = false;
+let mainTracksHidden = false;
 function pageIsHidden(): boolean {
   return typeof document !== 'undefined' && document.hidden;
 }
@@ -84,7 +86,12 @@ function ensureVisibilityGate(): void {
   ) return;
   document.addEventListener('visibilitychange', () => {
     visibilityEpoch += 1;
-    if (document.hidden) stopVoice();
+    if (document.hidden) {
+      stopVoice();
+      pauseMainTracks();
+    } else {
+      resumeMainTracks();
+    }
   });
   visibilityListenerAttached = true;
 }
@@ -712,6 +719,7 @@ function setTrackSample(track: TrackId, ref: string | null): void {
   tr.ref = ref;
   tr.token += 1;
   const c = initAudio();
+  if (pageIsHidden()) return;
   if (!c || !master) return;
   if (!ref) {
     // Declared silence: stop the clip AND the synth bed — do not fall back.
@@ -729,19 +737,63 @@ function setTrackSample(track: TrackId, ref: string | null): void {
     return;
   }
   const token = tr.token;
+  void mediaReadiness.request(track, ref, token);
   void loadSample(ref).then((buf) => {
-    if (token !== tr.token) return;
+    if (token !== tr.token || pageIsHidden()) return;
     if (buf) {
+      mediaReadiness.markReady(track, ref, token);
       if (track === 'ambient') setSynthAmbient(null); // sample wins, silence the synth
       else if (track === 'bgm') setSynthBgm(null);
       playTrackLoop(track, ref, buf, token);
     } else {
+      mediaReadiness.markFailed(track, ref, token, 'fetch');
       // Load FAILED → synth fallback. theme has no synth → stays silent.
       const stem = synthHintFromUrl(ref);
       if (track === 'ambient') setSynthAmbient(toneFromHint(stem));
       else if (track === 'bgm') setSynthBgm(moodFromHint(stem));
     }
   });
+}
+function pauseMainTracks(): void {
+  if (mainTracksHidden) return;
+  mainTracksHidden = true;
+  for (const id of ['ambient', 'bgm', 'theme'] as TrackId[]) {
+    const track = tracks[id];
+    track.token += 1;
+    if (track.clip) stopClip(id, track.clip, 0.05);
+  }
+  setSynthAmbient(null);
+  setSynthBgm(null);
+}
+
+function resumeMainTracks(): void {
+  if (!mainTracksHidden || pageIsHidden()) return;
+  mainTracksHidden = false;
+  for (const id of ['ambient', 'bgm', 'theme'] as TrackId[]) {
+    setTrackSample(id, tracks[id].ref);
+  }
+}
+
+/** Internal, show-local reversible ambient cut. It never changes the declared
+ * ref and releases only while the same track token still owns the cut. */
+export function beginTransientAmbientCut(
+  ref: string | null,
+  epoch: number
+): { release: () => void } {
+  const track = tracks.ambient;
+  if (track.ref !== ref || pageIsHidden() || epoch !== visibilityEpoch) return { release: () => {} };
+  const ownerToken = ++track.token;
+  if (track.clip) stopClip('ambient', track.clip, 0.05);
+  setSynthAmbient(null);
+  let released = false;
+  return {
+    release: () => {
+      if (released || pageIsHidden()) return;
+      released = true;
+      if (track.ref !== ref || track.token !== ownerToken || epoch !== visibilityEpoch) return;
+      setTrackSample('ambient', ref);
+    },
+  };
 }
 
 /** Re-assert every clip ramp from now (mirrors rampAmbient). */
@@ -766,17 +818,20 @@ function rampClips(): void {
 /** Set the layer ambience: a server-resolved URL plays a real sample,
  *  a bare name falls back to the synth bed, `null` declares silence. */
 export function setAmbient(ref: string | null): void {
+  ensureVisibilityGate();
   setTrackSample('ambient', ref);
 }
 
 /** Set the layer BGM mood: same three-state contract as setAmbient. */
 export function setBGM(ref: string | null): void {
+  ensureVisibilityGate();
   setTrackSample('bgm', ref);
 }
 
 /** Set the world theme: an independent, light main track. `null` stops it;
  *  a load failure stays silent (no synth voice to fall back to). */
 export function setTheme(ref: string | null): void {
+  ensureVisibilityGate();
   setTrackSample('theme', ref);
 }
 

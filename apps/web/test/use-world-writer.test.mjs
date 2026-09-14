@@ -11,7 +11,7 @@ test('writer prompts can target the active projection layer without a second sea
   assert.match(useWorld, /type: 'writer_prompt',[\s\S]*?layer: targetLayer/);
 });
 test('auto-init ghost is created only after its websocket request is accepted', () => {
-  const sendBlock = useWorld.match(/if \(result\.first === true[\s\S]*?await fetchLayer\(next\);/)?.[0] ?? '';
+  const sendBlock = useWorld.match(/if \(details\.first === true[\s\S]*?await fetchLayer\(next\);/)?.[0] ?? '';
   assert.match(sendBlock, /sent = sendSocket/);
   assert.match(sendBlock, /if \(sent\) \{\s*setInitializingLayer\(next\)/);
   assert.doesNotMatch(sendBlock, /setInitializingLayer\(next\);\s*sendSocket/);

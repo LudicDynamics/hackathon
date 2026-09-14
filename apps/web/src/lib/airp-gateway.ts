@@ -1,8 +1,17 @@
 import type { WorldSettings } from '@airp/shared/world-settings';
+import type {
+  ChooseOptionDetails,
+  EnterLayerDetails,
+  MoveEntityDetails,
+  UseItemOnDetails,
+} from '@airp/shared';
 export type AssetMediaKind = 'image' | 'video' | 'audio';
 
 export interface WorldShelf {
+  /** Shipped edition template ids only (experimental sandboxes excluded). */
   templates: string[];
+  /** Experimental sandbox template ids (`world.json` `exp: true`). */
+  expTemplates?: string[];
   worlds: string[];
   groups?: {
     id: string;
@@ -14,6 +23,8 @@ export interface WorldShelf {
     coverVideo?: string | null;
     locale?: string | null;
     description?: string;
+    /** Experimental sandbox (`world.json` `exp: true`), not a shipped edition. */
+    exp?: boolean;
     saves: { id: string; path: string; updatedAt: string; active: boolean }[];
   }[];
 }
@@ -83,6 +94,7 @@ let assetGeneration = 0;
 
 export const airpGateway = {
   worlds: () => request<WorldShelf>('/api/worlds'),
+  manifest: <TManifest = Record<string, unknown>>() => request<TManifest>('/api/manifest'),
   deleteSave: (worldPath: string) => request<{ ok: boolean; recoveryPath: string }>('/api/worlds/save', json('DELETE', { worldPath })),
   loadWorld: async <TManifest = Record<string, unknown>>(worldPath: string) => {
     const result = await request<WorldLoadResult<TManifest>>('/api/worlds/load', json('POST', { worldPath }));
@@ -93,29 +105,21 @@ export const airpGateway = {
     }
     return result;
   },
-  manifest: <TManifest = Record<string, unknown>>() => request<TManifest>('/api/manifest'),
+  move: (from: string, to: string, signal?: AbortSignal) =>
+    request<MoveEntityDetails>('/api/move', { ...json('POST', { from, to }), signal }),
+  choose: (path: string, choice: string | number, signal?: AbortSignal) =>
+    request<ChooseOptionDetails | { action: Record<string, unknown> }>('/api/choice', { ...json('POST', { path, choice }), signal }),
   layer: <TLayer = Record<string, unknown>>(layer: string, signal?: AbortSignal) =>
     request<TLayer>(`/api/layer?layer=${encodeURIComponent(layer)}`, { signal }),
   backpack: <TItems = unknown[]>() => request<{ items: TItems }>('/api/backpack'),
   characters: <TCharacters = unknown[]>() =>
     request<{ characters: TCharacters }>('/api/characters'),
-  move: (from: string, to: string) => request('/api/move', json('POST', { from, to })),
-  choose: (path: string, choice: string) => request('/api/choice', json('POST', { path, choice })),
   // `first` = the target layer had no README (a stub) — the auto-init signal
   // (docs/init/03 §3.2). The server decides it; the client only reads it.
   // `followers` is the carry-along settlement (docs/presence/00 §2.3 / P-10):
   // a character left behind must be visible, never silent.
-  enterLayer: (layer: string) =>
-    request<{
-      ok: boolean;
-      layer: string;
-      name: string;
-      first: boolean;
-      followers: {
-        moved: Array<{ characterId: string; x: number; y: number; following: boolean }>;
-        failures: Array<{ character: string; reason: string }>;
-      };
-    }>('/api/enter-layer', json('POST', { layer })),
+  enterLayer: (layer: string, signal?: AbortSignal) =>
+    request<{ ok: boolean } & EnterLayerDetails>('/api/enter-layer', { ...json('POST', { layer }), signal }),
   // Terminal state, not a toggle (docs/tools/05 §3.6.1): the UI inverts, the
   // action writes. Registered in tools/check-request-bodies.mjs.
   setFollowing: (character: string, following: boolean) =>
@@ -123,8 +127,8 @@ export const airpGateway = {
   worldSettings: () => request<WorldSettings>('/api/world-settings'),
   saveWorldSettings: (settings: WorldSettings) =>
     request<WorldSettings>('/api/world-settings', json('POST', settings)),
-  moveCard: (path: string, x: number, y: number) =>
-    request('/api/card/position', json('POST', { path, x, y })),
+  moveCard: (path: string, x: number, y: number, signal?: AbortSignal) =>
+    request<Record<string, unknown>>('/api/card/position', { ...json('POST', { path, x, y }), signal }),
   // Frozen request bodies (docs/wiring/00 §6): the server reads `path` only;
   // rollType/expect are parsed server-side from frontmatter.
   rollDice: (path: string) =>
@@ -133,8 +137,8 @@ export const airpGateway = {
       json('POST', { path }),
     ),
   // Server reads `{ item, target }` (docs/tools/12:182).
-  useItem: (item: string, target: string) =>
-    request('/api/use-item', json('POST', { item, target })),
+  useItem: (item: string, target: string, signal?: AbortSignal) =>
+    request<UseItemOnDetails>('/api/use-item', { ...json('POST', { item, target }), signal }),
   toggleFreeze: () => request<{ worldFrozen: boolean }>('/api/freeze', json('POST')),
   // Server reads `path` (docs/tools/12:1403).
   godAction: (action: 'create' | 'update' | 'delete', path: string, content?: string) =>

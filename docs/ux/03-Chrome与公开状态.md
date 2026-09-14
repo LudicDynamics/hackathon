@@ -14,13 +14,13 @@
 | 唯一 WS ingress / 角色分流 | `apps/web/src/state/useWorld.ts:478-485,559-617` 将 writer 帧交给 canonical state，并只向 typed character relay 派发角色帧；`App.tsx:401-420` 做身份路由。 | `apps/web/test/character-frame-queue.test.mjs:26-109` 覆盖 FIFO、缺序、缺 ID/非法帧。 |
 | Stop、焦点与 overlay admission | `apps/web/src/App.tsx:498-570,1074-1085` 提供 topmost Escape、唯一独立 Stop 与 Retry；`apps/web/src/lib/focus-coordinator.ts:1-90`、`overlay-admission.ts:21-75` 提供统一接缝。 | `apps/web/test/overlay-admission.test.mjs:16-80`、`apps/web/test/app-nook-camera-contract.test.mjs:28-39` 覆盖 topmost、拒绝、Stop 唯一性。 |
 
-#### 尚未闭环
+#### 已实现，待运行时矩阵收口
 
-| 缺口 | 当前证据与下一步 |
+| 已实现范围 | 当前实现与下一步运行时证据 |
 |---|---|
-| 动作反馈尚未贯通 App 全部入口 | `apps/web/src/lib/action-feedback.ts:98-233` 与 `EntityInteractions.tsx:127-193`、`BagItemDialog.tsx:43-54` 已使用分类 store；但 `apps/web/src/App.tsx:726-733` 的 present 仍直接 gateway + 固定成功通知，需接入真实 details/reconcile。 |
-| 下一批待办：组件内 Escape 未统一到 focus coordinator | `DeclaredActionDialog.tsx:126-151`、`PhotoDetailDialog.tsx:47-89`、`GateThreshold.tsx:10-20` 各自监听/清理 Escape；App 的 topmost 事务尚未覆盖这三个组件，需避免一次按键跨层关闭。[推断：当前无对应统一 focus owner 接线。] |
-| 下一批待办：Nook 演出与 Chrome 仍有投影边界 | `apps/web/src/components/nook/NookView.tsx:549-567` 只挂 Canvas；Nook 没有 `PerformanceLayer`，且 projection marker/inert 的覆盖仍需浏览器核验（见 A05）。 |
+| 动作反馈贯通 App/Nook 全部入口 | `apps/web/src/lib/action-feedback.ts:429-590` 提供 per-world coordinator；`App.tsx:813-982` 的 present/drop/take/move/enter 经过 coordinator，Nook reconcile 在 confirm 前完成；choice 点击只准备 writer draft，Send/declared confirmation 才执行。 | `apps/web/test/action-feedback.test.mjs:21-85`、`app-nook-camera-contract.test.mjs:11-18` 与全量测试覆盖分类、幂等和 Nook parity。 |
+| 组件内 Escape 统一到 focus coordinator | `App.tsx:700-733` 使用单一 document-capture dispatch；Declared/Photo/Gate、settings/activity/shelf/launcher 与 CharacterModal 通过 FocusSurface lease 接入；Focus lease 清理返回 `void`，避免 React effect cleanup 类型污染。 | `apps/web/test/focus-coordinator.test.mjs`、`app-nook-camera-contract.test.mjs:29-39` 和浏览器 Belongings→Escape 回放通过。 |
+| Nook 演出与 Chrome 投影 | `NookView.tsx:451-499,616-639` 复用单 Canvas 并透传统一 action/focus seams；`App.tsx:1265-1273` stable sibling PerformanceLayer 负责当前 layer/Nook 的唯一演出生命周期。 | `apps/web/test/active-projection.test.mjs:11-57` 与 `app-nook-camera-contract.test.mjs:11-18` 通过；完整多视口回放仍待补证。 |
 
 
 ## 1. 权威契约与边界

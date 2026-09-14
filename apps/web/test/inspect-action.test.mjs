@@ -17,7 +17,7 @@ test('CanvasObject is the single owner of card reading', () => {
 });
 
 test('Take along remains the only authoritative card action region', () => {
-  assert.match(entity, /collectable && <button[\s\S]*runGatewayAction\('move', item\.path, \(\) => airpGateway\.move\(item\.path/);
+  assert.match(entity, /collectable && <button[\s\S]*runGatewayAction\s*\(\s*'take'/);
   assert.match(entity, /t\('Added to belongings\.'\)/);
   assert.doesNotMatch(card, /onTakeItem|note__take|take_label/);
   assert.doesNotMatch(photo, /onTakeItem|photo-card__take|take_label/);

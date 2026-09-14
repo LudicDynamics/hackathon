@@ -1,0 +1,124 @@
+/** Internal media readiness seam shared by visual media consumers.
+ * Readiness is evidence from the resource, never mount/HTTP success. Every
+ * transition is bound to an owner/key/epoch tuple so late events cannot land
+ * in a replaced projection.
+ */
+export type MediaOwner =
+  | 'background'
+  | 'portrait'
+  | 'ambient'
+  | 'bgm'
+  | 'theme'
+  | 'foley'
+  | 'stinger'
+  | 'voice'
+  | 'show';
+
+export type ReadinessState = 'unrequested' | 'loading' | 'ready' | 'failed';
+
+export interface ReadinessSnapshot {
+  owner: MediaOwner;
+  key: string;
+  state: ReadinessState;
+  epoch: number;
+  errorCode?: 'fetch' | 'decode' | 'media-error' | 'stale';
+}
+
+export interface MediaReadinessAdapter {
+  request(owner: MediaOwner, key: string, epoch: number): Promise<ReadinessSnapshot>;
+  snapshot(owner: MediaOwner, key: string): ReadinessSnapshot;
+  invalidate(epoch: number): void;
+  cancel(owner: MediaOwner, key: string, epoch: number): void;
+  markReady(owner: MediaOwner, key: string, epoch?: number): ReadinessSnapshot;
+  markFailed(owner: MediaOwner, key: string, epoch?: number, errorCode?: ReadinessSnapshot['errorCode']): ReadinessSnapshot;
+  subscribe(listener: () => void): () => void;
+}
+
+interface Pending {
+  snapshot: ReadinessSnapshot;
+  resolve: (snapshot: ReadinessSnapshot) => void;
+}
+const idOf = (owner: MediaOwner, key: string): string => `${owner}\u0000${key}`;
+
+export function createMediaReadinessAdapter(): MediaReadinessAdapter {
+  const states = new Map<string, ReadinessSnapshot>();
+  const pending = new Map<string, Pending>();
+  const listeners = new Set<() => void>();
+  let currentEpoch = 0;
+
+  const snapshot = (owner: MediaOwner, key: string): ReadinessSnapshot =>
+    states.get(idOf(owner, key)) ?? { owner, key, state: 'unrequested', epoch: currentEpoch };
+
+  const finish = (next: ReadinessSnapshot): ReadinessSnapshot => {
+    const id = idOf(next.owner, next.key);
+    states.set(id, next);
+    for (const listener of listeners) listener();
+    const waiter = pending.get(id);
+    if (waiter && waiter.snapshot.epoch === next.epoch) {
+      pending.delete(id);
+      waiter.resolve(next);
+    }
+    return next;
+  };
+  const adapter: MediaReadinessAdapter = {
+    request(owner, key, epoch) {
+      const id = idOf(owner, key);
+      currentEpoch = Math.max(currentEpoch, epoch);
+      const existingPending = pending.get(id);
+      if (existingPending && existingPending.snapshot.epoch === epoch) {
+        return new Promise((resolve) => {
+          const previousResolve = existingPending.resolve;
+          pending.set(id, {
+            snapshot: existingPending.snapshot,
+            resolve: (value) => {
+              previousResolve(value);
+              resolve(value);
+            },
+          });
+        });
+      }
+      const existing = states.get(id);
+      if (existing && existing.epoch === epoch && (existing.state === 'ready' || existing.state === 'failed')) {
+        return Promise.resolve(existing);
+      }
+      const loading: ReadinessSnapshot = { owner, key, epoch, state: 'loading' };
+      states.set(id, loading);
+      return new Promise((resolve) => pending.set(id, { snapshot: loading, resolve }));
+    },
+    snapshot,
+    invalidate(epoch) {
+      currentEpoch = Math.max(currentEpoch + 1, epoch);
+      for (const [id, item] of states) {
+        if (item.epoch >= currentEpoch) continue;
+        states.set(id, { ...item, state: 'unrequested', epoch: currentEpoch, errorCode: undefined });
+        pending.delete(id);
+      }
+      for (const listener of listeners) listener();
+    },
+    cancel(owner, key, epoch) {
+      const id = idOf(owner, key);
+      const item = states.get(id);
+      if (!item || item.epoch !== epoch) return;
+      pending.delete(id);
+      states.set(id, { ...item, state: 'failed', errorCode: 'stale' });
+      for (const listener of listeners) listener();
+    },
+    markReady(owner, key, epoch = snapshot(owner, key).epoch) {
+      if (epoch < currentEpoch) return { ...snapshot(owner, key), state: 'failed', errorCode: 'stale' };
+      return finish({ owner, key, state: 'ready', epoch });
+    },
+    markFailed(owner, key, epoch = snapshot(owner, key).epoch, errorCode = 'media-error') {
+      if (epoch < currentEpoch) return { ...snapshot(owner, key), state: 'failed', epoch, errorCode };
+      return finish({ owner, key, state: 'failed', epoch, errorCode });
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+  return adapter;
+}
+
+/** Shared adapter for the current browser projection; components only mutate
+ * their own owner/key entries and never use this as a world-fact store. */
+export const mediaReadiness = createMediaReadinessAdapter();

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { renderFrontmatterWidgets } from '../../lib/fm.js';
 import { useLocale } from '../../lib/i18n.js';
-
+import type { FocusCoordinator, FocusSurfaceLease } from '../../lib/focus-coordinator.js';
 export type DeclaredItem = {
   path: string;
   declaredPath: string;
@@ -76,12 +76,14 @@ export function DeclaredActionDialog({
   onSubmit,
   onSendReview,
   onChoose,
+  focus,
 }: {
   value: DeclaredResponse;
   onClose: () => void;
   onSubmit: (selections: MaterialSelection[]) => Promise<string>;
   onSendReview: (prompt: string) => void;
   onChoose?: (path: string, choice: string) => void;
+  focus?: FocusCoordinator;
 }) {
   const { locale } = useLocale();
   const [selected, setSelected] = useState<Record<string, string[]>>({});
@@ -90,8 +92,33 @@ export function DeclaredActionDialog({
   const [error, setError] = useState('');
   const [reviewPrompt, setReviewPrompt] = useState('');
   const dialog = useRef<HTMLDivElement>(null);
+  const leaseRef = useRef<FocusSurfaceLease | null>(null);
+  const closeHandler = useRef(onClose);
+  closeHandler.current = onClose;
   const slots = value.slots ?? [];
   const items = value.items ?? [];
+
+  const requestClose = () => {
+    const lease = leaseRef.current;
+    if (lease && !lease.markClosing()) return;
+    closeHandler.current();
+  };
+
+  useEffect(() => {
+    if (!focus) return;
+    const lease = focus.registerSurface({
+      key: `declared:${value.source}:${String(value.choice)}:${value.revision}`,
+      owner: 'workspace',
+      priority: 350,
+      root: dialog.current,
+      close: () => closeHandler.current(),
+    });
+    leaseRef.current = lease;
+    return () => {
+      if (leaseRef.current === lease) leaseRef.current = null;
+      lease.unregister();
+    };
+  }, [focus, value.choice, value.revision, value.source]);
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -145,16 +172,14 @@ export function DeclaredActionDialog({
     <div
       className="declared-action-backdrop"
       data-no-drag
-      onPointerDown={event => event.stopPropagation()}
       onWheel={event => event.stopPropagation()}
       onClick={event => {
         event.stopPropagation();
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) requestClose();
       }}
       onKeyDown={event => {
-        event.stopPropagation();
-        if (event.key === 'Escape') onClose();
         if (event.key !== 'Tab') return;
+        event.stopPropagation();
         const nodes = dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex]:not([tabindex="-1"])');
         if (!nodes?.length) return;
         const first = nodes[0];
@@ -169,7 +194,7 @@ export function DeclaredActionDialog({
       }}
     >
       <div ref={dialog} className="declared-action-dialog" role="dialog" aria-modal="true" aria-label={copy(locale, 'Declared action', '宣言された行動', '声明动作')}>
-        <button type="button" onClick={onClose}>{copy(locale, 'Return ↩', 'この場に戻る ↩', '回到场景 ↩')}</button>
+        <button type="button" onClick={requestClose}>{copy(locale, 'Return ↩', 'この場に戻る ↩', '回到场景 ↩')}</button>
         {value.kind === 'stage' && <p>{copy(locale, 'Selecting materials does not submit or execute them.', '材料を選ぶだけでは、まだ提出も実行もされません。', '选择材料不会提交或执行。')}</p>}
 
         {value.kind === 'stage' && <fieldset className="material-slots" disabled={busy}>

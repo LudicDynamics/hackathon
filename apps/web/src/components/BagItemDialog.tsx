@@ -6,16 +6,9 @@ import { airpGateway } from '../lib/airp-gateway.js';
 import { playFoley } from '../lib/audio.js';
 import { ItemArtwork } from './ItemArtwork.js';
 import { PhotoMedia } from './photo/PhotoMedia.js';
-import {
-  actionKey,
-  ActionFeedbackStore,
-  runAction,
-  type ActionFeedback,
-  type ActionResultLike,
-} from '../lib/action-feedback.js';
 import type { AppearanceView } from '../lib/appearance-view.js';
-
-export function BagItemDialog({ item, onClose, onChoose, onPlace, onUse, useDisabled = false, inline = false, appearance }: {
+import type { FocusCoordinator, FocusSurfaceLease } from '../lib/focus-coordinator.js';
+export function BagItemDialog({ item, onClose, onChoose, onPlace, onUse, useDisabled = false, inline = false, appearance, focus }: {
   item: { path: string; filename: string; body: string; frontmatter: Record<string, any> | null };
   onClose: () => void;
   /** Hand a choice to the owner instead of posting it here (declared actions need the canvas flow). */
@@ -29,31 +22,47 @@ export function BagItemDialog({ item, onClose, onChoose, onPlace, onUse, useDisa
    * same resolution and never re-resolves. Optional so an old/absent resolution keeps the
    * default paper-reading paint. */
   appearance?: AppearanceView | null;
+  focus?: FocusCoordinator;
 }) {
   const { t } = useLocale();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [actionFeedback, setActionFeedback] = useState<ActionFeedback | null>(null);
-  const actionStore = useState(() => new ActionFeedbackStore())[0];
   const paper = useRef<HTMLElement>(null);
+  const leaseRef = useRef<FocusSurfaceLease | null>(null);
+  const closeHandler = useRef(onClose);
+  closeHandler.current = onClose;
+  const requestClose = () => {
+    const lease = leaseRef.current;
+    if (lease && !lease.markClosing()) return;
+    closeHandler.current();
+  };
+  useEffect(() => {
+    if (!focus) return;
+    const lease = focus.registerSurface({
+      key: `belongings:${inline ? 'inline:' : ''}${item.path}`,
+      owner: 'belongings',
+      priority: 340,
+      root: paper.current,
+      close: () => closeHandler.current(),
+    });
+    leaseRef.current = lease;
+    return () => {
+      if (leaseRef.current === lease) leaseRef.current = null;
+      lease.unregister();
+    };
+  }, [focus, inline, item.path]);
   useEffect(() => { playFoley('page-turn'); }, [item.path]);
   useEffect(() => {
-    const outside = (e: PointerEvent) => { if (!paper.current?.contains(e.target as Node)) onClose(); };
+    const outside = (e: PointerEvent) => { if (!paper.current?.contains(e.target as Node)) requestClose(); };
     window.addEventListener('pointerdown', outside, true);
     return () => window.removeEventListener('pointerdown', outside, true);
-  }, [onClose]);
-  const choose = async (choice: string) => {
-    setBusy(true); setError(''); setActionFeedback(null);
-    // The gateway returns `{ok: true, ...details}`; the feedback seam retains
-    // the actual details and distinguishes stale/refused choices from failures.
-    const result = await runAction(
-      actionStore,
-      { key: actionKey('choice', `${item.path}:${choice}`), verb: 'choice', target: item.path },
-      async () => await airpGateway.choose(item.path, choice) as ActionResultLike,
-    );
-    setActionFeedback(result);
-    if (result.outcome === 'failed' || result.outcome === 'rejected') setError(result.message);
-    setBusy(false);
+  }, []);
+  const choose = (choice: string) => {
+    if (!onChoose) {
+      setError('Review this choice in the writer before sending it.');
+      return;
+    }
+    onChoose(choice);
   };
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true); setError('');
@@ -65,8 +74,8 @@ export function BagItemDialog({ item, onClose, onChoose, onPlace, onUse, useDisa
   // ordinary carried items retain ItemArtwork and inline legacy image behavior.
   return <section ref={paper} data-reading data-no-drag {...appearance?.attrs} style={appearance?.style} className={`paper-reading${inline ? ' paper-reading--inline' : ' paper-reading--carried'}`} role="region" aria-label={String(item.frontmatter?.title || item.filename)} onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
     <header>
-      <h2><button onClick={onClose} title={t('Close')}>{item.frontmatter?.title || item.filename}</button></h2>
-      <button autoFocus className="paper-reading__fold" aria-label={t('Close')} onClick={onClose}>↙</button>
+      <h2><button onClick={requestClose} title={t('Close')}>{item.frontmatter?.title || item.filename}</button></h2>
+      <button autoFocus className="paper-reading__fold" aria-label={t('Close')} onClick={requestClose}>↙</button>
     </header>
     <div className="paper-reading__content">
       {isPhoto ? (
@@ -88,13 +97,11 @@ export function BagItemDialog({ item, onClose, onChoose, onPlace, onUse, useDisa
           <fieldset disabled={busy} aria-busy={busy}>
             {renderFrontmatterWidgets(item.frontmatter, { filePath: item.path, reveal: true, onChoice: onChoose ?? choose })}
             {onUse && <button type="button" disabled={useDisabled} onClick={() => onUse(item.path)}>{t('Use this item')}</button>}
-            {onPlace && <button type="button" onClick={() => void run(async () => { if (await onPlace(item.path)) onClose(); else setError(t('Could not move item')); })}>{t('Place in current scene')}</button>}
+            {onPlace && <button type="button" onClick={() => void run(async () => { if (await onPlace(item.path)) requestClose(); else setError(t('Could not move item')); })}>{t('Place in current scene')}</button>}
           </fieldset>
         </>
       )}
       {busy && <small role="status">{t('Working…')}</small>}
-      {actionFeedback && actionFeedback.outcome === 'conflict' && <p role="status" data-action-status="conflict">{actionFeedback.message}</p>}
-      {actionFeedback && actionFeedback.outcome === 'accepted' && <p role="status" data-action-status="accepted">{actionFeedback.message}</p>}
       {error && <p role="alert">{error}</p>}
     </div>
   </section>;

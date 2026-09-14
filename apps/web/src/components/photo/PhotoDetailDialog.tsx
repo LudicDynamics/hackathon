@@ -4,6 +4,7 @@ import { MarkdownText } from '../../lib/md.js';
 import type { AppearanceView } from '../../lib/appearance-view.js';
 import type { PhotoItem } from './PhotoMedia.js';
 import { PhotoMedia } from './PhotoMedia.js';
+import type { FocusCoordinator, FocusSurfaceLease } from '../../lib/focus-coordinator.js';
 
 export interface PhotoDetailDialogProps {
   item: PhotoItem;
@@ -11,8 +12,8 @@ export interface PhotoDetailDialogProps {
   onClose: () => void;
   returnFocusRef?: React.RefObject<HTMLElement | null>;
   dialogId?: string;
+  focus?: FocusCoordinator;
 }
-
 const FOCUSABLE = [
   'button:not([disabled])',
   '[href]',
@@ -28,9 +29,11 @@ export function PhotoDetailDialog({
   onClose,
   returnFocusRef,
   dialogId,
+  focus,
 }: PhotoDetailDialogProps): React.ReactElement | null {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const leaseRef = useRef<FocusSurfaceLease | null>(null);
   const generatedId = useId().replace(/:/g, '');
   const id = dialogId || `photo-detail-${generatedId}`;
   const titleId = `${id}-title`;
@@ -44,44 +47,33 @@ export function PhotoDetailDialog({
   const closeHandler = useRef(onClose);
   closeHandler.current = onClose;
 
+  const requestClose = () => {
+    const lease = leaseRef.current;
+    if (lease && !lease.markClosing()) return;
+    closeHandler.current();
+  };
+
+  useEffect(() => {
+    if (!focus) return;
+    const lease = focus.registerSurface({
+      key: `photo:${item.path}`,
+      owner: 'workspace',
+      priority: 340,
+      root: panelRef.current,
+      close: () => closeHandler.current(),
+    });
+    leaseRef.current = lease;
+    return () => {
+      if (leaseRef.current === lease) leaseRef.current = null;
+      lease.unregister();
+    };
+  }, [focus, item.path]);
+
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const focusFrame = window.requestAnimationFrame(() => closeRef.current?.focus());
-    const onKeyDown = (event: KeyboardEvent) => {
-      const panel = panelRef.current;
-      if (!panel) return;
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        closeHandler.current();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE))
-        .filter(element => element.getClientRects().length > 0);
-      if (focusable.length === 0) {
-        event.preventDefault();
-        panel.focus();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
-      if (!panel.contains(active)) {
-        event.preventDefault();
-        (event.shiftKey ? last : first).focus();
-      } else if (event.shiftKey && (active === first || active === panel)) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (active === last || active === panel)) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', onKeyDown, true);
     return () => {
       window.cancelAnimationFrame(focusFrame);
-      document.removeEventListener('keydown', onKeyDown, true);
       const target = returnFocusRef?.current;
       if (target && document.contains(target)) target.focus();
       else if (previous && document.contains(previous)) previous.focus();
@@ -95,7 +87,7 @@ export function PhotoDetailDialog({
       className="photo-detail"
       role="presentation"
       onMouseDown={event => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) requestClose();
       }}
     >
       <div
@@ -109,9 +101,34 @@ export function PhotoDetailDialog({
         {...appearance?.attrs}
         style={appearance?.style}
         onMouseDown={event => event.stopPropagation()}
+        onKeyDown={event => {
+          if (event.key !== 'Tab') return;
+          const panel = panelRef.current;
+          if (!panel) return;
+          const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE))
+            .filter(element => element.getClientRects().length > 0);
+          if (focusable.length === 0) {
+            event.preventDefault();
+            panel.focus();
+            return;
+          }
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          const active = document.activeElement;
+          if (!panel.contains(active)) {
+            event.preventDefault();
+            (event.shiftKey ? last : first).focus();
+          } else if (event.shiftKey && (active === first || active === panel)) {
+            event.preventDefault();
+            last.focus();
+          } else if (!event.shiftKey && (active === last || active === panel)) {
+            event.preventDefault();
+            first.focus();
+          }
+        }}
       >
         <header className="photo-detail__header">
-          <button ref={closeRef} type="button" className="photo-detail__close" aria-label="Close photo" onClick={onClose}>
+          <button ref={closeRef} type="button" className="photo-detail__close" aria-label="Close photo" onClick={requestClose}>
             Close
           </button>
           <h2 id={titleId}>{title}</h2>

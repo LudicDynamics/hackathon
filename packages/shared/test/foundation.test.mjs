@@ -56,7 +56,7 @@ test('HTTP_STATUS is exhaustive over ActionErrorCode and carries the adjudicated
   assert.equal(HTTP_STATUS.no_free_seat, 507);
   assert.equal(HTTP_STATUS.not_movable, 409);
   assert.equal(HTTP_STATUS.invalid_asset_ref, 400);
-  assert.equal(Object.keys(HTTP_STATUS).length, 18);
+  assert.equal(Object.keys(HTTP_STATUS).length, 19);
   const err = new ActionError({ code: 'not_found', message: 'nope' });
   assert.equal(err.httpStatus, 404);
   assert.deepEqual(err.toHttp(), { status: 404, body: { ok: false, code: 'not_found', error: 'nope' } });

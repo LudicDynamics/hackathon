@@ -25,8 +25,8 @@ test('hover controls float outside the entity and use a transparent container', 
   assert.match(css, /object:hover > \.entity-interactions/);
   assert.match(css, /entity-interactions \.fm-body \{[^}]*background: transparent/);
   const code = await fs.readFile(new URL('../apps/web/src/components/narrative/EntityInteractions.tsx', import.meta.url), 'utf8');
-  assert.match(code, /airpGateway.choose\(item.path, choice\)/);
-  assert.match(code, /airpGateway.move\(item.path/);
+  assert.match(code, /runGatewayAction\s*(?:<[^>]+>)?\s*\(/);
+  assert.doesNotMatch(code, /airpGateway\.(choose|move)\(/);
   assert.match(code, /setSide\(best.side\)/);
   assert.match(code, /side: 'below'/);
   assert.match(code, /candidate.side === placement/);
@@ -36,7 +36,7 @@ test('hover controls float outside the entity and use a transparent container', 
 
 test('canvas uses the merged action and event contracts', async () => {
   const read = file => fs.readFile(new URL(`../apps/web/src/${file}`, import.meta.url), 'utf8');
-  assert.match(await read('lib/airp-gateway.ts'), /request\('\/api\/choice'/);
+  assert.match(await read('lib/airp-gateway.ts'), /choose:[\s\S]*\/api\/choice/);
   assert.match(await read('components/narrative/DiceRoller.tsx'), /path: filePath/);
   assert.match(await read('state/useWorld.ts'), /case 'world_event':/);
   const widgets = await read('lib/fm.tsx');

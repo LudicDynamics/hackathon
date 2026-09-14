@@ -44,8 +44,8 @@ function svcFor(root, actor = { type: 'god' }) {
   return { store, svc: createActionService(store, actor, { turn: 'test:1' }) };
 }
 
-test('all 26 frozen method names are bound (only doc-16 snapshot/rollback may be unbound)', () => {
-  assert.equal(ACTION_METHODS.length, 26);
+test('all 27 frozen method names are bound (snapshot/rollback are included)', () => {
+  assert.equal(ACTION_METHODS.length, 27);
 });
 
 test('createEntity writes a file, derives kind/name, and appends entity_created', async () => {

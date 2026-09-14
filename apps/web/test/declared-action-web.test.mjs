@@ -29,9 +29,9 @@ test('stage retry preserves the draft after an authoritative review failure', ()
 });
 
 test('declared choices are classified through ActionFeedback and never become writer prompts before acceptance', () => {
-  assert.match(entity, /runGatewayAction<DeclaredChoiceDetails>\('choice'/);
-  assert.match(entity, /actionDetailsOf<DeclaredChoiceDetails>\(response\)/);
+  assert.match(entity, /runGatewayAction<DeclaredChoiceDetails>\(\s*'choice'/);
   assert.match(entity, /result\?\.outcome !== 'accepted'/);
+  assert.match(entity, /result\.details\.action/);
   const declaredChoice = entity.slice(entity.indexOf('const executeDeclaredChoice'), entity.indexOf('const choose'));
   assert.doesNotMatch(declaredChoice, /onChoice\(/);
 });
@@ -59,7 +59,7 @@ test('Prepare does not send to the writer; the separate Send review control does
     entity.indexOf('const submitMaterialReview'),
     entity.indexOf('  const actionsPanel = <>'),
   );
-  assert.match(materialSubmit, /runGatewayAction<MaterialReviewDetails>\('present'/);
+  assert.match(materialSubmit, /runGatewayAction<MaterialReviewDetails>\(\s*'act'/);
   assert.doesNotMatch(materialSubmit, /onChoice\s*\(/);
 
   // Inspect only the Send review callback so a future refactor cannot leave

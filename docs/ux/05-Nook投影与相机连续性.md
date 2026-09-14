@@ -18,13 +18,13 @@
 | Nook 取数/测量 | `NookView.tsx:217-236` 有 request sequence guard；`:347-378,380-411` 只在 Nook root 测量并等 fonts/ResizeObserver。 | `apps/web/test/app-nook-camera-contract.test.mjs:19-26,41-48` 覆盖事件重取与 note composer 接缝。 |
 | 相机记忆与动作透传 | `apps/web/src/lib/camera.ts:128-181` 提供 stack；`App.tsx:251-273,766-826` 编排 Nook/dialogue；`NookView.tsx:549-567` 透传 Canvas 动作回调。 | `apps/web/test/camera-memory-stack.test.mjs:19-65` 覆盖 layer/Nook/dialogue 嵌套恢复。 |
 
-#### 尚未闭环
+#### 已实现，待运行时矩阵收口
 
-| 缺口 | 当前证据与下一步 |
+| 已实现范围 | 当前实现与下一步运行时证据 |
 |---|---|
-| 下一批待办：App/Canvas marker 覆盖边界 | `App.tsx:857-888`、`NookView.tsx:423-432` 各有 marker/inert，但 layer wrapper 的 active 属性与 dialogue modal（`CharacterModal.tsx:784-791`）没有统一的 active marker 事务；需浏览器断言恰好一个 active projection。[推断] |
-| 下一批待办：Nook 无 PerformanceLayer | `NookView.tsx:549-567` 仅挂 Canvas，未挂 `PerformanceLayer`；Nook 内 show/演出无法宣称与 layer 同源，需补接而不新增 WS/相机。 |
-| 下一批待办：组件内 Escape | `DeclaredActionDialog.tsx:126-151`、`PhotoDetailDialog.tsx:47-89`、`GateThreshold.tsx:10-20` 自有 Escape 处理，尚未统一到 App focus coordinator；Nook/对话退出仍需验证一次只退一层。 |
+| App/Canvas marker 覆盖边界 | `App.tsx:1208-1212`、`NookView.tsx:491-499` 的 stage marker 随互斥分支切换；CharacterModal `:780-792` overlay-only，底层 stage 用 `aria-hidden/inert` 隔离，不新增 marker。基础 Chromium 已验证 layer 单 marker/单 Canvas，完整 dialogue/Nook transition 仍待回放。 |
+| Nook PerformanceLayer | `App.tsx:1265-1273` stable sibling 以当前 `layer`/`characters/<id>` identity 服务两个 stage；`PerformanceLayer.tsx:547-585` 负责唯一 listener/liveCtx、context replacement、hidden/effects/reduced/frozen 和卸载清理。 |
+| 组件内 Escape | `App.tsx:700-733` 是唯一 document-capture dispatch；Nook Back、CharacterModal、Photo、Declared、Gate 通过 coordinator surface lease 逐层关闭并恢复焦点。 |
 | 右侧角色/背包形态 | 统一引用 `docs/presence/00 §4.2.1`：CharacterRail 上、Bag 下；Nook 本文不再登记旧双 tab 入口。 |
 
 

@@ -7,5 +7,5 @@ test('bag items have a read action and an explicit return action', async () => {
   assert.match(app, /onClick=\{\(\) => setSelectedBagPath\(item.path\)\}/);
   assert.match(dialog, /MarkdownText text=\{item.body\}/);
   assert.match(dialog, /renderFrontmatterWidgets/);
-  assert.match(dialog, /if \(await onPlace\(item.path\)\) onClose\(\)/);
+  assert.match(dialog, /if \(await onPlace\(item\.path\)\) requestClose\(\)/);
 });

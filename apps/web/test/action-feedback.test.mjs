@@ -79,9 +79,11 @@ test('gateway ActionRequestError payload codes survive the rejected Promise boun
 test('action UI keeps domain choices out of the Writer prompt callback', async () => {
   const entity = await readFile(new URL('../src/components/narrative/EntityInteractions.tsx', import.meta.url), 'utf8');
   const dialog = await readFile(new URL('../src/components/BagItemDialog.tsx', import.meta.url), 'utf8');
-  assert.match(entity, /runGatewayAction\('choice'/);
+  assert.match(entity, /runGatewayAction<DeclaredChoiceDetails>\([\s\S]{0,120}'choice'/);
   assert.doesNotMatch(entity, /Look closer[\s\S]{0,300}send\(/);
-  assert.match(dialog, /runAction\(/);
+  assert.match(dialog, /onChoose\?:/);
+  assert.doesNotMatch(dialog, /airpGateway\.choose/);
+  assert.doesNotMatch(dialog, /runAction\(/);
 });
 test('gate and door pointer semantics reserve click for inspect and desktop double-click for enter', async () => {
   const card = await readFile(new URL('../src/components/canvas/CardRenderer.tsx', import.meta.url), 'utf8');
