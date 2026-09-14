@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
-
+import { createJiti } from '../../../vendor/pi-rp/node_modules/jiti/lib/jiti.mjs';
 
 const jiti = createJiti(import.meta.url);
-
-[docs/ux/06-Agent演出状态与角色剧场.md#0882]
+const {
+  ActionFeedbackStore,
   actionDetailsOf,
   classifyActionResult,
   runAction,
