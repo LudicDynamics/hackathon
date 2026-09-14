@@ -8,6 +8,7 @@
  * camera, and posts nothing (§4, §6.4).
  */
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { playFoley, playStinger } from '../../lib/audio.js';
 import { ROLL_MS, SETTLE_MS } from '../narrative/DiceRoller.js';
@@ -98,9 +99,12 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict,
     );
 
   if (!input) return null;
-  return (
+  // Portal to <body>, above every dialog: opened from a Chalk, the declared-action
+  // dialog is itself a body portal (z 40) and used to cover the rolling dice.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-[rgba(41,40,32,0.55)] backdrop-blur-sm flex items-center justify-center"
+      style={{ zIndex: 'calc(var(--depth-ui) + 10)' }}
+      className="fixed inset-0 bg-[rgba(41,40,32,0.55)] backdrop-blur-sm flex items-center justify-center"
       role="dialog"
       aria-modal="true"
       aria-label="Dice result ceremony"
@@ -160,6 +164,7 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict,
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
