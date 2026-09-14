@@ -241,6 +241,10 @@ export function D10Stage({ dice, rolls, settled, onLanded, integrated = false }:
               const upper = Math.min(lower + 1, trajectory.length - 1);
               const a = trajectory[lower][index];
               const b = trajectory[upper][index];
+              // Interpolate the simulated throw (lost in the a1ac282 migration,
+              // which left the dice frozen until they snapped to the result).
+              pivot.position.fromArray(a.position).lerp(new T.Vector3(...b.position), at - lower);
+              pivot.quaternion.fromArray(a.rotation).slerp(new T.Quaternion(...b.rotation), at - lower);
             } else {
               pivot.position.set(x, 0, 1);
               pivot.quaternion.copy(target);
