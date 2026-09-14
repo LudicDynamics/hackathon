@@ -891,59 +891,9 @@ export class LocalWorldStore implements WorldStore {
     return this.withSeatLock(layerId, async () => {
       this.execCanvas('BEGIN IMMEDIATE');
       try {
-        const uniqueFiles = [...new Map(files.map((file) => [file.path, file])).values()];
-        const existing = this.getLayerCards(uniqueFiles.map((file) => file.path));
-        const existingIds = new Set(existing.map((row) => row.id));
-        const missing = uniqueFiles.filter((file) => !existingIds.has(file.path));
-        if (missing.length === 0) {
-          this.execCanvas('COMMIT');
-          return [];
-        }
-
-        const occupied = this.layoutOccupied(layerId, existing);
-        const layout = flowColumns(
-          missing.map((file) => {
-            const size = seatDimensionsOf(file);
-            return { id: file.path, w: size.w, h: size.h, order: file.order };
-          }),
-          occupied
-        );
-        if (layout.exhausted) {
-          console.warn(
-            `[seat] flowColumns exhausted on layer "${layerId}" after ${layout.columnsUsed} columns; inserted deterministic fallback placements`
-          );
-        }
-
-        const maxZRows = this.queryCanvas(
-          'SELECT COALESCE(MAX(z_index), 0) AS maxZ FROM cards WHERE layer = ?',
-          [layerId]
-        );
-        let nextZ = Number((maxZRows[0] as Record<string, unknown> | undefined)?.maxZ ?? 0) + 1;
-        for (const placement of layout.placements) {
-          const file = missing.find((candidate) => candidate.path === placement.id)!;
-          this.execCanvas(
-            `INSERT INTO cards (id, layer, x, y, width, height, z_index, metadata)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(id) DO NOTHING`,
-            [
-              file.path,
-              layerId,
-              placement.x,
-              placement.y,
-              placement.w,
-              placement.h,
-              nextZ,
-              serializeCardMetadata({ seatW: placement.w, seatH: placement.h }),
-            ]
-          );
-          nextZ++;
-        }
+        const seated = await this.seatUnplacedLocked(layerId, files);
         this.execCanvas('COMMIT');
-        const seated = this.getLayerCards(missing.map((file) => file.path));
-        const byId = new Map(seated.map((row) => [row.id, row]));
-        return missing
-          .map((file) => byId.get(file.path))
-          .filter((row): row is CardRecord => row !== undefined);
+        return seated;
       } catch (err) {
         try {
           this.execCanvas('ROLLBACK');
@@ -953,6 +903,59 @@ export class LocalWorldStore implements WorldStore {
         throw err;
       }
     });
+  }
+
+  /** Seat missing cards while the caller owns the layer lock and SQLite transaction. */
+  private async seatUnplacedLocked(layerId: string, files: SeatFile[]): Promise<CardRecord[]> {
+    const uniqueFiles = [...new Map(files.map((file) => [file.path, file])).values()];
+    const existing = this.getLayerCards(uniqueFiles.map((file) => file.path));
+    const existingIds = new Set(existing.map((row) => row.id));
+    const missing = uniqueFiles.filter((file) => !existingIds.has(file.path));
+    if (missing.length === 0) return [];
+
+    const occupied = this.layoutOccupied(layerId, existing);
+    const layout = flowColumns(
+      missing.map((file) => {
+        const size = seatDimensionsOf(file);
+        return { id: file.path, w: size.w, h: size.h, order: file.order };
+      }),
+      occupied
+    );
+    if (layout.exhausted) {
+      console.warn(
+        `[seat] flowColumns exhausted on layer "${layerId}" after ${layout.columnsUsed} columns; inserted deterministic fallback placements`
+      );
+    }
+
+    const maxZRows = this.queryCanvas(
+      'SELECT COALESCE(MAX(z_index), 0) AS maxZ FROM cards WHERE layer = ?',
+      [layerId]
+    );
+    let nextZ = Number((maxZRows[0] as Record<string, unknown> | undefined)?.maxZ ?? 0) + 1;
+    for (const placement of layout.placements) {
+      const file = missing.find((candidate) => candidate.path === placement.id)!;
+      this.execCanvas(
+        `INSERT INTO cards (id, layer, x, y, width, height, z_index, metadata)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO NOTHING`,
+        [
+          file.path,
+          layerId,
+          placement.x,
+          placement.y,
+          placement.w,
+          placement.h,
+          nextZ,
+          serializeCardMetadata({ seatW: placement.w, seatH: placement.h }),
+        ]
+      );
+      nextZ++;
+    }
+    const seated = this.getLayerCards(missing.map((file) => file.path));
+    const byId = new Map(seated.map((row) => [row.id, row]));
+    return missing
+      .map((file) => byId.get(file.path))
+      .filter((row): row is CardRecord => row !== undefined);
   }
 
   /**
@@ -1464,9 +1467,32 @@ export class LocalWorldStore implements WorldStore {
     file: SeatFile,
     anchorPath: string
   ): Promise<CardRecord & { exhausted: boolean }> {
+    return this.withSeatLock(layerId, async () => {
+      try {
+        this.execCanvas('BEGIN IMMEDIATE');
+        const seated = await this.seatNearLocked(layerId, file, anchorPath);
+        this.execCanvas('COMMIT');
+        return seated;
+      } catch (err) {
+        try {
+          this.execCanvas('ROLLBACK');
+        } catch {
+          // SQLite already rolled back; the original error is the useful one.
+        }
+        throw err;
+      }
+    });
+  }
+
+  /** Seat beside an anchor while the caller owns the layer lock and transaction. */
+  private async seatNearLocked(
+    layerId: string,
+    file: SeatFile,
+    anchorPath: string
+  ): Promise<CardRecord & { exhausted: boolean }> {
     // The anchor card is seated first when it has no row; one shared helper so
     // `seatNear` and `seatPresence` can never diverge (04 §3.9.3 / 05 §11 冲突 5).
-    const { cx: aCx, cy: aCy } = await this.anchorOf(layerId, anchorPath);
+    const { cx: aCx, cy: aCy } = await this.anchorOfLocked(layerId, anchorPath);
     const anchor = this.getLayerCards([anchorPath])[0];
 
     const { w, h } = seatDimensionsOf(file);
@@ -1554,8 +1580,8 @@ export class LocalWorldStore implements WorldStore {
    * The card centre for an anchor path, seating it first when it has no row
    * (05 §7.3 / 04 §3.9.3). Without the pre-seat, a `near` anchor that was never
    * flushed by `/api/layer` would hand `undefined` to the spiral and produce
-   * `NaN` coordinates. `anchorOf` is the ONE such helper, shared by
-   * `seatPresence` and `seatNear`.
+   * `NaN` coordinates. `anchorOf` and `anchorOfLocked` are the shared helpers
+   * used by `seatPresence` and `seatNear`.
    */
   private async anchorOf(layerId: string, anchorPath: string): Promise<{ cx: number; cy: number }> {
     let anchor = this.getLayerCards([anchorPath])[0];
@@ -1565,6 +1591,29 @@ export class LocalWorldStore implements WorldStore {
       const kind = cardKindOf(parsed.frontmatter, path.basename(anchorPath));
       const form = cardFormOf(parsed.frontmatter, path.basename(anchorPath));
       await this.seatUnplaced(layerId, [{ path: anchorPath, kind, w: form.w, h: form.h }]);
+      anchor = this.getLayerCards([anchorPath])[0];
+    }
+    if (!anchor) {
+      throw new ActionError({
+        code: 'internal',
+        message: `Could not seat the anchor card "${anchorPath}" before seating beside it`,
+      });
+    }
+    return { cx: anchor.x + anchor.w / 2, cy: anchor.y + anchor.h / 2 };
+  }
+
+  /** Resolve an anchor while the caller owns the layer lock and SQLite transaction. */
+  private async anchorOfLocked(
+    layerId: string,
+    anchorPath: string
+  ): Promise<{ cx: number; cy: number }> {
+    let anchor = this.getLayerCards([anchorPath])[0];
+    if (!anchor) {
+      const raw = await this.readFile(anchorPath);
+      const parsed = parseFrontmatter(raw);
+      const kind = cardKindOf(parsed.frontmatter, path.basename(anchorPath));
+      const form = cardFormOf(parsed.frontmatter, path.basename(anchorPath));
+      await this.seatUnplacedLocked(layerId, [{ path: anchorPath, kind, w: form.w, h: form.h }]);
       anchor = this.getLayerCards([anchorPath])[0];
     }
     if (!anchor) {

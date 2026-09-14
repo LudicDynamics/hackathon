@@ -302,6 +302,46 @@ test('§10.3: seatNear places beside the anchor without overlap and never re-flo
   }
 });
 
+test('§10.3: concurrent seatNear calls serialize positions and z-indexes', async () => {
+  const { store, root } = await tempStore();
+  try {
+    await store.writeFile('world/inn/counter.md', '---\ntitle: Counter\ntype: chalk\n---\n\nCounter.\n');
+    await store.writeFile('world/inn/existing.md', '---\ntitle: Existing\ntype: chalk\n---\n\nExisting.\n');
+    await store.writeFile('world/inn/first.md', '---\ntitle: First\ntype: chalk\n---\n\nFirst.\n');
+    await store.writeFile('world/inn/second.md', '---\ntitle: Second\ntype: chalk\n---\n\nSecond.\n');
+    await store.seatUnplaced('world/inn', [
+      { path: 'world/inn/counter.md', w: 280, h: 180 },
+      { path: 'world/inn/existing.md', w: 280, h: 180 },
+    ]);
+
+    const [first, second] = await Promise.all([
+      store.seatNear(
+        'world/inn',
+        { path: 'world/inn/first.md', w: 280, h: 180 },
+        'world/inn/counter.md'
+      ),
+      store.seatNear(
+        'world/inn',
+        { path: 'world/inn/second.md', w: 280, h: 180 },
+        'world/inn/counter.md'
+      ),
+    ]);
+
+    assert.notDeepEqual([first.x, first.y], [second.x, second.y]);
+    assert.notEqual(first.z, second.z);
+    const persisted = store.getLayerCards(['world/inn/first.md', 'world/inn/second.md']);
+    assert.equal(persisted.length, 2);
+    assert.notDeepEqual(
+      [persisted[0].x, persisted[0].y],
+      [persisted[1].x, persisted[1].y]
+    );
+    assert.notEqual(persisted[0].z, persisted[1].z);
+  } finally {
+    store.close();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('§10.3: delete drops the card + its lines and does NOT touch referencing files', async () => {
   const { store, root } = await tempStore();
   try {
