@@ -52,7 +52,7 @@ export function TtsSettings({ focus }: { focus?: FocusCoordinator } = {}) {
   }, [focus]);
   const refresh = async () => {
     try { setConfig(await readTtsConfig(true)); setError(''); }
-    catch { setError('Voice service is unavailable. Text dialogue still works.'); }
+    catch { setError(t('Voice service is unavailable. Text dialogue still works.')); }
   };
   const openSettings = () => {
     setVolumes(readVolumes());
@@ -70,16 +70,16 @@ export function TtsSettings({ focus }: { focus?: FocusCoordinator } = {}) {
     return () => window.removeEventListener('airp:tts-unavailable', warn);
   }, []);
   return <>
-    <button type="button" onClick={openSettings}>Voice & connections</button>
+    <button type="button" onClick={openSettings}>{t('Voice & connections')}</button>
     {notice && !open && createPortal(<aside className="tts-notice" role="status">
-      Voice is unavailable. Check TTS configuration; text dialogue still works.
-      <button type="button" onClick={() => { setNotice(false); openSettings(); }}>Settings</button>
-      <button type="button" aria-label="Dismiss voice notice" onClick={() => setNotice(false)}>×</button>
+      {t('Voice is unavailable. Check voice settings; text dialogue still works.')}
+      <button type="button" onClick={() => { setNotice(false); openSettings(); }}>{t('Settings')}</button>
+      <button type="button" aria-label={t('Dismiss voice notice')} onClick={() => setNotice(false)}>×</button>
     </aside>, document.body)}
     {open && createPortal(<div className="prototype-dialog-backdrop" onClick={() => setOpenState(false)}>
-      <section className="prototype-world-picker settings-panel" role="dialog" aria-modal="true" aria-label="Voice settings" data-focus-owner="workspace" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpenState(false); } }}>
-        <button type="button" onClick={() => setOpenState(false)} aria-label="Close voice settings" autoFocus>Close</button>
-        <h2>Character voice</h2>
+      <section className="prototype-world-picker settings-panel" role="dialog" aria-modal="true" aria-label={t('Voice settings')} data-focus-owner="workspace" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpenState(false); } }}>
+        <button type="button" onClick={() => setOpenState(false)} aria-label={t('Close voice settings')} autoFocus>{t('Close')}</button>
+        <h2>{t('Character voice')}</h2>
         <fieldset aria-labelledby="audio-levels-heading">
           <legend id="audio-levels-heading">{t('Audio levels')}</legend>
           <div className="settings-volume">
@@ -91,12 +91,12 @@ export function TtsSettings({ focus }: { focus?: FocusCoordinator } = {}) {
             <input id="voice-volume" type="range" role="slider" min="0" max="100" step="1" value={volumes.voice} aria-valuemin={0} aria-valuemax={100} aria-valuenow={volumes.voice} aria-describedby="voice-volume-value" onChange={e => onVolumeInput('voice', e.currentTarget.value)} />
           </div>
         </fieldset>
-        <label><input type="checkbox" checked={enabled} onChange={e => { setEnabled(e.target.checked); setTtsEnabled(e.target.checked); }} /> Enable character voice on this browser</label>
+        <label><input type="checkbox" checked={enabled} onChange={e => { setEnabled(e.target.checked); setTtsEnabled(e.target.checked); }} /> {t('Enable character voice on this browser')}</label>
         {!enabled && <p role="status">{t('Voice playback is off; text dialogue remains available.')}</p>}
-        <p role="status">{error || (config ? config.configured ? 'Configured · availability is checked when speaking' : t('TTS is not configured. Text dialogue remains available.') : 'Checking configuration…')}</p>
-        {config && <><p>Model: {config.model}</p><p>Default voice: {config.defaultVoice} (characters may override it)</p></>}
-        {config && !config.configured && <p>Add your DashScope API key below. Text dialogue remains available.</p>}
-        <button type="button" onClick={() => { void refresh(); }}>Recheck configuration</button>
+        <p role="status">{error || (config ? config.configured ? t('Configured · availability is checked when speaking') : t('TTS is not configured. Text dialogue remains available.') : t('Checking configuration…'))}</p>
+        {config && <><p>{t('Online model')}: {config.model}</p><p>{t('Online fallback voice')}: {config.defaultVoice} · {t('Characters may override it')}</p></>}
+        {config && !config.configured && <p>{t('Add a DashScope API key below, or configure Nanami local voice. Text dialogue remains available.')}</p>}
+        <button type="button" onClick={() => { void refresh(); }}>{t('Recheck voice configuration')}</button>
         <NanamiTtsSettings onSaved={() => { void refresh(); }} />
         <ConnectionSettings onSaved={() => { void refresh(); }} />
       </section>
