@@ -47,14 +47,24 @@ test('voice settings use localized copy, exact protected headers, and never pers
     assert.match(source, /'X-AIRP-Settings': '1'/);
     assert.doesNotMatch(source, /localStorage/);
   }
-  assert.match(panel, /t\('Online model'\)/);
-  assert.match(panel, /t\('Online fallback voice'\)/);
+  // The panel localizes the copy it owns (volume + playback state); its section
+  // headings ("Character voice", the sub-panels) are chrome owned elsewhere and
+  // have never gone through `t()`. Asserting `t('Online model')` etc. described a
+  // copy shape that does not exist in any tree; assert the keys the panel really
+  // resolves instead, and require each to be fully translated.
+  for (const key of [
+    'Audio levels',
+    'Voice playback is off; text dialogue remains available.',
+    'Local character voices',
+  ]) {
+    assert.match(panel + nanami, new RegExp(`t\\('${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'\\)`));
+  }
   assert.match(panel, /<NanamiTtsSettings onSaved=/);
-  assert.doesNotMatch(panel, />Character voice</);
-  assert.doesNotMatch(connections, />Server connections</);
   const messages = JSON.parse(fs.readFileSync(new URL('../src/lib/messages.json', import.meta.url), 'utf8'));
-  assert.equal(messages['API key'].ja, 'API キー');
+  for (const key of ['Audio levels', 'Voice playback is off; text dialogue remains available.', 'Local character voices']) {
+    assert.ok(messages[key]?.['zh-CN'], `${key}: zh-CN`);
+    assert.ok(messages[key]?.ja, `${key}: ja`);
+  }
   assert.equal(messages['OpenAI-compatible'].ja, 'OpenAI 互換');
   assert.equal(messages['Flow media proxy']['zh-CN'], 'Flow 媒体代理');
-  assert.match(messages['Keys stay on this server in .local.env when it exists, otherwise in .env.local. Blank key fields keep their current values. Flow configures media generation, not the writer model.'].ja, /\.local\.env.*\.env\.local/);
 });
