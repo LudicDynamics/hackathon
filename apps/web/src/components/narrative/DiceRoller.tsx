@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import { Dices, CheckCircle2, AlertCircle } from 'lucide-react';
 import { actionKey } from '../../lib/action-feedback.js';
 /** Shared ceremony timings. DiceCeremony is the only renderer; these remain a
@@ -6,7 +6,15 @@ import { actionKey } from '../../lib/action-feedback.js';
 export const ROLL_MS = 1200;
 export const SETTLE_MS = 1300;
 export const FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-import { ingestPlayerRoll, parsePlayerDiceResponse, type DiceCeremonyInput } from '../../lib/dice-ceremony.js';
+import {
+  holdReveal,
+  ingestPlayerRoll,
+  isRevealHeld,
+  parsePlayerDiceResponse,
+  settleReveal,
+  subscribeCeremony,
+  type DiceCeremonyInput,
+} from '../../lib/dice-ceremony.js';
 
 interface DiceVerdict {
   dice: string;
@@ -57,6 +65,8 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({ filePath, rollDice, onRo
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The result stays hidden until the ceremony has shown it.
+  const held = useSyncExternalStore(subscribeCeremony, () => filePath !== '' && isRevealHeld(filePath));
 
   const roll = async () => {
     if (busy || rolled) return;
@@ -66,6 +76,8 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({ filePath, rollDice, onRo
       return;
     }
     setBusy(true);
+    holdReveal(filePath);
+    let staged = false;
     try {
       const res = await fetch('/api/dice', {
         method: 'POST',
@@ -87,11 +99,14 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({ filePath, rollDice, onRo
       // request is not replayed and is not reported as a fresh roll.
       const input: DiceCeremonyInput | null = ingestPlayerRoll(details, playerRequestKey(filePath));
       if (!input) throw new Error('This roll result was already presented or was incomplete.');
+      staged = true;
       setRolled({ result: input.result, passed: input.passed, crit: input.crit, fumble: input.fumble });
       onRollComplete?.(input.result, input.passed);
     } catch (err) {
       setError(`Could not roll: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
+      // A failed roll shows its error at once; a staged one is released by its ceremony.
+      settleReveal(filePath, staged ? undefined : 0);
       setBusy(false);
     }
   };
@@ -119,7 +134,9 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({ filePath, rollDice, onRo
         </span>
       </div>
 
-      {rolled ? (
+      {held ? (
+        <span role="status" className="text-xs text-ink/60 animate-pulse">The dice are rolling…</span>
+      ) : rolled ? (
         <div className="flex items-center gap-4">
           <div className="dice-cube dice-cube-compact" aria-hidden="true"><Dices className="w-7 h-7" /></div>
           <div className="flex items-center gap-3">

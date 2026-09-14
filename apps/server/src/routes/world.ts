@@ -84,6 +84,12 @@ async function reply(
       res.status(http.status).json(http.body);
       return;
     }
+    // The store's own no-clobber guard (a concurrent move won the race) is a
+    // conflict, not a server fault.
+    if ((err as NodeJS.ErrnoException | null)?.code === 'EEXIST') {
+      res.status(409).json({ ok: false, code: 'already_exists', error: err instanceof Error ? err.message : String(err) });
+      return;
+    }
     res.status(500).json({
       ok: false,
       code: 'internal',
@@ -560,7 +566,11 @@ export function createWorldRouter(
       const templatesRoot = path.join(repoRoot, 'templates') + path.sep;
       if (resolvedPath.startsWith(templatesRoot)) {
         const playPath = path.join(repoRoot, 'worlds', `${path.basename(resolvedPath)}-${randomUUID().slice(0, 8)}`);
-        await fs.cp(resolvedPath, playPath, { recursive: true });
+        // Runtime state (history DB, sessions) never travels with a template copy.
+        await fs.cp(resolvedPath, playPath, {
+          recursive: true,
+          filter: (source) => !['.airpworld', '.pi'].includes(path.relative(resolvedPath, source).split(path.sep)[0]),
+        });
         resolvedPath = playPath;
       }
 

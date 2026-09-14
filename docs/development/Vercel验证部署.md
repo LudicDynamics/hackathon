@@ -31,6 +31,16 @@
 - 前端已有 `useWorld` 重连：断开后每 1.2 秒重试；连接打开后清除作家忙态并重新读取当前层。不重放玩家请求，以免重复执行。
 - 同一条 WebSocket 的消息绑定同一实例，但独立 HTTP 请求和重连不保证进入该实例。现有全局活跃世界与广播仍是单实例设计。**必须实测 HTTP/WS 一致性；仅能打开页面或重连成功不算跑通。**
 
+## 本机 TTS（Tailscale Funnel）
+
+七海等角色的本机音色服务（setsuna）目前只在 Tailscale 内网可达（`100.x` 地址），Vercel 容器不在 tailnet 里，无法直接访问。2026-09-14 定案：用 **Tailscale Funnel** 把 TTS 机器发布为公网 HTTPS 地址，代码不改。
+
+1. 在运行本机 TTS 的机器上开启 Funnel，把 TTS 端口（如 `8090`）发布出去，得到 `https://<机器名>.<tailnet>.ts.net` 这样的地址。
+2. 部署环境变量：`AIRP_TTS_LOCAL_BASE_URL` 设为该 HTTPS 地址（不带 `/v1/tts`），`AIRP_TTS_LOCAL_API_KEY` 设为 TTS 服务要求的密钥。地址公开之后，**必须**靠密钥挡住外部调用。
+3. 其余本机音色设置（`AIRP_TTS_LOCAL_VOICE`、`AIRP_TTS_CHARACTER_VOICES`、`AIRP_TTS_LOCAL_TIMEOUT_MS`）照旧。
+
+Funnel 不可达或超时时，`/api/tts` 仍按现有逻辑回落线上千问，并带 `X-AIRP-TTS-Fallback: local-to-online` 响应头，玩家不会没有声音。验收时确认：部署实例能用本机音色合成一页台词；关掉 Funnel 后同一页回落线上。
+
 ## 构建与验证
 
 在包含完整 `vendor/pi-rp` 子模块的仓库根目录执行：

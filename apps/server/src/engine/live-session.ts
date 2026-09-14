@@ -41,6 +41,8 @@ const MAX_COMMENTARY_CHARS = 500;
 const TURN_TIMEOUT_MS = 90_000;
 /** Sideband attach budget: a socket that never opens must not hang the request. */
 const SIDEBAND_OPEN_TIMEOUT_MS = 10_000;
+/** Upstream `POST /live/sessions` budget; a hung request surfaces as upstream_unreachable. */
+const UPSTREAM_SESSION_TIMEOUT_MS = 20_000;
 /** How much input transcript is kept for delegation task text + captions. */
 const TRANSCRIPT_WINDOW = 4000;
 /**
@@ -470,8 +472,11 @@ export class LiveCallRegistry {
           },
           transport: { type: 'webrtc', sdp: input.sdp },
         }),
+        // Without a budget a silent upstream left the browser "connecting" forever.
+        signal: AbortSignal.timeout(UPSTREAM_SESSION_TIMEOUT_MS),
       });
     } catch (err) {
+      console.warn(`[AIRP Live] Session request failed (${err instanceof Error ? err.name : 'Error'}).`);
       throw new LiveCallError('upstream_unreachable', 502, err instanceof Error ? err.message : String(err));
     }
 
@@ -488,6 +493,7 @@ export class LiveCallRegistry {
     if (!response.ok) {
       const code = body?.error?.code ?? 'live_session_failed';
       const message = body?.error?.message ?? `Live session request failed (HTTP ${response.status})`;
+      console.warn(`[AIRP Live] Session refused upstream (${response.status} ${code}).`);
       throw new LiveCallError(code, response.status, message);
     }
     if (!body?.session?.id || !body.transport?.sdp) {

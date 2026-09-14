@@ -3,8 +3,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 /**
  * Player voice input with live transcription (docs/live-voice/语音输入（STT）.md).
  *
- * The microphone is captured at 24kHz through an AudioWorklet and streamed as
- * PCM16 to `/ws/stt`, which relays it to an OpenAI Realtime transcription
+ * The microphone is captured at the native rate through an AudioWorklet,
+ * resampled to 24kHz here (a 24kHz AudioContext fed Chrome silence from a 48kHz
+ * mic), and streamed as PCM16 to `/ws/stt`, which relays it to an OpenAI Realtime transcription
  * session. Partial text arrives while the player is still speaking. The text is
  * only a draft — the host decides when anything is sent.
  *
@@ -18,8 +19,8 @@ export type VoiceInputError = 'mic_denied' | 'mic_unsupported' | 'unavailable' |
 /** Auto-stop so a forgotten recording cannot run (and bill) indefinitely. */
 export const MAX_RECORDING_MS = 60_000;
 export const SAMPLE_RATE = 24_000;
-/** ~100ms of audio per frame sent to the relay. */
-const CHUNK_SAMPLES = 2_400;
+/** ~100ms of captured audio per frame (native rate, 48kHz typical). */
+const CHUNK_SAMPLES = 4_800;
 /** After Stop, wait this long at most for the last utterance to be finalised. */
 const FINISH_TIMEOUT_MS = 4_000;
 
@@ -33,6 +34,40 @@ class AirpPcmTap extends AudioWorkletProcessor {
 }
 registerProcessor('airp-pcm-tap', AirpPcmTap);
 `;
+
+/**
+ * Streaming linear resampler from the capture rate to the relay rate. Browsers do
+ * not reliably resample a 48kHz microphone into a 24kHz AudioContext (distorted or
+ * silent input made the model hallucinate short words), so capture runs at the
+ * native rate and we resample here, carrying the fractional position across chunks.
+ */
+export class LinearResampler {
+  private position = 0;
+  private last = 0;
+  private readonly step: number;
+
+  constructor(inputRate: number, outputRate: number) {
+    this.step = inputRate / outputRate;
+  }
+
+  process(input: Float32Array): Float32Array {
+    if (this.step === 1) return input;
+    const out: number[] = [];
+    // Sample i of this chunk sits at index i + 1 in [last, ...input].
+    while (this.position <= input.length - 1 + 1e-9) {
+      const index = this.position;
+      const lower = Math.floor(index);
+      const frac = index - lower;
+      const a = lower === 0 ? this.last : input[lower - 1];
+      const b = input[Math.min(lower, input.length - 1)];
+      out.push(a + (b - a) * frac);
+      this.position += this.step;
+    }
+    this.position -= input.length;
+    this.last = input[input.length - 1] ?? this.last;
+    return Float32Array.from(out);
+  }
+}
 
 export function floatToPcm16(samples: Float32Array): Int16Array {
   const out = new Int16Array(samples.length);
@@ -180,7 +215,9 @@ export function useVoiceInput({ onTranscript }: { onTranscript: (text: string) =
       return;
     }
 
-    const context = new AudioContext({ sampleRate: SAMPLE_RATE });
+    // Native rate: forcing 24kHz here is where capture got distorted.
+    const context = new AudioContext();
+    const resampler = new LinearResampler(context.sampleRate, SAMPLE_RATE);
     const socket = new WebSocket(relayUrl());
     socket.binaryType = 'arraybuffer';
     const session: Session = {
@@ -230,7 +267,7 @@ export function useVoiceInput({ onTranscript }: { onTranscript: (text: string) =
         for (const part of pending) { merged.set(part, offset); offset += part.length; }
         pending = [];
         pendingLength = 0;
-        const frame = floatToPcm16(merged).buffer as ArrayBuffer;
+        const frame = floatToPcm16(resampler.process(merged)).buffer as ArrayBuffer;
         if (ready && socket.readyState === WebSocket.OPEN) socket.send(frame);
         else early.push(frame);
       };

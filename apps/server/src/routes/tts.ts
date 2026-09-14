@@ -403,7 +403,8 @@ export function createTtsRouter(
       });
     } catch (err) {
       const mapped = mapSynthError(err);
-      console.warn(`[AIRP TTS] Online TTS failed (${mapped.code}).`);
+      // The reason ("DashScope HTTP 429", a timeout…) carries no key or URL.
+      console.warn(`[AIRP TTS] Online TTS failed (${mapped.code}: ${mapped.error}).`);
       return res.status(mapped.status).json({ ok: false, code: mapped.code, error: mapped.error });
     }
     try {
