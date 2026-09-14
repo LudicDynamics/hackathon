@@ -279,15 +279,12 @@ body:before {
   z-index: var(--depth-background-grain);
 }
 
-/* ---- ink animation: paperForm mount entrance ----
-   scale .92→1 over 1.25s cubic-bezier(.16,1,.3,1). Safe against
-   drag: drag writes left/top inline styles only (never transform),
-   and it never re-mounts, so the animation plays exactly once at
-   mount. Deliberately NO `forwards`: the 100% keyframe equals the
-   base rotate(var(--target-rot,0deg)) scale(1), and a fill would pin
-   the transform and shadow future inline writes. */
+/* ---- ink animation note ----
+   `paperForm` remains available to explicit `.paper-form` callers below, but
+   `.object` shells must not animate on every world refresh: position updates
+   during hover otherwise look like a card teleport. */
 .object {
-  animation: paperForm 1.25s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: none;
   transition: box-shadow 0.2s ease;
 }
 

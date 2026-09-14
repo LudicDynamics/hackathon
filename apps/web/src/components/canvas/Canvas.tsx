@@ -175,6 +175,13 @@ export const Canvas: React.FC<CanvasProps> = ({
     for (const it of items) if (it.kind === 'gate') map.set(it.path, ++n);
     return map;
   }, [items]);
+  // A fresh layer is first painted with the server's declared footprint. Keep
+  // that provisional geometry off-screen until the real DOM footprint has
+  // converged through the existing scheduler/re-fetch path; otherwise the
+  // player sees one overlapping frame followed by a visible reseat.
+  const readyLayoutLayersRef = useRef(new Set<string>());
+  const [, rerenderLayout] = React.useState(0);
+  const layoutPending = items.length > 0 && !readyLayoutLayersRef.current.has(currentLayer);
 
   // At most ONE portrait plays per canvas (AGENTS §7.6). `items` is in server
   // row order (z ascending), so the last portrait is the visual focus unless
@@ -228,6 +235,33 @@ export const Canvas: React.FC<CanvasProps> = ({
     // Font-dependent heights must settle before measuring (docs/footprint §3.5):
     // a bare document.fonts.ready can read pre-swap metrics.
     void whenFontsSettled().then(() => requestAnimationFrame(frame));
+    return () => { cancelled = true; };
+  }, [currentLayer, items, camera]);
+
+  // Do not expose the first declared-footprint pass. The DOM remains mounted
+  // and measurable, while the server's existing footprint round-trip can
+  // reseat cards without showing the temporary overlap to the player.
+  useEffect(() => {
+    if (!items.length || readyLayoutLayersRef.current.has(currentLayer)) return;
+    let cancelled = false;
+    void whenFontsSettled().then(() => requestAnimationFrame(() => {
+      if (cancelled) return;
+      const viewport = camera.viewportRef.current;
+      if (!viewport) return;
+      const objects = [...viewport.querySelectorAll<HTMLElement>('.object[data-path]')];
+      if (objects.length < items.length) return;
+      const stable = items.every((item) => {
+        const el = objects.find((candidate) => candidate.dataset.path === item.path);
+        return el !== undefined
+          && !el.matches(':hover')
+          && !el.hasAttribute('data-reading')
+          && Math.abs(el.offsetHeight - item.h) <= 1;
+      });
+      if (stable) {
+        readyLayoutLayersRef.current.add(currentLayer);
+        rerenderLayout((value) => value + 1);
+      }
+    }));
     return () => { cancelled = true; };
   }, [currentLayer, items, camera]);
 
@@ -593,10 +627,15 @@ export const Canvas: React.FC<CanvasProps> = ({
         const object = (event.target as HTMLElement).closest<HTMLElement>('.object[data-path]');
         if (object) setFocusedPortrait(object.dataset.path ?? null);
       }}>
-        <LinkLayer links={links} />
+        <LinkLayer links={layoutPending ? [] : links} />
         <CanvasGrid camera={camera} />
 
-        <div className={`absolute inset-0 ${DEPTH_MARKER('entity')}`} data-depth-surface={DEPTH_KIND.entity}>
+        <div
+          className={`absolute inset-0 ${DEPTH_MARKER('entity')}`}
+          data-depth-surface={DEPTH_KIND.entity}
+          aria-busy={layoutPending || undefined}
+          style={layoutPending ? { visibility: 'hidden', pointerEvents: 'none' } : undefined}
+        >
           {/* Cards — absolutely positioned at server-seated coords. */}
           {items.map((item) => (
             <CanvasObject
