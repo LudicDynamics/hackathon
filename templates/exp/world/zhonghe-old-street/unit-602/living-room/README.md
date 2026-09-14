@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 客厅兼工作区
+bg: assets/scenes/zhonghe-old-street-unit-602-living-room.jpg
 ambient: city-night
 title: 客厅兼工作区
 intent: 602 最主要的房间，一半是工作区，一半是休闲区。靠墙一张长条电脑桌、带鱼屏和二手人体工学椅，桌上桌下都是你的装备；对面是旧布艺沙发和矮茶几，堆着没拆的快递和一台 Switch。中间空地上铺着一张一米直径的黑色防滑垫，是你的 VR 活动区。往里有厨房和卧室，外侧连着阳台，也能退回玄关。

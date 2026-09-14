@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 星味楼 · 食堂
+bg: assets/scenes/stellar-cloud-campus-canteen.jpg
 ambient: tavern-chatter
 title: 星味楼 · 食堂
 intent: 园区食堂层。西北角独立的四层食堂大楼，2 层南侧有连廊直通 BC 栋。刷工牌或刷脸结账，晚上九点后刷工牌能免费领夜宵套餐。1 层是大排档套餐和自选称重，2 层面食麻辣烫，3 层小炒清真西餐，4 层是高管餐厅。饭点人声嘈杂。

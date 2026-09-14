@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 星味楼 2 层 · 特色风味
+bg: assets/scenes/stellar-cloud-campus-canteen-floor2.jpg
 ambient: tavern-chatter
 title: 星味楼 2 层 · 特色风味
 intent: 星味楼二层，主打特色风味。面食粉类、麻辣烫串串、地方小吃在里侧排开，轻食减脂餐窗口配着卡路里屏。南侧的连廊入口是一片缓冲枢纽，从 BC 栋走过来的人在这里分流。夜宵时段，面食窗口常亮。往下一层，或回食堂总览。

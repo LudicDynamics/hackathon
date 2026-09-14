@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 星味楼 1 层 · 快速就餐大平层
+bg: assets/scenes/stellar-cloud-campus-canteen-floor1.jpg
 ambient: tavern-chatter
 title: 星味楼 1 层 · 快速就餐大平层
 intent: 星味楼一层，整个食堂最快的一层。大排档套餐窗口、自选称重菜、炒面盖饭排成一排，水吧和烘焙房在最里侧，中间是自助调料台。刷工牌或刷脸结账，出口有免费打包盒。每层都有餐具回收传送带。往上是二层，或回食堂总览。

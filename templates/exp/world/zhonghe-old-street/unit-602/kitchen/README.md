@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 厨房
+bg: assets/scenes/zhonghe-old-street-unit-602-kitchen.jpg
 ambient: city-night
 title: 厨房
 intent: 602 的厨房，在客厅侧面，没有门，直接连通。墙面高处一扇铝合金小窗贴着防油烟贴纸。单开门冰箱和储物柜靠里，老式双头燃气灶、抽油烟机、迷你空气炸锅和二手电饭煲占着烹饪区，大理石台面上是备餐的地方，墙上挂着几口常用的锅。往回到客厅。

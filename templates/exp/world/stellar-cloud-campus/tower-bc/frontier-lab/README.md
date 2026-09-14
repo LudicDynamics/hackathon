@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 前沿隐私架构实验室
+bg: assets/scenes/stellar-cloud-campus-tower-bc-frontier-lab.jpg
 ambient: office-night
 title: 前沿隐私架构实验室
 intent: 实验室总览层，也是埃利亚斯的 home。B 栋 12 层西侧独立封闭办公区，磨砂玻璃双开门，白名单刷卡门禁。开门后是开放办公区：你的工位在边缘靠近走廊。走廊尽头是埃利亚斯的独立玻璃办公室，对面是会议室，角落是茶水间和洗手间。核心算法组是另一群人，跟你们底层支持组各干各的。

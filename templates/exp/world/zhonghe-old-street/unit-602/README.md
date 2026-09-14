@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 中和老街 602 · 你的出租屋
+bg: assets/scenes/zhonghe-old-street-unit-602.jpg
 ambient: city-night
 title: 中和老街 602 · 你的出租屋
 intent: 玩家自己的家，一单元顶楼，无电梯，一室一厅一厨一卫，约五十平。没有集中供暖，靠两台老式壁挂空调。门窗隔音差，能听见楼下的隐约人声。玄关进去是客厅兼工作区，客厅侧面是厨房，内侧是卧室，走廊尽头是卫浴间，客厅外连着阳台。

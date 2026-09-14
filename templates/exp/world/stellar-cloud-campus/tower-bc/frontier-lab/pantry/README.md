@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 茶水间
+bg: assets/scenes/stellar-cloud-campus-tower-bc-frontier-lab-pantry.jpg
 ambient: office-night
 title: 茶水间
 intent: 实验室角落、洗手间隔壁的一小间。行政配的饮水区在这头，核心组自费的高端意式咖啡机在另一头，各自占地。两台微波炉、双开门冰箱、零食架和三把高脚凳。你热饭、接水、撕一包速溶，都在这儿。出门口就是洗手间，再往前是走廊。

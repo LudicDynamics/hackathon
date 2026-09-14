@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 联合创新实验室
+bg: assets/scenes/stellar-cloud-campus-tower-bc-joint-innovation-lab.jpg
 ambient: office-night
 title: 联合创新实验室
 intent: B 栋 18 层的高密区，恒星云与外部初创企业、高校合作的预研实体。进出要专属电梯加生物识别，网络与主站物理隔离。合作方入驻做阶段性封闭测试，恒星云出场地、算力和适配人员。埃利亚斯偶尔以评审委员身份来这儿开会。这里没有你的活，你只是听说过。

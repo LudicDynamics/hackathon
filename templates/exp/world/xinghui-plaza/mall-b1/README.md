@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 星汇天地 · B1 超市与美食广场
+bg: assets/scenes/xinghui-plaza-mall-b1.jpg
 ambient: cafe-murmur
 title: 星汇天地 · B1 超市与美食广场
 intent: 购物中心地下一层。这一层是大型连锁生鲜超市、平价美食广场和生活杂物零售区。你下班早的时候会下来买点菜、吃点便宜的，或者随手补给日用品。能看生鲜超市、逛美食广场、在烘焙档买点面包，也能回商场总览。

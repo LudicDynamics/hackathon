@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 阳都 · 高新南区
+bg: assets/scenes/world.jpg
 ambient: rain
 title: 阳都 · 高新南区
 intent: 城市总览层。这里是你生活的城市，四扇门通向园区、公寓、老小区和商场。你要去哪里，自己决定；四扇门都能进，进入后各自是完整空间。

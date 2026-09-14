@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 下沉广场
+bg: assets/scenes/stellar-cloud-campus-sunken-plaza.jpg
 ambient: cafe-murmur
 title: 下沉广场
 intent: 园区中心的下沉式露天空间，被 A/B/C 三栋楼环绕，阶梯式向下通到 B1。中心是扇形木阶梯看台加圆形空地，还有块户外 LED 巨幕。环廊是半露天的咖啡外摆和无人便利店。南侧有草坪滑板场，北侧是快递柜和干洗柜。午休时有人躺在看台上。

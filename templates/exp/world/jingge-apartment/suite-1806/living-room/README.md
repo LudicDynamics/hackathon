@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 1806 · 会客厅与观景阳台
+bg: assets/scenes/jingge-apartment-suite-1806-living-room.jpg
 ambient: rain
 title: 1806 · 会客厅与观景阳台
 intent: 玄关正前方的会客厅，连着落地窗外的观景阳台。大型 L 型浅灰布艺沙发、玻璃茶几、85 寸壁挂电视与回音壁，沙发背后挂着一幅抽象色块画。落地窗旁是运动角，一张瑜伽垫和一组哑铃。阳台上有一张硬质皮质沙发、金属边几和一株绿萝。能看画、看哑铃、看阳台的绿萝。

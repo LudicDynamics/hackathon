@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 会议室
+bg: assets/scenes/stellar-cloud-campus-tower-bc-frontier-lab-meeting-room.jpg
 title: 会议室
 intent: 埃利亚斯办公室正对面的一间标准会议室。长条会议桌、转椅、墙面无线投屏和全向麦克风、玻璃白板。桌面没杂物，椅子摆得整整齐齐。整层极少在这里开全员会，平时多半被核心组的人借来当隔音舱打电话或打游戏。你一年也用不上几次。
 choice:

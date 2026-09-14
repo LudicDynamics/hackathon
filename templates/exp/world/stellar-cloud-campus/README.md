@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 恒星云西南总部园区
+bg: assets/scenes/stellar-cloud-campus.jpg
 ambient: city-night
 title: 恒星云西南总部园区
 intent: 园区总览层。封闭式科技园区，你上班的地方。西侧南北向排着深色玻璃幕墙的 BC 双子楼，西北角是食堂星味楼，中间是下沉广场，西南角有片小公园。四扇门分别通向这四处。

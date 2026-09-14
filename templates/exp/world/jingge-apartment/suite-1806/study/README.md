@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 1806 · 独立书房
+bg: assets/scenes/jingge-apartment-suite-1806-study.jpg
 ambient: rain
 title: 1806 · 独立书房
 intent: 走廊右侧的独立书房，一扇实体木门隔开。门边是落地衣帽架，里面是升降办公桌与人体工学椅、单侧通顶书架（酒店中文书与自购外文书）、单人沙发与落地灯。桌上是 MacBook 和外接显示器，桌下有一台 UPS。能翻桌上的 MacBook、看废纸篓里的草稿、抽一本外文书。

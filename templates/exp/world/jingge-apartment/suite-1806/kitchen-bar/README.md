@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 1806 · 开放式厨房与水吧台
+bg: assets/scenes/jingge-apartment-suite-1806-kitchen-bar.jpg
 ambient: rain
 title: 1806 · 开放式厨房与水吧台
 intent: 会客厅西侧的开放式厨房，没有实体门。石材中岛加两把高脚凳，岛上是意式半自动咖啡机和独立磨豆机、黑色玻璃电子秤、整木砧板。烹饪区有嵌入式电磁炉、铸铁煎烤锅、纯铜雪平锅、磁吸刀架。储物区是双开门冰箱和隐藏迷你吧抽屉。能看咖啡机、开冰箱、拉开迷你吧。

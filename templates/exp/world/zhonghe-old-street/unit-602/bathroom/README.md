@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 卫浴间
+bg: assets/scenes/zhonghe-old-street-unit-602-bathroom.jpg
 ambient: city-night
 title: 卫浴间
 intent: 602 的卫浴间，在走廊尽头。老式电热水器挂在墙上，陶瓷洗漱台配一面单面镜，蹲便器和简易花洒挤在一起。门外的角落放着平板拖把和水桶。洗漱台上摆着电动牙刷、洗脸巾、洗面奶和剃须刀，淋浴置物架上是量贩装的沐浴露和洗发水。往回到客厅。

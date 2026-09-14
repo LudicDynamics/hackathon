@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 星汇天地
+bg: assets/scenes/xinghui-plaza.jpg
 ambient: cafe-murmur
 title: 星汇天地
 intent: 商圈总览层。园区正南侧一街之隔的大型综合商圈，含多层室内购物中心、室外步行街、下沉广场、地下车库。你下班早的时候会来这边吃个饭、买点东西。B1 是生鲜超市和美食广场，1-2 层快时尚和数码旗舰店，5-6 层有院线和健身房。

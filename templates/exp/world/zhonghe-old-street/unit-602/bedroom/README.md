@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 卧室
+bg: assets/scenes/zhonghe-old-street-unit-602-bedroom.jpg
 ambient: city-night
 title: 卧室
 intent: 602 内侧的卧室，一张 1.5 米木板床，床铺有点凌乱，被子只卷了一半。窗式空调挂在墙上，一扇带防盗网的铝合金窗配着绿色布窗帘。白色床头柜上放台灯、静音闹钟和一只黄色笑脸马克杯，柜里是积灰的 Wii 手柄和一台 3DS。角落是简易衣柜和一把堆着 T 恤的木椅子。往回到客厅。

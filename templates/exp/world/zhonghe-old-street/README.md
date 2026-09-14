@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 中和老街安置小区
+bg: assets/scenes/zhonghe-old-street.jpg
 ambient: city-night
 title: 中和老街安置小区
 intent: 老小区总览层。府河东侧的中和街道，千禧年初建成的无电梯安置房群，外墙斑驳，管线裸露。一单元602是你租的房子。楼下临街面密布串串香、烧烤摊和苍蝇馆子，夜里很吵。这里和河对岸的高楼完全是两个世界，但物价便宜。

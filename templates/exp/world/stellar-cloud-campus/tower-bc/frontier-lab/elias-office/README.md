@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 埃利亚斯独立办公室
+bg: assets/scenes/stellar-cloud-campus-tower-bc-frontier-lab-elias-office.jpg
 ambient: office-night
 title: 埃利亚斯独立办公室
 intent: 走廊尽头那间单人玻璃办公室，刷卡门禁，百叶帘半开。里面极简、克制，没有任何私人装饰：白板漆的墙上留着推导，桌面居中一台 MacBook 和显示器，矮柜上一台胶囊咖啡机，茶几上摊着做了批注的英文论文。谁进来都能看见，但你不会在这里多待。

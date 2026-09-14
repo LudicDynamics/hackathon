@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 阳台
+bg: assets/scenes/zhonghe-old-street-unit-602-balcony.jpg
 ambient: city-night
 title: 阳台
 intent: 602 的阳台，从客厅推开带门帘的推拉门就到。封闭式防盗网把整面围起来，顶上装着手摇式晾衣架，角落里站着一台旧波轮洗衣机。防盗网边缘放着一盆仙人掌，盆土上铺着彩色鹅卵石；晾衣架上挂着几件深色衣服，另一角堆着空纸箱。往回到客厅。

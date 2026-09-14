@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 星汇天地 · 室外步行街与下沉广场
+bg: assets/scenes/xinghui-plaza-outdoor-street.jpg
 ambient: city-night
 title: 星汇天地 · 室外步行街与下沉广场
 intent: 商圈外围的露天步行街，连着商场和园区方向。两侧是双层餐饮门店、咖啡馆外摆和新能源车展厅；走到中段地面下沉，是阶梯式的露天小广场，中间有小喷泉，边上散着轻食店和连锁茶饮。傍晚下班你会来这边走走，吃个饭、坐一会儿。能看车展厅、看喷泉、在外摆桌边坐下，也能回商场总览。

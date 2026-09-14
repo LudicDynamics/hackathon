@@ -1,6 +1,7 @@
 ---
 type: readme
 name: BC 双子大楼
+bg: assets/scenes/stellar-cloud-campus-tower-bc.jpg
 ambient: office-night
 title: BC 双子大楼
 intent: 双子楼总览层。西侧与北侧 L 型排列的两栋 20 层玻璃幕墙楼。1-3 层裙楼扶梯互通，低区客梯通 4-12 层，高区通 13-17 层，18-20 层是高密区，要专用电梯加生物识别。你的实验室在 B 栋 12 层。18 层是联合创新实验室。

@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 开放办公区
+bg: assets/scenes/stellar-cloud-campus-tower-bc-frontier-lab-open-office.jpg
 ambient: office-night
 title: 开放办公区
 intent: 实验室的核心区域，整层没有实体墙隔断。靠门这侧是底层支持组三个人的工位，你的位子在最边缘、紧挨走廊；另一侧隔着低矮储物柜和大型移动白板，是核心算法组的十二个位子，墙上全是没擦的公式。你能看自己的工位、组长的位子、同事的位子，也能走到交界处的共享打印机和排障终端。出去就是走廊，两边是埃利亚斯的办公室、会议室和茶水间。

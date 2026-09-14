@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 玄关与门后空间
+bg: assets/scenes/zhonghe-old-street-unit-602-entry.jpg
 ambient: city-night
 title: 玄关与门后空间
 intent: 602 的入户玄关，进门第一小块地方。老式防盗门的锁孔磨得发亮，简易鞋架和带抽屉的半高鞋柜挤在墙边，门后挂着购物袋、尼龙胸包和一把备用黑伞。鞋柜桌面上是你随手丢下的钥匙和工作牌。往里有客厅，也能直接下楼。

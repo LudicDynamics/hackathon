@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 1806 · 客用卫浴间
+bg: assets/scenes/jingge-apartment-suite-1806-guest-bath.jpg
 ambient: rain
 title: 1806 · 客用卫浴间
 intent: 走廊左侧的客卫，干湿分离。智能感应马桶、单台盆大理石洗漱台与防雾镜、基础全玻璃淋浴房。这里几乎没有私人痕迹——洗漱台上是酒店标配、未拆封的洗漱包，毛巾是保洁叠出的折痕，没有任何电动牙刷、剃须刀或护肤品。能看洗漱包、看毛巾架，也能回走廊。

@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 1806 · 卧室
+bg: assets/scenes/jingge-apartment-suite-1806-bedroom.jpg
 ambient: rain
 title: 1806 · 卧室
 intent: 走廊尽头的卧室。双人床配硬支撑床垫，纯白高支棉床品；床头柜上靠床侧是 iPad、贴墙侧是 Kindle Oasis 3，浅抽屉里放着真丝眼罩与降噪耳塞。对面是 65 寸画框电视，里面连着步入式衣帽间和一台电子密码保险箱。遮光窗帘闭着，除湿机在门角静响。能看 Kindle、开衣帽间、看保险箱，也能回走廊。

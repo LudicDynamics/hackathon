@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 小公园
+bg: assets/scenes/stellar-cloud-campus-riverside-park.jpg
 ambient: rain
 title: 小公园
 intent: 园区西南角到南侧边缘的绿化区。有篮球场、网球场、乒乓球台和一条八百米环形塑胶跑道；再往里是银杏林，透水砖步道、长椅间距离得很开、循环水景；最南边是大片阳光草坪。午休有人带饭来草坪上坐着。

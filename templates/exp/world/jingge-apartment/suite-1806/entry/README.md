@@ -1,6 +1,7 @@
 ---
 type: readme
 name: 1806 · 玄关与家政区
+bg: assets/scenes/jingge-apartment-suite-1806-entry.jpg
 ambient: rain
 title: 1806 · 玄关与家政区
 intent: 入户门内的玄关与家政区。左手墙嵌着智能中控屏，能管全屋声光电、呼叫管家、设勿扰；旁边是电子猫眼屏。通顶玄关柜的下半部藏着洗烘一体机，墙角立着沥水伞架。能读中控屏、看伞架里的黑伞、打开玄关柜，也能往会客厅走或退出套房。
