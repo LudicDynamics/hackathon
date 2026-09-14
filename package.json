@@ -12,6 +12,7 @@
     "motion": "node tools/motion-clip.mjs",
     "gen": "node tools/flow-gen.mjs",
     "gen:image": "node tools/flow-gen.mjs image",
+    "gen:openai-image": "node tools/openai-image-gen.mjs",
     "gen:video": "node tools/flow-gen.mjs video",
     "gen:emotions": "node tools/gen-emotions.mjs",
     "gen:motion": "node tools/gen-motion.mjs",
