@@ -23,6 +23,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { translationCalls } from './lib/i18n-call-keys.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const webSrc = path.join(repoRoot, 'apps/web/src');
@@ -43,32 +44,12 @@ function walk(dir) {
 /**
  * Collect the keys of every `t(…)` call, with source positions.
  *
- * The argument is scanned as a balanced-paren slice, not a single quoted
- * literal: the codebase uses `t(muted ? 'Unmute sound' : 'Mute sound')` and
- * `t('{items} ITEMS · {people} PEOPLE', {...})`, so every string literal inside
- * the call is a candidate key. Dynamic keys (`t(someVariable)`) yield nothing
- * and are intentionally not gated.
+ * Parse only the first argument, including conditional key alternatives.
+ * Interpolation values and conditions are not translation keys. Dynamic keys
+ * (`t(someVariable)`) yield nothing and are intentionally not gated.
  */
 function callKeys(file, text) {
-  const found = [];
-  const re = /\bt\(\s*/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    const open = m.index + m[0].length - 1; // the '(' itself
-    let depth = 0;
-    let i = open;
-    for (; i < text.length; i++) {
-      const c = text[i];
-      if (c === '(') depth++;
-      else if (c === ')') { depth--; if (depth === 0) break; }
-    }
-    const arg = text.slice(open + 1, i);
-    const line = text.slice(0, m.index).split('\n').length;
-    for (const lit of arg.matchAll(/(['"])((?:\\.|(?!\1).)*)\1/g)) {
-      found.push({ key: lit[2], file: path.relative(repoRoot, file), line });
-    }
-  }
-  return found;
+  return translationCalls(file, text).map(hit => ({ ...hit, file: path.relative(repoRoot, file) }));
 }
 
 const messages = JSON.parse(fs.readFileSync(messagesPath, 'utf8'));

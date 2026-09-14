@@ -82,7 +82,8 @@ async function harness({ stub = true, blob } = {}) {
       try { store.close(); } catch {}
       await fs.rm(repo, { recursive: true, force: true });
       for (const k of ['AIRP_TTS_BASE_URL', 'DASHSCOPE_API_KEY', 'AIRP_TTS_MODEL',
-                       'AIRP_TTS_DEFAULT_VOICE', 'AIRP_TTS_TIMEOUT_MS']) {
+                       'AIRP_TTS_DEFAULT_VOICE', 'AIRP_TTS_TIMEOUT_MS', 'AIRP_TTS_LOCAL_BASE_URL',
+                       'AIRP_TTS_LOCAL_TIMEOUT_MS', 'AIRP_TTS_LOCAL_VOICE', 'AIRP_TTS_LOCAL_API_KEY']) {
         if (savedEnv[k] === undefined) delete process.env[k]; else process.env[k] = savedEnv[k];
       }
     },
@@ -91,6 +92,112 @@ async function harness({ stub = true, blob } = {}) {
 
 const post = (base, body) => fetch(`${base}/tts`, {
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+});
+
+async function localHarness(t, worldId = 'first-snow-jp') {
+  const h = await harness();
+  t.after(() => h.close());
+  const manifest = JSON.parse(await h.store.readFile('world.json'));
+  await h.store.writeFile('world.json', JSON.stringify({ ...manifest, id: worldId, characters: [{ id: 'nanami', home: 'world/map' }] }));
+  const local = { mode: 'ok', calls: [] };
+  const server = http.createServer((req, res) => {
+    let raw = '';
+    req.on('data', c => { raw += c; });
+    req.on('end', () => {
+      local.calls.push(JSON.parse(raw));
+      if (local.mode === 'timeout') return;
+      res.statusCode = local.mode === 'fail' ? 503 : 200;
+      res.end(local.mode === 'invalid' ? '<html>error</html>' : WAV);
+    });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  process.env.AIRP_TTS_LOCAL_BASE_URL = `http://127.0.0.1:${server.address().port}`;
+  process.env.AIRP_TTS_LOCAL_TIMEOUT_MS = '100';
+  process.env.AIRP_TTS_LOCAL_VOICE = 'setsuna';
+  delete process.env.AIRP_TTS_LOCAL_API_KEY;
+  return { ...h, local };
+}
+
+const localLine = { text: 'また会えたね。', voice: 'girl-next-door', language: 'ja', characterId: 'nanami', emotion: 'smile' };
+
+test('Local Nanami works without cloud key, preserves emotion, and caches independently', async t => {
+  const h = await localHarness(t);
+  delete process.env.DASHSCOPE_API_KEY;
+  assert.equal((await (await fetch(`${h.base}/tts/config`)).json()).configured, true);
+  const first = await (await post(h.base, localLine)).json();
+  assert.equal(first.ok, true);
+  assert.equal(first.cached, false);
+  assert.deepEqual(h.local.calls[0], { text: localLine.text, voice: 'setsuna', language: 'ja', emotion: 'happy' });
+  const cached = await (await post(h.base, localLine)).json();
+  assert.equal(cached.cached, true);
+  const sad = await (await post(h.base, { ...localLine, emotion: 'sad' })).json();
+  assert.notEqual(sad.url, first.url);
+  assert.equal(h.local.calls.length, 2);
+  assert.equal(h.ds.calls.length, 0);
+  assert.deepEqual(Buffer.from(await (await fetch(new URL(first.url, h.base))).arrayBuffer()), WAV);
+});
+
+for (const mode of ['fail', 'timeout', 'invalid']) {
+  test(`Local ${mode} warns and uses online fallback; recovery returns to local voice`, async t => {
+    const h = await localHarness(t, 'firstsnow-niko-ef44d9e');
+    const warnings = [];
+    t.mock.method(console, 'warn', line => warnings.push(line));
+    h.local.mode = mode;
+    const response = await post(h.base, localLine);
+    assert.equal(response.headers.get('X-AIRP-TTS-Fallback'), 'local-to-online');
+    const fallback = await response.json();
+    assert.equal(fallback.ok, true);
+    assert.equal(h.ds.calls.length, 1);
+    assert.ok(warnings.some(w => w.includes('falling back to online TTS')));
+    h.local.mode = 'ok';
+    const recovered = await (await post(h.base, localLine)).json();
+    assert.equal(recovered.ok, true);
+    assert.notEqual(recovered.url, fallback.url);
+    assert.equal(h.ds.calls.length, 1);
+    assert.equal(h.local.calls.length, 2);
+  });
+}
+
+test('Other characters and legacy requests remain online', async t => {
+  const h = await localHarness(t);
+  for (const characterId of ['sumi-yukimura', undefined]) {
+    const result = await (await post(h.base, { ...localLine, characterId })).json();
+    assert.equal(result.ok, true);
+  }
+  assert.equal(h.local.calls.length, 0);
+  assert.equal(h.ds.calls.length, 1);
+});
+
+for (const worldId of ['sakura-academy', 'sakura-academy-saved-game']) {
+  test(`School romance Nanami uses local TTS in ${worldId}`, async t => {
+    const h = await localHarness(t, worldId);
+    delete process.env.DASHSCOPE_API_KEY;
+    const response = await post(h.base, { ...localLine, voice: 'shy-sweet' });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).ok, true);
+    assert.equal(h.local.calls.length, 1);
+    assert.equal(h.local.calls[0].voice, 'setsuna');
+    assert.equal(h.ds.calls.length, 0);
+  });
+}
+
+test('Same character ID in another world remains online', async t => {
+  const h = await localHarness(t, 'magic-academy-jp');
+  assert.equal((await (await post(h.base, localLine)).json()).ok, true);
+  assert.equal(h.local.calls.length, 0);
+  assert.equal(h.ds.calls.length, 1);
+});
+
+test('Local failure without online credentials returns honest failure and warning header', async t => {
+  const h = await localHarness(t);
+  delete process.env.DASHSCOPE_API_KEY;
+  h.local.mode = 'fail';
+  const response = await post(h.base, localLine);
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get('X-AIRP-TTS-Fallback'), 'local-to-online');
+  assert.equal((await response.json()).code, 'tts_unconfigured');
+  assert.equal(h.ds.calls.length, 0);
 });
 
 // ── A 组：缓存命中（非空性核心） + 原子写 ──

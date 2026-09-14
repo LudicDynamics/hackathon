@@ -45,7 +45,7 @@ const BODIES = [
   {
     route: '/api/tts',
     file: 'apps/web/src/components/overlay/CharacterModal.tsx',
-    keys: ['text', 'voice', 'language'],
+    keys: ['text', 'voice', 'language', 'characterId', 'emotion'],
     doc: 'docs/wiring/00-共同上下文.md §6',
   },
   // The gateway (`airp-gateway.ts`) wraps bodies in `json('POST', {...})` rather

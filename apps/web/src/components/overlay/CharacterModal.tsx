@@ -252,7 +252,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 
   /** 页封口即预取（contract §6.5）：同页只发一次（voiceState 门）。
    *  ⚠️ 门禁硬约束：`fetch('/api/tts'` 与 route 同行、body 为内联对象字面量、
-   *  键集恰为 text / voice / language（tools/check-request-bodies.mjs）。 */
+   *  键集由 tools/check-request-bodies.mjs 校验。 */
   const prefetchVoice = useCallback(
     async (page: StagePage, i: number): Promise<void> => {
       if (page.voiceState !== 'idle') return; // 已 pending/ready/failed → 不重发
@@ -266,8 +266,11 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         const res = await fetch('/api/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: page.text, voice, language }),
+          body: JSON.stringify({ text: page.text, voice, language, characterId, emotion: page.emo }),
         });
+        if (res.headers.get('X-AIRP-TTS-Fallback') === 'local-to-online') {
+          console.warn('[AIRP TTS] Local voice failed; falling back to online TTS.');
+        }
         if (token !== voiceTurnRef.current) return; // 已换轮 → 丢弃结果（不写、不播）
         const data = (await res.json()) as { ok?: boolean; url?: string; code?: string };
         if (!res.ok || !data.ok || typeof data.url !== 'string' || data.url === '') {
@@ -286,7 +289,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         onVoiceResolved(page, i);
       }
     },
-    [voice, language, onVoiceResolved]
+    [voice, language, characterId, onVoiceResolved]
   );
 
   /** 语音在途 → 挂起 stinger，到点仍 pending 则响（contract §5.4）。 */
