@@ -506,7 +506,11 @@ export function createWorldRouter(
       const templatesRoot = path.join(repoRoot, 'templates') + path.sep;
       if (resolvedPath.startsWith(templatesRoot)) {
         const playPath = path.join(repoRoot, 'worlds', `${path.basename(resolvedPath)}-${randomUUID().slice(0, 8)}`);
-        await fs.cp(resolvedPath, playPath, { recursive: true });
+        // Runtime state (history DB, sessions) never travels with a template copy.
+        await fs.cp(resolvedPath, playPath, {
+          recursive: true,
+          filter: (source) => !['.airpworld', '.pi'].includes(path.relative(resolvedPath, source).split(path.sep)[0]),
+        });
         resolvedPath = playPath;
       }
 

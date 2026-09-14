@@ -4,7 +4,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import cors from 'cors';
-import { existsSync } from 'node:fs';
+import { cpSync, existsSync } from 'node:fs';
 import { WebSocketServer, WebSocket } from 'ws';
 import { LocalWorldStore, createActionService, settleTurnCursor } from '@airp/shared';
 import { AgentLifecycleManager } from './engine/lifecycle.js';
@@ -100,10 +100,23 @@ const liveCalls = new LiveCallRegistry({
   },
 });
 
-// Open the first curated world and start its writer.
-const DEFAULT_WORLD = path.resolve(REPO_ROOT, process.env.AIRP_WORLD ?? 'templates/wuwu');
+// Open the first curated world and start its writer. A template is never played
+// in place (that wrote play state into the repo): like `/api/worlds/load`, boot
+// plays a copy under worlds/. The copy is stable per template so dev restarts
+// keep progress instead of piling up saves.
+const DEFAULT_SOURCE = path.resolve(REPO_ROOT, process.env.AIRP_WORLD ?? 'templates/wuwu');
+const TEMPLATES_ROOT = path.join(REPO_ROOT, 'templates') + path.sep;
+const DEFAULT_WORLD = DEFAULT_SOURCE.startsWith(TEMPLATES_ROOT)
+  ? path.join(REPO_ROOT, 'worlds', `${path.basename(DEFAULT_SOURCE)}-default`)
+  : DEFAULT_SOURCE;
 try {
-  if (!existsSync(path.join(DEFAULT_WORLD, 'world.json'))) throw new Error('Default world is unavailable');
+  if (!existsSync(path.join(DEFAULT_SOURCE, 'world.json'))) throw new Error('Default world is unavailable');
+  if (DEFAULT_WORLD !== DEFAULT_SOURCE && !existsSync(path.join(DEFAULT_WORLD, 'world.json'))) {
+    cpSync(DEFAULT_SOURCE, DEFAULT_WORLD, {
+      recursive: true,
+      filter: (source) => !['.airpworld', '.pi'].includes(path.relative(DEFAULT_SOURCE, source).split(path.sep)[0]),
+    });
+  }
   activeStore = new LocalWorldStore(DEFAULT_WORLD);
   // Align the tail cursor BEFORE watching — the watcher kicks `drain()`, and
   // aligning first keeps "align, then listen" unambiguous (docs/tools/12 §8.6).
