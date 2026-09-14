@@ -5,6 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { resolveVoice, sanitiseTtsText, parseFrontmatter, type LocalWorldStore } from '@airp/shared';
 import { LocalTtsError, characterLocalVoice, isLocalTtsCharacter, localTtsEmotion, localTtsHash, readLocalTtsConfig, synthesiseLocal } from './local-tts.js';
+import { TtsTranslateError, needsJapaneseBridge, translateToJapanese } from './tts-translate.js';
 
 /**
  * Server-side TTS: the ONE synthesis point (docs/tts/00 §1, docs/tts/01).
@@ -54,7 +55,7 @@ interface TtsConfig {
  * Re-read env on EVERY request, never at module load (docs/tts/01 §3.D step 0):
  * the test harness sets env after import and expects it to take effect.
  */
-function readTtsConfig(): TtsConfig {
+export function readTtsConfig(): TtsConfig {
   const timeoutRaw = Number(process.env.AIRP_TTS_TIMEOUT_MS);
   return {
     apiKey: process.env.DASHSCOPE_API_KEY ?? '',
@@ -350,16 +351,24 @@ export function createTtsRouter(
           ?? (!override && isLocalTtsCharacter(manifest.id, characterId) ? local.voice : null);
         if (registered && selected) {
           const localConfig = { ...local, voice: selected };
-          const language = typeof rawLanguage === 'string' && rawLanguage in LANGUAGE_MAP ? rawLanguage : 'auto';
+          // A Japanese local voice never reads Chinese: a Chinese world's line
+          // is translated to Japanese first (display stays Chinese). Cached by
+          // the ORIGINAL line, so each line is translated and synthesised once.
+          const bridge = needsJapaneseBridge(selected, (manifest as { locale?: unknown }).locale, rawLanguage, text);
+          const language = bridge ? 'ja' : typeof rawLanguage === 'string' && rawLanguage in LANGUAGE_MAP ? rawLanguage : 'auto';
           const emotion = localTtsEmotion(rawEmotion);
-          const localFile = `${localTtsHash(localConfig, text, language, emotion)}.wav`;
+          const localFile = `${localTtsHash(localConfig, text, bridge ? 'zh-CN>ja' : language, emotion)}.wav`;
           const localAbs = path.join(store.worldRoot, '.airpworld', 'tts-cache', localFile);
           const cached = existsSync(localAbs);
-          if (!cached) await writeAtomic(localAbs, await synthesiseLocal(localConfig, text, language, emotion));
+          if (!cached) {
+            const spoken = bridge ? await translateToJapanese(text) : text;
+            await writeAtomic(localAbs, await synthesiseLocal(localConfig, spoken, language, emotion));
+          }
           return res.json({ ok: true, url: `/api/tts/audio/${localFile}`, cached, characters: text.length, truncated });
         }
       } catch (error) {
-        const reason = error instanceof LocalTtsError ? error.message : error instanceof Error ? error.name : 'Error';
+        // Translation failure lands here too: the online voice reads the Chinese.
+        const reason = error instanceof LocalTtsError || error instanceof TtsTranslateError ? error.message : error instanceof Error ? error.name : 'Error';
         console.warn(`[AIRP TTS] Local character TTS failed (${reason}); falling back to online TTS.`);
         res.setHeader('X-AIRP-TTS-Fallback', 'local-to-online');
       }
