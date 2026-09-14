@@ -51,6 +51,11 @@ const CONSUMERS = [
   // `airp:agent-frame` relay (writer busy state) and `dice_result` off
   // `airp:dice-frame`. Scanning only useWorld would call those dark.
   'apps/web/src/App.tsx',
+  // The nook realtime call consumes the character frames off the same
+  // `airp:character-frame` relay useWorld dispatches (docs/live-voice/00 §2.8).
+  // The hook filters `character_delta`; NookView branches on all three.
+  'apps/web/src/lib/live-call.ts',
+  'apps/web/src/components/nook/NookView.tsx',
 ];
 
 /**

@@ -1,6 +1,7 @@
 ---
 type: readme
 name: Edith Vale
+voice: shy-sweet
 avatar: assets/characters/edith.webp
 ---
 

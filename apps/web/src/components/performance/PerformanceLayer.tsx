@@ -19,6 +19,7 @@
  */
 import React, { useEffect, useReducer, useRef } from 'react';
 import type { ShowFrame } from '@airp/shared';
+import type { OverlayAdmission } from '../../lib/overlay-admission.js';
 import {
   clampBursts,
   clampStagger,
@@ -49,15 +50,18 @@ interface ActiveShow {
   cleanup: () => void;
 }
 
-/** Rendering environment the dispatcher hands to every renderer. */
 interface ShowCtx {
   /** Mount box (`<PerformanceLayer />`'s root div); dim/beam/threads go here. */
   root: HTMLElement;
-  /** Shared camera. `camera_focus` calls `flyTo`; threads subscribe for the
-   *  world transform so they stay aligned while the camera flies (§12.2). */
+  /** Shared camera. `camera_focus` calls `flyTo`; threads follow its transform. */
   camera: CameraApi;
-  /** `prefers-reduced-motion` probe (§3.7); decorators degrade when true. */
+  /** `prefers-reduced-motion` probe; decorators degrade when true. */
   still: boolean;
+  /** Shared lifecycle gate; decorative shows stop when any gate is closed. */
+  hidden: boolean;
+  effectsEnabled: boolean;
+  /** App-owned admission seam; absent keeps existing callers compatible. */
+  admission?: OverlayAdmission;
 }
 
 let active: ActiveShow[] = [];
@@ -219,12 +223,18 @@ function showLightsOut(frame: ShowFrame, ctx: ShowCtx): () => void {
 }
 
 /**
- * `fireworks` — bursts on the EXISTING ParticleLayer canvas, never a second
- * full-screen canvas (§4.4: a second full-screen canvas costs half a frame).
- * Purely decorative, so it is skipped entirely under reduced motion (§3.7).
+ * `fireworks` — bursts on ParticleLayer's bounded `burst` surface.
+ * Purely decorative, so it is skipped when effects are off, hidden, or reduced.
  */
 function showFireworks(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
-  if (ctx.still) return null;
+  if (
+    ctx.still ||
+    ctx.hidden ||
+    !ctx.effectsEnabled ||
+    (typeof document !== 'undefined' && document.hidden)
+  ) {
+    return null;
+  }
   const params = frame.params ?? {};
   const cancel = playBurst({
     color: strParam(params, 'color'),
@@ -232,7 +242,6 @@ function showFireworks(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
     origin: strParam(params, 'origin'),
     durationMs: frame.durationMs,
   });
-  // No boom in `FoleyName`; `crit-chime` is the frozen stand-in (contract §8b).
   playFoley('crit-chime');
   return cancel;
 }
@@ -361,7 +370,12 @@ function showInkBurst(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
  * crit/fumble judgement, no settle sound: the outcome belongs to `02`
  * (`dice_result`), and this show's schema carries no result (§3.3).
  */
-function showRollCeremony(frame: ShowFrame, ctx: ShowCtx): () => void {
+function showRollCeremony(frame: ShowFrame, ctx: ShowCtx): (() => void) | null {
+  const admission = ctx.admission?.request('dice', 'workspace');
+  if (admission?.accepted === false) {
+    console.warn('[show_frame] roll_ceremony rejected by overlay admission', admission.code);
+    return null;
+  }
   const params = frame.params ?? {};
   const anticipation = numParam(params, 'anticipation') ?? 0;
   const wrap = makeDiv('show-ceremony');
@@ -380,6 +394,7 @@ function showRollCeremony(frame: ShowFrame, ctx: ShowCtx): () => void {
 
   return () => {
     wrap.remove();
+    if (admission?.accepted) ctx.admission?.release(admission.token);
   };
 }
 
@@ -404,7 +419,10 @@ const SHOW_RENDERERS: Record<string, (f: ShowFrame, ctx: ShowCtx) => (() => void
  * once for developers; a missing / non-string component is fully silent
  * (§3.2, §7 S2/S2b).
  */
-export function performShowFrame(frame: unknown): boolean {
+export function performShowFrame(
+  frame: unknown,
+  injectedAdmission?: OverlayAdmission
+): boolean {
   if (!frame || typeof frame !== 'object') return false;
   const f = frame as Partial<ShowFrame>;
   if (f.type !== 'show_frame') return false;
@@ -421,18 +439,21 @@ export function performShowFrame(frame: unknown): boolean {
     return false;
   }
 
+  const ctx = injectedAdmission
+    ? { ...liveCtx, admission: injectedAdmission }
+    : liveCtx;
   const full = f as ShowFrame;
   const key = ruleKeyOf(kind);
 
   // Same resource: the newest intent takes over the shared DOM/veil. Different
-  // resources keep running side by side (§3.5).
+  // resources keep running side by side (§3.5). Render first so a rejected or
+  // target-missing frame does not tear down a valid running show.
+  const cleanup = SHOW_RENDERERS[kind](full, ctx);
+  if (!cleanup) return false;
   for (const s of active) {
     if (s.resourceKey === key) s.cleanup();
   }
   active = active.filter((s) => s.resourceKey !== key);
-
-  const cleanup = SHOW_RENDERERS[kind](full, liveCtx);
-  if (!cleanup) return false;
 
   // `caption` is a shared frame field (docs/perform/05 §4.3): one faint line
   // for every show. Owned here so no renderer has to duplicate it.
@@ -441,7 +462,7 @@ export function performShowFrame(frame: unknown): boolean {
   if (caption) {
     captionEl = makeDiv('show-caption');
     captionEl.textContent = caption;
-    liveCtx.root.appendChild(captionEl);
+    ctx.root.appendChild(captionEl);
   }
 
   const id = ++seq;
@@ -482,6 +503,12 @@ export interface PerformanceLayerProps {
   layer?: string;
   /** World frozen — a freeze cancels every running show (§7 S6). */
   frozen?: boolean;
+  /** Shared lifecycle inputs; omitted values preserve existing behavior. */
+  hidden?: boolean;
+  effectsEnabled?: boolean;
+  reducedMotion?: boolean;
+  /** App-owned overlay seam; omitted values preserve existing behavior. */
+  admission?: OverlayAdmission;
 }
 
 /**
@@ -490,27 +517,42 @@ export interface PerformanceLayerProps {
  * React render (docs/perform/05 §6.3). This component exists to own the box,
  * feed the render context, and cancel shows on a layer change / freeze.
  */
-export const PerformanceLayer: React.FC<PerformanceLayerProps> = ({ layer, frozen }) => {
+export const PerformanceLayer: React.FC<PerformanceLayerProps> = ({
+  layer,
+  frozen,
+  hidden,
+  effectsEnabled = true,
+  reducedMotion,
+  admission,
+}) => {
   const camera = useCamera();
-  const still = useStill();
+  const mediaStill = useStill();
+  const still = reducedMotion ?? mediaStill;
+  const hiddenState =
+    hidden ?? (typeof document !== 'undefined' && document.hidden);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [, force] = useReducer((n: number) => n + 1, 0);
 
-  // Private re-render feed so `activeShow()` is observable in DevTools/tests.
   useEffect(() => subscribeActiveShow(force), []);
 
-  // Publish the render context for the dispatcher; a show arriving before the
-  // component mounts sees `liveCtx === null` and is skipped, not crashed.
+  // Publish the render context for the dispatcher; admission is supplied by
+  // the host rather than stored as another document-level singleton.
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    liveCtx = { root, camera, still };
+    liveCtx = {
+      root,
+      camera,
+      still,
+      hidden: hiddenState,
+      effectsEnabled,
+      admission,
+    };
     return () => {
       liveCtx = null;
     };
-  }, [camera, still]);
+  }, [camera, still, hiddenState, effectsEnabled, admission]);
 
-  // z-20: below the dice ceremony's z-50 / fumble crack z-55 (contract §8b).
   useEffect(() => {
     const onShowFrame = (e: Event) => {
       performShowFrame((e as CustomEvent).detail);
@@ -522,8 +564,15 @@ export const PerformanceLayer: React.FC<PerformanceLayerProps> = ({ layer, froze
     };
   }, []);
 
-  // A layer change or a freeze invalidates every running show (§7 S6).
   useEffect(() => () => cancelShow(), [layer, frozen]);
 
-  return <div ref={rootRef} className="show-root" aria-hidden="true" />;
+  return (
+    <div
+      ref={rootRef}
+      className="show-root"
+      data-performance-surface="show"
+      data-depth="performance"
+      aria-hidden="true"
+    />
+  );
 };

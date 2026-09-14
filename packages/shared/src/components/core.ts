@@ -1,4 +1,6 @@
 import { stringifyFrontmatter } from '../schemas/frontmatter.js';
+import { validateAppearanceInput } from '../schemas/appearance.js';
+import { ActionError } from '../actions/errors.js';
 import type { ComponentDef, EntityRef, UseItemOnHandler } from './types.js';
 
 /** Item tags a lock/container treats as "the right thing". */
@@ -30,9 +32,21 @@ function itemTokens(item: EntityRef): string[] {
 async function rewriteTarget(
   store: { writeFileAtomic(path: string, content: string): Promise<void> },
   target: EntityRef,
+  kind: string,
   fm: Record<string, unknown>,
   body: string
 ): Promise<void> {
+  if (Object.prototype.hasOwnProperty.call(fm, 'appearance')) {
+    const appearance = validateAppearanceInput(fm.appearance, kind);
+    if (!appearance.ok) {
+      const issue = appearance.issues[0];
+      throw new ActionError({
+        code: 'invalid_argument',
+        message: issue?.message ?? `Invalid appearance for component kind "${kind}".`,
+        details: { issues: appearance.issues },
+      });
+    }
+  }
   await store.writeFileAtomic(target.path, stringifyFrontmatter(fm, body));
 }
 
@@ -49,7 +63,7 @@ export const lockHandler: UseItemOnHandler = async ({ item, target, store }) => 
   if (!keys.some((t) => KEY_TAGS.includes(t))) return { handled: false, reason: 'wrong_item' };
   const next = { ...data, locked: false, opened_by: item.path };
   fm.status = { ...(typeof fm.status === 'object' && fm.status ? fm.status : {}), data: next };
-  await rewriteTarget(store, target, fm, target.body ?? '');
+  await rewriteTarget(store, target, 'lock', fm, target.body ?? '');
   return { handled: true, summary: `${item.name} opens ${target.name}.`, details: { unlocked: true } };
 };
 
@@ -66,7 +80,7 @@ export const containerHandler: UseItemOnHandler = async ({ item, target, store }
   if (!keys.some((t) => KEY_TAGS.includes(t))) return { handled: false, reason: 'wrong_item' };
   const next = { ...data, opened: true, opened_by: item.path };
   fm.status = { ...(typeof fm.status === 'object' && fm.status ? fm.status : {}), data: next };
-  await rewriteTarget(store, target, fm, target.body ?? '');
+  await rewriteTarget(store, target, 'container', fm, target.body ?? '');
   return {
     handled: true,
     summary: `${item.name} opens ${target.name}.`,

@@ -1,12 +1,9 @@
 ---
-
-type: "readme"
-name: "Sumi Yukimura"
-avatar: "assets/motion/seedance/characters/sumi-transparent.webp"
-voice: mature-elegant
-avatarVideo: "assets/motion/seedance/characters/sumi-transparent.webm"
+type: readme
+name: Sumi Yukimura
+voice: warm-cheerful
+avatar: assets/motion/seedance/characters/sumi-transparent.webp
+avatarVideo: assets/motion/seedance/characters/sumi-transparent.webm
 ---
 
-# Sumi Yukimura
-
-A newly debuted singer who asks for forty minutes without work.
+A newly debuted singer. Wants to spend non-work time before the tour. Does not automatically know private conversations with Nanami.

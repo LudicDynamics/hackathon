@@ -1,6 +1,6 @@
 ---
 name: character-asset-batch
-description: Use when mass-producing or wiring character media for a world — 6-emotion differential portraits, transparent living-portrait micro-motion clips, workshop-to-publish promotion, provenance manifests, and the /api/characters + CharacterModal front-end wiring. Covers the green-screen chromakey recipe, the 9:16 form contract, the free-image / paid-video credit split, and the mirrors-firstsnow-to-first-snow-jp rule.
+description: Use when mass-producing or wiring character media for a world — 6-emotion differential portraits, transparent living-portrait micro-motion clips, workshop-to-publish promotion, provenance manifests, and the /api/characters + CharacterModal front-end wiring. Covers the green-screen chromakey recipe, recommended portrait proportions, the free-image / paid-video credit split, and the mirrors-firstsnow-to-first-snow-jp rule.
 ---
 
 # 角色素材批次：6 情绪差分 + 透明微动立绘
@@ -56,9 +56,9 @@ pnpm gen:emotions --list                         # 看有哪些角色/已产出
 
 模型偶尔产出渐变绿或带阴影的绿幕——`chromakey` 阈值一小就残留绿边、一大就把角色的深色区（黑发、深蓝毛衣）一起吃掉。**逐张抽出来看**，必要时对单角色重跑 `--force`。despill 是 `mix=0.6`（去绿边）与 `expand=0.4` 的平衡点；角色发梢仍绿就加大 mix。
 
-### 坑 B：规格是 9:16，不是 3:4
+### 坑 B：比例是建议，不是硬契约
 
-情绪图 **768×1376（9:16）**，与微动立绘 **360×640（9:16）** 同族。理由：遮罩里两者会交替出现（静态差分 ↔ 小天地用视频），**不同比例会跳变**。`apps/web/src/index.css` 的注释写死了这点（clip 是 9:16、框是 3:4 → letterbox）。**别产出 3:4 的图**。
+情绪图建议接近 **9:16**，微动立绘也建议保持相近比例，以免遮罩在静态图和视频之间切换时产生明显跳变。发布门禁不锁死具体分辨率或长宽比；不同来源的有效尺寸由组件布局适配。
 
 ---
 
@@ -72,9 +72,9 @@ pnpm gen:motion --world firstsnow --id nanami --force
 
 流程：`base.png --(i2v 绿幕视频 720p 6s)--> <id>-green.mp4 --(motion-clip --pingpong)--> <id>-transparent.webm + poster.png`。
 
-### 坑 C：视频只走 720p——360p 上游已关
+### 坑 C：视频生成分辨率按上游能力选择
 
-`omni-1.1-flash` 的 360p 档**在当前账号档位被拒**（`INVALID_ARGUMENT`；flow 确认 360p 已停用）。**别为了省额度试 360p**，直接 720p。成本实测 **10 credits / 720p 6s**，跑批前先 `pnpm gen credits`。
+当前 `omni-1.1-flash` 账号档位对 360p 生成档返回 `INVALID_ARGUMENT`，生产时建议使用可用的 720p 档位。这里是生成服务的可用性建议，不是发布 webm 的尺寸契约。
 
 ### 坑 D：不要重产已有溯源链的片子
 
@@ -128,9 +128,11 @@ pnpm gen:record -- --check # 核验（对不上 exit 1）
 ## 六、验收（④）与收工自检
 
 ```bash
-pnpm check:emotions          # 总门禁：6/6 齐备 + 真透明 + 9:16 + webm 真 alpha + 账本 SHA + 双模板字节一致
-pnpm check:emotions --all --json   # 机器可读
+pnpm check:emotions          # 6/6（已存在的情绪集）+ 真透明 + 溯源账 + 全模板引用
+pnpm check:emotions --all --json
 ```
+
+门禁检查资产存在性、真实 alpha、manifest 摘要和双模板字节一致性。尺寸与长宽比只输出 advisory，不会导致门禁失败。
 
 门禁六条（`docs/assets/00 §7`）：
 
@@ -138,7 +140,7 @@ pnpm check:emotions --all --json   # 机器可读
 |---|---|
 | A | 6/6 webp 齐备 |
 | B | webp **真透明**（`dwebp` 解 → alpha 占比 > 0） |
-| C | webp ~9:16 |
+| C | webp 尺寸与比例（**advisory，仅供生产参考**） |
 | D | webm 真 alpha（`-c:v libvpx-vp9` 解） |
 | E | 账本双向 SHA-256 对得上 |
 | F | firstsnow ↔ first-snow-jp 字节一致 |

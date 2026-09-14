@@ -4,23 +4,42 @@ import type { Dirent } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import type { CardRecord, LinkRecord, SeatFile, WorldStore } from './world-store.js';
+import type {
+  CardRecord,
+  CharacterCreationTransaction,
+  LinkRecord,
+  SeatFile,
+  WorldStore,
+} from './world-store.js';
 import { deriveLayers, layerOfPath, layerOfDir, cardsOfLayer, childLayers, WORLD_DIR } from './layers.js';
 import { linkIdOf } from '../schemas/canvas.js';
 import { type WorldManifest, type LayerConfig, validateWorldManifest } from '../schemas/world.js';
+import { isValidCharacterId } from '../rules/characters.js';
 import { entityName, parseFrontmatter } from '../schemas/frontmatter.js';
 import type { ActorValue, AppendEventArgs, DanglingRef, MoveResult, WorldEvent } from '../schemas/events.js';
 import { EventDetailSchemas } from '../schemas/events.js';
 import { ActionError } from '../actions/errors.js';
 import { dirname as posixDirname, relFrom, rewriteOwnRefs, scanOwnRefs, scanRefs, rewriteRefs } from '../actions/refs.js';
 import { initCanvasDatabase, initHistoryDatabase } from '../db/schema.js';
-import { CARD_FORMS, cardFormVersionOf } from '../schemas/forms.js';
+import { CARD_FORMS, cardFormOf, cardFormVersionOf, cardKindOf } from '../schemas/forms.js';
+import { flowColumns } from '../layout/flow-columns.js';
 import type { PresenceRecord, SeatPresenceResult, ViewpointRecord } from './world-store.js';
+import type { AutoLayoutRect } from '../layout/flow-columns.js';
 
 /** Seating anchor (world coords, viewport agnostic). Cards spiral outward from here. */
 export const SEAT_ANCHOR = { x: 960, y: 540 };
 /** Spiral step between candidate cells, in world px. */
 export const SEAT_STEP = 96;
+type CharacterCreationJournal = {
+  characterId: string;
+  stageDir: string;
+  targets: string[];
+  status: 'staged' | 'manifest_committed' | 'event_committed';
+  manifestBefore?: string;
+  manifestAfter?: string;
+  eventKey?: string;
+  eventArgs?: AppendEventArgs;
+};
 /** Collision padding around card bounds when judging seat overlap. */
 export const SEAT_PAD = 22;
 /** Max candidate cells tried before falling back to the anchor itself. */
@@ -93,7 +112,8 @@ export class LocalWorldStore implements WorldStore {
   private manifestCache: WorldManifest | null = null;
   /** `manifest.id` is stable for a world; reading it re-scans every layer dir. */
   private projectIdCache: string | null = null;
-
+  /** Serialize layout reads and writes per world/layer within this process. */
+  private readonly seatLocks = new Map<string, Promise<void>>();
   constructor(worldRoot: string) {
     this.worldRoot = path.resolve(worldRoot);
     const airpDir = path.join(this.worldRoot, '.airpworld');
@@ -104,6 +124,7 @@ export class LocalWorldStore implements WorldStore {
 
     initCanvasDatabase(this.canvasDb);
     initHistoryDatabase(this.historyDb);
+    void this.reconcileCharacterCreationJournals();
   }
 
   /**
@@ -375,6 +396,257 @@ export class LocalWorldStore implements WorldStore {
     const stmt = this.canvasDb.prepare(sql);
     stmt.run(...params);
   }
+  private async withSeatLock<T>(layerId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.seatLocks.get(layerId) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const tail = previous.then(() => current);
+    this.seatLocks.set(layerId, tail);
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (this.seatLocks.get(layerId) === tail) this.seatLocks.delete(layerId);
+    }
+  }
+
+  private layoutOccupied(
+    layerId: string,
+    pageRows: readonly CardRecord[],
+    excluded: ReadonlySet<string> = new Set()
+  ): AutoLayoutRect[] {
+    const ids = new Set(this.cardsInLayer(layerId));
+    for (const row of pageRows) ids.add(row.id);
+    return this.getLayerCards([...ids])
+      .filter((row) => !excluded.has(row.id) && row.w > 0 && row.h > 0)
+      .map((row) => ({ id: row.id, x: row.x, y: row.y, w: row.w, h: row.h }));
+  }
+
+  private characterJournalRoot(): string {
+    return path.join(this.worldRoot, '.airpworld', 'create-char-journal');
+  }
+  private async writeCharacterJournal(file: string, journal: CharacterCreationJournal): Promise<void> {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    const tmp = `${file}.tmp-${process.pid}-${randomUUID().slice(0, 6)}`;
+    try {
+      await fs.writeFile(tmp, JSON.stringify(journal, null, 2));
+      await fs.rename(tmp, file);
+    } catch (err) {
+      await fs.rm(tmp, { force: true }).catch(() => {});
+      throw new ActionError({ code: 'write_failed', message: `Character creation journal failed: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  }
+
+  private async readCharacterJournal(file: string): Promise<CharacterCreationJournal> {
+    return JSON.parse(await fs.readFile(file, 'utf8')) as CharacterCreationJournal;
+  }
+
+  private async appendEventLocked(args: AppendEventArgs): Promise<WorldEvent> {
+    const projectId = await this.projectId();
+    if (process.env.NODE_ENV !== 'production') {
+      const schema = EventDetailSchemas[args.type];
+      const parsed = schema.safeParse(args.detail);
+      if (!parsed.success) {
+        throw new ActionError({
+          code: 'invalid_argument',
+          message: `Event '${args.type}' detail does not match its schema: ${parsed.error.message}`,
+        });
+      }
+    }
+    const now = new Date().toISOString();
+    const info = this.historyDb
+      .prepare(
+        `INSERT INTO events (id, project_id, type, actor_type, actor_id, layer, subject, turn, detail, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        '',
+        projectId,
+        args.type,
+        args.actor.type,
+        args.actor.id ?? null,
+        args.layer ?? null,
+        args.subject ?? null,
+        args.turn ?? null,
+        JSON.stringify(args.detail),
+        now
+      );
+    const seq = Number(info.lastInsertRowid);
+    this.historyDb.prepare('UPDATE events SET id = ? WHERE seq = ?').run(`evt-${seq}`, seq);
+    return {
+      seq,
+      id: `evt-${seq}`,
+      projectId,
+      type: args.type,
+      actor: args.actor,
+      layer: args.layer ?? null,
+      subject: args.subject ?? null,
+      turn: args.turn ?? null,
+      detail: args.detail,
+      createdAt: now,
+    };
+  }
+
+  async withCharacterCreationWriteLock<T>(
+    characterId: string,
+    work: (tx: CharacterCreationTransaction) => Promise<T>,
+  ): Promise<T> {
+    if (!isValidCharacterId(characterId)) {
+      throw new ActionError({ code: 'invalid_argument', message: `Invalid character id "${characterId}"` });
+    }
+    const journalDir = this.characterJournalRoot();
+    await fs.mkdir(journalDir, { recursive: true });
+    let journalFile: string | null = null;
+    let journal: CharacterCreationJournal | null = null;
+    try {
+      this.historyDb.exec('BEGIN IMMEDIATE');
+    } catch (err) {
+      throw new ActionError({ code: 'write_failed', message: `Character creation lock unavailable: ${err instanceof Error ? err.message : String(err)}` });
+    }
+    try {
+      const tx: CharacterCreationTransaction = {
+        stageBundle: async (files) => {
+          if (journalFile) throw new ActionError({ code: 'write_failed', message: 'Character bundle already staged' });
+          const stageDir = path.join(this.worldRoot, '.airpworld', 'create-char-staging', `${characterId}-${randomUUID()}`);
+          const targets = [...files.keys()];
+          if (targets.length === 0) throw new ActionError({ code: 'write_failed', message: 'Character bundle is empty' });
+          try {
+            for (const target of targets) {
+              this.resolvePath(target);
+              const staged = path.join(stageDir, target);
+              await fs.mkdir(path.dirname(staged), { recursive: true });
+              await fs.writeFile(staged, files.get(target)!);
+            }
+          } catch (err) {
+            await fs.rm(stageDir, { force: true, recursive: true }).catch(() => {});
+            if (err instanceof ActionError) throw err;
+            throw new ActionError({ code: 'write_failed', message: `Character staging failed: ${err instanceof Error ? err.message : String(err)}` });
+          }
+          let current: WorldManifest;
+          try {
+            current = await this.getManifest();
+          } catch (err) {
+            await fs.rm(stageDir, { force: true, recursive: true }).catch(() => {});
+            throw err;
+          }
+          const { layers: _beforeLayers, ...persistedBefore } = current;
+          const file = path.join(journalDir, `${characterId}-${randomUUID()}.json`);
+          journalFile = file;
+          journal = {
+            characterId,
+            stageDir,
+            targets,
+            status: 'staged',
+            manifestBefore: JSON.stringify(persistedBefore),
+          };
+          await this.writeCharacterJournal(file, journal);
+        },
+        commitBundleAndManifest: async (updates) => {
+          if (!journalFile || !journal) throw new ActionError({ code: 'write_failed', message: 'Character bundle was not staged' });
+          const current = await this.getManifest();
+          const merged = validateWorldManifest({
+            ...current,
+            ...updates,
+            updatedAt: new Date().toISOString(),
+          });
+          const { layers: _derived, ...persisted } = merged;
+          journal.manifestAfter = JSON.stringify(merged);
+          await this.writeCharacterJournal(journalFile, journal);
+          const moved: string[] = [];
+          try {
+            for (const target of journal.targets) {
+              const destination = this.resolvePath(target);
+              if ((await this.statKind(target)) !== 'missing') {
+                throw new ActionError({ code: 'already_exists', message: `Character target already exists: "${target}"` });
+              }
+              await fs.mkdir(path.dirname(destination), { recursive: true });
+              await fs.rename(path.join(journal.stageDir, target), destination);
+              moved.push(target);
+            }
+            await this.writeFileAtomic('world.json', JSON.stringify(persisted, null, 2));
+            this.manifestCache = merged;
+            journal.status = 'manifest_committed';
+            await this.writeCharacterJournal(journalFile, journal);
+          } catch (err) {
+            for (const target of moved) await fs.rm(this.resolvePath(target), { force: true, recursive: true }).catch(() => {});
+            if (journal.manifestBefore) {
+              await this.writeFileAtomic('world.json', JSON.stringify(JSON.parse(journal.manifestBefore), null, 2)).catch(() => {});
+            }
+            if (err instanceof ActionError) throw err;
+            throw new ActionError({ code: 'write_failed', message: `Character bundle commit failed: ${err instanceof Error ? err.message : String(err)}` });
+          }
+        },
+        appendSuccessEventOnce: async (args, key) => {
+          if (!journalFile || !journal || journal.status !== 'manifest_committed') {
+            throw new ActionError({ code: 'event_failed', message: 'Character manifest is not committed' });
+          }
+          journal.eventArgs = args;
+          journal.eventKey = key;
+          await this.writeCharacterJournal(journalFile, journal);
+          const projectId = await this.projectId();
+          const detail = JSON.stringify(args.detail);
+          const existing = this.historyDb.prepare(
+            `SELECT * FROM events WHERE project_id = ? AND type = ? AND subject IS ? AND turn IS ? AND detail = ? ORDER BY seq LIMIT 1`
+          ).get(projectId, args.type, args.subject ?? null, args.turn ?? null, detail) as Record<string, unknown> | undefined;
+          const event = existing ? this.rowToEvent(existing as never) : await this.appendEventLocked(args);
+          journal.status = 'event_committed';
+          await this.writeCharacterJournal(journalFile, journal);
+          return event;
+        },
+      };
+      const result = await work(tx);
+      this.historyDb.exec('COMMIT');
+      const completedJournal = journal as CharacterCreationJournal | null;
+      if (journalFile && completedJournal) {
+        await fs.rm(completedJournal.stageDir, { force: true, recursive: true }).catch(() => {});
+        await fs.rm(journalFile, { force: true }).catch(() => {});
+      }
+      return result;
+    } catch (err) {
+      const failedJournal = journal as CharacterCreationJournal | null;
+      if (journalFile && failedJournal?.status === 'manifest_committed') {
+        // Manifest is durable but event append failed: reconciliation must finish it.
+      } else if (journalFile && failedJournal) {
+        await fs.rm(failedJournal.stageDir, { force: true, recursive: true }).catch(() => {});
+        await fs.rm(journalFile, { force: true }).catch(() => {});
+      }
+      throw err;
+    }
+  }
+
+  async reconcileCharacterCreationJournals(): Promise<void> {
+    const root = this.characterJournalRoot();
+    let names: string[] = [];
+    try { names = (await fs.readdir(root)).filter((name) => name.endsWith('.json')); } catch { return; }
+    for (const name of names) {
+      const file = path.join(root, name);
+      let journal: CharacterCreationJournal;
+      try { journal = await this.readCharacterJournal(file); } catch { continue; }
+      if (journal.status === 'staged') {
+        await fs.rm(journal.stageDir, { force: true, recursive: true }).catch(() => {});
+        await fs.rm(file, { force: true }).catch(() => {});
+        continue;
+      }
+      if (!journal.eventArgs) continue;
+      try {
+        this.historyDb.exec('BEGIN IMMEDIATE');
+        const projectId = await this.projectId();
+        const detail = JSON.stringify(journal.eventArgs.detail);
+        const existing = this.historyDb.prepare(
+          `SELECT seq FROM events WHERE project_id = ? AND type = ? AND subject IS ? AND turn IS ? AND detail = ? LIMIT 1`
+        ).get(projectId, journal.eventArgs.type, journal.eventArgs.subject ?? null, journal.eventArgs.turn ?? null, detail);
+        if (!existing) await this.appendEventLocked(journal.eventArgs);
+        this.historyDb.exec('COMMIT');
+        await fs.rm(journal.stageDir, { force: true, recursive: true }).catch(() => {});
+        await fs.rm(file, { force: true }).catch(() => {});
+      } catch {
+        try { this.historyDb.exec('ROLLBACK'); } catch {}
+      }
+    }
+  }
 
   async appendHistoryEntry(sessionId: string, type: string, content: string): Promise<void> {
     const manifest = await this.getManifest();
@@ -446,6 +718,31 @@ export class LocalWorldStore implements WorldStore {
       throw new ActionError({
         code: 'event_failed',
         message: `Failed to append event '${args.type}': ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }
+
+  /**
+   * Rollback's atomic core (doc-21 §6 / hooks/03 §6.2). `appendEvent` opens its
+   * own transaction, so this reuses the locked insert and flushes every cursor
+   * BEFORE committing: both land or neither does. Pushing to the event's OWN
+   * seq (not a later `getMaxSeq()`) is what lets the writer still read the
+   * rollback sentence while losing the pre-rollback backlog.
+   */
+  async appendEventAndPushCursors(args: AppendEventArgs): Promise<WorldEvent> {
+    this.historyDb.exec('BEGIN IMMEDIATE');
+    try {
+      const event = await this.appendEventLocked(args);
+      const now = new Date().toISOString();
+      this.historyDb.prepare('UPDATE read_cursors SET seq = ?, updated_at = ?').run(event.seq, now);
+      this.historyDb.exec('COMMIT');
+      return event;
+    } catch (err) {
+      this.historyDb.exec('ROLLBACK');
+      if (err instanceof ActionError) throw err;
+      throw new ActionError({
+        code: 'event_failed',
+        message: `Failed to record the rollback event: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
   }
@@ -591,89 +888,71 @@ export class LocalWorldStore implements WorldStore {
 
   async seatUnplaced(layerId: string, files: SeatFile[]): Promise<CardRecord[]> {
     if (files.length === 0) return [];
-
-    const existing = this.getLayerCards(files.map((f) => f.path));
-    const existingIds = new Set(existing.map((r) => r.id));
-    // Only seat cards with no row yet; stable sort for deterministic output.
-    const missing = files
-      .filter((f) => !existingIds.has(f.path))
-      .sort((a, b) => a.path.localeCompare(b.path));
-    if (missing.length === 0) return [];
-
-    const maxZRows = this.queryCanvas(
-      'SELECT COALESCE(MAX(z_index), 0) AS maxZ FROM cards WHERE layer = ?',
-      [layerId]
-    );
-    const rawMax = maxZRows[0] as Record<string, unknown> | undefined;
-    let nextZ = Number(rawMax?.maxZ ?? 0) + 1;
-
-    // Occupied bounds = existing rows in this batch ∪ seats already assigned here.
-    const occupied = existing.map((r) => ({
-      cx: r.x + r.w / 2,
-      cy: r.y + r.h / 2,
-      w: r.w,
-      h: r.h,
-    }));
-
-    const seats: CardRecord[] = [];
-    for (const file of missing) {
-      const w = file.w && file.w > 0 ? file.w : 280;
-      const h = file.h && file.h > 0 ? file.h : 180;
-
-      let placedX = SEAT_ANCHOR.x - w / 2;
-      let placedY = SEAT_ANCHOR.y - h / 2;
-      let found = false;
-      let tries = 0;
-      for (const [gx, gy] of spiralCells()) {
-        if (tries++ >= SEAT_MAX_CANDIDATES) break;
-        const cx = SEAT_ANCHOR.x + gx * SEAT_STEP;
-        const cy = SEAT_ANCHOR.y + gy * SEAT_STEP;
-        // Track every candidate so exhaustion falls back to the LAST one tried
-        // instead of the anchor — otherwise two overflowing cards stack on the
-        // same point and overlap (the spiral is a walk, always a valid-ish spot).
-        placedX = cx - w / 2;
-        placedY = cy - h / 2;
-        if (!overlapsOccupied(occupied, cx, cy, w, h)) {
-          found = true;
-          break;
+    return this.withSeatLock(layerId, async () => {
+      this.execCanvas('BEGIN IMMEDIATE');
+      try {
+        const uniqueFiles = [...new Map(files.map((file) => [file.path, file])).values()];
+        const existing = this.getLayerCards(uniqueFiles.map((file) => file.path));
+        const existingIds = new Set(existing.map((row) => row.id));
+        const missing = uniqueFiles.filter((file) => !existingIds.has(file.path));
+        if (missing.length === 0) {
+          this.execCanvas('COMMIT');
+          return [];
         }
-      }
-      if (!found) {
-        console.warn(
-          `[seat] no free cell within ${SEAT_MAX_CANDIDATES} candidates for "${file.path}"; placing at last candidate`
-        );
-      }
 
-      // The row's seat baseline (`seatW`/`seatH`) is written WITH the box, so a
-      // later measured overwrite leaves a comparable `h !== seatH` signal
-      // (contract §5.2). `formVersion` is NOT written here: this method is not
-      // told the kind — the same pass's `reseatLayer` backfills it (row 8).
-      this.execCanvas(
-        `INSERT INTO cards (id, layer, x, y, width, height, z_index, metadata)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO NOTHING`,
-        [
-          file.path,
-          layerId,
-          placedX,
-          placedY,
-          w,
-          h,
-          nextZ,
-          serializeCardMetadata({ seatW: w, seatH: h }),
-        ]
-      );
-      // BLOCKER-N1 (contract §2.7): the batch must SEE its own seats, or every
-      // rowless card in this pass spirals to the same first cell. Mirrors
-      // `reseatLayer`'s two pushes (:807 legacy / :826 measured), verbatim.
-      occupied.push({ cx: placedX + w / 2, cy: placedY + h / 2, w, h });
-      seats.push({ id: file.path, layer: layerId, x: placedX, y: placedY, w, h, z: nextZ });
-      // BLOCKER-N1 second half: `nextZ` was computed once and never advanced,
-      // so a whole batch shared one z_index (stack order = row order accident).
-      // Same shape as `reseatLayer` (:818) and `seatNear` (:1191, re-reads max).
-      nextZ++;
-    }
-    return seats;
+        const occupied = this.layoutOccupied(layerId, existing);
+        const layout = flowColumns(
+          missing.map((file) => {
+            const size = seatDimensionsOf(file);
+            return { id: file.path, w: size.w, h: size.h, order: file.order };
+          }),
+          occupied
+        );
+        if (layout.exhausted) {
+          console.warn(
+            `[seat] flowColumns exhausted on layer "${layerId}" after ${layout.columnsUsed} columns; inserted deterministic fallback placements`
+          );
+        }
+
+        const maxZRows = this.queryCanvas(
+          'SELECT COALESCE(MAX(z_index), 0) AS maxZ FROM cards WHERE layer = ?',
+          [layerId]
+        );
+        let nextZ = Number((maxZRows[0] as Record<string, unknown> | undefined)?.maxZ ?? 0) + 1;
+        for (const placement of layout.placements) {
+          const file = missing.find((candidate) => candidate.path === placement.id)!;
+          this.execCanvas(
+            `INSERT INTO cards (id, layer, x, y, width, height, z_index, metadata)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO NOTHING`,
+            [
+              file.path,
+              layerId,
+              placement.x,
+              placement.y,
+              placement.w,
+              placement.h,
+              nextZ,
+              serializeCardMetadata({ seatW: placement.w, seatH: placement.h }),
+            ]
+          );
+          nextZ++;
+        }
+        this.execCanvas('COMMIT');
+        const seated = this.getLayerCards(missing.map((file) => file.path));
+        const byId = new Map(seated.map((row) => [row.id, row]));
+        return missing
+          .map((file) => byId.get(file.path))
+          .filter((row): row is CardRecord => row !== undefined);
+      } catch (err) {
+        try {
+          this.execCanvas('ROLLBACK');
+        } catch {
+          // SQLite already rolled back; the original error is the useful one.
+        }
+        throw err;
+      }
+    });
   }
 
   /**
@@ -708,152 +987,158 @@ export class LocalWorldStore implements WorldStore {
    * skipped rather than re-seated at a guessed size.
    */
   async reseatLayer(layerId: string, files: SeatFile[]): Promise<CardRecord[]> {
-    if (files.length === 0) return []; // 1
-    const rows = this.getLayerCards(files.map((f) => f.path));
-    const byId = new Map(rows.map((r) => [r.id, r]));
+    if (files.length === 0) return [];
+    return this.withSeatLock(layerId, async () => {
+      this.execCanvas('BEGIN IMMEDIATE');
+      try {
+        const uniqueFiles = [...new Map(files.map((file) => [file.path, file])).values()];
+        const rows = this.getLayerCards(uniqueFiles.map((file) => file.path));
+        const byId = new Map(rows.map((row) => [row.id, row]));
 
-    // SEAT has exactly two size sources — DECLARED (rows 2/3/5/7) and the ROW
-    // value (row 4) — and they are told apart by which w/h the item carries.
-    // A rowless card is INSERTed (there is nothing to UPDATE); everything else
-    // keeps its x/y identity and only its box + metadata move.
-    const seatAt = (path: string, d: { w: number; h: number }, dv: string, insert = false) => ({
-      path,
-      w: d.w,
-      h: d.h,
-      insert,
-      // A declared seat invalidates any previous measurement (row 5) and
-      // re-baselines the drift signal to the box we are about to place.
-      meta: serializeCardMetadata({ formVersion: dv, measuredAt: null, seatW: d.w, seatH: d.h }),
-    });
-    const seated: Array<{ path: string; w: number; h: number; insert: boolean; meta: string }> = [];
-    const backfill: Array<{ path: string; meta: string }> = [];
-
-    for (const f of files) {
-      const declared = declaredOf(f);
-      if (!declared) continue; // §7: no declared -> cannot compute a version, never guess
-      const dv = declaredVersionOf(f, declared);
-      if (!dv) continue;
-      const row = byId.get(f.path);
-      if (!row) { // 2
-        seated.push(seatAt(f.path, declared, dv, true));
-        continue;
-      }
-      if (!(row.w > 0) || !(row.h > 0)) { // 3
-        seated.push(seatAt(f.path, declared, dv));
-        continue;
-      }
-      // BLOCKER-C (contract §5.1): the KIND-resize source is judged BEFORE the
-      // measured-move source. A measured height was folded at the OLD width, so
-      // a kind resize invalidates it — if source 4 matched first it would seat
-      // at a known-stale height AND write `formVersion: dv`, permanently hiding
-      // the resize (the MAJOR-2 narrowing, caught by the acceptance suite).
-      if (row.formVersion != null && row.formVersion !== dv) { // 5 — kind resized in code
-        seated.push(seatAt(f.path, declared, dv));
-        continue;
-      }
-      const measuredMoved =
-        row.measuredAt != null && (row.h !== row.seatH || row.w !== row.seatW);
-      if (measuredMoved) { // 4 — the F1 core: re-seat at the MEASURED (row) size
-        seated.push({
-          path: f.path,
-          w: row.w,
-          h: row.h,
-          insert: false,
-          meta: serializeCardMetadata({
-            formVersion: dv,
-            measuredAt: row.measuredAt,
-            seatW: row.w,
-            seatH: row.h,
-          }),
+        const seatAt = (
+          file: SeatFile,
+          d: { w: number; h: number },
+          dv: string,
+          insert = false
+        ) => ({
+          path: file.path,
+          w: d.w,
+          h: d.h,
+          insert,
+          order: file.order,
+          meta: serializeCardMetadata({ formVersion: dv, measuredAt: null, seatW: d.w, seatH: d.h }),
         });
-        continue;
-      }
-      if (row.formVersion === dv) continue; // 6 — steady state, no-op
-      if (row.measuredAt != null) continue; // 9 — measured row, no version yet: leave alone
-      if (row.w !== declared.w || row.h !== declared.h) { // 7 — legacy, size already changed
-        seated.push(seatAt(f.path, declared, dv));
-        continue;
-      }
-      backfill.push({ // 8 — legacy, size unchanged: mark only, x/y/w/h untouched
-        path: f.path,
-        meta: serializeCardMetadata({ formVersion: dv, seatW: row.w, seatH: row.h }),
-      });
-    }
-    if (seated.length === 0 && backfill.length === 0) return [];
+        const seated: Array<{
+          path: string;
+          w: number;
+          h: number;
+          insert: boolean;
+          order?: number;
+          meta: string;
+        }> = [];
+        const backfill: Array<{ path: string; meta: string }> = [];
 
-    // Only a SEATED card vacates its old spot; a backfilled row keeps its x/y,
-    // so it MUST stay an obstacle — otherwise a re-seated neighbour lands on it.
-    const moving = new Set(seated.map((s) => s.path));
-    // Occupied = every card NOT being re-seated, at its CURRENT (row) size, so a
-    // re-seated card flows around — never through — its stable siblings.
-    const occupied = files
-      .filter((f) => !moving.has(f.path))
-      .map((f) => {
-        const row = byId.get(f.path);
-        const w = row?.w ?? f.w ?? 280;
-        const h = row?.h ?? f.h ?? 180;
-        return { cx: (row?.x ?? 0) + w / 2, cy: (row?.y ?? 0) + h / 2, w, h };
-      });
-    // Only an INSERT needs a z; take it from the layer's current maximum so a
-    // card seated here lands on top (same rule as `seatUnplaced`).
-    const maxZRows = this.queryCanvas(
-      'SELECT COALESCE(MAX(z_index), 0) AS maxZ FROM cards WHERE layer = ?',
-      [layerId]
-    );
-    let nextZ = Number((maxZRows[0] as Record<string, unknown> | undefined)?.maxZ ?? 0) + 1;
+        for (const file of uniqueFiles) {
+          const declared = declaredOf(file);
+          if (!declared) continue;
+          const declaredVersion = declaredVersionOf(file, declared);
+          if (!declaredVersion) continue;
+          const row = byId.get(file.path);
+          if (!row) {
+            seated.push(seatAt(file, declared, declaredVersion, true));
+            continue;
+          }
+          if (!(row.w > 0) || !(row.h > 0)) {
+            seated.push(seatAt(file, declared, declaredVersion));
+            continue;
+          }
+          if (row.formVersion != null && row.formVersion !== declaredVersion) {
+            seated.push(seatAt(file, declared, declaredVersion));
+            continue;
+          }
+          const measuredMoved =
+            row.measuredAt != null && (row.w !== row.seatW || row.h !== row.seatH);
+          if (measuredMoved) {
+            seated.push({
+              path: file.path,
+              w: row.w,
+              h: row.h,
+              insert: false,
+              order: file.order,
+              meta: serializeCardMetadata({
+                formVersion: declaredVersion,
+                measuredAt: row.measuredAt,
+                seatW: row.w,
+                seatH: row.h,
+              }),
+            });
+            continue;
+          }
+          if (row.formVersion === declaredVersion) continue;
+          if (row.measuredAt != null) continue;
+          if (row.w !== declared.w || row.h !== declared.h) {
+            seated.push(seatAt(file, declared, declaredVersion));
+            continue;
+          }
+          backfill.push({
+            path: file.path,
+            meta: serializeCardMetadata({ formVersion: declaredVersion, seatW: row.w, seatH: row.h }),
+          });
+        }
 
-    const out: CardRecord[] = [];
-    for (const item of seated) {
-      const { w, h } = item;
-      let placedX = SEAT_ANCHOR.x - w / 2;
-      let placedY = SEAT_ANCHOR.y - h / 2;
-      let tries = 0;
-      for (const [gx, gy] of spiralCells()) {
-        if (tries++ >= SEAT_MAX_CANDIDATES) break;
-        const cx = SEAT_ANCHOR.x + gx * SEAT_STEP;
-        const cy = SEAT_ANCHOR.y + gy * SEAT_STEP;
-        // Fall back to the last tried cell (never the anchor) — see seatUnplaced.
-        placedX = cx - w / 2;
-        placedY = cy - h / 2;
-        if (!overlapsOccupied(occupied, cx, cy, w, h)) break;
-      }
-      if (item.insert) {
-        this.execCanvas(
-          `INSERT INTO cards (id, layer, x, y, width, height, z_index, metadata)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(id) DO NOTHING`,
-          [item.path, layerId, placedX, placedY, w, h, nextZ, item.meta]
+        if (seated.length === 0 && backfill.length === 0) {
+          this.execCanvas('COMMIT');
+          return [];
+        }
+
+        const moving = new Set(seated.map((item) => item.path));
+        const occupied = this.layoutOccupied(layerId, rows, moving);
+        const layout = flowColumns(
+          seated.map((item) => ({
+            id: item.path,
+            w: item.w,
+            h: item.h,
+            order: item.order,
+          })),
+          occupied
         );
-        occupied.push({ cx: placedX + w / 2, cy: placedY + h / 2, w, h });
-        out.push({
-          id: item.path,
-          layer: layerId,
-          x: placedX,
-          y: placedY,
-          w,
-          h,
-          z: nextZ,
-          ...parseCardMetadata(item.meta),
-        });
-        nextZ++;
-        continue;
+        if (layout.exhausted) {
+          console.warn(
+            `[seat] flowColumns exhausted while reseating layer "${layerId}" after ${layout.columnsUsed} columns`
+          );
+        }
+        const placements = new Map(layout.placements.map((placement) => [placement.id, placement]));
+
+        const maxZRows = this.queryCanvas(
+          'SELECT COALESCE(MAX(z_index), 0) AS maxZ FROM cards WHERE layer = ?',
+          [layerId]
+        );
+        let nextZ = Number((maxZRows[0] as Record<string, unknown> | undefined)?.maxZ ?? 0) + 1;
+        for (const item of seated) {
+          const placement = placements.get(item.path)!;
+          if (item.insert) {
+            this.execCanvas(
+              `INSERT INTO cards (id, layer, x, y, width, height, z_index, metadata)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id) DO NOTHING`,
+              [
+                item.path,
+                layerId,
+                placement.x,
+                placement.y,
+                placement.w,
+                placement.h,
+                nextZ,
+                item.meta,
+              ]
+            );
+            nextZ++;
+          } else {
+            this.execCanvas(
+              'UPDATE cards SET x = ?, y = ?, width = ?, height = ?, metadata = ? WHERE id = ?',
+              [placement.x, placement.y, placement.w, placement.h, item.meta, item.path]
+            );
+          }
+        }
+        for (const item of backfill) {
+          this.execCanvas('UPDATE cards SET metadata = ? WHERE id = ?', [item.meta, item.path]);
+        }
+        this.execCanvas('COMMIT');
+
+        const changedIds = [...seated.map((item) => item.path), ...backfill.map((item) => item.path)];
+        const changed = new Map(this.getLayerCards(changedIds).map((row) => [row.id, row]));
+        return changedIds
+          .map((id) => changed.get(id))
+          .filter((row): row is CardRecord => row !== undefined);
+      } catch (err) {
+        try {
+          this.execCanvas('ROLLBACK');
+        } catch {
+          // SQLite already rolled back; the original error is the useful one.
+        }
+        throw err;
       }
-      this.execCanvas(
-        'UPDATE cards SET x = ?, y = ?, width = ?, height = ?, metadata = ? WHERE id = ?',
-        [placedX, placedY, w, h, item.meta, item.path]
-      );
-      const prev = byId.get(item.path)!;
-      occupied.push({ cx: placedX + w / 2, cy: placedY + h / 2, w, h });
-      out.push({ ...prev, x: placedX, y: placedY, w, h, ...parseCardMetadata(item.meta) });
-    }
-    // Backfill rows come back too, so the caller's `rowByPath` holds the fresh
-    // metadata (they moved no pixels). No-op on the next pass (row 6).
-    for (const item of backfill) {
-      this.execCanvas('UPDATE cards SET metadata = ? WHERE id = ?', [item.meta, item.path]);
-      const prev = byId.get(item.path)!;
-      out.push({ ...prev, ...parseCardMetadata(item.meta) });
-    }
-    return out;
+    });
   }
 
   /**
@@ -1184,13 +1469,12 @@ export class LocalWorldStore implements WorldStore {
     const { cx: aCx, cy: aCy } = await this.anchorOf(layerId, anchorPath);
     const anchor = this.getLayerCards([anchorPath])[0];
 
-    const w = file.w && file.w > 0 ? file.w : 280;
-    const h = file.h && file.h > 0 ? file.h : 180;
-    const occupied = this.getLayerCards(this.cardsInLayer(layerId)).map((r) => ({
-      cx: r.x + r.w / 2,
-      cy: r.y + r.h / 2,
-      w: r.w,
-      h: r.h,
+    const { w, h } = seatDimensionsOf(file);
+    const occupied = this.layoutOccupied(layerId, [anchor]).map((row) => ({
+      cx: row.x + row.w / 2,
+      cy: row.y + row.h / 2,
+      w: row.w,
+      h: row.h,
     }));
 
     const maxZRows = this.queryCanvas(
@@ -1276,7 +1560,11 @@ export class LocalWorldStore implements WorldStore {
   private async anchorOf(layerId: string, anchorPath: string): Promise<{ cx: number; cy: number }> {
     let anchor = this.getLayerCards([anchorPath])[0];
     if (!anchor) {
-      await this.seatUnplaced(layerId, [{ path: anchorPath }]);
+      const raw = await this.readFile(anchorPath);
+      const parsed = parseFrontmatter(raw);
+      const kind = cardKindOf(parsed.frontmatter, path.basename(anchorPath));
+      const form = cardFormOf(parsed.frontmatter, path.basename(anchorPath));
+      await this.seatUnplaced(layerId, [{ path: anchorPath, kind, w: form.w, h: form.h }]);
       anchor = this.getLayerCards([anchorPath])[0];
     }
     if (!anchor) {
@@ -1660,6 +1948,14 @@ function serializeCardMetadata(meta: Partial<CardMetadata>): string {
   if (meta.seatW != null) out.seatW = meta.seatW;
   if (meta.seatH != null) out.seatH = meta.seatH;
   return JSON.stringify(out);
+}
+function seatDimensionsOf(file: SeatFile): { w: number; h: number } {
+  return {
+    // Legacy callers may provide path-only SeatFiles; preserve the canvas
+    // schema's first-paint fallback while canonical /layer supplies declared sizes.
+    w: typeof file.w === 'number' && Number.isFinite(file.w) && file.w > 0 ? file.w : 280,
+    h: typeof file.h === 'number' && Number.isFinite(file.h) && file.h > 0 ? file.h : 180,
+  };
 }
 /**
  * DECLARED footprint carried by a SeatFile, or null when untrustworthy. Doubles

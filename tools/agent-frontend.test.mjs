@@ -15,11 +15,15 @@ test('character frames retain their identity and model failures are visible', ()
   assert.equal(error[0].message, 'Model unavailable');
 });
 
-test('character overlay consumes real frames and has no fabricated reply bank', async () => {
-  const source = await fs.readFile('apps/web/src/components/overlay/CharacterModal.tsx', 'utf8');
-  assert.doesNotMatch(source, /FALLBACK_REPLIES/);
-  assert.match(source, /frame.characterId !== characterId/);
-  for (const type of ['character_delta', 'character_message', 'character_idle', 'turn_aborted']) assert.ok(source.includes(type));
+test('character overlay consumes routed frames without a fabricated reply bank', async () => {
+  const modal = await fs.readFile('apps/web/src/components/overlay/CharacterModal.tsx', 'utf8');
+  const app = await fs.readFile('apps/web/src/App.tsx', 'utf8');
+  const world = await fs.readFile('apps/web/src/state/useWorld.ts', 'utf8');
+  assert.doesNotMatch(modal, /FALLBACK_REPLIES/);
+  assert.doesNotMatch(modal, /airp:agent-frame|airp:character-frame/);
+  assert.match(app, /msg\.characterId !== activeId/);
+  assert.match(app, /frameQueue\.enqueue/);
+  for (const type of ['character_delta', 'character_message', 'character_idle', 'turn_aborted']) assert.ok(world.includes(type));
 });
 test('interactive writer defaults to low thinking with an explicit override', async () => {
   const launch = await fs.readFile('apps/server/src/engine/launch.ts', 'utf8');

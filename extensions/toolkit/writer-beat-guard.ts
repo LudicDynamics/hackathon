@@ -1,68 +1,78 @@
-import path from 'node:path';
+/**
+ * Writer top-level total tool-call guard.
+ *
+ * This is deliberately a runtime loop safety limit, not a Chalk or file policy.
+ * The removed niko restrictions (one Chalk per turn, duplicate Chalk checks,
+ * native write/edit blocking, path/name/content rules) would directly prevent a
+ * Writer from fully initializing a scene, which may require many file changes.
+ */
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { parseFrontmatter } from '../../packages/shared/dist/index.js';
-import { currentLayer, worldStore } from './deps.js';
 
-/** One player action, not one model/tool iteration. Initialization has its own budget. */
-export function registerWriterBeatGuard(pi: ExtensionAPI): void {
-  let calls = 0, blocked = 0;
-  let target: string | null = null;
-  let landed = false;
-  const edits = new Set<string>();
-  const enabled = () => process.env.AIRP_AGENT_ROLE === 'writer' && process.env.AIRP_INIT_IN_FLIGHT !== '1';
-  pi.on('agent_start', () => { calls = 0; blocked = 0; target = null; landed = false; edits.clear(); });
-  pi.on('tool_call', async (event, ctx) => {
-    if (!enabled()) return;
-    const refuse = (reason: string, terminal = false) => {
-      if (terminal || ++blocked >= 2) ctx.abort();
-      return { block: true as const, reason };
-    };
-    if (++calls > 24) return refuse('This action reached its tool budget. Stop and wait for the player to continue.', true);
-    const input = event.input as Record<string, unknown>;
-    if (event.toolName === 'chalk') {
-      if (landed) return refuse('One narration is already on the canvas. Edit it if needed, then stop. Do not create another Chalk.');
-      const requested = input.append_to ?? input.path;
-      if (typeof requested === 'string') {
-        if (target && target !== requested) return refuse(`Reuse ${target}; do not rename a duplicate Chalk.`);
-        target = requested;
-        if (input.path && await worldStore(ctx).statKind(requested) !== 'missing') return refuse(`Read and edit ${target} in place, preserving its frontmatter. Do not create a renamed copy.`);
-      }
-      if (typeof input.content === 'string' && (input.content.length > 1000 || input.content.trim().split(/\n\s*\n/).length > 1)) return refuse('Write one concise final paragraph under 1000 characters, not a dialogue transcript.');
-      if (!input.append_to && typeof input.content === 'string' && ctx.cwd) {
-        const layer = currentLayer(ctx);
-        const directory = typeof requested === 'string' ? path.posix.dirname(requested) : layer === 'map' ? 'world' : layer;
-        if (directory) {
-          const normalized = input.content.replace(/\s+/g, ' ').trim();
-          for (const file of await worldStore(ctx).listFiles(directory)) {
-            if (path.posix.dirname(file) !== directory || !file.endsWith('.md')) continue;
-            const parsed = parseFrontmatter(await worldStore(ctx).readFile(file));
-            if (parsed.frontmatter?.type === 'chalk' && parsed.body.replace(/\s+/g, ' ').trim() === normalized) {
-              target = file;
-              return refuse(`This narration already exists at ${file}. Reuse it; do not create another copy.`);
-            }
-          }
-        }
-      }
-    }
-    if (event.toolName === 'write' || event.toolName === 'edit') {
-      if (typeof input.path !== 'string') return;
-      const file = path.relative(ctx.cwd, path.resolve(ctx.cwd, input.path)).split(path.sep).join('/');
-      if (!file.endsWith('.md')) return;
-      let isChalk = event.toolName === 'write' && typeof input.content === 'string' && parseFrontmatter(input.content).frontmatter?.type === 'chalk';
-      try { isChalk ||= parseFrontmatter(await worldStore(ctx).readFile(file)).frontmatter?.type === 'chalk'; } catch { /* New files use the payload check. */ }
-      if (!isChalk) return;
-      if (event.toolName === 'write') return refuse('Use chalk for new narration, or edit existing narration. Do not create Chalk with raw write.');
-      if (target && target !== file) return refuse(`This action uses ${target}; do not write another narrative file.`);
-      target = file; edits.add(event.toolCallId);
-    }
+export const DEFAULT_WRITER_MAX_TOOL_CALLS = 24;
+const WRITER_SCOPE = 'writer-top-level';
+const WRITER_ROLE = 'writer';
+
+function isSafePositiveInteger(value: number): value is number {
+  return Number.isSafeInteger(value) && value > 0;
+}
+
+/**
+ * Parse the process configuration without accepting JavaScript's looser number
+ * syntax (whitespace, signs, decimals, exponents, or hexadecimal).
+ */
+export function parseWriterMaxToolCalls(raw: string | undefined, fallback = DEFAULT_WRITER_MAX_TOOL_CALLS): number {
+  const safeFallback = isSafePositiveInteger(fallback) ? fallback : DEFAULT_WRITER_MAX_TOOL_CALLS;
+  if (typeof raw !== 'string' || !/^[1-9]\d*$/.test(raw)) return safeFallback;
+
+  const value = Number(raw);
+  return isSafePositiveInteger(value) ? value : safeFallback;
+}
+
+export interface WriterToolCallGuardOptions {
+  maxToolCalls?: number;
+  role?: string;
+  scope?: string;
+}
+
+/**
+ * Register the pre-execution hook and engine-turn reset hooks.
+ *
+ * Production registration intentionally reads the raw environment once. The
+ * identity check uses the raw role, not agentActor(), because actor resolution
+ * falls back unknown/unset values to Writer. Scope is an explicit launch gate.
+ */
+export function registerWriterToolCallGuard(
+  pi: ExtensionAPI,
+  options: WriterToolCallGuardOptions = {},
+): void {
+  const role = options.role ?? process.env.AIRP_AGENT_ROLE;
+  const scope = options.scope ?? process.env.AIRP_AGENT_SCOPE;
+  if (role !== WRITER_ROLE || scope !== WRITER_SCOPE) return;
+
+  const configuredMaxToolCalls = options.maxToolCalls;
+  const maxToolCalls = configuredMaxToolCalls === undefined
+    ? parseWriterMaxToolCalls(process.env.AIRP_WRITER_MAX_TOOL_CALLS)
+    : isSafePositiveInteger(configuredMaxToolCalls)
+      ? configuredMaxToolCalls
+      : DEFAULT_WRITER_MAX_TOOL_CALLS;
+
+  let toolCallsThisTurn = 0;
+
+  // agent_start is only a defensive initial boundary. turn_start is authoritative.
+  pi.on('agent_start', () => {
+    toolCallsThisTurn = 0;
   });
-  pi.on('tool_result', event => {
-    if (!enabled()) return;
-    const edited = edits.delete(event.toolCallId);
-    if (event.isError) return;
-    if (event.toolName === 'chalk') {
-      const details = event.details as { path?: string } | undefined;
-      if (typeof details?.path === 'string') { target = details.path; landed = true; }
-    } else if (edited) landed = true;
+  pi.on('turn_start', () => {
+    toolCallsThisTurn = 0;
+  });
+  pi.on('tool_call', () => {
+    toolCallsThisTurn += 1;
+    if (toolCallsThisTurn <= maxToolCalls) return;
+
+    return {
+      block: true,
+      reason: `Writer tool-call limit (${maxToolCalls}) reached for this engine turn. Stop using tools and return a concise response; the player can continue on the next turn.`,
+      terminate: true,
+    };
   });
 }

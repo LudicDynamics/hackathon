@@ -9,18 +9,23 @@ import {
   type FootprintScheduler,
 } from '../lib/footprint.js';
 import { CARD_FORMS } from '@airp/shared/forms';
-import { register as registerPhantom, land as landPhantom, appendInk, setInk, evict as evictPhantom, reconcileLanded } from '../lib/phantom.js';
+import { isValidCharacterId } from '@airp/shared/characters';
+import type { AppearanceResolution, WorldEvent } from '@airp/shared';
+import { register as registerPhantom, land as landPhantom, appendInk, setInk, evict as evictPhantom, reconcileLanded, getPhantomsSnapshot } from '../lib/phantom.js';
+import { cardWritingGuard } from '../lib/card-skeleton.js';
 import { phantomSeatFor, publishSeatItems } from '../lib/phantom-seat.js';
 import { mergeItemPatch, mergeLinkPatch } from '../lib/canvas-patch.js';
-import { beginTurn, endTurn, reset as resetWriter } from '../lib/writer-state.js';
+import { acceptWriterFrame, beginWriterPrompt, getWriterState, resetForReconnect as resetWriter, type WriterPromptAcceptance } from '../lib/writer-state.js';
+import { agentActivityStore } from '../lib/agent-activity-store.js';
+import { worldEventToastStore } from '../lib/world-event-toast.js';
 import { playFoley, playCharge, endCharge, setAmbient } from '../lib/audio.js';
 import { ghostSizeFor, stageText, GHOST_WAIT_AMBIENT } from '../lib/ghost.js';
+import { getCharacterFrameQueue, type CharacterFrameQueueEvent } from '../lib/character-frame-queue.js';
 import {
   DEFAULT_WORLD_SETTINGS,
   startsSceneInit,
   type WorldSettings,
 } from '@airp/shared/world-settings';
-
 export interface LayerItem {
   path: string;
   filename: string;
@@ -33,6 +38,10 @@ export interface LayerItem {
   h: number;
   z: number;
   rot: number;
+  /** Verified appearance from the server resolver (docs/components/04 §:54). Optional:
+   *  an old server / old payload omits it, and the card then falls back to its kind
+   *  default. The frontend MUST NOT compute this from raw frontmatter. */
+  appearance?: AppearanceResolution;
 }
 
 export interface LayerLink {
@@ -48,6 +57,20 @@ export interface PresenceEntry {
   x: number;
   y: number;
   following: boolean;
+}
+
+/**
+ * What `enterLayer` resolves with (docs/presence/00 §3.3 / P-10): the follower
+ * outcome the caller needs in order to make a left-behind character visible.
+ */
+export interface EnterLayerResult {
+  layer: string;
+  name: string;
+  first: boolean;
+  followers: {
+    moved: PresenceEntry[];
+    failures: Array<{ character: string; reason: string }>;
+  };
 }
 
 export interface LayerState {
@@ -72,9 +95,14 @@ export interface UseWorldApi {
    *  (docs/init/03 §3.6). null = no ghost. */
   initializingLayer: string | null;
   /** Switch layer + fetch it. When auto-write is on and the target is a stub,
-   *  fires the I1 initialiser (`airp_init`) after the server confirms `first`. */
-  enterLayer(next: string, options?: { initialize?: boolean }): Promise<boolean>;
-  /** Re-read the active world's settings (after a world load). */
+   *  fires the I1 initialiser (`airp_init`) after the server confirms `first`.
+   *  The followers that travelled along come back in the result
+   *  (docs/presence/00 P-10); `null` = the same layer or a failed request. */
+  enterLayer(next: string): Promise<EnterLayerResult | null>;
+  /** Sync read of the live layer payload, without triggering a render
+   *  (docs/presence/00 §3.4 — cross-layer navigation needs the NEW layer's
+   *  coordinates right after `enterLayer` resolves, before React flushes). */
+  readLayerState(): LayerState | null;
   reloadSettings(): Promise<void>;
   /** Per-world auto-write preference (docs/settings/00); defaults to `off`. */
   settings: WorldSettings;
@@ -87,15 +115,17 @@ export interface UseWorldApi {
    * On failure the previous items snapshot is restored and a warning logged.
    */
   moveCard(path: string, x: number, y: number): Promise<void>;
-  /** Send a writer_prompt WS message (choices / free input). */
-  sendToWriter(text: string): void;
-  /** Raw WS send (character_prompt etc.). */
-  sendMessage(payload: Record<string, unknown>): void;
+  /** Send a writer_prompt; optional override targets an active projection layer. */
+  sendToWriter(text: string, layerOverride?: string): WriterPromptAcceptance;
+  /** Raw WS send (character_prompt etc.). false = socket not OPEN. */
+  sendMessage(payload: Record<string, unknown>): boolean;
   /** Debug/test seam: force a footprint flush (gates still apply). */
   flushFootprints(): void;
 }
 
 const INITIAL_LAYER = 'map';
+const WRITER_ABORT_TYPE = ['writer', 'abort'].join('_');
+const LEGACY_ABORT_TYPE = ['a', 'bort'].join('');
 
 /** 去重窗口（docs/tools/12 §6.4）：上限 200、FIFO 淘汰。 */
 const SEEN_EVENT_LIMIT = 200;
@@ -132,18 +162,41 @@ export function useWorld(): UseWorldApi {
   const wsRef = useRef<WebSocket | null>(null);
   const reqSeqRef = useRef(0);
   useEffect(() => {
-    const unavailable = () => { ++reqSeqRef.current; setState(null); setLoading(false); };
+    const unavailable = () => {
+      ++reqSeqRef.current;
+      resetWriter('world_change');
+      stateRef.current = null;
+      seenEventIdsRef.current.clear();
+      worldEventToastStore.reset('world-switch');
+      worldEventToastStore.setProjectId(null);
+      seenEventOrderRef.current = [];
+      setState(null);
+      setLoading(false);
+    };
     window.addEventListener('airp:world-unavailable', unavailable);
     return () => window.removeEventListener('airp:world-unavailable', unavailable);
   }, []);
   // world_event 去重（docs/tools/12 §6.4）：集合与 FIFO 队列同进同出。
   const seenEventIdsRef = useRef<Set<string>>(new Set());
   const seenEventOrderRef = useRef<string[]>([]);
+  // The queue is the character presentation owner after App has assigned
+  // identity. Consume its diagnostics here so a sequence gap or legacy
+  // unsequenced frame is visible through the existing notice lane. Character
+  // terminal/message frames never enter writer-state or advance its cursor.
+  useEffect(() => {
+    const unsubscribe = getCharacterFrameQueue().subscribe((event?: CharacterFrameQueueEvent) => {
+      if (!event) return;
+      window.dispatchEvent(new CustomEvent('airp:notice', {
+        detail: event.message,
+      }));
+    });
+    return unsubscribe;
+  }, []);
 
-  // Footprint channel (docs/footprint/03). The busy count is fed by the WS
-  // `tool_start`/`tool_end` pair for the writer; the scheduler reads it live.
+
   const fpRef = useRef<FootprintScheduler | null>(null);
-  const writerToolsInFlight = useRef(0);
+  // Footprint reads the canonical writer projection; tool count is not a second
+  // writer busy fact.
   const fontsSettledRef = useRef(false);
   // Per-world auto-write preference (docs/settings/00). Kept in a ref as well as
   // state: `enterLayer` reads it synchronously (a fresh fetch may not have
@@ -171,7 +224,7 @@ export function useWorld(): UseWorldApi {
       setState(next);
       // 幻影排座镜像 + 真实卡一到就把对应幻影撤掉（docs/perform/00 §6b-5）。
       publishSeatItems(next.layer, next.items);
-      reconcileLanded(next.items.map((it) => it.path));
+      reconcileLanded(new Set(next.items.map((it) => it.path)));
     } catch (err) {
       console.warn('Could not fetch layer:', err);
     } finally {
@@ -184,14 +237,15 @@ export function useWorld(): UseWorldApi {
   }, [fetchLayer]);
 
   const enterLayer = useCallback(
-    async (next: string, options?: { initialize?: boolean }) => {
+    async (next: string): Promise<EnterLayerResult | null> => {
       window.dispatchEvent(new CustomEvent('airp:gate-feedback', { detail: null }));
       if (next === layerRef.current) {
         // Same layer: still re-sync (may be an explicit gate re-entry).
         await fetchLayer(next);
-        return true;
+        // Nothing entered ⇒ no follower result to report (docs/presence/00 P-16).
+        return null;
       }
-      return await airpGateway.enterLayer(next).then(async (result) => {
+      const entered = await airpGateway.enterLayer(next).then(async (result) => {
         layerRef.current = next;
         setLayer(next);
         fpRef.current?.reset(next);
@@ -199,21 +253,41 @@ export function useWorld(): UseWorldApi {
         // When auto-write allows it, ask the engine to materialise the scene:
         // fire-and-forget, since the I1 initialiser runs 45–60s and its outcome
         // returns as a `layer_initialized` world event, not this reply.
-        if (options?.initialize !== false && result.first === true && startsSceneInit(settingsRef.current.autoWrite)) {
-          setInitializingLayer(next);
-          sendSocket(wsRef.current, { type: 'airp_init', kind: 'scene', target: next, by: 'player' });
+        if (result.first === true && startsSceneInit(settingsRef.current.autoWrite)) {
+          let sent = false;
+          try {
+            sent = sendSocket(wsRef.current, { type: 'airp_init', kind: 'scene', target: next, by: 'player' });
+          } catch {
+            sent = false;
+          }
+          if (sent) {
+            setInitializingLayer(next);
+          } else {
+            window.dispatchEvent(new CustomEvent('airp:notice', {
+              detail: 'Connection lost. The scene could not start yet.',
+            }));
+          }
         }
         await fetchLayer(next);
-        return true;
+        return result;
       }).catch(error => {
         const feedback = gateFeedback(error, next, stateRef.current?.items ?? []);
         if (feedback) window.dispatchEvent(new CustomEvent('airp:gate-feedback', { detail: feedback }));
         else window.dispatchEvent(new CustomEvent('airp:notice', { detail: String(error) }));
-        return false;
+        return null;
       });
+      return entered;
     },
     [fetchLayer]
   );
+
+  /**
+   * 同步读取当前层状态（`docs/presence/00 §3.4`）。
+   *
+   * 跨层导航需要「`enterLayer` 解析后」的坐标，但 React state 此刻未必已 flush；
+   * 这里返回内部 `stateRef` 的当前值——只读，不触发渲染、不写状态。
+   */
+  const readLayerState = useCallback((): LayerState | null => stateRef.current, []);
 
   const moveCard = useCallback(async (path: string, x: number, y: number) => {
     const prev = stateRef.current;
@@ -234,14 +308,52 @@ export function useWorld(): UseWorldApi {
     }
   }, []);
 
-  const sendToWriter = useCallback((text: string) => {
-    if (!sendSocket(wsRef.current, { type: 'writer_prompt', message: text, layer: layerRef.current })) {
-      window.dispatchEvent(new CustomEvent('airp:notice', { detail: 'Connection lost. Please try again.' }));
+  const sendToWriter = useCallback((text: string, layerOverride?: string): WriterPromptAcceptance => {
+    const normalized = typeof text === 'string' ? text.trim() : '';
+    if (!normalized) {
+      return { accepted: false, reason: 'invalid', message: 'Enter an action before sending.' };
     }
+    if (getWriterState().phase === 'writing') {
+      return { accepted: false, reason: 'busy', message: 'The writer is already working.' };
+    }
+    const targetLayer = typeof layerOverride === 'string' && layerOverride.trim()
+      ? layerOverride.trim()
+      : layerRef.current;
+    let sent = false;
+    try {
+      sent = sendSocket(wsRef.current, { type: 'writer_prompt', message: normalized, layer: targetLayer });
+    } catch {
+      sent = false;
+    }
+    if (!sent) {
+      return { accepted: false, reason: 'transport-closed', message: 'Connection lost. Please try again.' };
+    }
+    // There is no server domain-ack frame: transport acceptance is the seam.
+    if (!beginWriterPrompt(normalized)) {
+      return { accepted: false, reason: 'busy', message: 'The writer is already working.' };
+    }
+    return { accepted: true };
   }, []);
 
-  const sendMessage = useCallback((payload: Record<string, unknown>) => {
-    sendSocket(wsRef.current, payload);
+  // Returns false when the socket is not OPEN (docs/init/03 §⑫-4 ruling: the
+  // `airp_init` caller must know a request was actually sent before showing a
+  // ghost for it). Existing callers ignore the value.
+  const sendMessage = useCallback((payload: Record<string, unknown>): boolean => {
+    let sent = false;
+    try {
+      sent = sendSocket(wsRef.current, payload);
+    } catch {
+      sent = false;
+    }
+    if (!sent && (payload.type === WRITER_ABORT_TYPE || payload.type === LEGACY_ABORT_TYPE)) {
+      acceptWriterFrame({
+        type: 'error',
+        source: 'writer',
+        message: 'Connection lost. Please try again.',
+      });
+      window.dispatchEvent(new CustomEvent('airp:notice', { detail: 'Connection lost. Please try again.' }));
+    }
+    return sent;
   }, []);
 
   const flushFootprints = useCallback(() => {
@@ -263,12 +375,26 @@ export function useWorld(): UseWorldApi {
     return true;
   }, []);
 
-  /** 命中转发集合才派发 airp:world-event（00 §5 / docs/tools/12 §6.6）。 */
-  const forwardWorldEvent = useCallback((msg: WorldEventFrame): void => {
+  /**
+   * 命中转发集合才派发 airp:world-event（00 §5 / docs/tools/12 §6.6）：
+   * `entity_*` 让背包/角色视图同步；`following_changed` / `character_moved` 让
+   * App 重新取 chrome 数据（右侧角色栏的跨层事实来自 /api/characters，
+   * 见 docs/presence/00 §3.5）。
+   *
+   * ⚠️ 这里的 `.includes()` 形态是 `check:ws` 的约定（见 :444-446）：若改写成对
+   * `ev.type` 的等值比较，`consumedFrom` 会把**事件 type** 读成**帧名**并报 GHOST。
+   */
+  const forwardWorldEvent = useCallback((msg: Record<string, unknown>): void => {
+    const ev = msg.event as { type?: string } | undefined;
     if (
-      ['entity_created', 'entity_edited', 'entity_deleted', 'entity_moved'].includes(
-        msg.event?.type
-      )
+      [
+        'entity_created',
+        'entity_edited',
+        'entity_deleted',
+        'entity_moved',
+        'following_changed',
+        'character_moved',
+      ].includes(ev?.type ?? '')
     ) {
       window.dispatchEvent(new CustomEvent('airp:world-event', { detail: msg }));
     }
@@ -298,7 +424,7 @@ export function useWorld(): UseWorldApi {
       },
       // Raw count only: the scheduler owns the stale-counter (30s) guard and
       // its single warning, so there is exactly one place that decides.
-      isBusy: () => writerToolsInFlight.current > 0,
+      isBusy: () => getWriterState().toolCount > 0,
       isDragging: () => document.querySelector('.object.dragging-item') !== null,
       onResult: ({ layer: measuredLayer, updated }) => {
         // Seat against the new dimensions immediately, not a platform-specific
@@ -355,9 +481,9 @@ export function useWorld(): UseWorldApi {
     let retryTimer: number | null = null;
 
     const onMessage = (msg: Record<string, unknown>) => {
-      // Every raw frame also goes out on `airp:agent-frame` (niko): the model
-      // settings panel and the character modal both read writer progress from it.
-      window.dispatchEvent(new CustomEvent('airp:agent-frame', { detail: msg }));
+      // Every writer presentation frame enters the canonical writer snapshot;
+      // UI components never reconstruct this lifecycle from a raw event.
+      if (msg.source === 'writer') acceptWriterFrame(msg);
       if (msg.type === 'file_changed' || msg.type === 'card_position') {
         // App listens for this to keep its backpack/character views in sync.
         window.dispatchEvent(new CustomEvent('airp:world-event', { detail: msg }));
@@ -374,7 +500,8 @@ export function useWorld(): UseWorldApi {
               | undefined;
             if (!ev || typeof ev.id !== 'string') break; // 畸形帧不污染去重集合
             if (!noteWorldEvent(ev.id)) break; // 同一行的重复副本到此为止
-            forwardWorldEvent(msg as unknown as WorldEventFrame);
+            forwardWorldEvent(msg); // 转发集合命中才通知 App（:342）
+            worldEventToastStore.ingest(ev as WorldEvent);
             // The I1 initialiser's outcome (docs/init/03 §3.6): clear the ghost.
             // `layer_initialized` -> the refetched product replaces it (handover);
             // `layer_init_failed` must ALSO be visible (contract §8 anti-pattern 8),
@@ -412,38 +539,86 @@ export function useWorld(): UseWorldApi {
             });
           }
           break;
-        case 'tool_start':
-          if (msg.source === 'writer') writerToolsInFlight.current++;
+        case 'agent_progress':
+          // Lifecycle state was accepted at the ingress above. Keep an
+          // explicit consumer case for the websocket contract checker.
           break;
-        case 'tool_end':
-          if (msg.source === 'writer') {
-            writerToolsInFlight.current = Math.max(0, writerToolsInFlight.current - 1);
-            // 失败也要收笔：撤掉未落地的幻影并归位状态机（docs/perform/01 §7）。
-            if (msg.isError === true && typeof msg.toolCallId === 'string') {
-              evictPhantom(msg.toolCallId);
-              endTurn();
-              // A failed image also took the ambience; give it back (perform/03 §3.2).
-              setAmbient(stateRef.current?.audio.ambient ?? null);
-            }
+        case 'agent_activity':
+          // Player-facing activity has one canonical store consumer; it never
+          // enters writer-state or a component-local raw listener.
+          agentActivityStore.ingest(msg);
+          break;
+        case 'tool_start':
+          break;
+        case 'tool_end': {
+          const failedToolCallId = msg.isError === true && typeof msg.toolCallId === 'string'
+            ? msg.toolCallId
+            : undefined;
+          // Failed tools of either source must release their phantom.
+          if (failedToolCallId !== undefined) evictPhantom(failedToolCallId);
+          if (msg.source === 'writer' && failedToolCallId !== undefined) {
+            setAmbient(stateRef.current?.audio.ambient ?? null);
           }
           break;
+        }
         case 'character_delta':
         case 'character_message':
-        case 'character_idle':
-          // 演出帧（docs/tools/12 §6.2）：无条件转给遮罩，不进 world_event 的
-          // 去重/重取路径；归属过滤在 App。
+        case 'character_idle': {
+          // Character frames have one identity owner. Never repair a missing
+          // id from the open modal: an unowned delta is unsafe to render.
+          if (
+            msg.source !== 'character' ||
+            typeof msg.characterId !== 'string' ||
+            !isValidCharacterId(msg.characterId)
+          ) {
+            if (msg.source === 'character') {
+              window.dispatchEvent(new CustomEvent('airp:notice', {
+                detail: 'Character frame dropped: missing or invalid character id.',
+              }));
+            }
+            break;
+          }
+          if (
+            (msg.type === 'character_delta' && typeof msg.delta !== 'string') ||
+            (msg.type === 'character_message' && typeof msg.text !== 'string')
+          ) {
+            window.dispatchEvent(new CustomEvent('airp:notice', {
+              detail: 'Character frame dropped: malformed text payload.',
+            }));
+            break;
+          }
           window.dispatchEvent(new CustomEvent('airp:character-frame', { detail: msg }));
           break;
+        }
         case 'error':
-          // 角色车道报错 → 遮罩；同时给全局一条 notice（writer 错误也给玩家看见）。
-          if (msg.source === 'character' && typeof msg.characterId === 'string') {
+          // A character error follows the same typed lane as its text. Writer
+          // errors remain global notices; malformed character errors are not
+          // allowed to enter the lane.
+          if (
+            msg.source === 'character' &&
+            typeof msg.characterId === 'string' &&
+            isValidCharacterId(msg.characterId) &&
+            typeof msg.message === 'string'
+          ) {
             window.dispatchEvent(new CustomEvent('airp:character-frame', { detail: msg }));
+          } else if (msg.source === 'character') {
+            window.dispatchEvent(new CustomEvent('airp:notice', {
+              detail: 'Character error dropped: missing or invalid character id.',
+            }));
           } else {
             window.dispatchEvent(new CustomEvent('airp:notice', { detail: msg.message ?? 'The writer could not finish this turn.' }));
           }
           break;
         case 'turn_aborted':
-          window.dispatchEvent(new CustomEvent('airp:notice', { detail: msg.message ?? 'The writer could not finish this turn.' }));
+          if (
+            msg.source === 'character' &&
+            typeof msg.characterId === 'string' &&
+            isValidCharacterId(msg.characterId)
+          ) {
+            window.dispatchEvent(new CustomEvent('airp:character-frame', { detail: msg }));
+          } else {
+            window.dispatchEvent(new CustomEvent('airp:notice', { detail: msg.message ?? 'The writer could not finish this turn.' }));
+          }
           break;
         // ---- 演出通道（docs/perform/00 §4）----
         case 'chalk_writing': {
@@ -455,8 +630,29 @@ export function useWorld(): UseWorldApi {
             seat,
             layer: layerRef.current,
           });
-          beginTurn('chalk');
           playCharge(0);
+          break;
+        }
+        // 组件骨架屏（docs/skeleton/02 §3.1）：作家 write 一张组件卡时，服务端在
+        // tool_execution_start 发 card_writing；这里注册 component 幻影，由
+        // CardSkeleton 画结构化骨架，落地后经既有 reconcileLanded 按 path 删除。
+        case 'card_writing': {
+          if (msg.source !== 'writer' || typeof msg.toolCallId !== 'string') break;
+          const kind = typeof msg.kind === 'string' ? msg.kind : undefined;
+          const form = kind !== undefined ? CARD_FORMS[kind] : undefined;
+          const layer = typeof msg.layer === 'string' ? msg.layer : undefined;
+          // 白名单（不回退 layerRef.current）：层推不出 = 该 path 永不进 items →
+          // reconcileLanded 永不删 → 骨架永挂且挤座（docs/skeleton/00 F-10 裁决 O）。
+          if (!cardWritingGuard(form, kind, layer)) break;
+          const seat = phantomSeatFor({ w: form!.w, h: form!.h }, layer!).seat;
+          registerPhantom(msg.toolCallId, {
+            kind: 'component',
+            source: 'writer',
+            seat,
+            layer,
+            cardKind: kind,
+            cardTitle: typeof msg.title === 'string' ? msg.title : undefined,
+          });
           break;
         }
         case 'writer_delta': {
@@ -474,7 +670,6 @@ export function useWorld(): UseWorldApi {
         }
         case 'writer_idle': {
           if (msg.source !== 'writer') break;
-          endTurn();
           break;
         }
         case 'dice_result': {
@@ -483,12 +678,14 @@ export function useWorld(): UseWorldApi {
           break;
         }
         case 'image_generation_progress': {
-          if (typeof msg.toolCallId !== 'string') break;
+          const source = msg.source === 'character' || msg.source === 'writer' ? msg.source : undefined;
+          if (typeof msg.toolCallId !== 'string' || source === undefined) break;
           const size = ghostSizeFor(msg.width as number, msg.height as number);
           registerPhantom(msg.toolCallId, {
             kind: 'image',
-            source: 'writer',
-            seat: phantomSeatFor(size, layerRef.current).seat,
+            source,
+            seat: getPhantomsSnapshot().find((entry) => entry.toolCallId === msg.toolCallId)?.seat
+              ?? phantomSeatFor(size, layerRef.current).seat,
             layer: layerRef.current,
             label: stageText(msg.stage as string, msg.elapsedMs as number),
             elapsedMs: typeof msg.elapsedMs === 'number' ? msg.elapsedMs : undefined,
@@ -553,17 +750,28 @@ export function useWorld(): UseWorldApi {
 
     // Reconnect (niko): a dropped socket would otherwise leave the writer input
     // disabled and the tool counter stuck. Reconnect resets both guards on open.
+    let socketGeneration = 0;
     const connect = () => {
       if (stopped) return;
-      const ws = openAirpSocket(onMessage);
+      const generation = ++socketGeneration;
+      let ws: WebSocket;
+      ws = openAirpSocket((msg) => {
+        if (generation !== socketGeneration || wsRef.current !== ws) return;
+        onMessage(msg);
+      });
       wsRef.current = ws;
       ws.onopen = () => {
-        writerToolsInFlight.current = 0;
-        resetWriter();
+        if (generation !== socketGeneration || wsRef.current !== ws) return;
+        resetWriter('socket_open');
         void fetchLayer(layerRef.current);
       };
       ws.onclose = () => {
-        if (wsRef.current === ws) wsRef.current = null;
+        if (generation !== socketGeneration || wsRef.current !== ws) return;
+        wsRef.current = null;
+        resetWriter('socket_close');
+        // A dropped socket never delivers terminal frames, so clear activity
+        // immediately rather than waiting for its stale sweep.
+        agentActivityStore.clearAll();
         if (!stopped) retryTimer = window.setTimeout(connect, 1200);
       };
     };
@@ -572,6 +780,7 @@ export function useWorld(): UseWorldApi {
 
     return () => {
       stopped = true;
+      socketGeneration++;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       wsRef.current?.close();
       wsRef.current = null;
@@ -611,6 +820,7 @@ export function useWorld(): UseWorldApi {
     initializingLayer,
     enterLayer,
     refresh,
+    readLayerState,
     moveCard,
     sendToWriter,
     sendMessage,

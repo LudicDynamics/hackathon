@@ -36,6 +36,14 @@
       "id": "character-instruction",
       "slot": "system-char"
     },
+    { "kind": "slot", "id": "tools", "slot": "tools", "options": { "onlyWithSnippets": true } },
+    {
+      "kind": "slot",
+      "id": "tool-guidelines",
+      "slot": "tool-guidelines",
+      "options": { "includePiDefaultGuidelines": false, "heading": "Guidelines:" }
+    },
+    { "kind": "slot", "id": "skills", "slot": "skills" },
     {
       "kind": "block",
       "id": "world-language",

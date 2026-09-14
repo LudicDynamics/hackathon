@@ -1,6 +1,7 @@
 ---
 type: readme
 name: Arthur Wayne
+voice: dramatic-theatrical
 avatar: assets/characters/wayne.webp
 ---
 

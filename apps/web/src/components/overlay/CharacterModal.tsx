@@ -1,16 +1,28 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MotionPortrait } from './MotionPortrait.js';
-import { guardImeKey } from '../../lib/ime.js';
+import { ActivityRail } from '../chrome/ActivityRail.js';
+import { AgentActivityLog } from '../chrome/AgentActivityLog.js';
 import { canRequestTts, invalidateTts, ttsEnabled } from '../../lib/tts-readiness.js';
 import { useLocale } from '../../lib/i18n.js';
 import { playStinger, playVoice, stopVoice, unlock, type Emotion } from '../../lib/audio.js';
+import { sanitiseTtsText } from '@airp/shared/tts-text';
 import {
   clampPageIndex,
   charDelay,
+  createCharacterTurn,
+  consumeCharacterFrame,
   GREETING_LINE,
   parseEmoPages,
+  resetCharacterTurn,
+  type CharacterTurnBuffer,
   type DialoguePage,
 } from './dialogue-pages.js';
+import {
+  getCharacterFrameQueue,
+  type CharacterFrame,
+  type CharacterFrameQueue,
+  type CharacterFrameQueueEvent,
+} from '../../lib/character-frame-queue.js';
 
 /**
  * CharacterModal — galgame dialogue overlay (wave 2 Task D T3.3; TTS pagination T1/03).
@@ -27,10 +39,11 @@ import {
  * out and speaks its own TTS line; the player clicks the stage to fast-forward
  * or advance, and the input only fades in once the last page has been reached.
  *
- * A3 (docs/wiring/03): the text comes from the real character agent. App routes
- * raw WS frames to this modal via the `incoming` prop. T1 (docs/tts/00): the
- * page split, per-page voice, click/keyboard advance and the mock greeting are
- * frozen in `docs/tts/00`; the pure helpers live in `./dialogue-pages.js`.
+ * A3 (docs/wiring/03): the text comes from the real character agent. App
+ * routes identity into the shared FIFO; this modal only drains that queue.
+ * T1 (docs/tts/00): the page split, per-page voice, click/keyboard advance
+ * and the mock greeting are frozen in `docs/tts/00`; pure helpers live in
+ * `./dialogue-pages.js`.
  */
 
 interface CharacterModalProps {
@@ -45,8 +58,8 @@ interface CharacterModalProps {
   /** character_prompt protocol — the app wraps this in the message type; unchanged. */
   onSendMessage?: (msg: string) => void;
   locale?: 'en' | 'ja';
-  /** 最近一条属于本角色的真实帧；App 已按 activeModalCharId 过滤。null = 无。 */
-  incoming?: CharacterFrame | null;
+  /** Shared FIFO owner; App routes identity, this component only drains it. */
+  frameQueue?: CharacterFrameQueue;
   /** NEW: current world manifest.id — the `airp:greeted:<worldId>:<charId>` key segment. */
   worldId?: string;
   /** NEW: the character's DashScope voice (README frontmatter `voice`, via /api/characters). undefined → server default. */
@@ -54,19 +67,13 @@ interface CharacterModalProps {
   /** NEW: TTS request-body `language` — the world content language. Defaults to 'en'. */
   language?: string;
   /**
-   * NEW: per-emotion portrait URLs (docs/assets/00 §5.2). Present only when the
-   * world ships all six; when set, the stage shows the matching still per
+   * NEW: per-emotion portrait URLs (docs/assets/00 §5.2). Present only when
+   * the world ships all six; when set, the stage shows the matching still per
    * `[emo: tag]` instead of the single MotionPortrait clip.
    */
   emotions?: Record<string, string>;
 }
 
-/** Raw character-lane frame as forwarded by useWorld (`detail: msg` verbatim). */
-export type CharacterFrame =
-  | { type: 'character_delta'; characterId?: string; delta: string; timestamp?: string }
-  | { type: 'character_message'; characterId?: string; text: string; timestamp?: string }
-  | { type: 'character_idle'; characterId?: string; timestamp?: string }
-  | { type: 'error'; source?: string; characterId?: string; message: string; timestamp?: string };
 
 /**
  * 真实流缺席时的沉默兜底——一句诚实的"舞台指示"，绝不是伪造的角色台词。
@@ -88,7 +95,7 @@ type Phase = 'idle' | 'thinking' | 'streaming' | 'done';
 type VoiceState = 'idle' | 'pending' | 'ready' | 'failed';
 
 /** A dialogue page (contract §6.1) plus its voice request state. */
-type StagePage = DialoguePage & { voiceUrl?: string; voiceState: VoiceState };
+type StagePage = DialoguePage & { voiceUrl?: string; voiceState: VoiceState; voiceText?: string };
 
 
 /** Grace window while a page's voice prefetch is still in flight, before the
@@ -106,7 +113,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   onOpenNook,
   onSendMessage,
   locale = 'en',
-  incoming: suppliedFrame = null,
+  frameQueue = getCharacterFrameQueue(),
   worldId,
   voice,
   language = 'en',
@@ -114,18 +121,6 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 }) => {
   const { locale: uiLocale, t } = useLocale();
   locale = uiLocale === 'ja' ? 'ja' : locale;
-  const [receivedFrame, setReceivedFrame] = useState<CharacterFrame | null>(null);
-  const incoming = suppliedFrame ?? receivedFrame;
-  useEffect(() => {
-    const receive = (event: Event) => {
-      const frame = (event as CustomEvent).detail;
-      if (frame.characterId !== characterId) return;
-      if (['character_delta', 'character_message', 'character_idle'].includes(frame.type)) setReceivedFrame(frame);
-      if (['error', 'turn_aborted'].includes(frame.type)) setReceivedFrame({ ...frame, type: 'error' });
-    };
-    window.addEventListener('airp:agent-frame', receive);
-    return () => window.removeEventListener('airp:agent-frame', receive);
-  }, [characterId]);
   const [phase, setPhase] = useState<Phase>('idle');
   const [emo, setEmo] = useState<Emotion>('normal');
   const [pages, setPages] = useState<DialoguePage[]>([]); // read-only projection of pagesRef
@@ -135,12 +130,16 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const [inputText, setInputText] = useState('');
   const [avatarError, setAvatarError] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [activitySessionStartedAt, setActivitySessionStartedAt] = useState(() => Date.now());
+  useEffect(() => {
+    setActivitySessionStartedAt(Date.now());
+  }, [characterId]);
 
   const streamTimer = useRef<number | null>(null);
   const closeTimer = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // 流式驱动器的唯一状态（全是 ref：帧回调读 state 会拿到闭包旧值）。
-  const lineRef = useRef(''); // 已收到的原始全文（含标签、增量累积）
+  const turnBufferRef = useRef<CharacterTurnBuffer | null>(null); // turn/message aggregation truth
   const pagesRef = useRef<StagePage[]>([]); // 页数组（命令式真相源）
   const pageIndexRef = useRef(0); // 当前页下标，恒在 [0, max(0,len-1)]
   const pageShownRef = useRef(0); // 页内已显示字符数（取代旧的全局游标 shownRef）
@@ -149,16 +148,25 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const mockSeededRef = useRef(false); // StrictMode 单实例只 seed 一次
   const stingerGraceRef = useRef<number | null>(null); // pending 语音的 stinger 宽限定时器
   const streamingRef = useRef(false);
-  const messageEndedRef = useRef(false); // 收到过 character_message
-  const channelIdleRef = useRef(false); // 收到过 character_idle
-  const finalRef = useRef(false); // true → 末行可封口
+  const messageEndedRef = useRef(false); // mock greeting compatibility; real turns close on idle
+  const channelIdleRef = useRef(false); // received character_idle
+  const finalRef = useRef(false); // true → final projection may seal its tail
   const phaseRef = useRef<Phase>('idle');
   const phaseBeforeTurnRef = useRef<Phase>('idle');
   const lastEmoRef = useRef<Emotion>('normal');
   const stingerFiredRef = useRef(false); // 当前页情绪音是否已了结（由语音取代或已响）
   const turnWatchdog = useRef<number | null>(null);
   const busyRef = useRef(false);
-  const consumedFrameRef = useRef<CharacterFrame | null>(null); // StrictMode 重入守卫
+  const [queueVersion, setQueueVersion] = useState(0);
+  const queueGapEventRef = useRef<Extract<CharacterFrameQueueEvent, { kind: 'gap' }> | null>(null);
+  useEffect(
+    () =>
+      frameQueue.subscribe((event) => {
+        if (event?.kind === 'gap') queueGapEventRef.current = event;
+        setQueueVersion((version) => version + 1);
+      }),
+    [frameQueue]
+  );
 
   const cancelStreamTimer = useCallback(() => {
     if (streamTimer.current !== null) window.clearTimeout(streamTimer.current);
@@ -188,8 +196,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   /** 末页封口 + 追平 + turn 终结 → 收工（contract §6.6。`pageIndex === last`
    *  是「页翻尽才放输入框」的机械落点）。 */
   const settleIfDrained = useCallback(() => {
-    if (!(messageEndedRef.current || channelIdleRef.current)) return;
-    if (streamTimer.current !== null) return; // 还在逐字
+    if (!channelIdleRef.current && !mockRef.current) return;
     const last = pagesRef.current.length - 1;
     const drained =
       last >= 0 &&
@@ -256,22 +263,30 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const prefetchVoice = useCallback(
     async (page: StagePage, i: number): Promise<void> => {
       if (page.voiceState !== 'idle') return; // 已 pending/ready/failed → 不重发
-      if (page.text.trim() === '') return; // 空页不发（服务端 400）
+      const text = sanitiseTtsText(page.text);
+      page.voiceText = text;
+      if (text === '') {
+        page.voiceState = 'failed';
+        onVoiceResolved(page, i);
+        return;
+      }
       page.voiceState = 'pending';
+      const requestedText = text;
       const token = voiceTurnRef.current;
       try {
         const ready = await canRequestTts();
-        if (token !== voiceTurnRef.current) return;
-        if (!ready || !ttsEnabled()) { page.voiceState = 'failed'; onVoiceResolved(page, i); return; }
+        if (token !== voiceTurnRef.current || sanitiseTtsText(page.text) !== requestedText) return;
+        if (!ready || !ttsEnabled()) {
+          page.voiceState = 'failed';
+          onVoiceResolved(page, i);
+          return;
+        }
         const res = await fetch('/api/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: page.text, voice, language, characterId, emotion: page.emo }),
+          body: JSON.stringify({ text, voice, language }),
         });
-        if (res.headers.get('X-AIRP-TTS-Fallback') === 'local-to-online') {
-          console.warn('[AIRP TTS] Local voice failed; falling back to online TTS.');
-        }
-        if (token !== voiceTurnRef.current) return; // 已换轮 → 丢弃结果（不写、不播）
+        if (token !== voiceTurnRef.current || sanitiseTtsText(page.text) !== requestedText) return;
         const data = (await res.json()) as { ok?: boolean; url?: string; code?: string };
         if (!res.ok || !data.ok || typeof data.url !== 'string' || data.url === '') {
           page.voiceState = 'failed';
@@ -283,7 +298,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         page.voiceState = 'ready';
         onVoiceResolved(page, i); // 若正是当前页 → playVoice（truncated 不重试）
       } catch {
-        if (token !== voiceTurnRef.current) return;
+        if (token !== voiceTurnRef.current || sanitiseTtsText(page.text) !== requestedText) return;
         invalidateTts();
         page.voiceState = 'failed';
         onVoiceResolved(page, i);
@@ -337,7 +352,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     [applyMood, armStingerGrace, pump]
   );
 
-  /** 分页与封口（唯一入口）：每次 lineRef 变化都调它。 */
+  /** 分页与封口（唯一入口）：每次 turn projection 变化都调它。 */
   const syncPages = useCallback(
     (raw: string, opts: { final?: boolean; reset?: boolean }) => {
       const next = parseEmoPages(raw, { final: opts.final ?? false }).pages;
@@ -361,10 +376,12 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         if (np.text !== prev.text) {
           prev.text = np.text;
           prev.emo = np.emo;
-          if (prev.sealed) {
-            // 权威文本覆盖了已封口行（唯一允许路径，§3.5）→ 重取 TTS
-            prev.voiceUrl = undefined;
-            prev.voiceState = 'idle';
+          // Any text correction invalidates the prior request, whether the
+          // page was already sealed or was still being projected.
+          prev.voiceUrl = undefined;
+          prev.voiceText = undefined;
+          prev.voiceState = 'idle';
+          if (np.sealed) {
             void prefetchVoice(prev, i);
             if (pageIndexRef.current === i) enterPage(i, { announce: false }); // 重驱当前页
           }
@@ -392,7 +409,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     channelIdleRef.current = false;
     finalRef.current = false;
     stingerFiredRef.current = false;
-    lineRef.current = '';
+    turnBufferRef.current = resetCharacterTurn();
     pageShownRef.current = 0;
     voiceTurnRef.current += 1; // 新 turn：作废在途的语音结果
     setPageShown('');
@@ -429,8 +446,8 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     clearWatchdog();
     turnWatchdog.current = window.setTimeout(() => {
       turnWatchdog.current = null;
-      const silence = SILENCE_LINE[language === 'ja' ? 'ja' : 'en'];
-      lineRef.current = silence.text;
+      const silence = SILENCE_LINE[locale];
+      turnBufferRef.current = resetCharacterTurn();
       streamingRef.current = false;
       syncPages(silence.text, { final: true, reset: true });
       enterPage(0, { announce: false });
@@ -478,7 +495,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
       if (!mockRef.current || pagesRef.current.length === 0) return;
       for (const p of pagesRef.current) {
         p.voiceState = 'idle';
-        p.voiceUrl = undefined;
+        p.voiceText = undefined;
       }
       streamingRef.current = true;
       messageEndedRef.current = true;
@@ -491,7 +508,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     setEmo('normal');
     setPhase('idle');
     setPlayerEcho('');
-    lineRef.current = '';
+    turnBufferRef.current = resetCharacterTurn();
     pagesRef.current = [];
     pageIndexRef.current = 0;
     pageShownRef.current = 0;
@@ -541,12 +558,9 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     enterPage(0, { announce: true }); // 逐字 + 朗读，不响 stinger
   }, [characterId, language, worldId, prefetchVoice, enterPage]);
 
-  // 帧消费：App 已按 activeModalCharId 过滤；所有推进读 ref，consumedFrameRef
-  // 保证同一帧对象只消费一次（StrictMode 双跑可重入）。
-  useEffect(() => {
-    if (closing || !incoming) return;
-    if (incoming === consumedFrameRef.current) return;
-    consumedFrameRef.current = incoming;
+  // Frames are drained from the shared FIFO in delivery order. The callback
+  // below handles one frame; the effect after it drains every queued frame.
+  const consumeCharacterFrameFromQueue = useCallback((frame: CharacterFrame) => {
 
     /** 真实帧到达 → mock 引导语整块退场（不是插在真页前面，contract §7.2）。 */
     const dropMock = () => {
@@ -569,49 +583,48 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
       clearStingerGrace();
     };
 
-    if (incoming.type === 'character_delta') {
+    if (frame.type === 'character_delta') {
       dropMock();
       if (!streamingRef.current) beginStream();
-      lineRef.current += incoming.delta;
-      syncPages(lineRef.current, { final: false });
+      const buffer = turnBufferRef.current ?? createCharacterTurn();
+      const projection = consumeCharacterFrame(buffer, { type: 'character_delta', delta: frame.delta });
+      turnBufferRef.current = projection.buffer;
+      syncPages(projection.rawText, { final: false });
       pump();
       return;
     }
 
-    if (incoming.type === 'character_message') {
+    if (frame.type === 'character_message') {
       dropMock();
-      const lostAll = lineRef.current === '';
-      if (!streamingRef.current) beginStream(); // 会复位终结标志，故先建流
-      messageEndedRef.current = true;
+      if (!streamingRef.current) beginStream(); // 首个真实帧也能建立新 turn
+      const buffer = turnBufferRef.current ?? createCharacterTurn();
+      const projection = consumeCharacterFrame(buffer, { type: 'character_message', text: frame.text });
+      turnBufferRef.current = projection.buffer;
       finalRef.current = true;
-      if (lostAll) {
-        // delta 全丢（断线 / 非流式）：直接落定权威文本。
-        lineRef.current = incoming.text;
-        cancelStreamTimer(); // 取消沉思窗——权威文本无需揭幕延迟
-        streamingRef.current = true;
-        syncPages(lineRef.current, { final: true, reset: true });
-        enterPage(0, { announce: false });
-        settleIfDrained();
-      } else {
-        if (lineRef.current !== incoming.text) lineRef.current = incoming.text; // 丢帧 → 以权威文本为准
-        syncPages(lineRef.current, { final: true });
-        pump();
-        settleIfDrained();
-      }
+      // message_end closes only this assistant message; idle remains the turn boundary.
+      cancelStreamTimer();
+      streamingRef.current = true;
+      setPhase('streaming');
+      syncPages(projection.rawText, { final: true });
+      pump();
       return;
     }
 
-    if (incoming.type === 'character_idle') {
+    if (frame.type === 'character_idle') {
+      dropMock();
+      const buffer = turnBufferRef.current ?? createCharacterTurn();
+      const projection = consumeCharacterFrame(buffer, { type: 'character_idle' });
+      turnBufferRef.current = projection.buffer;
       channelIdleRef.current = true;
       finalRef.current = true;
-      if (lineRef.current === '') {
+      if (projection.rawText.trim() === '') {
         // 纯工具轮：整轮无文本 → 归还 phase，纸上页数组不动（保留刚说完的页）。
         cancelStreamTimer();
         streamingRef.current = false;
         clearWatchdog();
         setPhase(phaseBeforeTurnRef.current);
       } else {
-        syncPages(lineRef.current, { final: true });
+        if (projection.changed) syncPages(projection.rawText, { final: true });
         pump();
         settleIfDrained();
       }
@@ -626,8 +639,11 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     messageEndedRef.current = false;
     channelIdleRef.current = false;
     finalRef.current = true;
-    lineRef.current = incoming.message;
-    syncPages(incoming.message, { final: true, reset: true });
+    turnBufferRef.current = createCharacterTurn();
+    const errorMessage = typeof frame.message === 'string' && frame.message.trim() !== ''
+      ? frame.message
+      : 'The character could not finish this turn.';
+    syncPages(errorMessage, { final: true, reset: true });
     enterPage(0, { announce: false });
     const errPage = pagesRef.current[0];
     if (errPage) {
@@ -637,18 +653,70 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     setEmo('normal');
     lastEmoRef.current = 'normal';
     setPhase('done');
-  }, [incoming, closing, beginStream, pump, syncPages, enterPage, settleIfDrained, cancelStreamTimer, clearWatchdog, clearStingerGrace]);
+
+  }, [beginStream, pump, syncPages, enterPage, settleIfDrained, cancelStreamTimer, clearWatchdog, clearStingerGrace]);
+
+  /** A delivery gap is a presentation failure, not a partial reply. Stop the
+   * current turn and leave a truthful, retryable page instead of concatenating
+   * around the missing frame. */
+  const presentQueueGap = useCallback(
+    (event: Extract<CharacterFrameQueueEvent, { kind: 'gap' }>) => {
+      if (event.characterId !== characterId) return;
+      cancelStreamTimer();
+      clearWatchdog();
+      clearStingerGrace();
+      voiceTurnRef.current += 1;
+      stopVoice();
+      mockRef.current = false;
+      streamingRef.current = false;
+      messageEndedRef.current = false;
+      channelIdleRef.current = false;
+      finalRef.current = true;
+      turnBufferRef.current = createCharacterTurn();
+      const text =
+        locale === 'ja'
+          ? `返答を停止しました。途中の発言が欠落しています（${event.expectedSeq} の次に ${event.receivedSeq}）。閉じて、もう一度試してください。`
+          : `The reply stopped because a line was missing (delivery ${event.expectedSeq} was followed by ${event.receivedSeq}). Close and try again.`;
+      syncPages(text, { final: true, reset: true });
+      enterPage(0, { announce: false });
+      const page = pagesRef.current[0];
+      if (page) {
+        pageShownRef.current = page.text.length;
+        setPageShown(page.text);
+      }
+      setEmo('normal');
+      lastEmoRef.current = 'normal';
+      setPhase('done');
+    },
+    [
+      cancelStreamTimer,
+      characterId,
+      clearStingerGrace,
+      clearWatchdog,
+      enterPage,
+      locale,
+      syncPages,
+    ]
+  );
+
+  useEffect(() => {
+    if (closing) return;
+    const gap = queueGapEventRef.current;
+    if (gap) {
+      queueGapEventRef.current = null;
+      presentQueueGap(gap);
+      return;
+    }
+    const frames = frameQueue.drainUntil(characterId);
+    for (const frame of frames) consumeCharacterFrameFromQueue(frame);
+  }, [frameQueue, characterId, closing, consumeCharacterFrameFromQueue, presentQueueGap, queueVersion]);
 
   // Unmount: cancel every pending timer + stop the voice channel.
   useEffect(() => streamTurn, [streamTurn]);
 
-  // Esc closes the overlay (kept from v1); Space advances (Enter stays for send).
+  // Space advances (Enter stays for send); App owns the document Escape path.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        handleClose();
-        return;
-      }
       if (e.key !== ' ' && e.code !== 'Space') return;
       if (e.target instanceof HTMLInputElement) return; // never steal typing
       if (document.activeElement === inputRef.current) return;
@@ -657,7 +725,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleClose, advance]);
+  }, [advance]);
 
   // Reset the monogram fallback if the avatar path changes.
   useEffect(() => setAvatarError(false), [avatar, emo]);
@@ -672,6 +740,9 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const handleSend = () => {
     const msg = inputText.trim();
     if (!msg || busyRef.current) return; // one performance at a time
+    // A retry after a delivery gap explicitly reopens the queue lane. This
+    // does not alter the character_prompt payload or claim that stop succeeded.
+    frameQueue.clear('stop');
     setInputText('');
     setPlayerEcho(msg); // kept on the paper, not a history list
     // 乐观占位：真实首帧要等 agent 启动 + 首个 token，期间不能露出"可再发一条"的窗口。
@@ -682,6 +753,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     finalRef.current = false;
     // 清页队列（contract §6.6）：否则新回复的页接在旧页后面。
     voiceTurnRef.current += 1;
+    turnBufferRef.current = resetCharacterTurn();
     pagesRef.current = [];
     pageIndexRef.current = 0;
     pageShownRef.current = 0;
@@ -712,10 +784,11 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 
   return (
     <div
+      data-depth-surface="modal"
       className={`character-modal-layer${closing ? ' modal-closing' : ''}`}
       role="dialog"
+      aria-modal="true"
       aria-label={locale === 'ja' ? `${characterId}との会話` : `Dialogue with ${characterId}`}
-      onPointerDown={handleUnlock}
     >
       <button type="button" className="modal-close" onClick={handleClose} aria-label={t('Close dialog')}>
         ×
@@ -754,6 +827,14 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 
       {/* Bottom tilted paper dialog: name plate, narration, the current page, input. */}
       <div className={`speech-paper${closing ? ' speech-paper-closing' : ''}`}>
+        {/* 角色 activity rail（契约 §7.2）：挂在纸上沿之外的独立流式带，作为第一个
+            子节点、absolute 定位（bottom:100%）故不进纸的文档流、不改纸高。按
+            agentId 过滤，只显示本角色的动作。 */}
+        <ActivityRail surface="character-modal" agentId={`character:${characterId}`} />
+        <AgentActivityLog
+          query={{ surface: 'character-modal', agentId: `character:${characterId}`, since: activitySessionStartedAt }}
+          className="character-activity-log"
+        />
         <div className="name-plate">{displayName || characterId}</div>
         {onOpenNook && <button type="button" onClick={onOpenNook}>{t('Visit private space')}</button>}
         <p className="narr-line">{bio ? bio : '(necessary description)'}</p>

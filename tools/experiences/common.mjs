@@ -7,11 +7,12 @@ export function author(base, name, description, locale = 'ja') {
   const pack = { base, id: `${base}-playtest`, name, description, locale, files: {}, characters: [], scenes: [], checks: [] };
   pack.put = (file, fm, body) => { pack.files[file] = md(fm, body); };
   pack.scene = (dir, title, body, choices = [], extra = {}) => {
-    const fm = { type: dir === 'world' ? 'readme' : 'gate', name: title, title, ...extra };
+    const { appearance, ...sceneExtra } = extra;
+    const fm = { type: dir === 'world' ? 'readme' : 'gate', name: title, title, ...sceneExtra };
     if (choices.length) fm.choice = choices;
     pack.put(`${dir}/README.md`, fm, body);
     const filename = locale === 'ja' ? '01-目の前のこと.md' : '01-first-sight.md';
-    pack.put(`${dir}/${filename}`, { type: 'chalk', title, ...(choices.length ? { choice: choices } : {}), ...(extra.intent ? { intent: extra.intent } : {}) }, body);
+    pack.put(`${dir}/${filename}`, { type: 'chalk', title, ...(choices.length ? { choice: choices } : {}), ...(sceneExtra.intent ? { intent: sceneExtra.intent } : {}), ...(appearance ? { appearance } : {}) }, body);
     pack.scenes.push(dir);
   };
   pack.note = (file, title, body, extra = {}) => pack.put(file, { type: 'note', title, portable: true, ...extra }, body);

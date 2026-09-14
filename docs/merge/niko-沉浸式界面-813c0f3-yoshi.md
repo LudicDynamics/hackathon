@@ -107,3 +107,29 @@ pnpm typecheck:extensions                   # → 全 PASSED
 **浏览器实测**（真 Chromium + 真 server，`world/test-stub` 空层 fixture）：进 stub → 幻影出现（`pointer-events:none`，坐标 = anchor 中心 816/420 = 960−144/540−120）；init 失败 → 幻影消失 + 三语提示「ここはまだ形にならなかった」；成功路径 → 产物落座、幻影清零。
 
 **验证**：`pnpm build` ✓；`pnpm test` **655/655** ✓；六个门禁（含新 `check:i18n`）全绿；`probe:tools`/`probe:inject`/`probe:init`/`typecheck:extensions` 全 PASSED。
+
+### 4.3 补小天地（nook）初始化幻影（剩余幻影缺口收口）
+
+`docs/nook/04 附 A.1` 登记为 **P2 未实现**、`docs/init/03 §3.7` 定其交接点：**N1 只提供入口与输入条 UI，`airp_init` 触发内核归同一处**。明月要求把剩余幻影补齐，这是最后一条。
+
+**关键设计事实**（决定了实现不必碰 layout 批冻结的接缝）：
+- `useWorld` 的 `airp:layer-init` 派发**不按层过滤**（只判事件 type），故 nook 复用该通道**零新增契约**；
+- `NookView` 自足（自带 `fetchNook`，**不调 `useWorld`**，避免第二个 WS，`docs/nook/00 §6`），空判据 `items.length===0 && scene===null`（`docs/nook/02 §3.8 步 17`）本地已有；
+- `nook-init.json` 现已由 `launch.ts:113` `installPreset`，命令 `init-command.ts` 的 `kind:'nook'` 分支（判空 → in-flight 锁 → `buildNookInitBrief` → `spawnAgent` → `hasInitProduct` → `recordLayer*`）**已完整**。
+
+落点：
+
+| 文件 | 改动 |
+|---|---|
+| `apps/web/src/components/chrome/StubPrompt.tsx`（NEW） | 空态「这里是……」输入条（`docs/init/03 §3.3`）。**不是** `WriterBar`：后者 `onSend` 丢弃空串，而此处**空提交 = 合法语义**（留空 → 默认 brief）。Enter 与 Skip 同一出口；纯展示、无全屏层（`AGENTS §7.6①`） |
+| `apps/web/src/components/nook/NookView.tsx` | 新增可选 `onRequestInit` prop；空态从「`disabled` 死控件」改为**可提交的 `StubPrompt`**；新增 `initializing`/`notice` 本地态 + `airp:layer-init` 消费（**按 `ev.layer` 限定为 `characters/<id>`**，失败 `role=alert` 可见，契约 §8 反模式 8）；`initializing` 时渲染 `ghostItemFor` 幻影（座位委托 `phantomSeatFor`，不新增 seater） |
+| `apps/web/src/state/useWorld.ts` | `sendMessage` 返回 `boolean`（`docs/init/03 §⑫-4` 裁决：`airp_init` 调用方须知道请求真发出去了，才能据此显示幻影） |
+| `apps/web/src/App.tsx` | NookView 传 `onRequestInit` → `sendMessage({type:'airp_init', kind, target, request?, by:'player'})` |
+| `apps/web/src/lib/legacy-ui-copy.ts` | `nookInitSkip` / `nookGenerating` / `nookInitFailed`（en/ja 同增） |
+| `apps/web/src/index.css` | `.stub-prompt*`（同 `.writer-bar` 纸片语汇；普通 DOM，非全屏层） |
+
+**座位**：`ghostItemFor` → `phantomSeatFor(size, layer)`（唯一 seater），空 nook 首座 = anchor 中心格（`{960,540}` 减半尺寸 = 816,420），与真实首产物同格 → 过户不跳位。**未特判 `SEAT_ANCHOR`**（符合 `docs/layout/02 §8.5`）。
+
+**浏览器实测**（真 Chromium + 真 server，`characters/test-empty` 空 nook fixture）：进小天地 → 空态显示**可提交**日语输入条（原为 disabled）；提交（Skip=留空）→ WS 发出 `{type:'airp_init',kind:'nook',target:'test-empty',by:'player'}` → 幻影出现（文案「形になりつつある…」、`pointer-events:none`、`data-path="__init__/characters/test-empty"`、坐标 816/420、skeleton 在）→ 离线 init 快速失败 → 幻影清零 + 限定该角色的日语提示「ここはまだ形にならなかった」。清理 fixture 后 `templates/` 复原。
+
+**验证**：`pnpm build` ✓；`pnpm test` **655/655** ✓；七个门禁（含 `check:i18n`、`check:merge`）全绿。

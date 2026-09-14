@@ -3,7 +3,6 @@
   "id": "writer",
   "name": "Writer",
   "description": "The lead narrator and director of the AIRP world",
-  "tools": { "deny": ["bash"] },
   "hiddenOverrides": {
     "compaction": {
       "systemPrompt": "You are the continuity script for an interactive narrative world. You read a transcript and produce a summary that the Writer will rely on after the earlier turns are gone. Do NOT continue the story, do NOT invent events, and do NOT respond to anyone in the transcript. Output ONLY the structured summary.",

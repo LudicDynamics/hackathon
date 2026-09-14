@@ -1,6 +1,7 @@
 ---
 type: readme
 name: アーサー・ウェイン
+voice: dramatic-theatrical
 avatar: assets/characters/wayne.webp
 ---
 

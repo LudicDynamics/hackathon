@@ -60,6 +60,12 @@ export interface SeatFile {
    * computing from (kind,w,h); when absent the version comes from `kind`.
    */
   formVersion?: string;
+  /**
+   * NEW. Stable within-batch seating hint; never persisted in card metadata.
+   * Canonical `/api/layer` callers derive it from explicit order, kind stage,
+   * numeric filename prefix, and ASCII path.
+   */
+  order?: number;
 }
 
 /**
@@ -96,6 +102,13 @@ export interface SeatPresenceResult {
   seat: { gx: number; gy: number; tries: number; exhausted: boolean };
 }
 
+export interface CharacterCreationTransaction {
+  stageBundle(files: ReadonlyMap<string, string>): Promise<void>;
+  commitBundleAndManifest(updates: Partial<WorldManifest>): Promise<void>;
+  appendSuccessEventOnce(args: AppendEventArgs, key: string): Promise<WorldEvent>;
+}
+
+
 export interface WorldStore {
   worldRoot: string;
   readFile(relPath: string): Promise<string>;
@@ -116,8 +129,21 @@ export interface WorldStore {
   getMaxSeq(): Promise<number>;
   readCursor(reader: string): Promise<number>;
   writeCursor(reader: string, seq: number): Promise<void>;
+  /**
+   * Rollback's ONE atomic step (doc-21 §6, hooks/03 §6.2): append
+   * `world_rolled_back` and push EVERY read cursor to the resulting max seq in
+   * the SAME `historyDb` transaction. Doing them separately lets a concurrent
+   * writer turn observe "cursors pushed, rollback event not yet landed" — that
+   * turn would then see neither the rollback nor the pre-rollback events, a
+   * silent swallow. Returns the appended event (its `seq` is the pushed value).
+   */
+  appendEventAndPushCursors(args: AppendEventArgs): Promise<WorldEvent>;
   /** Newest-first, history panel only (doc-21 §3.1: seq is the cursor, never created_at). */
   getEvents(limit?: number, opts?: { layer?: string }): Promise<WorldEvent[]>;
+  withCharacterCreationWriteLock<T>(
+    characterId: string,
+    work: (tx: CharacterCreationTransaction) => Promise<T>,
+  ): Promise<T>;
 
   // === Path / file helpers (01 §2.7) ===
   /**

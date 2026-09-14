@@ -1,6 +1,7 @@
 ---
 type: readme
 name: トム・ヘイル
+voice: casual-drawl
 avatar: assets/characters/tom.webp
 ---
 

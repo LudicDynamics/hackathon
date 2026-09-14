@@ -1,30 +1,67 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ConnectionSettings } from './ConnectionSettings.js';
-import { NanamiTtsSettings } from './NanamiTtsSettings.js';
-import { readTtsConfig, setTtsEnabled, ttsEnabled, type TtsConfig } from '../lib/tts-readiness.js';
-import { setPlayHintsEnabled, usePlayHintsEnabled } from '../lib/play-hints.js';
-import { useLocale } from '../lib/i18n.js';
 import { getChannelVolume, setChannelVolume, type VolumeChannel } from '../lib/audio.js';
-import { useAudio } from '../state/useAudio.js';
+import { useLocale } from '../lib/i18n.js';
+import { readTtsConfig, setTtsEnabled, ttsEnabled, type TtsConfig } from '../lib/tts-readiness.js';
+import type { FocusCoordinator } from '../lib/focus-coordinator.js';
 
-export function TtsSettings() {
+const clampPercent = (value: number): number => (
+  Number.isNaN(value) ? 0 : Math.min(100, Math.max(0, Math.round(value)))
+);
+
+const volumeToPercent = (value: number): number => (
+  Number.isNaN(value) ? 100 : Math.round(Math.min(1, Math.max(0, value)) * 100)
+);
+
+function readVolume(channel: VolumeChannel): number {
+  try {
+    return volumeToPercent(getChannelVolume(channel));
+  } catch {
+    // A broken audio binding must not prevent text settings from opening.
+    return 100;
+  }
+}
+
+function readVolumes(): Record<VolumeChannel, number> {
+  return { music: readVolume('music'), voice: readVolume('voice') };
+}
+
+export function TtsSettings({ focus }: { focus?: FocusCoordinator } = {}) {
   const { t } = useLocale();
-  const { muted, toggleMuted } = useAudio();
-  const hintsEnabled = usePlayHintsEnabled();
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState(false);
   const [enabled, setEnabled] = useState(ttsEnabled);
   const [config, setConfig] = useState<TtsConfig | null>(null);
-  const [hasError, setHasError] = useState(false);
-  const [volumes, setVolumes] = useState(() => ({ music: getChannelVolume('music'), voice: getChannelVolume('voice') }));
-  const changeVolume = (channel: VolumeChannel, value: number) => {
-    setChannelVolume(channel, value);
-    setVolumes(previous => ({ ...previous, [channel]: value }));
+  const [error, setError] = useState('');
+  const [volumes, setVolumes] = useState<Record<VolumeChannel, number>>(readVolumes);
+  const focusTokenRef = useRef<string | null>(null);
+  const setOpenState = (next: boolean): void => {
+    setOpen(next);
+    const token = focusTokenRef.current;
+    if (next && focus && !token) focusTokenRef.current = focus.acquire('workspace');
+    if (!next && token && focus) {
+      focus.release(token);
+      focusTokenRef.current = null;
+    }
   };
+  useEffect(() => () => {
+    const token = focusTokenRef.current;
+    if (token && focus) focus.release(token);
+  }, [focus]);
   const refresh = async () => {
     try { setConfig(await readTtsConfig(true)); setHasError(false); }
     catch { setHasError(true); }
+  };
+  const openSettings = () => {
+    setVolumes(readVolumes());
+    setOpenState(true);
+    void refresh();
+  };
+  const onVolumeInput = (channel: VolumeChannel, rawValue: string) => {
+    const percent = clampPercent(Number(rawValue));
+    setVolumes(previous => ({ ...previous, [channel]: percent }));
+    setChannelVolume(channel, percent / 100);
   };
   useEffect(() => {
     const warn = () => setNotice(true);
@@ -32,39 +69,33 @@ export function TtsSettings() {
     return () => window.removeEventListener('airp:tts-unavailable', warn);
   }, []);
   return <>
-    <button type="button" onClick={() => { setOpen(true); void refresh(); }}>{t('Sound & settings')}</button>
+    <button type="button" onClick={openSettings}>Voice & connections</button>
     {notice && !open && createPortal(<aside className="tts-notice" role="status">
-      {t('Voice is unavailable. Check voice settings; text dialogue still works.')}
-      <button onClick={() => { setOpen(true); setNotice(false); void refresh(); }}>{t('Sound & settings')}</button>
-      <button aria-label={t('Dismiss voice notice')} onClick={() => setNotice(false)}>×</button>
+      Voice is unavailable. Check TTS configuration; text dialogue still works.
+      <button type="button" onClick={() => { setNotice(false); openSettings(); }}>Settings</button>
+      <button type="button" aria-label="Dismiss voice notice" onClick={() => setNotice(false)}>×</button>
     </aside>, document.body)}
-    {open && createPortal(<div className="settings-backdrop" onClick={() => setOpen(false)}>
-      <section className="settings-panel" role="dialog" aria-modal="true" aria-label={t('Sound & settings')} onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); } }}>
-        <header className="settings-panel__header"><h1>{t('Sound & settings')}</h1><button onClick={() => setOpen(false)} aria-label={t('Close sound settings')} autoFocus>×</button></header>
-        <h2>{t('Audio volume')}</h2>
-        {muted && <div className="settings-master-muted" role="status">
-          <span>{t('All sound is muted. Volume changes will apply after sound is turned on.')}</span>
-          <button type="button" onClick={toggleMuted}>{t('Turn sound on')}</button>
-        </div>}
-        {(['voice', 'music'] as const).map(channel => <label className="settings-volume" key={channel}>
-          <span>{channel === 'voice' ? t('Voice volume') : t('Background music')}<output>{Math.round(volumes[channel] * 100)}%</output></span>
-          <input type="range" min="0" max="100" step="1" aria-label={channel === 'voice' ? t('Voice volume') : t('Background music')} value={Math.round(volumes[channel] * 100)} onChange={event => changeVolume(channel, Number(event.target.value) / 100)} />
-        </label>)}
-        <p>{t('Volumes are saved on this browser. Master mute still silences all audio.')}</p>
-        <h2>{t('Play assistance')}</h2>
-        <label><input type="checkbox" role="switch" checked={hintsEnabled} onChange={event => setPlayHintsEnabled(event.target.checked)} /> {t('Show Continue / next-step hints')}</label>
-        <p>{t('Off hides the Continue button. Saved on this browser; your game progress is unchanged.')}</p>
-        <h2>{t('Character voice')}</h2>
-        <label><input type="checkbox" checked={enabled} onChange={event => { setEnabled(event.target.checked); setTtsEnabled(event.target.checked); }} /> {t('Enable character voice on this browser')}</label>
-        <p role="status">{hasError
-          ? t('Voice service is unavailable. Text dialogue still works.')
-          : config
-            ? t(config.configured ? 'Configured · availability is checked when speaking' : 'TTS is not configured. Text dialogue remains available.')
-            : t('Checking configuration…')}</p>
-        {config && <><p>{t('Online model')}: {config.model}</p><p>{t('Online fallback voice')}: {config.defaultVoice} · {t('Characters may override it')}</p></>}
-        {config && !config.configured && <p>{t('Add a DashScope API key below, or configure Nanami local voice. Text dialogue remains available.')}</p>}
-        <button onClick={() => { void refresh(); }}>{t('Recheck voice configuration')}</button>
-        <NanamiTtsSettings onSaved={() => { void refresh(); }} />
+    {open && createPortal(<div className="prototype-dialog-backdrop" onClick={() => setOpenState(false)}>
+      <section className="prototype-world-picker settings-panel" role="dialog" aria-modal="true" aria-label="Voice settings" data-focus-owner="workspace" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpenState(false); } }}>
+        <button type="button" onClick={() => setOpenState(false)} aria-label="Close voice settings" autoFocus>Close</button>
+        <h2>Character voice</h2>
+        <fieldset aria-labelledby="audio-levels-heading">
+          <legend id="audio-levels-heading">{t('Audio levels')}</legend>
+          <div className="settings-volume">
+            <span><label htmlFor="music-volume">{t('Music volume')}</label><output id="music-volume-value" htmlFor="music-volume">{t('{value}%', { value: volumes.music })}</output></span>
+            <input id="music-volume" type="range" role="slider" min="0" max="100" step="1" value={volumes.music} aria-valuemin={0} aria-valuemax={100} aria-valuenow={volumes.music} aria-describedby="music-volume-value" onChange={e => onVolumeInput('music', e.currentTarget.value)} />
+          </div>
+          <div className="settings-volume">
+            <span><label htmlFor="voice-volume">{t('Voice volume')}</label><output id="voice-volume-value" htmlFor="voice-volume">{t('{value}%', { value: volumes.voice })}</output></span>
+            <input id="voice-volume" type="range" role="slider" min="0" max="100" step="1" value={volumes.voice} aria-valuemin={0} aria-valuemax={100} aria-valuenow={volumes.voice} aria-describedby="voice-volume-value" onChange={e => onVolumeInput('voice', e.currentTarget.value)} />
+          </div>
+        </fieldset>
+        <label><input type="checkbox" checked={enabled} onChange={e => { setEnabled(e.target.checked); setTtsEnabled(e.target.checked); }} /> Enable character voice on this browser</label>
+        {!enabled && <p role="status">{t('Voice playback is off; text dialogue remains available.')}</p>}
+        <p role="status">{error || (config ? config.configured ? 'Configured · availability is checked when speaking' : t('TTS is not configured. Text dialogue remains available.') : 'Checking configuration…')}</p>
+        {config && <><p>Model: {config.model}</p><p>Default voice: {config.defaultVoice} (characters may override it)</p></>}
+        {config && !config.configured && <p>Add your DashScope API key below. Text dialogue remains available.</p>}
+        <button type="button" onClick={() => { void refresh(); }}>Recheck configuration</button>
         <ConnectionSettings onSaved={() => { void refresh(); }} />
       </section>
     </div>, document.body)}

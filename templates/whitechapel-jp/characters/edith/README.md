@@ -1,6 +1,7 @@
 ---
 type: readme
 name: イーディス・ヴェイル
+voice: shy-sweet
 avatar: assets/characters/edith.webp
 ---
 

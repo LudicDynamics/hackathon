@@ -39,7 +39,7 @@
     {
       "kind": "block",
       "id": "world-language",
-      "content": "日本語で話す。記憶は characters/watson/memory.md。この人物が実際に見聞きしたことだけ知る。"
+      "content": "日本語で話す。記憶は characters/silver-kite/memory.md。この人物が実際に見聞きしたことだけ知る。"
     },
     {
       "kind": "slot",
@@ -58,7 +58,7 @@
           "near-term.md",
           "long-term.md"
         ],
-        "baseDir": "characters/watson",
+        "baseDir": "characters/silver-kite",
         "stripFrontmatter": true,
         "onMissing": "skip"
       }

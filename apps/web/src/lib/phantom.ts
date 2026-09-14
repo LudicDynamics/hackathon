@@ -14,7 +14,7 @@
 
 import { useSyncExternalStore } from 'react';
 
-export type PhantomKind = 'chalk' | 'image';
+export type PhantomKind = 'chalk' | 'image' | 'component';
 
 /** World-space placement, produced by `phantomSeatFor` (owner 03). */
 export interface PhantomSeat {
@@ -45,6 +45,11 @@ export interface PhantomEntry {
   elapsedMs?: number;
   /** Owning layer; undefined = don't filter (tolerate older frames). */
   layer?: string;
+  /** component lane: the resolved card kind (server's `card_writing.kind`),
+   *  which `skeletonShapeFor` turns into a shape (docs/skeleton/02). */
+  cardKind?: string;
+  /** component lane: optional title placeholder (= `card_writing.title`). */
+  cardTitle?: string;
   phase: 'pending' | 'writing' | 'landed' | 'evicted';
   createdAt: number;
 }
@@ -57,6 +62,10 @@ export interface PhantomInit {
   label?: string;
   elapsedMs?: number;
   layer?: string;
+  /** component lane: the resolved card kind (docs/skeleton/02). */
+  cardKind?: string;
+  /** component lane: optional title placeholder. */
+  cardTitle?: string;
 }
 
 /** `land` payload, shared by both lanes. **No `seat`** — landing never reseats. */
@@ -95,6 +104,8 @@ export function register(toolCallId: string, init: PhantomInit): void {
     if (init.elapsedMs !== undefined) existing.elapsedMs = init.elapsedMs;
     if (init.layer !== undefined) existing.layer = init.layer;
     if (init.path !== undefined) existing.path = init.path;
+    if (init.cardKind !== undefined) existing.cardKind = init.cardKind;
+    if (init.cardTitle !== undefined) existing.cardTitle = init.cardTitle;
     publish();
     return;
   }
@@ -114,6 +125,8 @@ export function register(toolCallId: string, init: PhantomInit): void {
   if (init.label !== undefined) entry.label = init.label;
   if (init.elapsedMs !== undefined) entry.elapsedMs = init.elapsedMs;
   if (init.layer !== undefined) entry.layer = init.layer;
+  if (init.cardKind !== undefined) entry.cardKind = init.cardKind;
+  if (init.cardTitle !== undefined) entry.cardTitle = init.cardTitle;
   // P0 ordering: ink may have arrived before this register — pour it in.
   const buffered = pendingInk.get(toolCallId);
   if (buffered !== undefined) {
@@ -149,10 +162,20 @@ export function setInk(toolCallId: string, text: string): void {
   publish();
 }
 
-/** Mark a phantom landed: phase='landed', record payload; **seat unchanged**. */
+/**
+ * Mark a phantom landed: phase='landed', record payload; **seat unchanged**.
+ *
+ * Guard (docs/skeleton/00 F-7 ruling L): a failed `write` still gets a
+ * `chalk_landed` after its `tool_end{isError}`, which evicted the phantom. A
+ * second `land` would overwrite `'evicted'` back to `'landed'`, so the
+ * evicted-drop never fires and the skeleton sticks forever. Landing an already
+ * evicted phantom is a no-op. The chalk/image lanes are unaffected: on the
+ * normal path `land` always precedes `evict`.
+ */
 export function land(toolCallId: string, payload: PhantomLandPayload): void {
   const entry = entries.get(toolCallId);
   if (!entry) return;
+  if (entry.phase === 'evicted') return;
   if (payload.path !== undefined) entry.path = payload.path;
   if (payload.asset !== undefined) entry.asset = payload.asset;
   if (payload.reused !== undefined) entry.reused = payload.reused;

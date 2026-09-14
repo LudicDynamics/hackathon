@@ -23,14 +23,37 @@ export function portraitPlayStateOf(cards: { path: string; kind: string }[]): {
 
 /**
  * Live `prefers-reduced-motion: reduce` probe (nook 03 §③-6 L3 / §③-4).
- * Probed once at mount; no `change` subscription this batch (03 §⑫-7).
+ * The media query is subscribed for the lifetime of the component so a
+ * system preference change takes effect without remounting the stage.
  */
+function reducedMotionMatches(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 export function useStill(): boolean {
-  const [still, setStill] = useState(
-    () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  );
+  const [still, setStill] = useState(reducedMotionMatches);
   useEffect(() => {
-    setStill(!!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = (event?: MediaQueryListEvent): void => {
+      setStill(event ? event.matches : query.matches);
+    };
+    update();
+    const modernListener = typeof query.addEventListener === 'function';
+    if (modernListener) {
+      query.addEventListener('change', update);
+    } else {
+      // Safari < 14 and a few test DOMs only expose the deprecated listener.
+      query.addListener?.(update);
+    }
+    return () => {
+      if (modernListener) {
+        query.removeEventListener?.('change', update);
+      } else {
+        query.removeListener?.(update);
+      }
+    };
   }, []);
   return still;
 }

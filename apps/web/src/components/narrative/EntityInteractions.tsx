@@ -1,32 +1,71 @@
 import { useLocale } from '../../lib/i18n.js';
 import React from 'react';
-import { renderFrontmatterWidgets } from '../../lib/fm.js';
-import { airpGateway } from '../../lib/airp-gateway.js';
-import { DeclaredActionDialog, type DeclaredResponse } from './DeclaredActionDialog.js';
+import { BagItemDialog } from '../BagItemDialog.js';
+import { DeclaredActionDialog, type DeclaredResponse, type MaterialSelection } from './DeclaredActionDialog.js';
 import './declared-actions.css';
-import { MarkdownText } from '../../lib/md.js';
+import { airpGateway, AirpRequestError } from '../../lib/airp-gateway.js';
+import { actionDetailsOf, actionKey, ActionFeedbackStore, runAction, type ActionFeedback, type ActionResultLike, type ActionVerb } from '../../lib/action-feedback.js';
+import { renderFrontmatterWidgets } from '../../lib/fm.js';
 
-export interface EntityInteractionProps {
-  item: { path: string; body?: string; frontmatter: Record<string, any> | null };
+interface Props {
+  item: { path: string; filename?: string; body?: string; frontmatter: Record<string, any> | null };
   active?: boolean;
   onChoice?: (prompt: string) => void;
   onSelectChoice?: (path: string, choice: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
   onEnterGate?: (path: string) => void;
   onOpenCharacter?: (id: string) => void;
-  inline?: boolean;
+  onActionResult?: (result: ActionFeedback) => void;
 }
 
+type DeclaredChoiceDetails = {
+  action: DeclaredResponse;
+};
+
+type MaterialReviewDetails = {
+  prompt: string;
+  materials: Array<{ slot: string; path: string; revision: string }>;
+};
+
+function declaredActionOf(value: unknown): DeclaredResponse | null {
+  if (!value || typeof value !== 'object') return null;
+  const action = value as Record<string, unknown>;
+  if (!['read', 'take', 'stage', 'enter', 'character', 'reply', 'writer'].includes(String(action.kind))
+    || typeof action.source !== 'string'
+    || (typeof action.choice !== 'string' && typeof action.choice !== 'number')
+    || typeof action.revision !== 'string'
+    || !Array.isArray(action.items)
+    || !Array.isArray(action.missing)) return null;
+  if (action.kind === 'stage' && !Array.isArray(action.slots)) return null;
+  return action as DeclaredResponse;
+}
+
+
 /** Shared by every Markdown form; visual form never decides interaction support. */
-export function EntityInteractions({ item, active = false, onChoice, onSelectChoice, onDiceRolled, onEnterGate, onOpenCharacter, inline = false }: EntityInteractionProps) {
+function requestCanvasReading(source: HTMLElement): void {
+  const object = source.closest<HTMLElement>('.object');
+  if (!object) return;
+  // CanvasObject already owns the reading projection and its keyboard seam.
+  // Re-enter that seam rather than sending an action or fabricating feedback.
+  object.dispatchEvent(new KeyboardEvent('keydown', {
+    key: 'Enter',
+    bubbles: true,
+    cancelable: true,
+  }));
+}
+export function EntityInteractions({ item, active = false, onChoice, onDiceRolled, onEnterGate, onOpenCharacter, onActionResult }: Props) {
   const { t } = useLocale();
   const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState('');
+  const [feedbackStatus, setFeedbackStatus] = React.useState<string | null>(null);
   const [feedback, setFeedback] = React.useState('');
-  const [direct, setDirect] = React.useState<DeclaredResponse | null>(null);
+  const [error, setError] = React.useState('');
   const ref = React.useRef<HTMLDivElement>(null);
   const running = React.useRef(false);
+  const feedbackStore = React.useMemo(() => new ActionFeedbackStore(), []);
   const [side, setSide] = React.useState('right');
+  const [inspecting, setInspecting] = React.useState(false);
+  const [direct, setDirect] = React.useState<DeclaredResponse | null>(null);
+
   React.useLayoutEffect(() => {
     if (inline || !active || !ref.current) return;
     const el = ref.current;
@@ -69,14 +108,40 @@ export function EntityInteractions({ item, active = false, onChoice, onSelectCho
     observer.observe(viewport);
     viewport.addEventListener('wheel', schedule, { passive: true });
     return () => { cancelAnimationFrame(frame); observer.disconnect(); viewport.removeEventListener('wheel', schedule); };
-  }, [active, inline]);
-  const run = async (work: () => void | Promise<unknown>) => {
-    if (running.current) return;
+  }, [active]);
+
+  const publish = (result: ActionFeedback, acceptedMessage?: string) => {
+    onActionResult?.(result);
+    setFeedbackStatus(result.outcome);
+    if (result.outcome === 'accepted') {
+      setFeedback(acceptedMessage ?? result.message);
+      setError('');
+    } else if (result.outcome === 'conflict') {
+      setFeedback(result.message);
+      setError('');
+    } else if (result.outcome === 'rejected' || result.outcome === 'failed') {
+      setFeedback('');
+      setError(result.message);
+    }
+  };
+
+  const runGatewayAction = async <TDetails,>(verb: ActionVerb, target: string, request: () => Promise<unknown>, acceptedMessage?: string): Promise<ActionFeedback<TDetails> | null> => {
+    if (running.current) return null;
     running.current = true;
     setBusy(true); setError(''); setFeedback('');
-    try { await work(); } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
-    finally { running.current = false; setBusy(false); }
+    // Gateway returns the server's `{ok: true, ...details}` JSON shape. The
+    // adapter validates/classifies it; this cast does not invent a response.
+    const result = await runAction<TDetails>(
+      feedbackStore,
+      { key: actionKey(verb, target), verb, target },
+      async () => await request() as ActionResultLike<TDetails>,
+    );
+    publish(result, acceptedMessage);
+    running.current = false;
+    setBusy(false);
+    return result;
   };
+
   const send = (action: string) => onChoice?.(`Regarding world file ${JSON.stringify(item.path)}, the player requests: ${action}`);
   const actions = Array.isArray(item.frontmatter?.actions)
     ? item.frontmatter.actions.filter((action: unknown): action is string => typeof action === 'string' && !!action.trim())
@@ -85,46 +150,143 @@ export function EntityInteractions({ item, active = false, onChoice, onSelectCho
   const isGate = fm?.type === 'gate' || item.path.endsWith('/README.md');
   const isPerson = fm?.type === 'character' || fm?.type === 'sprite';
   const collectable = !isGate && !isPerson && fm?.type !== 'chalk' && item.path.startsWith('world/') && fm?.portable !== false;
-  const choose = (choice: string) => {
-    if (!item.frontmatter?.choice_actions) { onSelectChoice?.(item.path, choice); return; }
-    executeChoice(item.path, choice);
-  };
-  const executeChoice = (source: string, choice: string) => {
-    void run(async () => {
-      const result = await airpGateway.choose(source, choice) as { action?: DeclaredResponse };
-      const action = result.action;
-      if (!action) throw new Error('The action declaration changed. Refresh this card.');
+  const hasBody = typeof item.body === 'string' && item.body.trim().length > 0;
+  const canvasReadingAllowed = !isGate && fm?.type !== 'sprite';
+  const canRead = hasBody && canvasReadingAllowed;
+
+  const handleDeclaredAction = (action: DeclaredResponse) => {
+    if (action.kind === 'enter' && typeof action.target === 'string') {
       setDirect(null);
-      if (action.kind === 'enter') onEnterGate?.(action.target!);
-      else if (action.kind === 'character') onOpenCharacter?.(action.character!);
-      else if (action.kind === 'writer') onChoice?.(`Regarding world file ${JSON.stringify(source)}, the player requests: ${action.prompt ?? choice}`);
-      else setDirect(action);
+      onEnterGate?.(action.target);
+    } else if (action.kind === 'character' && typeof action.character === 'string') {
+      setDirect(null);
+      onOpenCharacter?.(action.character);
+    } else if (action.kind === 'writer' && typeof action.prompt === 'string' && action.prompt.trim() && onChoice) {
+      setDirect(null);
+      onChoice(action.prompt);
+    } else {
+      setDirect(action);
+    }
+  };
+
+  const executeDeclaredChoice = async (source: string, choice: string) => {
+    const result = await runGatewayAction<DeclaredChoiceDetails>('choice', `${source}:${choice}`, async () => {
+      const response = await airpGateway.choose(source, choice) as ActionResultLike<DeclaredChoiceDetails>;
+      if ('ok' in response && response.ok === true) {
+        const details = actionDetailsOf<DeclaredChoiceDetails>(response);
+        if (!details || !declaredActionOf(details.action)) throw new Error('The declared action response is invalid. Refresh this card.');
+      }
+      return response;
     });
+    if (result?.outcome !== 'accepted' || !result.details) return;
+    const action = declaredActionOf(result.details.action);
+    if (!action) return;
+    handleDeclaredAction(action);
   };
-  const characterId = fm?.characterId || fm?.id || item.path.split('/').pop()!.replace(/\.md$/, '');
-  return <div ref={ref} className={inline ? 'entity-interactions-inline' : `entity-interactions entity-interactions--${side}`} data-no-drag onClick={event => event.stopPropagation()}>
-    <fieldset disabled={busy}>
-    {item.frontmatter?.dice_outcomes && <details className="dice-help"><summary>{String(item.frontmatter.title ?? 'Dice')}</summary><MarkdownText text={(item.body ?? '').split(/<!--\s*resolved-dice:/)[0]} /></details>}
-    {renderFrontmatterWidgets(item.frontmatter, { filePath: item.path, reveal: active, onChoice: choose, onDiceRolled })}
-    {!inline && <div className="entity-action-arrows" aria-label={t("Entity actions")}>
-      {actions.map((action: string, index: number) => <button type="button" key={`${index}-${action}`} disabled={!onChoice} onClick={() => send(action)}><span aria-hidden="true">→ </span>{action}</button>)}
-      {collectable && <button type="button" onClick={() => void run(async () => { await airpGateway.move(item.path, `player/${item.path.split('/').pop()}`); setFeedback(t('Added to belongings.')); })}>{t("→ Take along")}</button>}
-      {isGate && onEnterGate && <button type="button" onClick={() => onEnterGate(typeof fm?.target === 'string' ? fm.target : item.path.replace(/\/README\.md$/, ''))}>{t("→ Enter scene")}</button>}
-      {isPerson && onOpenCharacter && <button type="button" onClick={() => onOpenCharacter(fm?.characterId || fm?.id || item.path.split('/').pop()!.replace(/\.md$/, ''))}>{t("→ Talk")}</button>}
-      {isPerson && <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('airp:open-nook', { detail: { characterId } }))}>→ {t('Visit private space')}</button>}
-      {onChoice && <button type="button" onClick={() => send('Look closely at this entity and respond in the current role-playing scene. Do not move or collect it unless asked.')}>{t("→ Look closer")}</button>}
-    </div>}
+
+  const choose = (choice: string) => {
+    // Choices are domain actions, not writer prompts. Only the authoritative
+    // `/api/choice` result can produce accepted/conflict/failed feedback.
+    if (fm?.choice_actions && typeof fm.choice_actions === 'object') {
+      void executeDeclaredChoice(item.path, choice);
+      return;
+    }
+    void runGatewayAction('choice', `${item.path}:${choice}`, () => airpGateway.choose(item.path, choice));
+  };
+
+  const requestMaterialReview = async (action: DeclaredResponse, selections: MaterialSelection[]) => {
+    const response = await fetch('/api/material-review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: action.source, choice: action.choice, revision: action.revision, selections }),
+    });
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new AirpRequestError(`POST /api/material-review -> ${response.status}`, response.status, null);
+    }
+    if (!payload || typeof payload !== 'object') {
+      throw new AirpRequestError(`POST /api/material-review -> ${response.status}`, response.status, null);
+    }
+    const result = payload as ActionResultLike<MaterialReviewDetails>;
+    if (!response.ok) throw new AirpRequestError(`POST /api/material-review -> ${response.status}`, response.status, payload as Record<string, unknown>);
+    if ('ok' in result && result.ok === true) {
+      const details = actionDetailsOf<MaterialReviewDetails>(result);
+      if (!details || typeof details.prompt !== 'string' || !Array.isArray(details.materials)) {
+        throw new Error('The material review response is invalid. Reopen the panel.');
+      }
+    }
+    return result;
+  };
+
+  const submitMaterialReview = async (selections: MaterialSelection[]): Promise<string> => {
+    if (!direct) throw new Error('The action snapshot is no longer available. Reopen the panel.');
+    if (!onChoice) throw new Error('The writer input is unavailable. Return to the scene.');
+    const result = await runGatewayAction<MaterialReviewDetails>('present', direct.source, () => requestMaterialReview(direct, selections));
+    if (result?.outcome !== 'accepted' || !result.details) throw new Error(result?.message ?? 'The review draft was not accepted.');
+    return result.details.prompt;
+  };
+  const inspect = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    setError('');
+    setFeedback('');
+    setFeedbackStatus(null);
+    setInspecting(true);
+    // A body-bearing, readable CanvasObject owns the canonical projection.
+    // Empty/non-readable entities stay local so they still get a visible
+    // read-only empty state instead of a no-op or fabricated status.
+    if (canRead) requestCanvasReading(event.currentTarget);
+  };
+  const readingItem = {
+    path: item.path,
+    filename: item.filename ?? item.path.split('/').pop() ?? item.path,
+    body: item.body ?? '',
+    frontmatter: item.frontmatter,
+  };
+
+  const actionsPanel = <>
+    <fieldset disabled={busy} aria-busy={busy}>
+      {renderFrontmatterWidgets(item.frontmatter, { filePath: item.path, reveal: active, onChoice: choose, onDiceRolled })}
+      <div className="entity-action-arrows" aria-label={t('Entity actions')}>
+        {actions.map((action: string, index: number) => <button type="button" key={`${index}-${action}`} disabled={!onChoice} onClick={() => send(action)}><span aria-hidden="true">→ </span>{action}</button>)}
+        {collectable && <button type="button" onClick={() => void runGatewayAction('move', item.path, () => airpGateway.move(item.path, `player/${item.path.split('/').pop()}`), t('Added to belongings.'))}>{t('→ Take along')}</button>}
+        <button type="button" onClick={inspect}>{t('→ Look closer')}</button>
+        {isGate && onEnterGate && <button type="button" onClick={() => onEnterGate(typeof fm?.target === 'string' ? fm.target : item.path.replace(/\/README\.md$/, ''))}>{t('→ Enter scene')}</button>}
+        {isPerson && onOpenCharacter && <button type="button" onClick={() => onOpenCharacter(fm?.characterId || fm?.id || item.path.split('/').pop()!.replace(/\.md$/, ''))}>{t('→ Talk')}</button>}
+      </div>
     </fieldset>
-    {busy && <small role="status">{t("Working…")}</small>}
-    {feedback && <small role="status">{feedback}</small>}
-    {error && <small className="entity-action-error" role="alert">{error}</small>}
-    {direct && <DeclaredActionDialog key={JSON.stringify(direct)} value={direct} onClose={() => setDirect(null)} onChoose={executeChoice} onSubmit={async selections => {
-      if (!onChoice) throw new Error('The writer input is unavailable. Return to the scene.');
-      const response = await fetch('/api/material-review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ world: direct.world, path: direct.source, choice: direct.choice, revision: direct.revision, selections }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? 'Could not prepare material review');
-      onChoice(data.prompt);
-      setDirect(null);
-    }} />}
+    {busy && <small role="status">{t('Working…')}</small>}
+    {feedback && <small role="status" data-action-status={feedbackStatus ?? 'accepted'}>{feedback}</small>}
+    {error && <small className="entity-action-error" role="alert" data-action-status={feedbackStatus ?? 'failed'}>{error}</small>}
+  </>;
+
+  const readingProjection = <>
+    <BagItemDialog
+      inline
+      item={{ ...readingItem, body: canRead ? readingItem.body : '' }}
+      onClose={() => setInspecting(false)}
+    />
+    {!canRead && <small role="status">{t('Nothing readable here.')}</small>}
+  </>;
+
+  return <div ref={ref} className={`entity-interactions entity-interactions--${side}`} data-no-drag onClick={event => event.stopPropagation()}>
+    {inspecting ? readingProjection : actionsPanel}
+    {direct && <DeclaredActionDialog
+      key={`${direct.source}:${String(direct.choice)}:${direct.revision}`}
+      value={direct}
+      onClose={() => setDirect(null)}
+      onChoose={executeDeclaredChoice}
+      onSubmit={submitMaterialReview}
+      onSendReview={prompt => {
+        if (!onChoice) {
+          setError('The writer input is unavailable. Return to the scene.');
+          return;
+        }
+        onChoice(prompt);
+        setDirect(null);
+      }}
+    />}
   </div>;
+
 }

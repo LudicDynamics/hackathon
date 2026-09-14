@@ -1,19 +1,23 @@
 import { useLocale } from './lib/i18n.js';
 import { AgentSettings } from './components/AgentSettings.js';
 import { TtsSettings } from './components/TtsSettings.js';
+import { WriterBar } from './components/chrome/WriterBar.js';
 import { WriterResult } from './components/WriterResult.js';
-import { WorldActivityToast } from './components/WorldActivityToast.js';
+import { ActivityRail } from './components/chrome/ActivityRail.js';
+import { AgentActivityLog } from './components/chrome/AgentActivityLog.js';
+import { ConnectedWorldToastRegion } from './components/chrome/WorldToast.js';
 import { ItemArtwork } from './components/ItemArtwork.js';
 import { NookView } from './components/nook/NookView.js';
 import { ghostItemFor } from './lib/init-ghost.js';
 import { useViewpointReport } from './hooks/useViewpointReport.js';
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Canvas } from './components/canvas/Canvas.js';
-import { CharacterModal, type CharacterFrame } from './components/overlay/CharacterModal.js';
+import { CharacterModal } from './components/overlay/CharacterModal.js';
 import { DiceCeremony } from './components/performance/DiceCeremony.js';
 import { PerformanceLayer } from './components/performance/PerformanceLayer.js';
 import {
   parseDiceFrame,
+  parseDiceFrameResult,
   shouldPlayFrame,
   markPlayed,
   playCeremony,
@@ -21,13 +25,28 @@ import {
   subscribeCeremony,
   getCeremonySnapshot,
 } from './lib/dice-ceremony.js';
+import { getCharacterFrameQueue, isCharacterFrame } from './lib/character-frame-queue.js';
+import {
+  createCameraMemoryStack,
+  projectionTarget,
+  type CameraMemoryStack,
+  type ProjectionTarget,
+} from './lib/camera.js';
+import { useWriterState, requestWriterStop, resetForReconnect, retryWriterPrompt } from './lib/writer-state.js';
+import { buildItemActionPrompt, appendItemAction } from './lib/item-action-draft.js';
+import { PLAY_HINT_REQUEST } from './lib/play-hints.js';
+import { agentActivityStore } from './lib/agent-activity-store.js';
+import { worldEventToastStore } from './lib/world-event-toast.js';
 import { GodModeToolbar } from './components/god/GodModeToolbar.js';
 import { RadialMenu, type RadialItemType } from './components/god/RadialMenu.js';
 import { MuteButton } from './components/chrome/MuteButton.js';
 import { useAudio } from './state/useAudio.js';
 import { useCamera } from './state/useCamera.js';
 import { useWorld } from './state/useWorld.js';
-import { airpGateway, type WorldShelf } from './lib/airp-gateway.js';
+import type { EnterLayerResult } from './state/useWorld.js';
+import { CharacterRail } from './components/sidebar/CharacterRail.js';
+import { usePresence } from './state/usePresence.js';
+import { airpGateway, onWorldUnavailable, AirpRequestError, type AssetMediaKind, type WorldShelf } from './lib/airp-gateway.js';
 import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
 import { BagItemDialog } from './components/BagItemDialog.js';
 import { appendItemAction, buildItemActionPrompt } from './lib/item-action-draft.js';
@@ -37,6 +56,9 @@ import { initialShell, transitionShell, splitCharacters } from './lib/ui-shell.m
 import { MarkdownText } from './lib/md.js';
 import { BookOpen, ChevronDown, ChevronUp, Maximize, Minimize, UserRound, Backpack, Sparkles } from 'lucide-react';
 import { preloadAudio } from './lib/audio.js';
+import { useStill } from './lib/motion.js';
+import { createFocusCoordinator, type FocusOwner } from './lib/focus-coordinator.js';
+import { createOverlayAdmission } from './lib/overlay-admission.js';
 
 interface WorldManifest {
   id: string;
@@ -76,6 +98,12 @@ interface CharacterView {
    * MotionPortrait fallback.
    */
   emotions?: Record<string, string>;
+  /**
+   * Where this character actually IS (docs/presence/00 §3.2) — the ONE
+   * cross-layer fact. The key is ALWAYS present; `null` = not in the world.
+   * NEVER `home`: that is only the initial layer baked into world.json.
+   */
+  presence: { layer: string; following: boolean } | null;
 }
 
 type Attention = 'ambient' | 'writer' | 'authoring';
@@ -91,10 +119,15 @@ function labelOf(value: string): string {
     .join(' ');
 }
 
-function assetUrl(path?: string): string | undefined {
+function assetUrl(path?: string, mediaKind: AssetMediaKind = 'image'): string | undefined {
   if (!path) return undefined;
-  if (/^(?:https?:|data:|blob:|\/)/.test(path)) return path;
-  return airpGateway.assetUrl(path);
+  if (path.startsWith('/api/asset')) {
+    const url = new URL(path, window.location.origin);
+    const assetPath = url.searchParams.get('path');
+    return assetPath ? airpGateway.assetUrl(assetPath, undefined, mediaKind) : undefined;
+  }
+  if (/^(?:https?:|data:|blob:)/.test(path)) return path;
+  return airpGateway.assetUrl(path.replace(/^\/+/, ''), undefined, mediaKind);
 }
 
 function sceneName(manifest: WorldManifest | null, layer: string): string {
@@ -111,6 +144,8 @@ export function App() {
   const [characters, setCharacters] = useState<CharacterView[]>([]);
   const [shelf, setShelf] = useState<WorldShelf>({ templates: [], worlds: [] });
   const [attention, setAttention] = useState<Attention>('ambient');
+  const [isGodHandOpen, setIsGodHandOpen] = useState(false);
+  const allowChalkDrag = isGodHandOpen;
   const [shell, setShell] = useState(initialShell);
   const [encounters, setEncounters] = useState<Record<string, string[]>>({});
   const [bagOpen, setBagOpen] = useState(false);
@@ -119,6 +154,31 @@ export function App() {
   const [effectsEnabled, setEffectsEnabled] = useState(() => {
     try { return localStorage.getItem('airp:effects') === 'on'; } catch { return false; }
   });
+  const reducedMotion = useStill();
+  const [pageVisible, setPageVisible] = useState(() => typeof document === 'undefined' || !document.hidden);
+  useEffect(() => {
+    const onVisibilityChange = () => setPageVisible(!document.hidden);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, []);
+  const focusCoordinator = useMemo(() => createFocusCoordinator(), []);
+  const overlayAdmission = useMemo(() => createOverlayAdmission(focusCoordinator), [focusCoordinator]);
+  const [, setFocusRevision] = useState(0);
+  useEffect(() => focusCoordinator.subscribe(() => setFocusRevision(value => value + 1)), [focusCoordinator]);
+  const focusTokensRef = useRef(new Map<FocusOwner, string>());
+  const syncFocus = useCallback((owner: FocusOwner, active: boolean) => {
+    const token = focusTokensRef.current.get(owner);
+    if (active && !token) {
+      focusTokensRef.current.set(owner, focusCoordinator.acquire(owner));
+    } else if (!active && token) {
+      focusCoordinator.release(token);
+      focusTokensRef.current.delete(owner);
+    }
+  }, [focusCoordinator]);
+  const characterAdmissionRef = useRef<string | null>(null);
+  const radialAdmissionRef = useRef<string | null>(null);
+  const diceAdmissionRef = useRef<string | null>(null);
+  const closeCharacterRef = useRef<() => void>(() => {});
   useEffect(() => {
     try { localStorage.setItem('airp:effects', effectsEnabled ? 'on' : 'off'); } catch { /* Storage is optional. */ }
   }, [effectsEnabled]);
@@ -134,33 +194,9 @@ export function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [loadingWorld, setLoadingWorld] = useState<string | null>(null);
   const [backdropReady, setBackdropReady] = useState(false);
-  const [writerWorking, setWriterWorking] = useState(false);
-  const [writerStopRequested, setWriterStopRequested] = useState(false);
-  useEffect(() => { if (!writerWorking) setWriterStopRequested(false); }, [writerWorking]);
-  const [writerStage, setWriterStage] = useState('The writer is working…');
-  const [writerStarted, setWriterStarted] = useState(0);
-  const [writerElapsed, setWriterElapsed] = useState(0);
-  useEffect(() => {
-    if (!writerWorking || !writerStarted) return;
-    const timer = window.setInterval(() => setWriterElapsed(Math.floor((Date.now() - writerStarted) / 1000)), 1000);
-    return () => window.clearInterval(timer);
-  }, [writerWorking, writerStarted]);
-  useEffect(() => {
-    const receive = (event: Event) => {
-      const frame = (event as CustomEvent).detail;
-      if (frame.source !== 'writer') return;
-      if (frame.type === 'agent_progress') {
-        setWriterStage(frame.stage);
-        setWriterStarted(frame.startedAt);
-        setWriterElapsed(Math.floor((Date.now() - frame.startedAt) / 1000));
-        setWriterWorking(frame.busy);
-      }
-      if (['writer_delta', 'tool_start', 'chalk_writing'].includes(frame.type)) setWriterWorking(true);
-      if (['writer_idle', 'error', 'turn_aborted'].includes(frame.type)) setWriterWorking(false);
-    };
-    window.addEventListener('airp:agent-frame', receive);
-    return () => window.removeEventListener('airp:agent-frame', receive);
-  }, []);
+  const writerState = useWriterState();
+  const writerWorking = writerState.phase === 'writing';
+  const [writerSubmitPending, setWriterSubmitPending] = useState(false);
   const writerRef = useRef<HTMLInputElement>(null);
   const activeSavePath = shelf.groups?.flatMap(group => group.saves).find(save => save.active)?.path;
   useEffect(() => {
@@ -171,11 +207,21 @@ export function App() {
   }, [manifest?.id, activeSavePath]);
   const writerHistory = useRef<string[]>([]);
   const writerHistoryCursor = useRef(0);
-  const writerDraft = useRef('');
+  const [writerDraft, setWriterDraft] = useState('');
+  const historyDraft = useRef('');
   const toastTimer = useRef<number | null>(null);
+  const clearAdmittedCeremony = useCallback(() => {
+    clearCeremony();
+    const token = diceAdmissionRef.current;
+    if (token) {
+      overlayAdmission.release(token);
+      diceAdmissionRef.current = null;
+    }
+  }, [overlayAdmission]);
+  const writerPendingRef = useRef(false);
 
-  // 角色演出帧（A3）：useWorld 转发给遮罩；本组件按 activeCharacter.id 路由后下推。
-  const [activeModalFrame, setActiveModalFrame] = useState<CharacterFrame | null>(null);
+  // Character frames cross the one App-owned identity router into the queue.
+  const frameQueue = useMemo(() => getCharacterFrameQueue(), []);
 
   // Dice ceremony (presentation channel, docs/perform/02): the fullscreen roll
   // driven by the `dice_result` frame. Module store (lib/dice-ceremony.ts) so
@@ -189,21 +235,122 @@ export function App() {
   // Canvas world state (layer payload, WS events, card persistence).
   const world = useWorld();
   const { state, layer, enterLayer, refresh, moveCard, sendToWriter, sendMessage } = world;
+  useEffect(() => {
+    worldEventToastStore.setProjectId(manifest?.id ?? null);
+  }, [manifest?.id]);
+  const cameraStackRef = useRef<CameraMemoryStack | null>(null);
+  if (cameraStackRef.current === null) {
+    cameraStackRef.current = createCameraMemoryStack(camera, projectionTarget('layer', layer));
+  }
+  const cameraStack = cameraStackRef.current!;
+  useEffect(() => {
+    if (nookChar === null && !activeCharacter) {
+      cameraStack.setCurrent(projectionTarget('layer', layer));
+    }
+  }, [activeCharacter, cameraStack, layer, nookChar]);
+  const callerProjectionRef = useRef<ProjectionTarget | null>(null);
   const chromeVisible = !shell.immersive;
   const isDusk = backdropReady;
 
-  // The free-input channel locks while the writer is mid-turn (docs/perform/01
-  // §6.4): a stray Enter must not queue a prompt the writer will never read.
-  // `writerWorking` is driven below from the writer frames (tool_start /
-  // writer_delta / chalk_writing → busy; writer_idle / error / turn_aborted →
-  // idle), so it covers a turn before its first chalk lands.
-  const writerLocked = writerWorking || state?.worldFrozen === true;
+  // The canonical writer-state projection owns busy phase; App only derives
+  // the input lock and never mirrors progress frames into local state.
+  const writerLocked = writerWorking || writerSubmitPending || state?.worldFrozen === true;
+  useEffect(() => {
+    if (writerWorking && writerPendingRef.current) {
+      writerPendingRef.current = false;
+      setWriterSubmitPending(false);
+    }
+  }, [writerWorking]);
+  const openNook = useCallback((characterId: string) => {
+    const caller: ProjectionTarget = nookChar
+      ? projectionTarget('nook', nookChar)
+      : projectionTarget('layer', layer);
+    const target = projectionTarget('nook', characterId);
+    cameraStack.pushTransition(target);
+    cameraStack.restoreTarget(target);
+    callerProjectionRef.current = caller;
+    frameQueue.clear('switch');
+    setNookChar(characterId);
+  }, [cameraStack, callerProjectionRef, frameQueue, layer, nookChar]);
 
-  const notify = (message: string) => {
-    setToast(message);
+  const closeNook = useCallback(() => {
+    const caller = callerProjectionRef.current;
+    if (caller) {
+      const frame = cameraStack.popTransition(caller);
+      if (frame) cameraStack.restoreProjection(frame);
+    }
+    callerProjectionRef.current = null;
+    frameQueue.clear('close');
+    setNookChar(null);
+    void refresh();
+  }, [cameraStack, callerProjectionRef, frameQueue, refresh]);
+  const notify = useCallback((message: string) => {
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(null), 3000);
-  };
+    setToast(message);
+    toastTimer.current = window.setTimeout(() => {
+      toastTimer.current = null;
+      setToast(null);
+    }, 3000);
+  }, []);
+  useEffect(() => { syncFocus('world-shelf', worldPickerOpen); }, [syncFocus, worldPickerOpen]);
+  useEffect(() => { syncFocus('nook', nookChar !== null); }, [nookChar, syncFocus]);
+  useEffect(() => { syncFocus('character-dialogue', activeCharacter !== null); }, [activeCharacter, syncFocus]);
+  useEffect(() => { syncFocus('belongings', bagOpen || selectedBagItem !== undefined); }, [bagOpen, selectedBagItem, syncFocus]);
+  useEffect(() => { syncFocus('profile', profileOpen); }, [profileOpen, syncFocus]);
+  useEffect(() => { syncFocus('writer', attention === 'authoring' && !shell.immersive); }, [attention, shell.immersive, syncFocus]);
+  useEffect(() => { syncFocus('journal', shell.journal); }, [shell.journal, syncFocus]);
+
+  // The single presence projection (§4.1): both the canvas avatars and the
+  // character rail consume THESE views, never a re-derivation of their own.
+  const { views: presenceViews, navigateTo: navigateToCharacter } = usePresence({
+    characters,
+    layer,
+    presence: state?.presence ?? [],
+    readLayerState: world.readLayerState,
+    enterLayer: world.enterLayer,
+    camera,
+    // `lib/presence.ts` stays pure and emits English KEY strings for its
+    // notices (docs/presence/04 §7); translate them at the boundary, like the
+    // rail does. Passing `notify` straight through leaked English into a
+    // Japanese session.
+    notify: (key: string) => notify(t(key)),
+  });
+  // Ids whose follow request is in flight. UI only — NOT the follow truth:
+  // nothing reads it as `following` (docs/presence/00 §2.4).
+  const [pendingFollowing, setPendingFollowing] = useState<ReadonlySet<string>>(new Set());
+
+  const toggleFollowing = useCallback(async (id: string, next: boolean) => {
+    setPendingFollowing(current => new Set(current).add(id));
+    try {
+      await airpGateway.setFollowing(id, next);
+      // No optimistic write: `presence.following` is the only truth (§2.4), and
+      // the writer may have flipped it in the meantime. The world event brings
+      // the new projection.
+    } catch {
+      notify(t('Could not change whether {name} follows you.', { name: labelOf(id) }));
+    } finally {
+      setPendingFollowing(current => {
+        const nextPending = new Set(current);
+        nextPending.delete(id);
+        return nextPending;
+      });
+    }
+  }, [notify, t]);
+
+  /**
+   * Surface the characters that could NOT follow into the new layer
+   * (docs/presence/00 §2.3 / P-9). The server reports them in the
+   * `enter-layer` reply; a left-behind character must never be silent.
+   * A `null` result means "same layer or the request failed" — that path is
+   * already surfaced by `airp:gate-feedback` / `airp:notice` in `useWorld`.
+   */
+  const applyFollowFailures = useCallback(
+    (result: EnterLayerResult | null) => {
+      if (!result?.followers?.failures?.length) return;
+      notify(t('Some of the party could not follow you.'));
+    },
+    [notify, t]
+  );
 
   const loadChromeData = async () => {
     const generation = worldLoadGeneration.current;
@@ -220,21 +367,39 @@ export function App() {
       setCharacters(nextCharacters.characters);
       setShelf(nextShelf);
     } catch (error) {
-      console.warn('Could not load AIRP chrome data:', error);
+      // `no_active_world` is not a data failure: the world shelf is already
+      // opening (see the `onWorldUnavailable` effect) and telling the player to
+      // "retry" would be false. Only genuine load errors get the toast.
+      const unavailable = error instanceof AirpRequestError && error.payload?.code === 'no_active_world';
+      if (!unavailable) {
+        // The character rail's ONLY data source: a silent empty rail would read
+        // as "nobody is here" (docs/presence/00 §6, global MUST NOT 6).
+        notify(t('Could not load the world data. Please retry.'));
+        console.warn('Could not load AIRP chrome data:', error);
+      }
     }
   };
-
   useEffect(() => {
     const unavailable = () => {
+      writerPendingRef.current = false;
+      setWriterSubmitPending(false);
       setManifest(null);
-      setCharacters([]);
       setBackpack([]);
-      setWriterWorking(false);
+      setCharacters([]);
+      setEncounters({});
+      setNookChar(null);
+      setActiveCharacter(null);
+      callerProjectionRef.current = null;
+      cameraStack.clear();
       setWorldPickerOpen(true);
+      frameQueue.clear('disconnect');
       void airpGateway.worlds().then(setShelf).catch(() => notify('Could not load the world shelf. Please retry.'));
     };
-    window.addEventListener('airp:world-unavailable', unavailable);
-    return () => window.removeEventListener('airp:world-unavailable', unavailable);
+    // Replayed subscription, not a one-shot `airp:world-unavailable` listener:
+    // the first `no_active_world` can land before this effect registers, and a
+    // missed signal would leave the player on a blank canvas with no way to pick
+    // a world (docs/ux/03 §6).
+    return onWorldUnavailable(unavailable);
   }, []);
 
   useEffect(() => {
@@ -246,32 +411,28 @@ export function App() {
   // I1 initialiser outcome (docs/init/03 §3.6): a failed materialisation must be
   // visible — never a silent canvas (contract §8 anti-pattern 8). The success
   // path needs no UI here; the ghost clears and the refetched layer replaces it.
-  useEffect(() => {
-    const onLayerInit = (event: Event) => {
-      const ev = (event as CustomEvent).detail?.event as { type?: string } | undefined;
-      if (['layer_init_failed'].includes(ev?.type ?? '')) notify(t('It never quite took shape here.'));
-    };
-    window.addEventListener('airp:layer-init', onLayerInit);
-    return () => window.removeEventListener('airp:layer-init', onLayerInit);
-  }, [t]);
-
-  // 角色演出帧（A3）：useWorld 转发的原始帧；按当前打开的角色过滤后下推给遮罩。
-  // 归属过滤放在这里而不是 useWorld：遮罩是唯一消费者，且须随开关重绑。
+  // The App is the sole identity boundary: only an active, valid character
+  // frame reaches the shared FIFO. Missing ids never inherit modal context.
   useEffect(() => {
     const onCharacterFrame = (event: Event) => {
-      const msg = (event as CustomEvent).detail as CharacterFrame | undefined;
-      if (!msg) return;
+      const msg = (event as CustomEvent).detail as unknown;
       const activeId = activeCharacter?.id;
-      if (msg.characterId !== undefined) {
-        if (msg.characterId !== activeId) return;
-      } else if (activeId === null) {
+      if (!activeId) return;
+      if (!isCharacterFrame(msg)) {
+        const candidate =
+          msg && typeof msg === 'object' && 'characterId' in msg ? msg.characterId : undefined;
+        if (candidate === undefined) notify('This character reply could not be assigned. Reopen the dialogue.');
         return;
       }
-      setActiveModalFrame(msg);
+      if (msg.characterId !== activeId) {
+        notify(`Character reply for ${msg.characterId} could not be assigned to ${activeId}.`);
+        return;
+      }
+      frameQueue.enqueue(msg, frameQueue.nextDeliverySeq());
     };
     window.addEventListener('airp:character-frame', onCharacterFrame);
     return () => window.removeEventListener('airp:character-frame', onCharacterFrame);
-  }, [activeCharacter]);
+  }, [activeCharacter?.id, frameQueue, notify]);
 
   // Dice ceremony: forwarded raw frame → boundary guard → layer filter / dedup
   // → ceremony layer. Rebinds on the current layer so the filter reads the live
@@ -279,17 +440,39 @@ export function App() {
   // layers (docs/perform/02 §7.2).
   useEffect(() => {
     const onDiceFrame = (event: Event) => {
-      const v = parseDiceFrame((event as CustomEvent).detail);
-      if (!v || !shouldPlayFrame(v, layer)) return;
+      const raw = (event as CustomEvent).detail as unknown;
+      const parsed = parseDiceFrameResult(raw);
+      if (!parsed.ok) {
+        if (raw && typeof raw === 'object' && (raw as { type?: unknown }).type === 'dice_result') {
+          notify('The dice result could not be understood.');
+        }
+        return;
+      }
+      const v = parsed.value;
+      if (!shouldPlayFrame(v, layer)) return;
+      const record = raw && typeof raw === 'object' ? raw : null;
+      const rawSource = record && 'source' in record ? record.source : undefined;
+      const rawCharacterId = record && 'characterId' in record ? record.characterId : undefined;
+      if (rawSource === 'character' || rawCharacterId !== undefined) {
+        if (rawSource !== 'character' || !activeCharacter || v.characterId !== activeCharacter.id) return;
+      }
+      if (diceAdmissionRef.current) clearAdmittedCeremony();
+      const caller: FocusOwner = activeCharacter ? 'character-dialogue' : nookChar ? 'nook' : 'workspace';
+      const admission = overlayAdmission.request('dice', caller);
+      if (!admission.accepted) {
+        notify(admission.message);
+        return;
+      }
       markPlayed(v.path);
+      diceAdmissionRef.current = admission.token;
       playCeremony(v);
     };
     window.addEventListener('airp:dice-frame', onDiceFrame);
     return () => {
       window.removeEventListener('airp:dice-frame', onDiceFrame);
-      clearCeremony();
+      clearAdmittedCeremony();
     };
-  }, [layer]);
+  }, [activeCharacter?.id, clearAdmittedCeremony, layer, nookChar, notify, overlayAdmission]);
 
   useEffect(() => {
     void loadChromeData();
@@ -315,12 +498,11 @@ export function App() {
 
   useEffect(() => {
     const src = state?.bg?.src;
-    setBackdropReady(false);
     if (!src || loadingWorld) return;
     const probe = new Image();
     probe.onload = () => setBackdropReady(true);
     probe.onerror = () => setBackdropReady(false);
-    probe.src = airpGateway.assetUrl(src);
+    probe.src = airpGateway.assetUrl(src, undefined, 'image');
     return () => {
       probe.onload = null;
       probe.onerror = null;
@@ -332,20 +514,48 @@ export function App() {
       const target = event.target as HTMLElement | null;
       const typing = target?.closest('input, textarea, select, button, a, [role="switch"], [contenteditable="true"]');
       if (event.key === 'Escape') {
-        // Dismiss transient chrome first; if nothing was open, Esc is the
-        // documented "go back" key (HintBar: "Alt+← / Esc to return"). Inside a
-        // nook it closes the nook and MUST NOT also walk the layer tree.
-        if (activeCharacter || bagOpen || profileOpen || worldPickerOpen) {
-          setWorldPickerOpen(false);
-          setProfileOpen(false);
-          setBagOpen(false);
+        event.preventDefault();
+        event.stopPropagation();
+        if (radialState || radialAdmissionRef.current) {
+          setRadialState(null);
+          const token = radialAdmissionRef.current;
+          if (token) overlayAdmission.release(token);
+          radialAdmissionRef.current = null;
           return;
         }
-        setAttention('ambient');
-        if (nookChar !== null) { setNookChar(null); camera.restore(layer); void refresh(); return; }
-        if (shell.header || shell.journal || shell.immersive) { setShell(initialShell); return; }
+        if (ceremony) {
+          clearAdmittedCeremony();
+          return;
+        }
+        const topmost = focusCoordinator.peek();
+        if (topmost) {
+          focusCoordinator.handleEscape();
+          if (topmost === 'character-dialogue') {
+            closeCharacterRef.current();
+          } else if (topmost === 'nook') {
+            closeNook();
+          } else if (topmost === 'world-shelf') {
+            setWorldPickerOpen(false);
+          } else if (topmost === 'belongings') {
+            if (selectedBagPath !== null) setSelectedBagPath(null);
+            else setBagOpen(false);
+          } else if (topmost === 'profile') {
+            setProfileOpen(false);
+          } else if (topmost === 'writer') {
+            writerRef.current?.blur();
+            setAttention('ambient');
+            setIsGodHandOpen(false);
+          } else if (topmost === 'journal') {
+            setShell(current => ({ ...current, journal: false }));
+          }
+          return;
+        }
+        if (shell.header || shell.journal || shell.immersive) {
+          setShell(initialShell);
+          return;
+        }
         if (layer !== 'map') {
-          enterLayer(manifest?.layers?.[layer]?.parent || 'map');
+          void enterLayer(manifest?.layers?.[layer]?.parent || 'map').then(applyFollowFailures);
         }
         return;
       }
@@ -363,7 +573,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [activeCharacter, bagOpen, profileOpen, worldPickerOpen, nookChar, shell, layer, manifest, enterLayer, refresh, camera]);
+  }, [activeCharacter, ceremony, clearAdmittedCeremony, closeNook, enterLayer, focusCoordinator, layer, manifest, overlayAdmission, radialState, selectedBagPath, shell]);
 
   const chalks = useMemo(
     () => (state?.items || []).filter((item) => item.frontmatter?.type === 'chalk'),
@@ -373,8 +583,28 @@ export function App() {
     const expected = layer === 'map' ? 'world/README.md' : `${layer}/README.md`;
     return state?.items.find((item) => item.path === expected);
   }, [layer, state?.items]);
-  const encounteredIds = [...(encounters[manifest?.id || ''] || []), ...(state?.presence || []).map(person => person.characterId)];
-  const { resident, encountered } = splitCharacters(characters, encounteredIds);
+  const worldReady = Boolean(manifest && state && readme);
+  useEffect(() => {
+    overlayAdmission.setWorldAvailable(worldReady);
+    if (!worldReady) {
+      clearAdmittedCeremony();
+      const dialogueToken = characterAdmissionRef.current;
+      if (dialogueToken) {
+        overlayAdmission.release(dialogueToken);
+        characterAdmissionRef.current = null;
+      }
+      const radialToken = radialAdmissionRef.current;
+      if (radialToken) {
+        overlayAdmission.release(radialToken);
+        radialAdmissionRef.current = null;
+      }
+      setRadialState(null);
+    }
+  }, [clearAdmittedCeremony, overlayAdmission, worldReady]);
+  // `encounters` is browser-memory only ("characters you have opened"), NOT
+  // presence: it never decides who is in this scene (docs/presence/00 §2.1).
+  const encounteredIds = encounters[manifest?.id || ''] || [];
+  const { encountered } = splitCharacters(characters, encounteredIds);
   const handItems = backpack.filter((item) => item.filename.toLowerCase() !== 'readme.md');
   useViewpointReport({ camera, layer, bagCount: handItems.length, enabled: nookChar === null });
   const canvasItems = (state?.items || []).filter((item) => item.path !== readme?.path);
@@ -389,7 +619,7 @@ export function App() {
   );
   const currentName = readme?.frontmatter?.title || sceneName(manifest, layer);
   const playerRole = manifest?.player?.name || (manifest?.id === 'wuwu' ? 'Harbor Investigator' : 'Traveler');
-  const playerAvatar = assetUrl(manifest?.player?.avatar);
+  const playerAvatar = assetUrl(manifest?.player?.avatar, 'image');
   const sceneStatus = chalks.flatMap(chalk => Object.entries(chalk.frontmatter?.status?.data || {})).slice(0, 3);
   const breadcrumbs: string[] = [];
   let crumb: string | null = layer;
@@ -402,7 +632,7 @@ export function App() {
     const onBack = (event: KeyboardEvent) => {
       if (event.altKey && event.key === 'ArrowLeft' && !activeCharacter) {
         event.preventDefault();
-        enterLayer(manifest?.layers?.[layer]?.parent || 'map');
+        void enterLayer(manifest?.layers?.[layer]?.parent || 'map').then(applyFollowFailures);
       }
     };
     window.addEventListener('keydown', onBack);
@@ -417,9 +647,13 @@ export function App() {
     setLoadingWorld(worldPath);
     setWorldPickerOpen(false);
     setSelectedBagPath(null);
-    setActiveCharacter(null);
-    setNookChar(null);
-    setWriterWorking(false);
+    setWriterDraft('');
+    resetForReconnect('world_change');
+    writerPendingRef.current = false;
+    setWriterSubmitPending(false);
+    frameQueue.clear('world-change');
+    cameraStack.clear();
+    callerProjectionRef.current = null;
     try {
       const result = await airpGateway.loadWorld<WorldManifest>(worldPath);
       setManifest(result.manifest);
@@ -427,10 +661,11 @@ export function App() {
       // `.airpworld/`, so re-read them before entering the world's first layer
       // — `enterLayer` gates the I1 initialiser on `autoWrite`.
       await world.reloadSettings();
-      await enterLayer('map');
+      await enterLayer('map').then(applyFollowFailures);
       await loadChromeData();
       setWorldPickerOpen(false);
       setAttention('ambient');
+      setIsGodHandOpen(false);
       setShell(initialShell);
       setProfileOpen(false);
       setBagOpen(false);
@@ -442,67 +677,60 @@ export function App() {
       setLoadingWorld(null);
     }
   };
+  const submitWriterText = useCallback((rawText: string, layerOverride?: string, prepared = false): boolean => {
+    if (writerLocked || writerPendingRef.current) return false;
+    const text = rawText.trim();
+    if (!text) {
+      notify(t('Please enter an action before sending.'));
+      return false;
+    }
+    const prompt = prepared ? text : buildItemActionPrompt(text, backpack);
 
-  const prepareWriter = (text: string) => {
-    if (writerLocked) { notify('Wait for the current action, or stop it first.'); return; }
-    setShell(current => ({ ...current, immersive: false }));
-    setAttention('writer');
-    preparedSource.current = null;
-    if (writerRef.current) writerRef.current.value = text;
-    requestAnimationFrame(() => writerRef.current?.focus());
-    setPreparedAction(text.split('\n')[0]);
-    notify(t('Selected: {action}. Review and press Send.', { action: text.split('\n')[0].slice(0, 100) }));
-  };
-  const prepareChoice = async (source: string, choice: string) => {
-    if (writerLocked) { notify('Wait for the current action, or stop it first.'); return; }
-    const directory = source.slice(0, source.lastIndexOf('/'));
-    const target = directory === 'world' ? 'map' : directory;
-    if (source.startsWith('world/') && target !== layer && !await enterLayer(target, { initialize: false })) return;
-    setNookChar(null);
-    prepareWriter(choice);
-    preparedSource.current = source;
-  };
-  const prepareItemUse = (path: string) => {
-    if (writerLocked) { notify('Wait for the current action, or stop it first.'); return; }
-    const item = backpack.find(candidate => candidate.path === path);
-    if (!item || !writerRef.current) return;
-    const draft = appendItemAction(writerRef.current.value, item, t);
-    writerRef.current.value = draft;
-    setShell(current => ({ ...current, immersive: false }));
-    setAttention('writer');
-    setSelectedBagPath(null);
-    setNookChar(null);
-    setPreparedAction(draft);
-    requestAnimationFrame(() => writerRef.current?.focus());
-    notify(t('Selected: {action}. Review and press Send.', { action: draft.slice(0, 100) }));
-  };
-  useEffect(() => {
-    const open = (event: Event) => {
-      const id = (event as CustomEvent).detail?.characterId;
-      if (typeof id === 'string' && characters.some(character => character.id === id)) { camera.save(layer); setNookChar(id); }
-    };
-    window.addEventListener('airp:open-nook', open);
-    return () => window.removeEventListener('airp:open-nook', open);
-  }, [characters, camera, layer]);
-
-  const submitWriter = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (writerLocked) return; // belt-and-braces: the input is disabled too
-    const input = writerRef.current;
-    const text = input?.value.trim() || '';
-    if (!text) return;
+    writerPendingRef.current = true;
+    setWriterSubmitPending(true);
+    const result = sendToWriter(prompt, layerOverride);
+    if (!result.accepted) {
+      writerPendingRef.current = false;
+      setWriterSubmitPending(false);
+      notify(result.message);
+      return false;
+    }
     if (writerHistory.current.at(-1) !== text) writerHistory.current.push(text);
     if (writerHistory.current.length > 50) writerHistory.current.shift();
     writerHistoryCursor.current = writerHistory.current.length;
-    writerDraft.current = '';
-    setWriterWorking(true);
-    setPreparedAction('');
-    const prompt = buildItemActionPrompt(text, backpack);
-    sendToWriter(preparedSource.current ? `${prompt}\n\nSource entity: ${JSON.stringify(preparedSource.current)}. Resolve only this action, then wait for my next input.` : prompt);
-    preparedSource.current = null;
-    input!.value = '';
-    notify('The writer is listening…');
-  };
+    setWriterDraft('');
+    notify(t('The writer is listening…'));
+    return true;
+  }, [backpack, notify, sendToWriter, t, writerLocked]);
+
+  const prepareWriterHint = useCallback((): boolean => {
+    if (writerLocked || !worldReady) {
+      notify(!worldReady ? t('Load a world and wait for the scene to appear before asking for a hint.') : t('The writer is already working.'));
+      return false;
+    }
+    setAttention('authoring');
+    setWriterDraft(t(PLAY_HINT_REQUEST));
+    writerHistoryCursor.current = writerHistory.current.length;
+    notify(t('Next-step hint draft ready. Review it, then press Send.'));
+    window.requestAnimationFrame(() => writerRef.current?.focus());
+    return true;
+  }, [notify, t, worldReady, writerLocked]);
+  const prepareItemUse = useCallback((itemPath: string): void => {
+    if (writerLocked) {
+      notify(t('The writer is already working.'));
+      return;
+    }
+    const item = backpack.find((candidate) => candidate.path === itemPath);
+    if (!item) {
+      notify(t('This item is no longer available. Please refresh.'));
+      return;
+    }
+    setWriterDraft((current) => appendItemAction(current, item, t));
+    setSelectedBagPath(null);
+    setAttention('authoring');
+    notify(t('Item selected. Review it, then press Send.'));
+    window.requestAnimationFrame(() => writerRef.current?.focus());
+  }, [backpack, notify, t, writerLocked]);
 
   const handleItemDrop = async (itemPath: string, targetPath: string) => {
     try {
@@ -514,9 +742,9 @@ export function App() {
     }
   };
 
-  const handleReturnItem = async (itemPath: string) => {
+  const handleReturnItem = async (itemPath: string, targetLayer = layer) => {
     const filename = itemPath.split('/').pop() || 'item.md';
-    const destination = layer === 'map' ? `world/${filename}` : `${layer}/${filename}`;
+    const destination = targetLayer === 'map' ? `world/${filename}` : `${targetLayer}/${filename}`;
     try {
       await airpGateway.move(itemPath, destination);
       await refresh();
@@ -540,12 +768,28 @@ export function App() {
       notify(error instanceof Error ? error.message : 'Could not change world time');
     }
   };
+  const handleToggleGodHand = () => {
+    setIsGodHandOpen(open => !open);
+  };
 
   const openCharacter = (character: CharacterView) => {
+    if (activeCharacter) return;
+    const admission = overlayAdmission.request('dialogue', nookChar ? 'nook' : 'workspace');
+    if (!admission.accepted) {
+      notify(admission.message);
+      return;
+    }
+    characterAdmissionRef.current = admission.token;
     const worldId = manifest?.id || '';
+    const caller: ProjectionTarget = nookChar
+      ? projectionTarget('nook', nookChar)
+      : projectionTarget('layer', layer);
+    const target = projectionTarget('dialogue', character.id, caller.slot);
     setEncounters(current => ({ ...current, [worldId]: [...new Set([...(current[worldId] || []), character.id])] }));
-    camera.save('dialogue');
-    setActiveModalFrame(null); // 清上一轮残留，避免新遮罩先演旧台词
+    cameraStack.pushTransition(target);
+    cameraStack.restoreTarget(target);
+    callerProjectionRef.current = caller;
+    frameQueue.clear('switch');
     setActiveCharacter(character);
     sendMessage({
       type: 'character_start',
@@ -553,6 +797,12 @@ export function App() {
       recentContext: chalks.slice(-3).map((chalk) => chalk.body).join('\n\n'),
     });
   };
+  const closeRadial = useCallback(() => {
+    setRadialState(null);
+    const token = radialAdmissionRef.current;
+    if (token) overlayAdmission.release(token);
+    radialAdmissionRef.current = null;
+  }, [overlayAdmission]);
 
   const createAt = async (type: RadialItemType, title: string, content: string, x: number, y: number) => {
     const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `creation-${Date.now()}`;
@@ -561,21 +811,32 @@ export function App() {
     const form = type === 'character' ? 'sprite' : type;
     try {
       await airpGateway.godAction('create', filePath, `---\ntype: ${form}\ntitle: ${JSON.stringify(title)}\n---\n${content}`);
-      await moveCard(filePath, x, y);
       await refresh();
-      setRadialState(null);
+      closeRadial();
       notify(`Created “${title}”`);
     } catch (error) { notify(error instanceof Error ? error.message : 'Could not create the object'); }
   };
-
   const closeCharacter = () => {
     if (activeCharacter) sendMessage({ type: 'character_stop', characterId: activeCharacter.id });
+    const token = characterAdmissionRef.current;
+    if (token) {
+      overlayAdmission.release(token);
+      characterAdmissionRef.current = null;
+    }
+    agentActivityStore.clearSurface('character-modal');
+    frameQueue.clear('close');
+    const caller = callerProjectionRef.current;
+    if (caller) {
+      const frame = cameraStack.popTransition(caller);
+      if (frame) cameraStack.restoreProjection(frame);
+    }
+    callerProjectionRef.current = null;
     setActiveCharacter(null);
-    camera.restore('dialogue');
   };
+  closeCharacterRef.current = closeCharacter;
 
   return (
-    <div className={`airp-prototype${isDusk ? ' is-dusk' : ''}${shell.immersive ? ' is-immersive' : ''}${shell.journal ? ' is-reading' : ''}${shell.header ? ' has-header' : ''}${attention !== 'ambient' ? ' is-authoring' : ''}`}>
+    <div data-depth-surface="ui" className={`airp-prototype${isDusk ? ' is-dusk' : ''}${shell.immersive ? ' is-immersive' : ''}${shell.journal ? ' is-reading' : ''}${shell.header ? ' has-header' : ''}${attention === 'authoring' ? ' is-authoring' : ''}`}>
       <main className="prototype-workspace">
         <aside className={`prototype-narrative${shell.journal ? ' is-open' : ''}`} aria-label={t("Story journal")} aria-hidden={!shell.journal} inert={!shell.journal}>
           <div className="prototype-narrhead">
@@ -602,40 +863,93 @@ export function App() {
         </aside>
 
         <section className="prototype-world" aria-label={t("Spatial story canvas")}>
-          <Canvas
-            key={manifest?.id || 'opening'}
-            effectsEnabled={effectsEnabled}
-            currentLayer={layer}
-            ghost={ghostItem}
-            ghostLabel={ghostLabel}
-            ghostCopy={{
-              reused: t('Already had this image'),
-              failed: t('The picture could not be drawn.'),
-              unreachable: t('The picture could not be shown.'),
-            }}
-            items={canvasItems}
-            links={state?.links || []}
-            bg={(!loadingWorld && state?.bg) || { src: null, tone: 'warm', grain: 'parchment' }}
-            onMoveCard={moveCard}
-            onSelectChoice={(path, choice) => { void prepareChoice(path, choice); }}
-            onEntityAction={(choice) => {
-              prepareWriter(choice);
-            }}
-            onDiceRolled={(result, passed) => notify(`Roll ${result} · ${passed ? 'passed' : 'failed'}`)}
-            onEnterGate={enterLayer}
-            onOpenCharacterModal={(id) => {
-              const character = characters.find((item) => item.id === id);
-              if (character) openCharacter(character);
-            }}
-            onItemDropOnTarget={handleItemDrop}
-            onDropItemToScene={handleReturnItem}
-            onTakeItem={handleTakeItem}
-            onOpenRadialMenu={(x, y, worldX, worldY) => { if (attention === 'authoring') setRadialState({ x, y, worldX, worldY }); }}
-          />
+          {nookChar && (
+            <div
+              className="prototype-nook"
+              data-airp-projection={`nook:${nookChar}`}
+              aria-hidden={activeCharacter !== null || worldPickerOpen}
+              inert={activeCharacter !== null || worldPickerOpen}
+            >
+              <NookView
+                characterId={nookChar!}
+                locale={locale === 'ja' ? 'ja' : 'en'}
+                onClose={closeNook}
+                inactive={activeCharacter !== null}
+                onMoveCard={moveCard}
+                writerLocked={writerLocked}
+                onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }}
+                onOpenCharacterModal={(id) => {
+                  const character = characters.find((item) => item.id === id);
+                  if (character) openCharacter(character);
+                }}
+                onItemDropOnTarget={handleItemDrop}
+                onDropItemToScene={handleReturnItem}
+                onTakeItem={handleTakeItem}
+                onRequestInit={(kind, target, request) => sendMessage({ type: 'airp_init', kind, target, ...(request ? { request } : {}), by: 'player' })}
+              />
+            </div>
+          )}
+          {!nookChar && (
+            <div
+              data-airp-projection={`layer:${layer}`}
+              data-airp-projection-active="true"
+              aria-hidden={activeCharacter !== null || worldPickerOpen}
+              inert={activeCharacter !== null || worldPickerOpen}
+            >
+              <Canvas
+                key={manifest?.id || 'opening'}
+                effectsEnabled={effectsEnabled}
+                currentLayer={layer}
+                hidden={!pageVisible}
+                reducedMotion={reducedMotion}
+                allowChalkDrag={allowChalkDrag}
+                stillPortraits={reducedMotion}
+                ghost={ghostItem}
+                ghostLabel={ghostLabel}
+                ghostCopy={{
+                  reused: t('Already had this image'),
+                  failed: t('The picture could not be drawn.'),
+                  unreachable: t('The picture could not be shown.'),
+                }}
+                items={canvasItems}
+                links={state?.links || []}
+                bg={(!loadingWorld && state?.bg) || { src: null, tone: 'warm', grain: 'parchment' }}
+                onMoveCard={moveCard}
+                onSelectChoice={(path, choice) => { void airpGateway.choose(path, choice).catch(error => notify(String(error))); }}
+                onEntityAction={(choice) => { void submitWriterText(choice); }}
+                onOpenCharacterModal={(id) => {
+                  const character = characters.find((item) => item.id === id);
+                  if (character) openCharacter(character);
+                }}
+                presence={presenceViews}
+                assetUrl={assetUrl}
+                onEnterGate={(target) => void enterLayer(target).then(applyFollowFailures)}
+                onDropItemToScene={handleReturnItem}
+                onTakeItem={handleTakeItem}
+                onOpenRadialMenu={(x, y, worldX, worldY) => {
+                  if (attention !== 'authoring') return;
+                  const admission = overlayAdmission.request('radial', 'workspace');
+                  if (!admission.accepted) {
+                    notify(admission.message);
+                    return;
+                  }
+                  radialAdmissionRef.current = admission.token;
+                  setRadialState({ x, y, worldX, worldY });
+                }}
+              />
 
-          {/* Performance shows (docs/perform/05) — z-20, below the dice ceremony
-              (z-50). Cancels its own shows on layer change / freeze. */}
-          <PerformanceLayer layer={layer} frozen={state?.worldFrozen === true} />
+              {/* Performance shows (docs/perform/05) — z-20, below the dice ceremony
+                  (z-50). Cancels its own shows on layer change / freeze. */}
+              <PerformanceLayer
+                layer={layer}
+                frozen={state?.worldFrozen === true}
+                hidden={!pageVisible}
+                effectsEnabled={effectsEnabled}
+                reducedMotion={reducedMotion}
+                admission={overlayAdmission}
+              />
+            </div>
+          )}
 
           <div className="prototype-vignette" aria-hidden="true" />
 
@@ -643,7 +957,7 @@ export function App() {
             <span className="prototype-brand">World<span>lines</span></span>
             <nav className="prototype-crumbs" aria-label={t("Scene path")}>
               {breadcrumbs.map((part) => {
-                return <button key={part} onClick={() => enterLayer(part)}>{part === 'map' ? t('Map') : sceneName(manifest, part)}</button>;
+                return <button key={part} onClick={() => void enterLayer(part).then(applyFollowFailures)}>{part === 'map' ? t('Map') : sceneName(manifest, part)}</button>;
               })}
             </nav>
             <div className="prototype-spacer" />
@@ -651,8 +965,8 @@ export function App() {
             <span className="prototype-status">{t('{items} ITEMS · {people} PEOPLE', { items: handItems.length, people: characters.length })}</span>
             <button className="prototype-pill" onClick={() => setWorldPickerOpen(true)}>{t("Worlds")}</button>
             <label className="prototype-language"><span className="sr-only">{t('Language')}</span><select aria-label={t('Language')} value={locale} onChange={event => setLocale(event.target.value as 'en' | 'zh-CN' | 'ja')}><option value="en">English</option><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
-            <AgentSettings settings={world.settings} onSaveSettings={world.saveSettings} />
-            <TtsSettings />
+            <AgentSettings settings={world.settings} onSaveSettings={world.saveSettings} focus={focusCoordinator} />
+            <TtsSettings focus={focusCoordinator} />
             <MuteButton />
             <button className="prototype-effects-toggle" role="switch" aria-label={t("Visual effects")} aria-checked={effectsEnabled} onClick={() => setEffectsEnabled(value => !value)} title={t("Particles, parallax and animated backgrounds")}><span aria-hidden="true" />{t(effectsEnabled ? 'Effects on' : 'Effects off')}</button>
             <button className="prototype-quiet" onClick={() => toggleShell('header')} aria-label={t("Close header")}><ChevronUp size={16} /></button>
@@ -670,13 +984,26 @@ export function App() {
             <h1>{currentName}</h1>
             <p>{layer === 'map' ? t('The first moment') : t('The story continues')} · {state?.worldFrozen ? t('Time stands still') : t('Time flows')}</p>
             {sceneStatus.map(([key, value]) => <span className="prototype-stat" key={key}>{labelOf(key)} · {String(value)}</span>)}
-            <WriterResult worldKey={`${activeSavePath ?? manifest?.id}:${worldLoadGeneration.current}`} onContinue={manifest ? () => prepareWriter(t(PLAY_HINT_REQUEST)) : undefined} />
+            <WriterResult
+              worldKey={`${manifest?.id}:${layer}`}
+              worldReady={worldReady}
+              worldFrozen={state?.worldFrozen === true}
+              submitPending={writerSubmitPending}
+              onContinue={prepareWriterHint}
+            />
           </div>
+
+          {/* 全局 activity rail（契约 §7.1）：writer/functional 在角色或小天地
+              打开时也必须可见；character 只进入 CharacterModal 自己的 surface，
+              避免串台。始终挂在这里，不作为 modal 的后代。 */}
+          <ActivityRail surface="rail" className="prototype-chrome" />
+          <ConnectedWorldToastRegion className="prototype-chrome" />
+          <AgentActivityLog query={{ surface: 'rail' }} className="prototype-chrome" focus={focusCoordinator} />
 
           <div className="prototype-tools prototype-chrome" aria-label={t("Canvas tools")}>
             <button className="active" title={t("Explore")}>↖</button>
             <button onClick={() => setAttention('authoring')} title={t("God Hand")}>◯</button>
-            <button onClick={() => camera.restore(layer)} title={t("Return to scene")}>⌖</button>
+            <button onClick={() => cameraStack.restoreTarget(projectionTarget('layer', layer))} title={t("Return to scene")}>⌖</button>
           </div>
 
           <div className="prototype-hand-tray prototype-chrome" aria-label={t("Encountered characters")}>
@@ -688,9 +1015,9 @@ export function App() {
                 className="prototype-hand-orb"
                 onClick={() => openCharacter(character)}
                 title={t('Talk to {name}', { name: character.name || character.id })}
-                style={assetUrl(character.avatar) ? { backgroundImage: `url("${assetUrl(character.avatar)}")` } : undefined}
+                style={assetUrl(character.avatar, 'image') ? { backgroundImage: `url("${assetUrl(character.avatar, 'image')}")` } : undefined}
               >
-                {!assetUrl(character.avatar) && <span>{character.id.charAt(0).toUpperCase()}</span>}
+                {!assetUrl(character.avatar, 'image') && <span>{character.id.charAt(0).toUpperCase()}</span>}
                 <small>{character.name || labelOf(character.id)}</small>
               </button>
             ))}
@@ -710,7 +1037,7 @@ export function App() {
                   <ItemArtwork item={item} />
                   <span className="inventory-item__name">{item.frontmatter?.title || labelOf(item.filename.replace(/\.md$/, ''))}</span>
                   <span className="inventory-item__open" aria-hidden="true">↗</span>
-                </button>
+                  </button>
               );
             })}</div>}
           </div>
@@ -721,36 +1048,52 @@ export function App() {
               <b>{playerRole}</b>
               <div className="prototype-small">{t("PLAYER CHARACTER")}</div>
               <p>{manifest?.id === 'wuwu' ? 'Newly posted to Fogwharf. Three commissions, one unfinished case. Your story begins here.' : `Your story unfolds in ${manifest?.name || 'this world'}.`}</p>
-              <div>{currentName} · {t('{count} carried items', { count: handItems.length })}</div>
             </div>
           )}
 
-          <div className="prototype-residents prototype-chrome" aria-label={t("Resident companions")}>
-          {resident.map(companion => (
-            <div className="resident-with-actions" key={companion.id}>
-            <button
-              key={companion.id}
-              className="prototype-companion-orb"
-              onClick={() => openCharacter(companion)}
-              aria-label={t('Talk to {name}', { name: companion.name || companion.id })}
-              style={assetUrl(companion.avatar) ? { backgroundImage: `url("${assetUrl(companion.avatar)}")` } : undefined}
-            >
-              {!assetUrl(companion.avatar) && companion.id.charAt(0).toUpperCase()}<i /><small>{companion.name || labelOf(companion.id)}</small>
-            </button>
-            <div className="resident-actions">
-              <button type="button" onClick={() => openCharacter(companion)}>{t('→ Talk')}</button>
-              <button type="button" onClick={() => { camera.save(layer); setNookChar(companion.id); }}>{t('Visit private space')}</button>
-            </div>
-            </div>
-          ))}
-          </div>
-          <button className="prototype-action-toggle prototype-chrome" onClick={() => { setAttention(current => current === 'authoring' ? 'ambient' : 'authoring'); window.setTimeout(() => writerRef.current?.focus(), 0); }} aria-label={t("Write an action")}><Sparkles size={17} /><span aria-live="polite">{writerWorking ? `${t(writerStage)} · ${writerElapsed}s` : t('What do you do?')}</span></button>
-
-          {writerWorking && <button type="button" className="writer-stop-control" onClick={() => { setWriterStopRequested(true); sendMessage({ type: 'writer_abort' }); }} aria-label="Stop writing">
-            ■ {writerStopRequested ? 'Stop requested · retry' : 'Stop writing'} · {writerElapsed}s
+          {/* The character rail (docs/presence/00 §4.2.1): RIGHT column, stacked
+              above the belongings, no tabs. It replaced the companion-only
+              `.prototype-residents` row, which could not express "elsewhere"
+              or "absent" and never showed who was following. */}
+          <CharacterRail
+            views={presenceViews}
+            pendingFollowing={pendingFollowing}
+            nookOpen={nookChar !== null}
+            onOpenCharacter={(id) => {
+              const character = characters.find((item) => item.id === id);
+              if (character) openCharacter(character);
+            }}
+            onTravelTo={(id) => void navigateToCharacter(id)}
+            onToggleFollowing={(id, next) => void toggleFollowing(id, next)}
+            onOpenNook={openNook}
+            notify={notify}
+            assetUrl={assetUrl}
+          />
+          <button className="prototype-action-toggle prototype-chrome" onClick={() => {
+            if (attention === 'authoring') {
+              closeRadial();
+              setAttention('ambient');
+              setIsGodHandOpen(false);
+              return;
+            }
+            setAttention('authoring');
+            setShell(current => ({ ...current, immersive: false }));
+            window.setTimeout(() => writerRef.current?.focus(), 0);
+          }} aria-label={t("Write an action")}><Sparkles size={17} /><span aria-live="polite">{writerWorking ? t('The writer is working…') : t('What do you do?')}</span></button>
+          {writerWorking && <button type="button" className="writer-stop-control" data-writer-stop disabled={writerState.stopRequested} onClick={() => {
+            if (requestWriterStop()) sendMessage({ type: 'writer_abort' });
+          }} aria-label={t(writerState.stopRequested ? 'Stop requested' : 'Stop writing')}>
+            ■ {writerState.stopRequested ? t('Stop requested') : t('Stop writing')}
           </button>}
-          <form className="prototype-dock prototype-chrome" onSubmit={submitWriter}>
-            {preparedAction && <div className="prepared-action" role="status">{t('Ready to send: {action}', { action: preparedAction })}</div>}
+          {writerState.error?.retryable && retryWriterPrompt() && (
+            <button type="button" className="writer-retry-control" data-writer-retry onClick={() => {
+              const prompt = retryWriterPrompt();
+              if (prompt) void submitWriterText(prompt, undefined, true);
+            }}>
+              Retry writing
+            </button>
+          )}
+          <div className="prototype-dock prototype-chrome">
             <div className="prototype-docktop">
               <b>{t("✧ SPEAK TO THE WRITER")}</b>
               <span>{state?.worldFrozen ? t('The world is paused') : t('Your action moves the world forward')}</span>
@@ -758,25 +1101,39 @@ export function App() {
               <span>↵</span>
             </div>
             <div className="prototype-dockrow">
-              {writerWorking && <span role="status">{t(writerStage)} · {writerElapsed}s <button type="button" onClick={() => { sendMessage({ type: 'writer_abort' }); }}>{t('Stop writing')}</button></span>}
-              <input ref={writerRef} aria-label={t("Action")} placeholder={writerLocked ? t('The writer is writing…') : t("What do you do? You can also address someone by name…")} disabled={writerLocked} autoComplete="off" onKeyDown={event => {
-                if (guardImeKey(event)) return;
-                if (!['ArrowUp', 'ArrowDown'].includes(event.key) || !writerHistory.current.length) return;
-                event.preventDefault(); event.stopPropagation();
-                const history = writerHistory.current;
-                if (writerHistoryCursor.current === history.length) writerDraft.current = event.currentTarget.value;
-                writerHistoryCursor.current = Math.max(0, Math.min(history.length, writerHistoryCursor.current + (event.key === 'ArrowUp' ? -1 : 1)));
-                event.currentTarget.value = writerHistoryCursor.current === history.length ? writerDraft.current : history[writerHistoryCursor.current];
-                event.currentTarget.setSelectionRange(event.currentTarget.value.length, event.currentTarget.value.length);
-              }} />
-              <button className="prototype-primary" aria-label={t("Send action")}>↑</button>
+              <WriterBar
+                embedded
+                inputRef={writerRef}
+                inputAriaLabel={t('Action')}
+                value={writerDraft}
+                onChange={setWriterDraft}
+                onSend={text => submitWriterText(text)}
+                disabled={writerLocked}
+                placeholder={t("What do you do? You can also address someone by name…")}
+                writingPlaceholder={t('The writer is writing…')}
+                sendLabel="↑"
+                onKeyDown={event => {
+                  if (!['ArrowUp', 'ArrowDown'].includes(event.key) || !writerHistory.current.length) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const history = writerHistory.current;
+                  if (writerHistoryCursor.current === history.length) historyDraft.current = writerDraft;
+                  writerHistoryCursor.current = Math.max(0, Math.min(history.length, writerHistoryCursor.current + (event.key === 'ArrowUp' ? -1 : 1)));
+                  const next = writerHistoryCursor.current === history.length ? historyDraft.current : history[writerHistoryCursor.current];
+                  setWriterDraft(next);
+                  window.requestAnimationFrame(() => {
+                    const input = writerRef.current;
+                    if (input) input.setSelectionRange(input.value.length, input.value.length);
+                  });
+                }}
+              />
             </div>
-          </form>
+          </div>
 
           {attention === 'authoring' && (
             <div className="prototype-authoring">
-              <GodModeToolbar frozen={state?.worldFrozen === true} onToggleFreeze={handleToggleFreeze} />
-              <button className="prototype-quiet" onClick={() => setAttention('ambient')}>{t("Close")}</button>
+              <GodModeToolbar frozen={state?.worldFrozen === true} onToggleFreeze={handleToggleFreeze} allowChalkDrag={allowChalkDrag} onToggleChalkDrag={handleToggleGodHand} />
+              <button className="prototype-quiet" onClick={() => { closeRadial(); setAttention('ambient'); setIsGodHandOpen(false); }}>{t("Close")}</button>
             </div>
           )}
 
@@ -788,47 +1145,47 @@ export function App() {
         <WorldShelfDialog shelf={shelf} loading={loadingWorld} onLoad={path => void loadWorld(path)} onClose={() => setWorldPickerOpen(false)} onRefresh={async () => { setShelf(await airpGateway.worlds()); }} />
       )}
 
-      {selectedBagItem && <BagItemDialog item={selectedBagItem} onClose={() => setSelectedBagPath(null)} onPlace={handleReturnItem} onUse={prepareItemUse} useDisabled={writerLocked} interactions={{ onChoice: prepareWriter, onSelectChoice: (path, choice) => { void prepareChoice(path, choice); }, onEnterGate: enterLayer, onOpenCharacter: id => { const character = characters.find(c => c.id === id); if (character) openCharacter(character); } }} />}
+      {selectedBagItem && (
+        <BagItemDialog
+          item={selectedBagItem}
+          onClose={() => setSelectedBagPath(null)}
+          onPlace={handleReturnItem}
+          onUse={prepareItemUse}
+          useDisabled={writerLocked}
+        />
+      )}
 
-      {radialState && <RadialMenu {...radialState} onClose={() => setRadialState(null)} onCreate={createAt} />}
+      {radialState && <RadialMenu {...radialState} onClose={closeRadial} onCreate={createAt} />}
 
       {activeCharacter && (
         <CharacterModal
           key={activeCharacter.id}
           characterId={activeCharacter.id}
           displayName={activeCharacter.name}
-          avatar={assetUrl(activeCharacter.avatar)}
-          avatarVideo={assetUrl(activeCharacter.avatarVideo)}
+          avatar={assetUrl(activeCharacter.avatar, 'image')}
+          avatarVideo={assetUrl(activeCharacter.avatarVideo, 'video')}
           emotions={
             activeCharacter.emotions
               ? Object.fromEntries(
-                  Object.entries(activeCharacter.emotions).map(([emo, path]) => [emo, assetUrl(path) ?? ''])
+                Object.entries(activeCharacter.emotions).map(([emo, path]) => [emo, assetUrl(path, 'image') ?? ''])
                 )
               : undefined
           }
           effectsEnabled={effectsEnabled}
           bio={activeCharacter.bio || activeCharacter.description}
-          incoming={activeModalFrame}
+          frameQueue={frameQueue}
           worldId={manifest?.id}
           voice={activeCharacter.voice}
-          language={manifest?.locale === 'ja' || manifest?.locale === 'en' ? manifest.locale : 'en'}
           onClose={closeCharacter}
-          onOpenNook={() => { const id = activeCharacter.id; closeCharacter(); camera.save(layer); setNookChar(id); }}
+          language={manifest?.locale === 'ja' || manifest?.locale === 'en' ? manifest.locale : 'en'}
+          onOpenNook={() => { const id = activeCharacter.id; closeCharacter(); openNook(id); }}
           onSendMessage={(message) => sendMessage({ type: 'character_prompt', characterId: activeCharacter.id, message })}
         />
       )}
 
-      <WorldActivityToast worldKey={`${manifest?.id}:${worldLoadGeneration.current}`} />
-      {nookChar && <div className="prototype-nook"><NookView characterId={nookChar} locale={locale} onClose={() => { setNookChar(null); camera.restore(layer); void refresh(); }} onMoveCard={moveCard} onSelectChoice={(path, choice) => { void prepareChoice(path, choice); }} onInitialize={id => {
-        if (writerWorking) { notify('Wait for the writer to finish before initializing.'); return false; }
-        sendMessage({ type: 'airp_init', kind: 'nook', target: id, by: 'player' });
-        notify('Private space initialization requested. Existing content will be preserved.');
-        return true;
-      }} onTakeItem={path => { void handleTakeItem(path); }} /></div>}
-
       {/* Dice ceremony overlay (screen-fixed layer, same visual language as the player path) */}
       {ceremony && (
-        <DiceCeremony key={ceremony.key} verdict={ceremony.verdict} onDone={clearCeremony} />
+        <DiceCeremony key={ceremony.key} verdict={ceremony.verdict} onDone={clearAdmittedCeremony} />
       )}
 
       {toast && <div className="prototype-toast" role="status">{toast}</div>}

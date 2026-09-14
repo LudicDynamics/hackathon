@@ -28,6 +28,11 @@ const JSON_OUT = process.argv.includes('--json');
  * The frozen request bodies (docs/wiring/00-共同上下文.md §6). Each entry names
  * the frontend file that posts the body, the route literal to locate the call,
  * and the exact key set that MUST appear in `JSON.stringify({...})`.
+ *
+ * Convention: entries are keyed by route and matched on the `fetch('<route>', …)`
+ * text. A read-only GET (e.g. `GET /api/live/config`, `GET /api/tts/config`) has
+ * no body to pin, so it is NOT registered — the gate's whole premise is a frozen
+ * request-body key set, and a bodyless route has none.
  */
 const BODIES = [
   {
@@ -82,6 +87,27 @@ const BODIES = [
     file: 'apps/web/src/lib/airp-gateway.ts',
     keys: ['path', 'x', 'y'],
     doc: 'docs/tools/12-工具注册与路由统一.md §6',
+  },
+  {
+    route: '/api/following',
+    file: 'apps/web/src/lib/airp-gateway.ts',
+    keys: ['character', 'following'],
+    doc: 'docs/presence/00-共同上下文.md §3.3',
+  },
+  // docs/live-voice/00-共同上下文.md §2.2 freezes the two bodies. Only the two
+  // POSTs carry one; `GET /api/live/config` is a bodyless readiness probe (see
+  // the note above BODIES) and is deliberately not registered here.
+  {
+    route: '/api/live/session',
+    file: 'apps/web/src/lib/live-call.ts',
+    keys: ['character', 'sdp', 'language'],
+    doc: 'docs/live-voice/00-共同上下文.md §2.2',
+  },
+  {
+    route: '/api/live/close',
+    file: 'apps/web/src/lib/live-call.ts',
+    keys: ['character'],
+    doc: 'docs/live-voice/00-共同上下文.md §2.2',
   },
 ];
 

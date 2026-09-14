@@ -5,9 +5,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const css = fs.readFileSync(path.join(root, 'src/decoration.css'), 'utf8');
+const sceneCss = fs.readFileSync(path.join(root, 'src/scene-shell.css'), 'utf8');
+
+function uncomment(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
 test('all six material URLs resolve to optimized WebP assets', () => {
-  const css = fs.readFileSync(path.join(root, 'src/decoration.css'), 'utf8');
-  const urls = [...new Set([...css.matchAll(/url\('([^']+)'\)/g)].map(m => m[1]))];
+  const urls = [...new Set([...css.matchAll(/url\('([^']+)'\)/g)].map((match) => match[1]))];
   assert.equal(urls.length, 6);
   let total = 0;
   for (const url of urls) {
@@ -21,11 +27,20 @@ test('all six material URLs resolve to optimized WebP assets', () => {
   assert.match(css, /\[data-nook\] \.paper-reading/);
 });
 
-test('settings portal owns its styles independently from world selection', () => {
-  const component = fs.readFileSync(path.join(root, 'src/components/TtsSettings.tsx'), 'utf8');
-  assert.match(component, /className="settings-panel"/);
-  assert.doesNotMatch(component, /className="prototype-world-picker"/);
-  const css = fs.readFileSync(path.join(root, 'src/decoration.css'), 'utf8');
-  assert.match(css, /overscroll-behavior: contain/);
-  assert.match(css, /focus-visible/);
+test('decoration uses the existing semantic palette and registered depth only', () => {
+  const source = uncomment(css);
+  assert.match(source, /var\(--(?:ink|muted|paper|cream|wall|rust|sage|blue|line)\b/);
+  assert.doesNotMatch(source, /#(?:7853ae|b39acb|483956|292332|302638)/i);
+  for (const value of [...source.matchAll(/z-index\s*:\s*([^; }\n]+)/g)].map((match) => match[1])) {
+    assert.match(value, /^var\(--depth-[a-z0-9-]+\)$/,
+      `decoration has an unregistered numeric or compound z-index: ${value}`);
+  }
+  assert.match(sceneCss, /@import ['"]\.\/decoration\.css['"]/);
+});
+
+test('settings portal styling is isolated from world-picker styling', () => {
+  assert.match(css, /\.settings-panel\s*\{/);
+  assert.match(css, /overscroll-behavior:\s*contain/);
+  assert.match(css, /:is\(button, input\):focus-visible/);
+  assert.doesNotMatch(css, /\.settings-panel[^}]*z-index\s*:/s);
 });

@@ -3,116 +3,227 @@ import { createPortal } from 'react-dom';
 import { renderFrontmatterWidgets } from '../../lib/fm.js';
 import { useLocale } from '../../lib/i18n.js';
 
-export interface DeclaredResponse {
-  kind: string;
-  text?: string;
-  prompt?: string;
+export type DeclaredItem = {
+  path: string;
+  declaredPath: string;
+  revision: string;
+  title: string;
+  body: string;
+  frontmatter: Record<string, any> | null;
+};
+
+export type MaterialSlot = {
+  id: string;
+  title: string;
+  required: boolean;
+  paths: string[];
+};
+
+export type DeclaredActionKind = 'read' | 'take' | 'stage' | 'enter' | 'character' | 'reply' | 'writer';
+
+/** The server's validated action detail. This is a read-only snapshot. */
+export type DeclaredResponse = {
+  kind: DeclaredActionKind;
+  source: string;
+  choice: string | number;
+  revision: string;
+  items: DeclaredItem[];
+  missing: string[];
+  slots?: MaterialSlot[];
   target?: string;
   character?: string;
-  world?: string;
-  source?: string;
-  choice?: string;
-  revision?: string;
-  slots?: Array<{ id: string; title: string; required: boolean; paths: string[]; maxItems?: number }>;
-  items: Array<{ path: string; declaredPath?: string; revision?: string; title: string; body: string; frontmatter?: Record<string, any> }>;
-  missing: string[];
+  text?: string;
+  prompt?: string;
+};
+
+export type MaterialSelection = { slot: string; path: string; revision: string };
+
+export function replaceMaterialSelection(
+  selected: Record<string, string>,
+  slot: string,
+  path: string,
+): Record<string, string> {
+  return Object.fromEntries([
+    ...Object.entries(selected).filter(([id, selectedPath]) => id !== slot && selectedPath !== path),
+    [slot, path],
+  ]);
 }
 
-/** Read/stage is local presentation. Preparing a draft does not call AI. */
-export function DeclaredActionDialog({ value, onClose, onSubmit, onChoose }: {
-  value: DeclaredResponse; onClose: () => void; onSubmit: (selections: Array<{ slot: string; path: string; revision?: string }>) => Promise<void>;
-  onChoose: (path: string, choice: string) => void;
+export function materialSelectionReady(slots: MaterialSlot[], selected: Record<string, string>): boolean {
+  return slots.length > 0
+    && Object.values(selected).some(Boolean)
+    && slots.every(slot => !slot.required || !!selected[slot.id]);
+}
+
+function copy(locale: string, en: string, ja: string, zh: string): string {
+  return locale === 'ja' ? ja : locale === 'zh-CN' ? zh : en;
+}
+
+function isSelectable(item: DeclaredItem, slot: MaterialSlot): boolean {
+  return slot.paths.includes(item.declaredPath) || slot.paths.includes(item.path);
+}
+
+export function DeclaredActionDialog({
+  value,
+  onClose,
+  onSubmit,
+  onSendReview,
+  onChoose,
+}: {
+  value: DeclaredResponse;
+  onClose: () => void;
+  onSubmit: (selections: MaterialSelection[]) => Promise<string>;
+  onSendReview: (prompt: string) => void;
+  onChoose?: (path: string, choice: string) => void;
 }) {
   const { locale } = useLocale();
-  const ja = locale === 'ja'; const zh = locale === 'zh-CN';
-  const [selected, setSelected] = useState<Record<string, string[]>>({});
+  const [selected, setSelected] = useState<Record<string, string>>({});
+  const [activeSlot, setActiveSlot] = useState(value.slots?.[0]?.id ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const slots = value.slots ?? [];
-  const [activeSlot, setActiveSlot] = useState(slots[0]?.id ?? '');
-  const place = (path: string, target?: string) => {
-    if (busy) return;
-    const item = value.items.find(i => i.path === path);
-    const compatible = (s: typeof slots[number]) => !!item && s.paths.includes(item.declaredPath ?? item.path);
-    const slot = target ? slots.find(s => s.id === target) : slots.find(s => s.id === activeSlot && compatible(s)) ?? slots.find(compatible);
-    if (!item || !slot || !slot.paths.includes(item.declaredPath ?? item.path)) {
-      setError(ja ? 'この場所には置けません。別の枠を選んでください。' : zh ? '这份材料不适合当前槽位，请选择其他槽位。' : 'This material does not fit here. Choose another slot.'); return;
-    }
-    setError('');
-    const currentItems = selected[slot.id] ?? [];
-    if (currentItems.includes(path)) return;
-    if (currentItems.length >= (slot.maxItems ?? slot.paths.length)) {
-      setError(ja ? '枠がいっぱいです。材料を戻してから追加してください。' : zh ? '槽位已满，请先移除一份材料。' : 'This slot is full. Remove a material before adding another.'); return;
-    }
-    setActiveSlot(slot.id);
-    setSelected(current => ({ ...Object.fromEntries(Object.entries(current).map(([id, paths]) => [id, paths.filter(p => p !== path)])), [slot.id]: [...(current[slot.id] ?? []), path] }));
-  };
-  const ready = slots.length > 0 && Object.values(selected).some(p => p.length > 0) && slots.every(s => !s.required || selected[s.id]?.length);
-  const submit = async () => {
-    if (!ready || busy) return;
-    setBusy(true); setError('');
-    try { await onSubmit(slots.flatMap(s => (selected[s.id] ?? []).map(path => ({ slot: s.id, path, revision: value.items.find(i => i.path === path)?.revision })))); }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(false); }
-  };
+  const [reviewPrompt, setReviewPrompt] = useState('');
   const dialog = useRef<HTMLDivElement>(null);
+  const slots = value.slots ?? [];
+  const items = value.items ?? [];
+
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
-    dialog.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    dialog.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
     return () => previous?.focus();
   }, []);
-  return createPortal(<div className="declared-action-backdrop" data-no-drag onPointerDown={e => e.stopPropagation()} onWheel={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }}
-    onKeyDown={e => {
-      e.stopPropagation(); if (e.key === 'Escape') onClose();
-      if (e.key === 'Tab') {
-        const nodes = dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled)');
+
+  const place = (path: string, target = activeSlot) => {
+    if (busy) return;
+    const item = items.find(candidate => candidate.path === path);
+    const slot = slots.find(candidate => candidate.id === target);
+    if (!item || !slot || !isSelectable(item, slot)) {
+      setError(copy(locale, 'This material does not fit here. Choose another slot.', 'この材料はここには置けません。別の枠を選んでください。', '这份材料不适合当前槽位，请选择其他槽位。'));
+      return;
+    }
+    setError('');
+    setSelected(current => replaceMaterialSelection(current, target, path));
+  };
+
+  const ready = materialSelectionReady(slots, selected);
+  const submit = async () => {
+    if (!ready || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const prompt = await onSubmit(slots.filter(slot => selected[slot.id]).map(slot => ({
+        slot: slot.id,
+        path: selected[slot.id],
+        revision: items.find(item => item.path === selected[slot.id])?.revision ?? '',
+      })));
+      setReviewPrompt(prompt);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return createPortal(
+    <div
+      className="declared-action-backdrop"
+      data-no-drag
+      onPointerDown={event => event.stopPropagation()}
+      onWheel={event => event.stopPropagation()}
+      onClick={event => {
+        event.stopPropagation();
+        if (event.target === event.currentTarget) onClose();
+      }}
+      onKeyDown={event => {
+        event.stopPropagation();
+        if (event.key === 'Escape') onClose();
+        if (event.key !== 'Tab') return;
+        const nodes = dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex]:not([tabindex="-1"])');
         if (!nodes?.length) return;
-        const first = nodes[0], last = nodes[nodes.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    }}>
-    <div ref={dialog} className="declared-action-dialog" role="dialog" aria-modal="true" aria-label={ja ? '目の前のこと' : zh ? '眼前的发现' : 'A closer look'}>
-      <button type="button" onClick={onClose}>{ja ? 'この場に戻る ↩' : zh ? '回到场景 ↩' : 'Return ↩'}</button>
-      {value.kind === 'stage' && <p>{ja ? '材料を選ぶだけでは、まだ提出も実行もされません。' : zh ? '选择材料不会提交或执行。' : 'Selecting materials does not submit or execute them.'}</p>}
-      {value.kind === 'stage' && <fieldset className="material-slots" disabled={busy}>
-        {slots.map(slot => {
-          const candidates = value.items.filter(i => slot.paths.includes(i.declaredPath ?? i.path));
-          const items = candidates.filter(i => selected[slot.id]?.includes(i.path));
-          return <section className={`material-slot ${activeSlot === slot.id ? 'is-active' : ''}`} key={slot.id}
-            onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
-            onDrop={e => { e.preventDefault(); e.stopPropagation(); setActiveSlot(slot.id); place(e.dataTransfer.getData('text/plain'), slot.id); }}>
-            <button type="button" className="material-slot__target" aria-pressed={activeSlot === slot.id} onClick={() => setActiveSlot(slot.id)}>
-              <small>{slot.title} {slot.required && '*'}</small>
-              <strong>{items.length ? `${items.length} / ${slot.maxItems ?? slot.paths.length}` : (ja ? 'ここに材料を置く' : zh ? '将材料放在这里' : 'Place material here')}</strong>
-            </button>
-            {items.map(item => <div key={item.path} className="material-slot__item"><strong>{item.title}</strong><button type="button" aria-label={`${ja ? '戻す' : zh ? '移除' : 'Remove'} ${item.title}`} onClick={() => setSelected(s => ({ ...s, [slot.id]: (s[slot.id] ?? []).filter(p => p !== item.path) }))}>{ja ? '戻す' : zh ? '移除' : 'Remove'}</button><details><summary>{ja ? '読む' : zh ? '查看原文' : 'Read'}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{item.body}</p></details></div>)}
-            {!candidates.length && <small>{ja ? '材料がまだありません。' : zh ? '此槽位的材料尚未准备。' : 'No material available for this slot yet.'}</small>}
-          </section>;
-        })}
-      </fieldset>}
-      {value.kind === 'stage' && <>
-        <p>{ja ? '枠を選び、材料をクリック。または枠へドラッグ。' : zh ? '先选槽位，再点击材料；也可将材料拖入槽位。' : 'Select a slot, then click a material—or drag it into a slot.'}</p>
-        <div className="material-pool">
-          {value.items.map(item => <button key={item.path} type="button" draggable={!busy} disabled={busy}
-            aria-pressed={Object.values(selected).some(paths => paths.includes(item.path))} onClick={() => place(item.path)}
-            onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData('text/plain', item.path); e.dataTransfer.effectAllowed = 'move'; }}>
-            <span aria-hidden="true">▤</span><strong>{item.title}</strong><small>{item.body.slice(0, 80)}</small>
-          </button>)}
-        </div>
-      </>}
-      {value.text && <p style={{ whiteSpace: 'pre-wrap' }}>{value.text}</p>}
-      {value.kind !== 'stage' && value.items.map(item => <article key={item.path}>
-        <h3>{item.title}</h3>
-        <div style={{ whiteSpace: 'pre-wrap' }}>{item.body}</div>
-        {item.frontmatter && renderFrontmatterWidgets({ ...item.frontmatter, ...(!item.frontmatter.choice_actions ? { choice: undefined } : {}) }, { filePath: item.path, reveal: true, onChoice: choice => onChoose(item.path, choice), onDiceRolled: onClose })}
-      </article>)}
-      {value.missing.length > 0 && <p>{ja ? 'まだ用意されていない材料：' : zh ? '尚未准备的材料：' : 'Not prepared yet: '}{value.missing.join(', ')}</p>}
-      {value.kind === 'stage' && <>
-        <p>{ja ? '内容や推理の正しさはまだ判定しません。確認依頼を作家欄に入れ、送信すると一度だけ相談します。計画は実行しません。' : zh ? '此处不判断推论。准备审核草稿后，在作家栏点击发送才请求审核；不会执行计划。' : 'This does not judge your reasoning. Prepare a review draft, then Send in the writer field to request one review. It does not execute the plan.'}</p>
-        <button type="button" disabled={!ready || busy} onClick={() => void submit()}>{busy ? (ja ? '材料を確認中…' : zh ? '核对材料中…' : 'Checking materials…') : (ja ? '確認依頼の下書きを作る' : zh ? '准备审核草稿' : 'Prepare review draft')}</button>
-      </>}
-      {error && <p role="alert">{error}</p>}
-    </div>
-  </div>, document.body);
+        const first = nodes[0];
+        const last = nodes[nodes.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }}
+    >
+      <div ref={dialog} className="declared-action-dialog" role="dialog" aria-modal="true" aria-label={copy(locale, 'Declared action', '宣言された行動', '声明动作')}>
+        <button type="button" onClick={onClose}>{copy(locale, 'Return ↩', 'この場に戻る ↩', '回到场景 ↩')}</button>
+        {value.kind === 'stage' && <p>{copy(locale, 'Selecting materials does not submit or execute them.', '材料を選ぶだけでは、まだ提出も実行もされません。', '选择材料不会提交或执行。')}</p>}
+
+        {value.kind === 'stage' && <fieldset className="material-slots" disabled={busy}>
+          {slots.map(slot => {
+            const candidates = items.filter(item => isSelectable(item, slot));
+            const item = candidates.find(candidate => candidate.path === selected[slot.id]);
+            return <section
+              className={`material-slot ${activeSlot === slot.id ? 'is-active' : ''}`}
+              key={slot.id}
+              onDragOver={event => { event.preventDefault(); event.stopPropagation(); }}
+              onDrop={event => {
+                event.preventDefault();
+                event.stopPropagation();
+                setActiveSlot(slot.id);
+                place(event.dataTransfer.getData('text/plain'), slot.id);
+              }}
+            >
+              <button type="button" className="material-slot__target" aria-pressed={activeSlot === slot.id} onClick={() => setActiveSlot(slot.id)}>
+                <small>{slot.title}{slot.required ? ' *' : ''}</small>
+                <strong>{item?.title ?? copy(locale, 'Place material here', 'ここに材料を置く', '将材料放在这里')}</strong>
+              </button>
+              {item && <button type="button" onClick={() => { setSelected(current => ({ ...current, [slot.id]: '' })); setError(''); }}>{copy(locale, 'Remove', '戻す', '移除')}</button>}
+              {!candidates.length && <small>{copy(locale, 'No material available for this slot yet.', '材料がまだありません。', '此槽位的材料尚未准备。')}</small>}
+              {item && <details><summary>{copy(locale, 'Read selected material', '選択した材料を読む', '查看所选材料')}</summary><p>{item.body}</p></details>}
+            </section>;
+          })}
+        </fieldset>}
+
+        {value.kind === 'stage' && <>
+          <p>{copy(locale, 'Select a slot, then click a material—or drag it into a slot.', '枠を選び、材料をクリック。または枠へドラッグ。', '先选槽位，再点击材料；也可将材料拖入槽位。')}</p>
+          <div className="material-pool">
+            {items.map(item => <button
+              key={item.path}
+              type="button"
+              draggable={!busy}
+              disabled={busy}
+              aria-pressed={Object.values(selected).includes(item.path)}
+              onClick={() => place(item.path)}
+              onDragStart={event => {
+                event.stopPropagation();
+                event.dataTransfer.setData('text/plain', item.path);
+                event.dataTransfer.effectAllowed = 'move';
+              }}
+            >
+              <span aria-hidden="true">▤</span><strong>{item.title}</strong><small>{item.body.slice(0, 80)}</small>
+            </button>)}
+          </div>
+          <p>{copy(locale, 'Prepare a review draft. Nothing is sent until you choose Send review.', '確認依頼の下書きを作ります。「確認依頼を送る」を選ぶまで送信されません。', '准备审核草稿；选择“发送审核”前不会发送。')}</p>
+          <button type="button" disabled={!ready || busy} onClick={() => void submit()}>{busy ? copy(locale, 'Checking materials…', '材料を確認中…', '核对材料中…') : copy(locale, 'Prepare review draft', '確認依頼の下書きを作る', '准备审核草稿')}</button>
+          {reviewPrompt && <div className="declared-review-draft">
+            <label>
+              <strong>{copy(locale, 'Review draft', '確認依頼の下書き', '审核草稿')}</strong>
+              <textarea value={reviewPrompt} onChange={event => setReviewPrompt(event.target.value)} rows={8} />
+            </label>
+            <button type="button" disabled={busy || !reviewPrompt.trim()} onClick={() => { onSendReview(reviewPrompt); }}>{copy(locale, 'Send review', '確認依頼を送る', '发送审核')}</button>
+          </div>}
+
+        </>}
+        {value.text && <p className="declared-action-dialog__text">{value.text}</p>}
+        {value.prompt && <p className="declared-action-dialog__text">{value.prompt}</p>}
+        {value.kind !== 'stage' && items.map(item => <article key={item.path}>
+          <h3>{item.title}</h3>
+          <div className="declared-action-dialog__body">{item.body}</div>
+          {item.frontmatter && renderFrontmatterWidgets(
+            { ...item.frontmatter, ...(!item.frontmatter.choice_actions ? { choice: undefined } : {}) },
+            { filePath: item.path, reveal: true, onChoice: choice => onChoose?.(item.path, choice) },
+          )}
+        </article>)}
+        {value.missing.length > 0 && <p>{copy(locale, 'Not prepared yet: ', 'まだ用意されていない材料：', '尚未准备的材料：')}{value.missing.join(', ')}</p>}
+        {error && <p role="alert">{error}</p>}
+      </div>
+    </div>,
+    document.body,
+  );
 }

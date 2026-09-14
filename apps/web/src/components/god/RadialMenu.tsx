@@ -77,17 +77,6 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
   const [prompt, setPrompt] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Close on Escape
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
 
   // Focus input on form entry
   useEffect(() => {

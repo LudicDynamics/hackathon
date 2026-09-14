@@ -3,8 +3,7 @@ import fs from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { resolveVoice, type LocalWorldStore } from '@airp/shared';
-import { LocalTtsError, isLocalTtsCharacter, localTtsEmotion, localTtsHash, readLocalTtsConfig, synthesiseLocal } from './local-tts.js';
+import { resolveVoice, sanitiseTtsText, type LocalWorldStore } from '@airp/shared';
 
 /**
  * Server-side TTS: the ONE synthesis point (docs/tts/00 §1, docs/tts/01).
@@ -67,12 +66,14 @@ function readTtsConfig(): TtsConfig {
 }
 
 /**
- * docs/tts/00 §3.2: sha256(`${model}|${voice}|${language_type}|${text}`).slice(0,20).
- * The four fields are joined verbatim (including the RESOLVED language_type).
- * Instruct models append the effective delivery instructions so style edits miss.
+ * Cache keys include the effective delivery instructions for instruct models,
+ * so changing voice direction cannot reuse ordinary or stale audio.
  */
 export function hashOf(model: string, voice: string, languageType: string, text: string, instructions = ''): string {
-  return createHash('sha256').update(`${model}|${voice}|${languageType}|${text}${instructions ? `|delivery:${instructions}` : ''}`).digest('hex').slice(0, 20);
+  return createHash('sha256')
+    .update(`${model}|${voice}|${languageType}|${text}${instructions ? `|delivery:${instructions}` : ''}`)
+    .digest('hex')
+    .slice(0, 20);
 }
 
 /** Ordinary Flash does not support instruction control; never send ignored options. */
@@ -81,7 +82,11 @@ export function deliveryInstructions(model: string, voice: string): string {
   const identity = voice === 'Cherry' || voice === 'Nini'
     ? 'Use a natural youthful feminine speaking voice, not a child voice. '
     : 'Preserve the selected speaker identity and natural vocal register. ';
-  return identity + 'Speak as if talking quietly face to face, at a comfortable conversational pace. Use relaxed phrasing and small, context-appropriate emotional changes. Keep pitch stable and unforced. Avoid exaggerated rises, sing-song delivery, theatrical breathiness, artificial laughter, shouting and announcer-style emphasis. Read only the supplied text; do not speak these instructions.';
+  return identity +
+    'Speak as if talking quietly face to face, at a comfortable conversational pace. ' +
+    'Use relaxed phrasing and small, context-appropriate emotional changes. Keep pitch stable and unforced. ' +
+    'Avoid exaggerated rises, sing-song delivery, theatrical breathiness, artificial laughter, shouting and announcer-style emphasis. ' +
+    'Read only the supplied text; do not speak these instructions.';
 }
 
 /** Upstream failure carrier: a typed marker beats string-matching the message. */
@@ -132,13 +137,14 @@ export async function synthesise(opts: {
   // Step 1 — request shape (qwen3-tts-flash.md §1.1/§1.2/§2.1/§2.2). `language_type`
   // keeps its underscore: a camelCase key is silently ignored by DashScope.
   const endpoint = `${opts.baseUrl}/services/aigc/multimodal-generation/generation`;
+  const instructions = deliveryInstructions(opts.model, opts.voice);
   const payload = {
     model: opts.model,
     input: {
       text: opts.text,
       voice: opts.voice,
       language_type: opts.languageType,
-      ...(deliveryInstructions(opts.model, opts.voice) ? { instructions: deliveryInstructions(opts.model, opts.voice), optimize_instructions: false } : {}),
+      ...(instructions ? { instructions, optimize_instructions: false } : {}),
     },
   };
   const headers = {
@@ -265,8 +271,8 @@ export function createTtsRouter(
       return res.status(400).json({ ok: false, code: 'no_active_world', error: 'No active world' });
     }
 
-    // Step 2 — `text` must be a non-empty string. Only the emptiness check
-    // trims; the page text is sent verbatim (leading space may be a beat).
+    // Step 2 — `text` must be a non-empty string before it enters the shared
+    // safety boundary. Only the emptiness check trims the raw input here.
     const {
       text: rawText,
       voice: rawVoice,
@@ -280,23 +286,33 @@ export function createTtsRouter(
         .json({ ok: false, code: 'invalid_argument', error: 'text must be a non-empty string' });
     }
 
-    // Step 3 — truncate BEFORE hashing, so the cache key matches the text that
+    // Step 3 — clean before truncation, hashing, cache lookup, and synthesis.
+    // The helper is pure and idempotent; this server-side pass is mandatory even
+    // when the browser already performed its preflight.
+    const cleanedText = sanitiseTtsText(rawText);
+    if (cleanedText === '') {
+      return res
+        .status(400)
+        .json({ ok: false, code: 'invalid_argument', error: 'text must be a non-empty string' });
+    }
+
+    // Step 4 — truncate BEFORE hashing, so the cache key matches the text that
     // was actually sent. Truncation keeps the performance alive rather than
     // failing silently; `truncated` reaches the client.
-    let text = rawText;
+    let text = cleanedText;
     let truncated = false;
     if (text.length > MAX_TEXT_CHARS) {
       text = text.slice(0, MAX_TEXT_CHARS);
       truncated = true;
     }
 
-    // Step 4 — resolve the declared voice through the palette (docs/tts/07 §3).
+    // Step 5 — resolve the declared voice through the palette (docs/tts/07 §3).
     // Two vocabularies reach here: an effect alias from world content
     // (`wise-elder`) or a raw id already in the palette (`Eldric Sage`).
     // A typo is NOT silently accepted — the page still plays on the default,
     // but `check:voices` fails the build so it never ships (07 §3).
+    const defaultVoice = resolveVoice(config.defaultVoice) ?? DEFAULTS.voice;
     const requestedVoice = typeof rawVoice === 'string' ? rawVoice.trim() : '';
-    const defaultVoice = resolveVoice(config.defaultVoice) ?? config.defaultVoice;
     let voice = defaultVoice;
     if (requestedVoice !== '') {
       if (!VOICE_RE.test(requestedVoice)) {
@@ -314,35 +330,13 @@ export function createTtsRouter(
       }
     }
 
-    // Step 5 — world locale short code → DashScope `language_type`.
+    // Step 6 — world locale short code → DashScope `language_type`.
     const languageType = typeof rawLanguage === 'string' ? (LANGUAGE_MAP[rawLanguage] ?? 'Auto') : 'Auto';
 
-    // Local Nanami audio always gets first refusal, even if an online fallback
-    // for this line is cached. A recovered local service must regain its voice.
-    const local = readLocalTtsConfig();
-    if (local.baseUrl && characterId === 'nanami') {
-      try {
-        const manifest = await store.getManifest();
-        if (isLocalTtsCharacter(manifest.id, characterId) && manifest.characters?.some(c => c.id === characterId)) {
-          const language = typeof rawLanguage === 'string' && rawLanguage in LANGUAGE_MAP ? rawLanguage : 'auto';
-          const emotion = localTtsEmotion(rawEmotion);
-          const file = `${localTtsHash(local, text, language, emotion)}.wav`;
-          const abs = path.join(store.worldRoot, '.airpworld', 'tts-cache', file);
-          const cached = existsSync(abs);
-          if (!cached) await writeAtomic(abs, await synthesiseLocal(local, text, language, emotion));
-          return res.json({ ok: true, url: `/api/tts/audio/${file}`, cached, characters: text.length, truncated });
-        }
-      } catch (err) {
-        // Only a safe diagnostic is exposed; never log keys, URLs or dialogue.
-        const reason = err instanceof LocalTtsError ? err.message : err instanceof Error ? err.name : 'Error';
-        console.warn(`[AIRP TTS] Local TTS failed for nanami (${reason}); falling back to online TTS.`);
-        res.setHeader('X-AIRP-TTS-Fallback', 'local-to-online');
-      }
-    }
-
-    // Step 6 — cache lookup. `existsSync` (not `stat`) is enough: atomic writes
+    // Step 7 — cache lookup. `existsSync` (not `stat`) is enough: atomic writes
     // guarantee "present ⇒ complete".
-    const hash = hashOf(config.model, voice, languageType, text, deliveryInstructions(config.model, voice));
+    const instructions = deliveryInstructions(config.model, voice);
+    const hash = hashOf(config.model, voice, languageType, text, instructions);
     const cacheDir = path.join(store.worldRoot, '.airpworld', 'tts-cache');
     const file = `${hash}.wav`;
     const abs = path.join(cacheDir, file);
@@ -356,7 +350,7 @@ export function createTtsRouter(
       });
     }
 
-    // Step 7 — key check comes AFTER the cache probe on purpose: an already
+    // Step 8 — key check comes AFTER the cache probe on purpose: an already
     // synthesised page keeps playing even if the key was withdrawn.
     if (!config.apiKey) {
       console.warn('[AIRP TTS] Online TTS unavailable: DASHSCOPE_API_KEY is not set.');

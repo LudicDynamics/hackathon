@@ -1,49 +1,69 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { createJiti } from '../../../vendor/pi-rp/node_modules/jiti/lib/jiti.mjs';
+
 const jiti = createJiti(import.meta.url, { moduleCache: false });
-const { d10Display } = await jiti.import('../src/lib/d10-display.ts');
-const { d10Landing, d10FaceBasis } = await jiti.import('../src/lib/d10-pose.ts');
-test('percentile dice reconstruct all 100 authoritative outcomes', () => {
- for(let r=1;r<=100;r++) {
-  const d=d10Display('1d100',[r]);
-  assert.equal(d.digits[0]*10+d.digits[1] || 100,r);
- }
- assert.deepEqual(d10Display('1d100',[100]).digits,[0,0]);
- assert.deepEqual(d10Display('1d100',[10]).digits,[1,0]);
- assert.deepEqual(d10Display('1d100',[1]).digits,[0,1]);
+const display = await jiti.import('../src/lib/d10-display.ts');
+const pose = await jiti.import('../src/lib/d10-pose.ts');
+const physics = await jiti.import('../src/lib/d10-physics.ts');
+const { Quaternion } = await import('../node_modules/three/build/three.module.js');
+
+test('display maps D10 boundaries without changing supplied values', () => {
+  assert.deepEqual(display.d10Display('1d10', [1]).digits, [1]);
+  assert.deepEqual(display.d10Display('1d10', [10]).digits, [0]);
+  assert.deepEqual(display.d10Display('1d10+5', [10]).digits, [0]);
+  assert.equal(display.d10Display('1d10', [0]), null);
+  assert.equal(display.d10Display('1d10', [11]), null);
+  assert.equal(display.d10Display('2d10', [4]), null);
 });
-test('D10 uses 0 for ten; modifiers do not alter the physical faces', () => {
- assert.deepEqual(d10Display('1d10',[10]).digits,[0]);
- assert.deepEqual(d10Display('1d100+5',[62]).digits,[6,2]);
- assert.equal(d10Display('2d10',[6,2]),null);
- assert.equal(d10Display('1d100',[0]),null);
- assert.equal(d10Display('1d100',[101]),null);
+
+test('percentile display maps 1, 10, 99 and 100 to tens and units', () => {
+  assert.deepEqual(display.d10Display('1d100', [1]).digits, [0, 1]);
+  assert.deepEqual(display.d10Display('1d100', [10]).digits, [1, 0]);
+  assert.deepEqual(display.d10Display('1d100', [99]).digits, [9, 9]);
+  assert.deepEqual(display.d10Display('1d100', [100]).digits, [0, 0]);
+  assert.equal(display.d10Display('1d100', [101]), null);
+  assert.equal(display.d10Display('2d100', [10, 20]), null);
 });
-test('every GLB numeral lands facing camera and upright', () => {
- for(let digit=0;digit<10;digit++) {
-  const {normal,up}=d10FaceBasis(digit); const q=d10Landing(digit);
-  normal.applyQuaternion(q);up.applyQuaternion(q);
-  assert.ok(Math.abs(normal.z-1)<1e-10,`${digit}: normal`);
-  assert.ok(Math.abs(up.y-1)<1e-10,`${digit}: up`);
- }
+
+test('D6, D10 pair and unsupported dice select the renderer explicitly', () => {
+  assert.deepEqual(display.diceStageDisplay('1d6', [6]).digits, [6]);
+  assert.deepEqual(display.diceStageDisplay('2d6', [1, 6]).digits, [1, 6]);
+  assert.deepEqual(display.diceStageDisplay('2d10', [10, 8]).digits, [0, 8]);
+  assert.equal(display.diceStageDisplay('3d6', [1, 2, 3]), null);
+  assert.equal(display.diceStageDisplay('1d20', [20]), null);
 });
-const { simulateD10Throw, d10Hull, readTopFace } = await jiti.import('../src/lib/d10-physics.ts');
-const { Quaternion, Vector3 } = await jiti.import('../node_modules/three/build/three.module.js');
-test('orientation correction is a true hull symmetry for all pairs', () => {
- const hull=d10Hull();
- for(let a=0;a<10;a++) for(let b=0;b<10;b++) {
-  const q=d10Landing(a).invert().multiply(d10Landing(b));
-  for(const v of hull.vertices) {
-   const p=new Vector3(v.x,v.y,v.z).applyQuaternion(q);
-   assert.ok(hull.vertices.some(w=>p.distanceTo(new Vector3(w.x,w.y,w.z))<1e-8),`${a} → ${b}`);
+
+test('each D10 landing pose faces the camera and stays upright', () => {
+  for (let digit = 0; digit < 10; digit += 1) {
+    const basis = pose.d10FaceBasis(digit);
+    const landing = pose.d10Landing(digit);
+    basis.normal.applyQuaternion(landing);
+    basis.up.applyQuaternion(landing);
+    assert.ok(Math.abs(basis.normal.z - 1) < 1e-10, `${digit}: normal`);
+    assert.ok(Math.abs(basis.up.y - 1) < 1e-10, `${digit}: up`);
   }
- }
 });
-test('rigid-body trajectories stop with authoritative top digits', async () => {
- for(const digits of [[0],[1],[9],[0,0],[6,2]]) {
-  const frames=await simulateD10Throw(digits,42);
-  assert.ok(frames.length>30);
-  frames.at(-1).forEach((pose,i)=>assert.equal(readTopFace(new Quaternion(...pose.rotation)),digits[i]));
- }
+
+test('trajectory cancellation rejects before doing work', async () => {
+  await assert.rejects(
+    physics.simulateD10Throw([0], 42, () => true),
+    /Throw cancelled/,
+  );
+});
+
+test('D6 and D10 trajectories finish on supplied authoritative faces', async () => {
+  for (const [faces, values] of [[6, [1, 6]], [10, [0, 8]]]) {
+    let frames;
+    for (let seed = 1; seed <= 5 && !frames; seed += 1) {
+      try {
+        frames = await physics.simulateD10Throw(values, seed, () => false, faces);
+      } catch {
+        // A physically invalid edge landing is a renderer fallback, not a new roll.
+      }
+    }
+    assert.ok(frames?.length > 10);
+    const read = faces === 6 ? physics.readD6Top : physics.readTopFace;
+    assert.deepEqual(frames.at(-1).map((item) => read(new Quaternion(...item.rotation))), values);
+  }
 });

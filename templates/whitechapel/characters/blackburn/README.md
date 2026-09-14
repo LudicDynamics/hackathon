@@ -1,6 +1,7 @@
 ---
 type: readme
 name: Editor Blackburn
+voice: refined-thoughtful
 avatar: assets/characters/blackburn.webp
 ---
 

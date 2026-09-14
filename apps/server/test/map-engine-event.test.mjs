@@ -11,8 +11,8 @@ import { test } from 'node:test';
 import { mapEngineEvent, messageText } from '../dist/engine/event-bridge.js';
 
 /** Strip the broadcast timestamp so a frame compares structurally. */
-function frames(source, event, args = new Map(), characterId = undefined, buf = new Map()) {
-  return mapEngineEvent(source, event, args, characterId, buf).map(({ timestamp: _t, ...rest }) => rest);
+function frames(source, event, args = new Map(), characterId = undefined, buf = new Map(), turnId = `orphan:${source}`, projector = undefined) {
+  return mapEngineEvent(source, event, args, characterId, buf, turnId, projector).map(({ timestamp: _t, ...rest }) => rest);
 }
 
 test('chalk_landed reads details.path (the frozen shape) and result.path (legacy)', () => {
@@ -269,4 +269,127 @@ test('chalk delta backstop uses replacement mode when the extractor lags', () =>
   const replace = out.find((f) => f.mode === 'replace');
   assert.ok(replace, 'expected a replacement backstop frame');
   assert.equal(replace.delta, 'parts');
+});
+
+test('agent_activity preserves writer/character identity and terminal idempotency', async () => {
+  const { ActivityProjector } = await import('../dist/engine/agent-activity.js');
+  const projector = new ActivityProjector();
+  const args = new Map();
+  const start = {
+    type: 'tool_execution_start',
+    toolCallId: 'activity-1',
+    toolName: 'write',
+    args: { path: '/private/secret.md', content: 'do not expose' },
+  };
+  const end = {
+    type: 'tool_execution_end',
+    toolCallId: 'activity-1',
+    toolName: 'write',
+    result: { details: { path: '/private/secret.md' } },
+    isError: false,
+  };
+  const started = frames('writer', start, args, undefined, new Map(), 'turn-1', projector)
+    .find((frame) => frame.type === 'agent_activity');
+  const completed = frames('writer', end, args, undefined, new Map(), 'turn-1', projector)
+    .find((frame) => frame.type === 'agent_activity');
+  assert.equal(started.source, 'writer');
+  assert.equal(started.agentId, 'writer');
+  assert.equal(started.phase, 'started');
+  assert.equal(started.subject, 'secret');
+  assert.equal(completed.activityId, started.activityId);
+  assert.equal(completed.phase, 'completed');
+  assert.equal(frames('writer', end, args, undefined, new Map(), 'turn-1', projector).some((frame) => frame.type === 'agent_activity'), false);
+});
+
+test('custom role airp activity relay is not hidden by assistant-only mapping', async () => {
+  const { ActivityProjector } = await import('../dist/engine/agent-activity.js');
+  const projector = new ActivityProjector();
+  const message = {
+    role: 'custom',
+    customType: 'airp_agent_activity',
+    content: JSON.stringify({
+      type: 'tool_start',
+      context: { source: 'functional', agentId: 'scene-init', turnId: 'functional:t1' },
+      toolCallId: 'child-1',
+      toolName: 'read',
+      args: { path: '/private/note.md' },
+    }),
+  };
+  const out = mapEngineEvent('writer', { type: 'message_end', message }, new Map(), undefined, new Map(), 'writer:t1', projector);
+  const activity = out.find((frame) => frame.type === 'agent_activity');
+  assert.equal(activity.source, 'functional');
+  assert.equal(activity.agentId, 'scene-init');
+  assert.equal(activity.phase, 'started');
+  assert.equal(activity.characterId, undefined);
+});
+
+test('card_writing fires for a writer `write` and carries kind/title/layer', () => {
+  const out = frames('writer', {
+    type: 'tool_execution_start',
+    toolCallId: 'c9',
+    toolName: 'write',
+    args: {
+      path: 'world/baker-street/lock.md',
+      content: '---\ntype: component\ncomponent: lock\ntitle: Brass Lock\n---\n\nbody\n',
+    },
+  });
+  const frame = out.find((f) => f.type === 'card_writing');
+  assert.equal(frame.source, 'writer');
+  assert.equal(frame.toolCallId, 'c9');
+  assert.equal(frame.kind, 'lock');
+  assert.equal(frame.title, 'Brass Lock');
+  assert.equal(frame.layer, 'world/baker-street');
+  // The frame never carries `path` — handover is keyed on chalk_landed.path.
+  assert.equal(frame.path, undefined);
+});
+
+test('card_writing survives missing frontmatter (no throw, no half frame)', () => {
+  // Unparseable / absent content → kind falls back to 'note', NOT 'default'.
+  const out = frames('writer', {
+    type: 'tool_execution_start',
+    toolCallId: 'c10',
+    toolName: 'write',
+    args: { path: 'world/map/note.md', content: '' },
+  });
+  const frame = out.find((f) => f.type === 'card_writing');
+  assert.equal(frame.kind, 'note');
+  assert.equal(frame.layer, 'world/map');
+  // A title is never empty: entityName falls back to the basename minus `.md`.
+  assert.equal(frame.title, 'note');
+});
+
+test('card_writing omits `layer` when the path has no directory (F-2)', () => {
+  const out = frames('writer', {
+    type: 'tool_execution_start',
+    toolCallId: 'c11',
+    toolName: 'write',
+    args: { path: 'stray.md', content: '---\ntype: note\n---\n' },
+  });
+  const frame = out.find((f) => f.type === 'card_writing');
+  assert.equal('layer' in frame, false);
+});
+
+test('card_writing fires only for the writer lane, never character/chalk', () => {
+  const start = (source, toolName, args) => frames(source, {
+    type: 'tool_execution_start',
+    toolCallId: 'c12',
+    toolName,
+    args,
+  });
+  const args = { path: 'world/map/x.md', content: '---\ntype: note\n---\n' };
+  assert.equal(start('writer', 'write', args).some((f) => f.type === 'card_writing'), true);
+  assert.equal(start('character', 'write', args).some((f) => f.type === 'card_writing'), false);
+  assert.equal(start('writer', 'chalk', args).some((f) => f.type === 'card_writing'), false);
+});
+
+test('card_writing resolves a nook path (characters/<id>/** is its own layer)', () => {
+  const out = frames('writer', {
+    type: 'tool_execution_start',
+    toolCallId: 'c13',
+    toolName: 'write',
+    args: { path: 'characters/bob/photo.md', content: '---\ntype: component\ncomponent: photo\n---\n' },
+  });
+  const frame = out.find((f) => f.type === 'card_writing');
+  assert.equal(frame.layer, 'characters/bob');
+  assert.equal(frame.kind, 'photo');
 });

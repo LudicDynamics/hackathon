@@ -7,6 +7,8 @@
 import { entityName, parseFrontmatter } from '../schemas/frontmatter.js';
 import type { DanglingRef } from '../schemas/events.js';
 import { ActionError } from './errors.js';
+import { assertNookMutationAllowed } from './actor.js';
+import type { AgentScope } from './actor.js';
 import { registerAction } from './service.js';
 import { actorLabel } from './actor.js';
 import { seatFileOf } from './delete.js';
@@ -92,6 +94,17 @@ export async function moveEntity(
       message: `move only accepts a single .md file, got a directory: "${from}"`,
     });
   }
+  const agentScope: AgentScope =
+    ctx.agentScope ??
+    (actor.type === 'character' ? 'character' : actor.type === 'player' ? 'player' : 'writer-top-level');
+  const manifest = await store.getManifest();
+  assertNookMutationAllowed(
+    actor,
+    agentScope,
+    from,
+    'move',
+    manifest.characters.map((character) => character.id),
+  );
   if (from.endsWith('/README.md') || from === 'README.md') {
     throw new ActionError({
       code: 'not_movable',
@@ -121,6 +134,13 @@ export async function moveEntity(
     }
     to = `${to.replace(/\/+$/, '')}/${from.split('/').pop()}`;
   }
+  assertNookMutationAllowed(
+    actor,
+    agentScope,
+    to,
+    'move',
+    manifest.characters.map((character) => character.id),
+  );
   if (to === from) {
     throw new ActionError({ code: 'invalid_argument', message: `Cannot move a file onto itself: "${to}"` });
   }

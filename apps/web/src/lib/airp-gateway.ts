@@ -1,4 +1,5 @@
 import type { WorldSettings } from '@airp/shared/world-settings';
+export type AssetMediaKind = 'image' | 'video' | 'audio';
 
 export interface WorldShelf {
   templates: string[];
@@ -19,14 +20,37 @@ export class AirpRequestError extends Error {
   }
 }
 
+// `no_active_world` is a durable state, not a one-shot moment: the initial
+// `loadChromeData` can resolve before the App's listener registers (a StrictMode
+// remount or a slow first paint opens that gap), and a lost signal strands the
+// player on a blank canvas while the backend only needs a world chosen. Record
+// the state here and replay it to late subscribers (docs/ux/03 §6: release the
+// input lock and make the world shelf topmost).
+let worldUnavailable = false;
+const worldUnavailableListeners = new Set<() => void>();
+
+/**
+ * Observe the "no active world" state. When a world-scoped reply has already
+ * answered `no_active_world`, the listener runs immediately so a late
+ * subscriber cannot miss it. Returns an unsubscribe function.
+ */
+export function onWorldUnavailable(listener: () => void): () => void {
+  worldUnavailableListeners.add(listener);
+  if (worldUnavailable) listener();
+  return () => { worldUnavailableListeners.delete(listener); };
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   if (!response.ok) {
     const message = await response.text();
     let payload: Record<string, unknown> | null = null;
     try { payload = JSON.parse(message); } catch { /* Keep non-JSON diagnostics. */ }
-    if (payload?.code === 'no_active_world' && typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('airp:world-unavailable'));
+    if (payload?.code === 'no_active_world') {
+      worldUnavailable = true;
+      // `useWorld` and the live-call forwarder still consume the DOM event.
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('airp:world-unavailable'));
+      for (const listener of worldUnavailableListeners) listener();
     }
     throw new AirpRequestError(`${init?.method ?? 'GET'} ${url} -> ${response.status}${message ? ` ${message}` : ''}`, response.status, payload);
   }
@@ -52,6 +76,7 @@ export const airpGateway = {
   loadWorld: async <TManifest = Record<string, unknown>>(worldPath: string) => {
     const result = await request<WorldLoadResult<TManifest>>('/api/worlds/load', json('POST', { worldPath }));
     if (result.ok) {
+      worldUnavailable = false;
       assetSession = `${Date.now()}-${++assetGeneration}`;
       if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('airp:gate-feedback', { detail: null }));
     }
@@ -67,11 +92,23 @@ export const airpGateway = {
   choose: (path: string, choice: string) => request('/api/choice', json('POST', { path, choice })),
   // `first` = the target layer had no README (a stub) — the auto-init signal
   // (docs/init/03 §3.2). The server decides it; the client only reads it.
+  // `followers` is the carry-along settlement (docs/presence/00 §2.3 / P-10):
+  // a character left behind must be visible, never silent.
   enterLayer: (layer: string) =>
-    request<{ ok: boolean; layer: string; name: string; first: boolean }>(
-      '/api/enter-layer',
-      json('POST', { layer }),
-    ),
+    request<{
+      ok: boolean;
+      layer: string;
+      name: string;
+      first: boolean;
+      followers: {
+        moved: Array<{ characterId: string; x: number; y: number; following: boolean }>;
+        failures: Array<{ character: string; reason: string }>;
+      };
+    }>('/api/enter-layer', json('POST', { layer })),
+  // Terminal state, not a toggle (docs/tools/05 §3.6.1): the UI inverts, the
+  // action writes. Registered in tools/check-request-bodies.mjs.
+  setFollowing: (character: string, following: boolean) =>
+    request('/api/following', json('POST', { character, following })),
   worldSettings: () => request<WorldSettings>('/api/world-settings'),
   saveWorldSettings: (settings: WorldSettings) =>
     request<WorldSettings>('/api/world-settings', json('POST', settings)),
@@ -91,7 +128,12 @@ export const airpGateway = {
   // Server reads `path` (docs/tools/12:1403).
   godAction: (action: 'create' | 'update' | 'delete', path: string, content?: string) =>
     request('/api/god-action', json('POST', { action, path, content })),
-  assetUrl: (path: string) => `/api/asset?path=${encodeURIComponent(path)}&session=${assetSession}`,
+  assetUrl: (
+    path: string,
+    session: string | undefined,
+    mediaKind: AssetMediaKind,
+  ) =>
+    `/api/asset?path=${encodeURIComponent(path)}&kind=${mediaKind}&session=${encodeURIComponent(session ?? assetSession)}`,
 };
 
 export function openAirpSocket(onMessage: (message: Record<string, unknown>) => void): WebSocket {

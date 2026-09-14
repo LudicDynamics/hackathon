@@ -1,5 +1,4 @@
-// Historical fixtures; current bilingual coverage is in world-editions.test.mjs.
-// Content contracts only; live model compliance requires a separate rehearsal.
+// Historical fixture contract; current bilingual coverage is in world-editions.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

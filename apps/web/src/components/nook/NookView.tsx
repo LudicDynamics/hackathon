@@ -1,9 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2, Mic, PhoneOff } from 'lucide-react';
 import { Canvas } from '../canvas/Canvas.js';
 import { WriterBar } from '../chrome/WriterBar.js';
+import { StubPrompt } from '../chrome/StubPrompt.js';
+import { ghostItemFor } from '../../lib/init-ghost.js';
 import type { LayerState } from '../../state/useWorld.js';
-import { UI_COPY, translate, type Locale } from '../../lib/i18n.js';
+import { NookNoteComposer } from './NookNoteComposer.js';
+import { UI_COPY, type Locale } from '../../lib/i18n.js';
+import { useLiveCall } from '../../lib/live-call.js';
+import type { CharacterFrame } from '../../lib/character-frame-queue.js';
+import { airpGateway, type AssetMediaKind } from '../../lib/airp-gateway.js';
 import { useStill } from '../../lib/motion.js';
 import { whenFontsSettled } from '../../lib/fonts.js';
 import { invalidateMeasures } from '../../lib/measure.js';
@@ -25,7 +31,7 @@ import {
  * Re-fetch on world changes rides the existing `airp:world-event` forward.
  */
 export interface NookViewProps {
-  /** Character id (ASCII kebab-case, from the RightSidebar's 4th button). */
+  /** Character id (ASCII kebab-case, supplied by the character rail's nook button). */
   characterId: string;
   /** Close the nook, returning to the layer that was showing. App owns it. */
   onClose: () => void;
@@ -33,9 +39,22 @@ export interface NookViewProps {
   // Forwarded layer callbacks (02 §⑫-2): the nook MUST NOT build its own
   onMoveCard?: (path: string, x: number, y: number) => Promise<void> | void;
   onSelectChoice?: (path: string, choice: string) => void;
+  onEntityAction?: (prompt: string, targetLayer?: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
+  onOpenCharacterModal?: (characterId: string) => void;
+  onItemDropOnTarget?: (itemPath: string, targetPath: string) => void;
+  onDropItemToScene?: (itemPath: string, targetLayer?: string) => void;
   onTakeItem?: (path: string) => void;
-  onInitialize?: (characterId: string) => boolean;
+  /** True while a CharacterModal owns focus above this projection. */
+  inactive?: boolean;
+  writerLocked?: boolean;
+  /**
+   * Ask the engine to materialise this empty nook (docs/init/03 §3.7: the N1
+   * view owns the ENTRY, the `airp_init` kernel stays in one place). `request`
+   * is the player's one-line intent, or undefined for "leave it blank".
+   * Returns false when the socket is down, so the caller keeps its UI state.
+   */
+  onRequestInit?: (kind: 'nook', target: string, request?: string) => boolean;
 }
 
 interface NookError {
@@ -49,14 +68,17 @@ interface NookError {
 type FetchResult = { ok: true; data: LayerState } | { ok: false; error: NookError };
 
 /**
- * `/api/asset?path=` is the ONE frozen avatar URL shape (00 §5.4). A raw
- * `/assets/...` value (the old RightSidebar fallback) is normalised rather
- * than passed through, so the nook never reproduces 02 §⑪-2.
+ * Nook avatars are image-lane media. Legacy `/api/asset?path=` values are
+ * normalised in place so every request still declares `kind=image`.
  */
-export function assetUrl(value: unknown): string | null {
+export function assetUrl(value: unknown, mediaKind: AssetMediaKind = 'image'): string | null {
   if (typeof value !== 'string' || value.trim() === '') return null;
-  if (value.startsWith('/api/asset')) return value;
-  return `/api/asset?path=${encodeURIComponent(value.replace(/^\/+/, ''))}`;
+  if (value.startsWith('/api/asset')) {
+    const url = new URL(value, 'http://airp.local');
+    const assetPath = url.searchParams.get('path');
+    return assetPath ? airpGateway.assetUrl(assetPath, undefined, mediaKind) : null;
+  }
+  return airpGateway.assetUrl(value.replace(/^\/+/, ''), undefined, mediaKind);
 }
 
 /**
@@ -112,41 +134,91 @@ async function fetchNook(characterId: string): Promise<FetchResult> {
     };
   }
 }
-
 export const NookView: React.FC<NookViewProps> = ({
   characterId,
   onClose,
   locale,
   onMoveCard,
   onSelectChoice,
+  onEntityAction,
   onDiceRolled,
+  onOpenCharacterModal,
+  onItemDropOnTarget,
+  onDropItemToScene,
   onTakeItem,
-  onInitialize,
+  inactive = false,
+  writerLocked = false,
+  onRequestInit,
 }) => {
   const [state, setState] = useState<LayerState | null>(null);
   const [error, setError] = useState<NookError | null>(null);
   const [loading, setLoading] = useState(true);
   const [initializing, setInitializing] = useState(false);
-  useEffect(() => {
-    if (!initializing) return;
-    const timer = setTimeout(() => { setInitializing(false); void load(characterId); }, 60000);
-    return () => clearTimeout(timer);
-  }, [initializing, characterId]);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const copy = Object.fromEntries(Object.entries(UI_COPY.en).map(([key, value]) => [key, locale === 'ja' ? UI_COPY.ja[key as keyof typeof UI_COPY.ja] : translate(locale, value)])) as typeof UI_COPY.en;
 
+  // The character's REAL lines during a call, read off the frames `useWorld`
+  // already dispatches (docs/live-voice/00 §2.8) — never a second WS, never a
+  // second source of truth. `character_message` commits a line; `character_delta`
+  // streams the one in flight; `character_idle` drops a half-typed one.
+  const [callLines, setCallLines] = useState<{ streaming: string; lines: string[] }>({
+    streaming: '',
+    lines: [],
+  });
+  const handleCharacterFrame = useCallback((frame: CharacterFrame) => {
+    if (frame.type === 'character_delta') {
+      setCallLines((prev) => ({ ...prev, streaming: prev.streaming + frame.delta }));
+    } else if (frame.type === 'character_message') {
+      setCallLines((prev) => ({ lines: [...prev.lines, frame.text], streaming: '' }));
+    } else if (frame.type === 'character_idle') {
+      setCallLines((prev) => (prev.streaming === '' ? prev : { ...prev, streaming: '' }));
+    }
+  }, []);
+  const { state: call, available: callAvailable, start: startCall, stop: stopCall } = useLiveCall({
+    characterId,
+    locale,
+    onCharacterFrame: handleCharacterFrame,
+  });
+  const callInProgress = call.phase === 'connecting' || call.phase === 'live';
+  // Mutual exclusion (docs/live-voice/00 §5.15, unresolved 1): a live call never
+  // opens the dialogue overlay, which would drive the same character agent twice.
+  const handleOpenCharacterModal = useCallback(
+    (id: string) => {
+      if (callInProgress) {
+        setNotice(copy.liveCallModalBlocked);
+        return;
+      }
+      onOpenCharacterModal?.(id);
+    },
+    [callInProgress, copy.liveCallModalBlocked, onOpenCharacterModal],
+  );
+
   const nookIdRef = useRef('');
   const stateRef = useRef<LayerState | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const reqSeqRef = useRef(0);
+  const mountedRef = useRef(false);
   const fpRef = useRef<FootprintScheduler | null>(null);
   const fontsSettledRef = useRef(false);
   const reduceMotion = useStill();
 
+  // A projection can disappear while /api/nook, a move write, or an
+  // initialiser refresh is in flight. Invalidate those continuations at the
+  // boundary so an unmounted Nook never animates or writes a stale footprint.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      ++reqSeqRef.current;
+    };
+  }, []);
+
   const load = useCallback(async (id: string) => {
     const seq = ++reqSeqRef.current;
-    setLoading(true);
+    if (mountedRef.current) setLoading(true);
     const result = await fetchNook(id);
-    if (seq !== reqSeqRef.current) return; // last request wins (02 §⑦)
+    if (!mountedRef.current || seq !== reqSeqRef.current) return; // last request wins (02 §⑦)
     if (result.ok) {
       // The nook id comes FROM the response (00 §5.1); never re-derived here.
       if (nookIdRef.current !== result.data.layer) {
@@ -167,13 +239,106 @@ export const NookView: React.FC<NookViewProps> = ({
     void load(characterId);
   }, [characterId, load]);
 
-  // A world file changed (writer added a furnishing / drag persisted) → re-read
-  // the whole nook. `useWorld` already forwards `file_changed` before its own
-  // switch, so this costs zero new contract (02 §⑥).
+  // The initialiser's outcome (docs/init/03 §3.6): clear the ghost. A failure
+  // must ALSO be visible — never a silent blank room (contract §8 anti-pattern 8).
+  // Scope by layer: `airp:layer-init` also fires for scene inits.
+  useEffect(() => {
+    const onLayerInit = (event: Event) => {
+      const msg = (event as CustomEvent).detail as { event?: { type?: string; layer?: string } } | undefined;
+      const ev = msg?.event;
+      if (!ev || ev.layer !== nookIdRef.current || !mountedRef.current) return;
+      setInitializing(false);
+      if (['layer_init_failed'].includes(ev.type ?? '')) setNotice(copy.nookInitFailed);
+      else void load(characterId); // success: the refetched furnishing replaces the ghost
+    };
+    window.addEventListener('airp:layer-init', onLayerInit);
+    return () => window.removeEventListener('airp:layer-init', onLayerInit);
+  }, [characterId, load, copy.nookInitFailed]);
+
+  const handleMoveCard = useCallback(
+    async (path: string, x: number, y: number) => {
+      const previous = stateRef.current;
+      if (!mountedRef.current || !previous) return;
+      const next = {
+        ...previous,
+        items: previous.items.map(item => item.path === path ? { ...item, x, y } : item),
+      };
+      stateRef.current = next;
+      setState(next);
+      if (!onMoveCard) return;
+      try {
+        await onMoveCard(path, x, y);
+        if (!mountedRef.current) return;
+        await load(characterId);
+      } catch {
+        if (!mountedRef.current) return;
+        stateRef.current = previous;
+        setState(previous);
+      }
+    },
+    [characterId, load, onMoveCard],
+  );
+  const handleDropItemToScene = useCallback(
+    (path: string) => onDropItemToScene?.(path, stateRef.current?.layer),
+    [onDropItemToScene],
+  );
+  const handleEntityAction = useCallback(
+    (prompt: string) => onEntityAction?.(prompt, stateRef.current?.layer),
+    [onEntityAction],
+  );
+
+  /**
+   * The one exit of the empty-state prompt (docs/init/03 §3.3/§3.7): Submit and
+   * Skip are the same call; `''` means "leave it blank". `onRequestInit` returns
+   * false when the socket is down — then keep the prompt up rather than showing a
+   * ghost for a request that was never sent.
+   */
+  const resolveInit = useCallback(
+    (text: string) => {
+      if (!onRequestInit) return;
+      const req = text.trim();
+      if (onRequestInit('nook', characterId, req === '' ? undefined : req)) {
+        setNotice(null);
+        setInitializing(true);
+      }
+    },
+    [onRequestInit, characterId]
+  );
+
+  // World changes (writer edits, entity lifecycle, and authoritative card
+  // positions) are the Nook's refresh seam; no second WS is created here.
   useEffect(() => {
     const onWorldEvent = (e: Event) => {
-      const msg = (e as CustomEvent).detail as { type?: string } | undefined;
-      if (msg?.type === 'file_changed') void load(characterId);
+      const msg = (e as CustomEvent).detail as {
+        type?: string;
+        path?: string;
+        x?: number;
+        y?: number;
+        event?: { type?: string };
+      } | undefined;
+      const eventType = msg?.event?.type ?? msg?.type;
+      if (
+        eventType === 'file_changed' ||
+        ['entity_created', 'entity_edited', 'entity_deleted', 'entity_moved'].includes(eventType ?? '')
+      ) {
+        void load(characterId);
+        return;
+      }
+      if (
+        eventType === 'card_position' &&
+        typeof msg?.path === 'string' &&
+        typeof msg.x === 'number' &&
+        typeof msg.y === 'number'
+      ) {
+        const current = stateRef.current;
+        if (!current || !current.items.some(item => item.path === msg.path)) return;
+        const next = {
+          ...current,
+          items: current.items.map(item => item.path === msg.path ? { ...item, x: msg.x!, y: msg.y! } : item),
+        };
+        stateRef.current = next;
+        setState(next);
+      }
     };
     window.addEventListener('airp:world-event', onWorldEvent);
     return () => window.removeEventListener('airp:world-event', onWorldEvent);
@@ -181,13 +346,13 @@ export const NookView: React.FC<NookViewProps> = ({
 
   // Footprint channel (02 §3.6): the layer scheduler only knows layer items,
   // so nook cards would never have their measured height written back. This
-  // second instance submits ONLY the paths in its own widths map, so the two
-  // schedulers cannot collide even though both scan the global DOM.
+  // scheduler submits only Nook paths and measures inside this active root;
+  // the layer projection is unmounted while Nook is active.
   useEffect(() => {
     const scheduler = createFootprintScheduler({
       layer: () => nookIdRef.current,
       widths: () => new Map((stateRef.current?.items ?? []).map((it) => [it.path, it.w])),
-      measure: () => measureHeights(),
+      measure: () => measureHeights(rootRef.current ?? document),
       post: async (l, boxes) => {
         const res = await fetch('/api/card/footprint', {
           method: 'POST',
@@ -203,7 +368,7 @@ export const NookView: React.FC<NookViewProps> = ({
       },
       // The nook consumes no writer tool_start/tool_end frames this batch.
       isBusy: () => false,
-      isDragging: () => document.querySelector('.object.dragging-item') !== null,
+      isDragging: () => rootRef.current?.querySelector('.object.dragging-item') !== null,
     });
     fpRef.current = scheduler;
     return () => {
@@ -223,7 +388,9 @@ export const NookView: React.FC<NookViewProps> = ({
     });
     frame = requestAnimationFrame(() => {
       if (disposed) return;
-      for (const el of document.querySelectorAll('.object[data-path]')) observer.observe(el);
+      for (const el of rootRef.current?.querySelectorAll<HTMLElement>('.object[data-path]') ?? []) {
+        observer.observe(el);
+      }
       if (fontsSettledRef.current) {
         fpRef.current?.notify();
         return;
@@ -244,7 +411,7 @@ export const NookView: React.FC<NookViewProps> = ({
   }, [state?.items]);
 
   const sceneFrontmatter: Record<string, any> | null = state?.scene?.frontmatter ?? null;
-  const avatar = assetUrl(sceneFrontmatter?.avatar);
+  const avatar = assetUrl(sceneFrontmatter?.avatar, 'image');
   const displayName =
     typeof sceneFrontmatter?.name === 'string' && sceneFrontmatter.name.trim() !== ''
       ? sceneFrontmatter.name
@@ -254,7 +421,16 @@ export const NookView: React.FC<NookViewProps> = ({
   const canRetry = error !== null && (error.status === 0 || error.status >= 500);
 
   return (
-    <div className="relative w-full h-full overflow-hidden" data-nook={characterId}>
+    <div
+      ref={rootRef}
+      className="relative w-full h-full overflow-hidden"
+      data-nook={characterId}
+      data-airp-projection={`nook:${characterId}`}
+      data-airp-projection-active="true"
+      aria-hidden={inactive || undefined}
+      inert={inactive || undefined}
+      aria-label={`Nook projection for ${displayName}`}
+    >
       {/* Character existence core — always visible, read-only (00 §4.2). */}
       <div
         role="group"
@@ -327,19 +503,47 @@ export const NookView: React.FC<NookViewProps> = ({
       )}
 
       {isEmpty ? (
-        /* Empty room (doc-11 §4.1): a room nothing has moved into yet. The
-           room text sits centred; the input line reuses the writer bar's
-           paper-slip imagery but MUST stay a dead control — initialisation
-           is a later batch (00 §4). */
+        /* Empty room (doc-11 §4.1): a room nothing has moved into yet. While an
+           initialiser runs, the ghost card occupies the room instead of the
+           prompt (docs/init/03 §3.5); otherwise the prompt collects the one-line
+           intent — an EMPTY submit is a valid meaning ("leave it blank"). */
         <div className="w-full h-full">
-          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 px-8 text-center">
-            <div className="font-serif text-lg text-ink/70">{copy.nookEmptyTitle}</div>
-            <div className="font-mono text-xs text-ink/50">{copy.nookEmptyBody}</div>
-          </div>
-          <div className="absolute bottom-16 inset-x-0 text-center"><button type="button" disabled={!onInitialize || initializing} className="px-4 py-2 rounded-lg bg-paper-wall text-ink" onClick={() => { if (onInitialize?.(characterId)) setInitializing(true); }}>{translate(locale, initializing ? 'Initializing private space…' : 'Initialize private space')}</button></div>
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 font-mono text-[10px] text-ink/40 text-center px-4">
-            {translate(locale, 'Initialize to furnish this space from the character’s history.')}
-          </div>
+          {initializing ? (
+            <Canvas
+              currentLayer={state.layer}
+              items={[]}
+              links={[]}
+              bg={state.bg}
+              ghost={ghostItemFor(state.layer, copy.nookGenerating)}
+              ghostLabel={copy.nookGenerating}
+              ghostCopy={{
+                reused: copy.ghostReused,
+                failed: copy.ghostFailed,
+                unreachable: copy.ghostUnreachable,
+              }}
+              stillPortraits={reduceMotion}
+            />
+          ) : (
+            <>
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 px-8 text-center">
+                <div className="font-serif text-lg text-ink/70">{copy.nookEmptyTitle}</div>
+                <div className="font-mono text-xs text-ink/50">{copy.nookEmptyBody}</div>
+              </div>
+              {onRequestInit ? (
+                <StubPrompt
+                  kind="nook"
+                  copy={{
+                    label: copy.nookEmptyPrompt,
+                    placeholder: copy.nookEmptyHint,
+                    skip: copy.nookInitSkip,
+                  }}
+                  onResolve={resolveInit}
+                />
+              ) : (
+                <WriterBar disabled onSend={() => {}} placeholder={copy.nookEmptyPrompt} sendLabel="⏎" />
+              )}
+            </>
+          )}
         </div>
       ) : state ? (
         <Canvas
@@ -352,13 +556,132 @@ export const NookView: React.FC<NookViewProps> = ({
             failed: copy.ghostFailed,
             unreachable: copy.ghostUnreachable,
           }}
-          onMoveCard={onMoveCard}
+          onMoveCard={handleMoveCard}
           onSelectChoice={onSelectChoice}
+          onEntityAction={handleEntityAction}
           onDiceRolled={onDiceRolled}
+          onOpenCharacterModal={handleOpenCharacterModal}
+          onDropItemToScene={handleDropItemToScene}
+          onItemDropOnTarget={onItemDropOnTarget}
           onTakeItem={onTakeItem}
-          stillPortraits={reduceMotion}
         />
       ) : null}
+      {/* One visible notice lane for the whole nook (init failure, a blocked
+          dialogue while a call is running). Root-level so a furnished nook
+          shows it too — the empty-room branch is not the only state. */}
+      {notice && (
+        <div
+          role="alert"
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 px-3 py-2 rounded-lg bg-rust/10 border border-rust/40 font-mono text-[11px] text-ink shadow-soft"
+        >
+          {notice}
+        </div>
+      )}
+      {/* Realtime call entry (docs/live-voice/00 §2.3, §15.4). It lives on the
+          nook root, beside the note composer. When the server has no key the
+          button is NOT rendered — a visible-absent control, never a click that
+          errors (§2.9). */}
+      {callAvailable && (
+        <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (call.phase === 'idle' || call.phase === 'error') void startCall();
+              else void stopCall();
+            }}
+            disabled={inactive}
+            aria-label={callInProgress ? copy.liveCallStop : copy.liveCallStart}
+            title={callInProgress ? copy.liveCallStop : copy.liveCallStart}
+            className={
+              callInProgress
+                ? 'flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rust/90 border border-rust text-xs text-white shadow-soft backdrop-blur-md hover:bg-rust transition-all'
+                : 'flex items-center gap-1.5 px-3 py-2 rounded-xl bg-paper-card/95 border border-ink/10 text-xs text-ink/80 shadow-soft backdrop-blur-md hover:bg-ink hover:text-white transition-all'
+            }
+          >
+            {call.phase === 'connecting' ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : callInProgress ? (
+              <PhoneOff className="w-3.5 h-3.5" />
+            ) : (
+              <Mic className="w-3.5 h-3.5" />
+            )}
+            <span>
+              {call.phase === 'connecting'
+                ? copy.liveCallConnecting
+                : callInProgress
+                  ? copy.liveCallStop
+                  : copy.liveCallStart}
+            </span>
+          </button>
+          {call.phase === 'live' && (
+            <span
+              role="status"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-rust/10 border border-rust/30 font-mono text-[10px] text-rust"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-rust animate-pulse" />
+              {copy.liveCallLive}
+            </span>
+          )}
+          {call.phase === 'error' && call.error && (
+            <span
+              role="alert"
+              className="max-w-xs px-2 py-1 rounded-lg bg-rust/10 border border-rust/40 font-mono text-[10px] text-ink"
+            >
+              {call.error}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Subtitles: the player's words and the character's, both straight from
+          the transcript deltas (docs/live-voice/00 §2.3). The list of committed
+          lines is the character's real `character_message` text — the same
+          source the canvas trusts. */}
+      {callInProgress && (
+        <div className="absolute bottom-20 left-4 z-10 w-80 max-w-[60vw] rounded-xl border border-ink/10 bg-paper-card/90 p-3 shadow-soft backdrop-blur-md">
+          <div className="max-h-32 overflow-y-auto space-y-1.5">
+            {callLines.lines.length === 0 &&
+              callLines.streaming === '' &&
+              call.outputText === '' &&
+              call.inputText === '' && (
+              <div className="font-mono text-[10px] text-ink/40">{copy.liveCallConnecting}</div>
+            )}
+            {callLines.lines.map((line, index) => (
+              <div key={index} className="text-xs text-ink leading-snug">
+                <span className="font-serif font-bold text-rust mr-1">{copy.liveCallThem}</span>
+                {line}
+              </div>
+            ))}
+            {callLines.streaming !== '' && (
+              <div className="text-xs text-ink/70 leading-snug">
+                <span className="font-serif font-bold text-rust mr-1">{copy.liveCallThem}</span>
+                {callLines.streaming}
+              </div>
+            )}
+            {/* The voice front-end's own spoken transcript. Shown only when no
+                character line is streaming, so the same sentence is never
+                printed twice (docs/live-voice/00 §2.7: an append is accepted,
+                not proof it was spoken). */}
+            {callLines.streaming === '' && call.outputText !== '' && (
+              <div className="text-xs text-ink/60 leading-snug">
+                <span className="font-mono mr-1">{copy.liveCallThem}</span>
+                {call.outputText}
+              </div>
+            )}
+            {call.inputText !== '' && (
+              <div className="text-xs text-ink/50 leading-snug italic">
+                <span className="font-mono not-italic mr-1">{copy.liveCallYou}</span>
+                {call.inputText}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      <NookNoteComposer
+        characterId={characterId}
+        disabled={inactive || writerLocked || state?.worldFrozen === true}
+        lockMessage={writerLocked ? 'The writer is working.' : undefined}
+      />
     </div>
   );
 };

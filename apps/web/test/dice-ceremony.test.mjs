@@ -71,7 +71,7 @@ test('D6 missing crit/fumble settle to false — no 95/5 heuristic', { skip }, (
 });
 
 test('D7 missing copy fields fall back to empty strings, never drop the frame', { skip }, () => {
-  const v = mod.parseDiceFrame({ path: 'a.md', result: 3, passed: false, rolls: [3] });
+  const v = mod.parseDiceFrame({ source: 'writer', path: 'a.md', result: 3, passed: false, rolls: [3] });
   assert.ok(v);
   assert.equal(v.desc, '');
   assert.equal(v.expect, '');
@@ -80,7 +80,7 @@ test('D7 missing copy fields fall back to empty strings, never drop the frame', 
 });
 
 test('D8 missing layer means no filter', { skip }, () => {
-  const v = mod.parseDiceFrame({ path: 'a.md', result: 3, passed: false, rolls: [3] });
+  const v = mod.parseDiceFrame({ source: 'writer', path: 'a.md', result: 3, passed: false, rolls: [3] });
   assert.ok(v);
   assert.equal(v.layer, null);
   assert.equal(mod.shouldPlayFrame(v, 'world/a'), true);
@@ -168,4 +168,79 @@ test('D17 rollingFace is deterministic and in range', { skip }, () => {
     }
   }
   assert.equal(mod.rollingFace(0, 0, 4), mod.rollingFace(0, 0, 4));
+});
+
+
+const DETAILS = {
+  path: 'world/baker-street/evening.md',
+  name: 'Evening Check',
+  dice: '2d6+3',
+  desc: 'Perception',
+  expect: '>10',
+  result: 14,
+  passed: true,
+  rolls: [5, 6],
+  crit: true,
+  fumble: false,
+  forged: false,
+  layer: 'world/baker-street',
+};
+
+test('D18 canonical allocator deduplicates without advancing sourceSeq', { skip }, () => {
+  mod.resetSeenForTest();
+  const first = mod.allocate('canonical:one');
+  const duplicate = mod.allocate('canonical:one');
+  const next = mod.allocate('canonical:two');
+  assert.equal(first.isDuplicate, false);
+  assert.equal(duplicate.isDuplicate, true);
+  assert.equal(duplicate.sourceSeq, first.sourceSeq);
+  assert.equal(next.sourceSeq, first.sourceSeq + 1);
+});
+
+test('D19 each source and character identity gets a distinct fingerprint', { skip }, () => {
+  mod.resetSeenForTest();
+  const writer = mod.parseDiceFrame({ ...FRAME, source: 'writer' });
+  const character = mod.parseDiceFrame({ ...FRAME, source: 'character', characterId: 'char-1' });
+  assert.ok(writer && character);
+  const writerInput = mod.toDiceCeremonyInput(writer, 'writer-frame');
+  const characterInput = mod.toDiceCeremonyInput(character, 'character-frame');
+  assert.ok(writerInput && characterInput);
+  assert.notEqual(writerInput.fingerprint, characterInput.fingerprint);
+  assert.notEqual(writerInput.sourceSeq, characterInput.sourceSeq);
+  assert.equal(mod.toDiceCeremonyInput({ ...FRAME, source: 'character' }, 'character-frame'), null);
+});
+
+test('D20 incomplete frame never becomes a ceremony input', { skip }, () => {
+  const incomplete = mod.parseDiceFrame({ ...FRAME, desc: undefined });
+  assert.ok(incomplete);
+  assert.equal(mod.toDiceCeremonyInput(incomplete, 'writer-frame'), null);
+  assert.equal(mod.parseRollDiceDetails({ ...DETAILS, expect: undefined }), null);
+});
+
+test('D21 HTTP 2xx with domain failure is not authoritative', { skip }, () => {
+  assert.equal(
+    mod.parsePlayerDiceResponse({ ok: true, code: 'conflict', error: 'already rolled' }, true),
+    null,
+  );
+  assert.ok(mod.parsePlayerDiceResponse({ ok: true, details: DETAILS }, true));
+  assert.equal(mod.parsePlayerDiceResponse({ ok: true, details: { code: 'conflict' } }, true), null);
+  assert.equal(mod.parsePlayerDiceResponse({ ok: false, ...DETAILS }, true), null);
+  assert.ok(mod.parsePlayerDiceResponse({ ok: true, ...DETAILS }, true));
+});
+
+test('D22 player details enter the same single ceremony and replay once only', { skip }, () => {
+  mod.resetSeenForTest();
+  const first = mod.ingestPlayerRoll(DETAILS, 'action-key-1');
+  assert.ok(first);
+  assert.equal(first.source, 'player-http');
+  assert.equal(first.sourceId, 'action-key-1');
+  assert.equal(mod.getCeremonySnapshot().input, first);
+  assert.equal(mod.ingestPlayerRoll(DETAILS, 'action-key-1'), null);
+});
+
+test('D23 frame source is mandatory and character frames require identity', { skip }, () => {
+  assert.equal(mod.parseDiceFrame({ ...FRAME, source: undefined }), null);
+  assert.equal(mod.parseDiceFrame({ ...FRAME, source: 'character', characterId: undefined }), null);
+  assert.equal(mod.parseDiceFrame({ ...FRAME, source: 'character', characterId: '' }), null);
+  assert.ok(mod.parseDiceFrame({ ...FRAME, source: 'character', characterId: 'char-1' }));
 });

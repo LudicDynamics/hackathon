@@ -35,6 +35,7 @@ extensions/tools.ts                       MODIFY  在 default export 里调 regi
 // packages/shared/src/render/brief.ts
 export interface SceneInitContext {
   targetPath: string;          // 世界根相对目录，如 'world/baker-street/crime-scene'
+  layerId: string;             // 层身份；根层为 'map'，其物理目录为 'world'
   manifest: WorldManifest;
   parentLayerName?: string;    // 父层显示名
   parentLayerPath?: string;    // 父层目录（'world' 或 'world/a/b'）
@@ -54,7 +55,10 @@ export interface NookInitContext {
   missingFiles?: string[];     // 仅 file 槽（跳过 glob 槽），只写文件名
 }
 export function buildNookInitBrief(ctx: NookInitContext): string;
+
 ```
+
+`buildSceneInitBrief` 输出顺序固定为 `[Task]`、`[Layer ID] <layerId>`、`[Target Path] <targetPath>`；根层示例是 `map` + `world`，绝不生成 `map/...` 文件路径。其 `[Deliverables]` 要求 1–3 个物件与 1–2 篇 opening；新 authored opening 使用 `NN-opening.md`（首篇 `01-opening.md`，可选 `02-opening.md`）。
 
 `[Parent Path] <parentLayerPath>` 与 `[Home] <home> (role: <role>)` 两个输出行见契约 §4.1 / §4.2；**不设 `[Parent Id]`**——`parentLayerId` 曾是死字段（无输出行），**已删**，父层 id 只在命令内部用于解析 `parentLayerPath`。
 
@@ -146,7 +150,7 @@ pi-rp 的扩展命令**在 streaming 中也会立即执行**，且两次 `prompt
 
 ### 3.5 拼 brief（契约 §2.3 第 4 步 + §4）
 
-1. `kind: 'scene'` → `buildSceneInitBrief({ targetPath: dir, manifest, parentLayerName, parentLayerPath, userPrompt: request })`（**无 `parentLayerId`**，契约 §4.1）。
+1. `kind: 'scene'` → `buildSceneInitBrief({ layerId: layer, targetPath: dir, manifest, parentLayerName, parentLayerPath, userPrompt: request })`（`layerId` 保留 `map`/`world/...` 身份，`targetPath` 始终为归一后的 `world/...` 目录）。
    - `targetPath` 传**归一后的目录** `dir`（不是裸 `target`）；契约 §10 断言 `[Target Path]` 等于传入值。
 2. `kind: 'nook'` → `buildNookInitBrief({ characterId: target, displayName, roleDesc, home, role, manifest, missingFiles })`（选项对象，契约 §4.2）。各字段解析见 §3.4-3；`missingFiles` 见 §3.6。
    - **漏了会怎样**：`missingFiles` 不传 → `03` 篇 `[Process] 4`「若 brief 点名了缺失文件就补齐」**永不触发**。
@@ -449,8 +453,10 @@ export function registerAirpInitCommand(pi: ExtensionAPI, airpTools: readonly To
           const manifest = await store.getManifest();
           if (kind === 'scene') {
             const parentId = manifest.layers[layer]?.parent ?? null;
-            brief = buildSceneInitBrief({              // 无 parentLayerId（契约 §4.1）
-              targetPath: dir, manifest,
+            brief = buildSceneInitBrief({
+              layerId: layer,
+              targetPath: dir,
+              manifest,
               parentLayerName: parentId ? manifest.layers[parentId]?.name : undefined,
               parentLayerPath: parentId ? dirOfLayer(parentId) : undefined,
               userPrompt: request,
@@ -545,10 +551,10 @@ registerAirpInitCommand(pi, AIRP_TOOLS.map((t) => t.tool));
 
 | # | 输入 | 断言 |
 |---|---|---|
-| 1 | `buildSceneInitBrief({ targetPath:'world/a/b', manifest, parentLayerName:'A', parentLayerPath:'world/a' })` | 输出**含** `[Parent Layer] A` **且** 含 `[Parent Path] world/a`，且 `[Parent Path]` 紧跟在 `[Parent Layer]` 行**之后**一行 |
+| 1 | `buildSceneInitBrief({ layerId:'world/a/b', targetPath:'world/a/b', manifest, parentLayerName:'A', parentLayerPath:'world/a' })` | 输出**含** `[Layer ID] world/a/b`、`[Parent Layer] A` **且** 含 `[Parent Path] world/a`，且 `[Parent Path]` 紧跟在 `[Parent Layer]` 行**之后**一行 |
 | 2 | 同 #1 | 输出含 `[Target Path] world/a/b`（**等于传入值**，逐字） |
-| 3 | `buildSceneInitBrief({ targetPath:'world/x', manifest })`（无 parent 字段） | 输出**不含** `[Parent Layer]`、**不含** `[Parent Path]` |
-| 4 | `buildSceneInitBrief({ …, parentLayerName:'A' })`（只有名字、无路径） | 输出含 `[Parent Layer] A`、**不含** `[Parent Path]`（两个 `if` 独立） |
+| 3 | `buildSceneInitBrief({ layerId:'world/x', targetPath:'world/x', manifest })`（无 parent 字段） | 输出**不含** `[Parent Layer]`、**不含** `[Parent Path]` |
+| 4 | `buildSceneInitBrief({ layerId:'world/a/b', targetPath:'world/a/b', manifest, parentLayerName:'A' })`（只有名字、无路径） | 输出含 `[Parent Layer] A`、**不含** `[Parent Path]`（两个 `if` 独立） |
 | 5 | `buildNookInitBrief({ characterId:'watson', displayName:'Watson', manifest, missingFiles:['identity.md','personality.md'] })` | 输出含 `[Missing Files] identity.md, personality.md` |
 | 6 | `buildNookInitBrief({ characterId:'watson', displayName:'Watson', manifest })`（**省略 `missingFiles`**） | 输出**不含** `[Missing Files]`（契约 §4.2「空则不输出」） |
 | 7 | `buildNookInitBrief({ …, missingFiles: [] })` | **不含** `[Missing Files]`（**空数组也不输出**，MUST NOT 出现 `（none）`） |
@@ -556,7 +562,7 @@ registerAirpInitCommand(pi, AIRP_TOOLS.map((t) => t.tool));
 | 9 | `buildNookInitBrief({ characterId:'w', displayName:'W', roleDesc:'', manifest })` | `[Character]` 行**无空括号**（`[Character] W`）；`roleDesc` 非空时才带 ` (roleDesc)` |
 | 10 | `buildNookInitBrief({ …, home:'world/baker-street', role:'companion' })` | 输出含 `[Home] world/baker-street (role: companion)`；`role` 缺省时只到 `[Home] <home>` |
 | 11 | 两函数 | 输出含 `[Report]`；且正文为中性指路 `Report in exactly the three lines the system prompt defines`（不重复 `03` 正文规格） |
-| 12 | `buildSceneInitBrief` 含 `[Deliverables]` | `[Deliverables]` 三条与 `03` 篇 §① 的产出规范一致（README / 2–4 物件 / 1 开场 chalk） |
+| 12 | `buildSceneInitBrief` 含 `[Deliverables]` | `[Deliverables]` 三条与 `03` 篇 §① 的产出规范一致（README / 1–3 物件 / 1–2 篇 `NN-opening.md` chalk） |
 
 ### 10.2 `parseInitArgs` 表驱动（纯函数，`03`/`02` 共用）
 
@@ -631,7 +637,7 @@ registerAirpInitCommand(pi, AIRP_TOOLS.map((t) => t.tool));
 
 ### 冲突 3（**已解决**）— `2–4` vs `2–3` vs `1~3`（沿用 `03` §⑨ 冲突 3）
 
-`03` §⑨ 冲突 3 逐字：`extensions/instructions.ts:109` = 2–4；历史 `brief-builder.ts:54` = 2–3；`doc-11 §4.3` = 1~3。`03` 正文**取 2–4**。本文件 D4 已把 brief 对齐为 `2–4`（**已落地** `render/brief.ts:102`）。`doc-11 §4.3` 的 `1~3` 归 `05` 篇回写。
+历史冲突中的数量分别属于不同产物：当前 **scene** brief/instruction 固定 1–3 个物件、1–2 篇 `NN-opening.md`；当前 **nook** brief/instruction 固定 2–4 个生活痕迹。旧 `brief-builder.ts` 与旧正文数字仅作历史记录，不是现行契约。
 
 ### 冲突 4 — `[Missing Files]` 的**输出形状**未被契约冻结（只有"空则不输出"）
 

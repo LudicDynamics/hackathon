@@ -46,6 +46,9 @@ const TRIGGERS_BY_SKILL = {
   'component-narration': ['note', 'letter', 'chalk', 'get_component'],
   'tool-craft': ['move_to', 'show', 'choice', 'roll_dice', 'link', 'chalk'],
   'voice-casting': ['voice', 'README', 'palette', 'character'],
+  'scene-initialization': ['scene-init', 'airp-init', 'README', 'choice', 'roll_dice'],
+  'abstract-directory-story': ['directory', 'time', 'parallel', 'decision', 'ending'],
+  'nook-management': ['character', 'move', 'move_to', 'memory', 'player', 'world'],
 };
 /** A0: the platform tier's exact membership. Adding a skill MUST update this. */
 const EXPECTED_PLATFORM = Object.keys(TRIGGERS_BY_SKILL);

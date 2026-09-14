@@ -9,8 +9,13 @@
  */
 import type { WorldEvent } from '../schemas/events.js';
 import { entityName, parseFrontmatter, stringifyFrontmatter } from '../schemas/frontmatter.js';
+import { validateAppearanceInput } from '../schemas/appearance.js';
+import { resolveComponentKind } from '../components/registry.js';
 import { cardFormOf } from '../schemas/forms.js';
 import { ActionError } from './errors.js';
+import { assertImageAsset } from '../rules/media.js';
+import { assertNookMutationAllowed } from './actor.js';
+import type { AgentScope } from './actor.js';
 import { scanRefs } from './refs.js';
 import { registerAction } from './service.js';
 import { actorLabel } from './actor.js';
@@ -94,6 +99,17 @@ export async function removeEntity(
       message: `delete only accepts a single .md file, got a directory: "${path}"`,
     });
   }
+  const agentScope: AgentScope =
+    ctx.agentScope ??
+    (actor.type === 'character' ? 'character' : actor.type === 'player' ? 'player' : 'writer-top-level');
+  const manifest = await store.getManifest();
+  assertNookMutationAllowed(
+    actor,
+    agentScope,
+    path,
+    'delete',
+    manifest.characters.map((character) => character.id),
+  );
   const guard = movablePathError(path);
   if (guard) throw guard;
   if (!path.endsWith('.md')) {
@@ -158,6 +174,17 @@ export async function editEntity(
   if (kind !== 'file') {
     throw new ActionError({ code: 'not_found', message: `Entity not found: "${path}"` });
   }
+  const agentScope: AgentScope =
+    ctx.agentScope ??
+    (actor.type === 'character' ? 'character' : actor.type === 'player' ? 'player' : 'writer-top-level');
+  const manifest = await store.getManifest();
+  assertNookMutationAllowed(
+    actor,
+    agentScope,
+    path,
+    'edit',
+    manifest.characters.map((character) => character.id),
+  );
 
   const raw = await store.readFile(path);
   const parsed = parseFrontmatter(raw);
@@ -170,6 +197,23 @@ export async function editEntity(
     for (const [key, value] of Object.entries(input.frontmatter)) {
       if (value === null) delete merged[key];
       else merged[key] = value;
+    }
+  }
+  // The appearance gate uses the semantic kind of the merged entity; eventKind
+  // above intentionally remains anchored to the pre-edit entity for history.
+  const semanticKind = resolveComponentKind(merged, path.split('/').pop() ?? path);
+  if (merged.component === 'photo' && Object.prototype.hasOwnProperty.call(merged, 'image')) {
+    await assertImageAsset(store.worldRoot, merged.image as string);
+  }
+  if (Object.prototype.hasOwnProperty.call(merged, 'appearance')) {
+    const appearance = validateAppearanceInput(merged.appearance, semanticKind);
+    if (!appearance.ok) {
+      const issue = appearance.issues[0];
+      throw new ActionError({
+        code: 'invalid_argument',
+        message: issue?.message ?? `Invalid appearance for component kind "${semanticKind}".`,
+        details: { issues: appearance.issues },
+      });
     }
   }
   const body = input.body ?? parsed.body;

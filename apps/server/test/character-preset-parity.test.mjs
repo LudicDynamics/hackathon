@@ -59,7 +59,7 @@ test('04 §5.4: every character preset carries the template compaction verbatim'
   // guards against a broken walk passing vacuously.
   const files = characterPresets();
   assert.ok(files.length >= 7, `expected the template/world character presets, found ${files.length}`);
-  assert.ok(files.includes('templates/cthulhu/characters/old-sailor/preset.json'), 'walk must reach templates/');
+  assert.ok(files.includes('templates/wuwu/characters/old-mo/preset.json'), 'walk must reach templates/');
   // Player saves are ignored by Git; audit them explicitly with AIRP_CHECK_SAVES=1.
 
   for (const presetPath of files) {

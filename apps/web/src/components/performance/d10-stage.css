@@ -1,36 +1,71 @@
-.d10-stage { width: min(480px, 76vw); position: relative; background: transparent; color: #ead9ac; overflow: hidden; }
-.d10-stage__canvas { width: 100%; height: 260px; }
-.d10-stage__canvas canvas { display: block; }
-.d10-stage__labels { display: flex; justify-content: space-around; padding: 8px 18px; font: 600 16px/1.5 monospace; letter-spacing: .12em; }
-.d10-stage__reading { display: block; text-align: center; padding: 0 12px 14px; font: 18px/1.5 monospace; }
-.d10-stage__fallback { height: 260px; display: grid; place-items: center; font: 40px monospace; }
-.d10-overlay { position: fixed; inset: 0; z-index: 10000; pointer-events: auto; background: #0b0614cc; backdrop-filter: blur(5px); display: grid; place-items: center; padding: 16px; }
-.d10-dialog {
-  position: relative; isolation: isolate; max-height: 94vh; overflow-y: auto;
-  width: min(560px, 100%); color: #eadff7; padding: 26px 12px 20px;
-  border: 12px solid #35223f; border-radius: 42px;
-  background-image: linear-gradient(#29113be0, #160c24d9), url('../../assets/textures/dice-tray-suede.png');
-  background-size: cover; background-position: center;
-  display: flex; flex-direction: column; align-items: center; gap: 12px;
-  box-shadow: inset 0 0 28px #06030dcc, 0 0 0 1px #b99ac34d, 0 14px 0 -4px #160d21, 0 30px 70px #0008;
+.d10-stage {
+  width: min(480px, 76vw);
+  position: relative;
+  overflow: hidden;
+  color: var(--ink);
+  contain: layout paint;
 }
-.d10-dialog::before {
-  content: ''; position: absolute; inset: 7px; border: 1px dashed #c8a4d54d;
-  border-radius: 25px; pointer-events: none;
+
+.d10-stage__canvas,
+.d10-stage__fallback {
+  width: 100%;
+  height: 260px;
 }
-.d10-dialog > strong { text-align: center; letter-spacing: .06em; padding: 0 18px; text-shadow: 0 2px 5px #000; }
-.d10-dialog .d10-stage { width: 100%; overflow: visible; }
-.d10-dialog .dice-result-number { color: #f0dbad; text-shadow: 0 2px 12px #0008; }
-.d10-dialog button {
-  padding: 10px 30px; border-radius: 12px; background: #24132dc9;
-  border: 1px solid #b99ad659; color: #f1e5fa;
-  box-shadow: inset 0 1px 0 #e2c3f024, 0 3px 8px #0005;
+
+.d10-stage__canvas canvas {
+  display: block;
+  max-width: 100%;
 }
-.d10-dialog button:hover { background: #483052; }
-.d10-dialog button:focus-visible { outline: 2px solid #d5b9ee; outline-offset: 3px; }
-.dice-landed--success { animation: dice-success-glow .8s ease-out; }
-.dice-landed--great-success { animation: dice-success-glow 1.4s ease-out; border-color: #aa8a4c; }
-.dice-landed--failure, .dice-landed--setback { animation: dice-setback .5s ease-out; border-color: #725768; }
-@keyframes dice-success-glow { 30% { box-shadow: 0 0 55px #e9bd7699, inset 0 0 30px #c6a25b44; } }
-@keyframes dice-setback { 25% { transform: translateX(-3px); } 60% { transform: translateX(2px); } }
-@media(prefers-reduced-motion:reduce) { .dice-landed { animation:none; } }
+
+.d10-stage__fallback {
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  font: 700 clamp(28px, 7vw, 40px)/1.2 'DM Mono', monospace;
+  text-align: center;
+}
+
+.d10-stage__labels {
+  display: flex;
+  justify-content: space-around;
+  gap: 12px;
+  padding: 8px 18px;
+  color: var(--muted);
+  font: 600 16px/1.5 'DM Mono', monospace;
+  letter-spacing: .12em;
+  text-align: center;
+}
+
+.d10-stage__labels span {
+  min-width: 0;
+}
+
+.d10-stage__reading {
+  display: block;
+  padding: 0 12px 14px;
+  color: var(--ink);
+  font: 18px/1.5 'DM Mono', monospace;
+  text-align: center;
+}
+
+.d10-stage__sr-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .d10-stage__canvas {
+    display: none;
+  }
+  .d10-stage__fallback {
+    height: auto;
+    min-height: 96px;
+  }
+}

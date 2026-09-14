@@ -1,44 +1,108 @@
 import { useEffect, useRef, useState } from 'react';
-import { usePlayHintsEnabled } from '../lib/play-hints.js';
+import { useWriterState } from '../lib/writer-state.js';
 import { useLocale } from '../lib/i18n.js';
-import { AgentActivity } from './AgentActivity.js';
+import {
+  deriveContinueHintAvailability,
+  usePlayHintsEnabled,
+  type ContinueHintAvailability,
+} from '../lib/play-hints.js';
+
+interface WriterResultProps {
+  worldKey?: string;
+  worldReady?: boolean;
+  worldFrozen?: boolean;
+  submitPending?: boolean;
+  onContinue?: () => boolean;
+}
 
 /** One ephemeral receipt per settled turn; never render reasoning or tool arguments. */
-export function WriterResult({ worldKey, onContinue }: { worldKey?: string; onContinue?: () => void }) {
-  const hintsEnabled = usePlayHintsEnabled();
+export function WriterResult({
+  worldKey,
+  worldReady = true,
+  worldFrozen = false,
+  submitPending = false,
+  onContinue,
+}: WriterResultProps) {
   const { t } = useLocale();
-  const [result, setResult] = useState<{ text: string; id: number } | null>(null);
-  const [progress, setProgress] = useState('');
-  const [canContinue, setCanContinue] = useState(false);
-  const lastReply = useRef('');
-  const active = useRef(false);
+  const writer = useWriterState();
+  const hintsEnabled = usePlayHintsEnabled();
+  // The snapshot owns the receipt text. Local state only controls its
+  // seven-second visibility window; it never copies or caches writer content.
+  const [visibleSeq, setVisibleSeq] = useState<number | null>(null);
+  const [preparedSeq, setPreparedSeq] = useState<number | null>(null);
+  const timer = useRef<number | undefined>(undefined);
+  const seenCompletion = useRef(0);
+  const preparedGuard = useRef<number | null>(null);
+
   useEffect(() => {
-    setResult(null); setProgress(''); setCanContinue(false); lastReply.current = ''; active.current = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const receive = (event: Event) => {
-      const frame = (event as CustomEvent).detail;
-      if (frame.source !== 'writer') return;
-      if (frame.type === 'agent_progress') setProgress(frame.busy && typeof frame.stage === 'string' ? frame.stage : '');
-      if (['writer_delta', 'chalk_writing', 'tool_start', 'writer_message'].includes(frame.type) || (frame.type === 'agent_progress' && frame.busy)) {
-        if (!active.current) { active.current = true; setCanContinue(false); lastReply.current = ''; clearTimeout(timer); setResult(null); }
-      }
-      if (frame.type === 'writer_message' && typeof frame.text === 'string') lastReply.current = frame.text;
-      if (['error', 'turn_aborted'].includes(frame.type)) { active.current = false; lastReply.current = ''; setProgress(''); setCanContinue(false); setResult(null); clearTimeout(timer); }
-      if (frame.type === 'writer_idle' && active.current) {
-        active.current = false;
-        setProgress(''); setCanContinue(true);
-        const text = lastReply.current.replace(/\s+/g, ' ').trim();
-        setResult({ text: text || 'Your action has been processed.', id: Date.now() });
-        lastReply.current = '';
-        clearTimeout(timer); timer = setTimeout(() => setResult(null), 7000);
-      }
-    };
-    window.addEventListener('airp:agent-frame', receive);
-    return () => { clearTimeout(timer); window.removeEventListener('airp:agent-frame', receive); };
+    setVisibleSeq(null);
+    setPreparedSeq(null);
+    preparedGuard.current = null;
+    seenCompletion.current = writer.completionSeq;
+    clearTimeout(timer.current);
+    timer.current = undefined;
   }, [worldKey]);
-  return <>
-    {progress ? <div className="writer-result writer-progress" role="status">{progress}</div> : result ? <div key={result.id} className="writer-result" role="status">{result.text}</div> : null}
-    {hintsEnabled && onContinue && <button type="button" className="writer-continue" disabled={!!progress} onClick={onContinue}>{t('Continue · next-step hint →')}</button>}
-    <AgentActivity worldKey={worldKey} />
-  </>;
+
+  useEffect(() => {
+    if (writer.error || (writer.phase === 'idle' && writer.stage === null)) {
+      setVisibleSeq(null);
+      setPreparedSeq(null);
+      preparedGuard.current = null;
+      seenCompletion.current = writer.completionSeq;
+      return;
+    }
+    if (writer.phase !== 'idle' || writer.completionSeq === 0 || writer.completionSeq === seenCompletion.current) return;
+    seenCompletion.current = writer.completionSeq;
+    setPreparedSeq(null);
+    preparedGuard.current = null;
+    setVisibleSeq(writer.completionSeq);
+    clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setVisibleSeq(null), 7000);
+  }, [writer.completionSeq, writer.error, writer.phase, writer.stage]);
+
+  useEffect(() => () => {
+    clearTimeout(timer.current);
+    timer.current = undefined;
+  }, []);
+
+  const availability: ContinueHintAvailability = deriveContinueHintAvailability({
+    enabled: hintsEnabled && onContinue !== undefined,
+    phase: writer.phase,
+    stage: writer.stage,
+    error: writer.error,
+    completionSeq: writer.completionSeq,
+    visibleSeq,
+    worldReady,
+    worldFrozen,
+    submitPending,
+    preparedSeq,
+  });
+  if (visibleSeq === null || visibleSeq !== writer.completionSeq || writer.error) return null;
+  const text = (writer.lastMessage ?? '').replace(/\s+/g, ' ').trim() || t('Your action has been processed.');
+  const canContinue = availability === 'available' && onContinue !== undefined;
+  const handleContinue = () => {
+    if (!canContinue || preparedGuard.current === writer.completionSeq) return;
+    preparedGuard.current = writer.completionSeq;
+    if (onContinue!()) {
+      setPreparedSeq(writer.completionSeq);
+    } else {
+      preparedGuard.current = null;
+    }
+  };
+  return (
+    <div key={visibleSeq} data-depth-surface="ui" className="writer-result" role="status" aria-live="polite">
+      <span>{text}</span>
+      {onContinue && (
+        <button
+          type="button"
+          data-writer-continue
+          disabled={!canContinue}
+          aria-label={t('Continue · next-step hint')}
+          onClick={handleContinue}
+        >
+          {t('Continue · next-step hint →')}
+        </button>
+      )}
+    </div>
+  );
 }

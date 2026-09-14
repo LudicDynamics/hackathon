@@ -12,7 +12,7 @@ import { AgentLifecycleManager } from '../dist/engine/lifecycle.js';
 
 test('doors record the entry; only the auto-write switch starts a turn', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'airp-cabin-test-'));
-  await fs.cp(new URL('../../../templates/unwritten-door/', import.meta.url), root, { recursive: true });
+  await fs.cp(new URL('../../../archive/templates/pre-bilingual-2026-09-14/unwritten-door/', import.meta.url), root, { recursive: true });
   const store = new LocalWorldStore(root);
   const calls = [];
   const lifecycle = { submitWriter: async (world, prompt) => calls.push({ world, prompt }) };

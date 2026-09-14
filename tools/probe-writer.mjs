@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writerLaunch, characterLaunch } from '../apps/server/dist/engine/launch.js';
 import { RpcClient } from '../vendor/pi-rp/packages/coding-agent/dist/index.js';
-import { LocalWorldStore, parseFrontmatter } from '../packages/shared/dist/index.js';
+import { LocalWorldStore, flowColumns, parseFrontmatter } from '../packages/shared/dist/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -145,8 +145,80 @@ async function runProbe() {
     throw new Error(`Probe 4 leaked probe-chalk.md into the template at ${PROBE_CHALK_REL}`);
   }
   console.log('✓ Template world untouched by Probe 4.');
+  await runLayoutProbe();
 
   console.log('\n=== [AIRP Gate Probe] ALL CHECKS PASSED ===');
+}
+
+function runLayoutProbe() {
+  console.log('\n[Probe 5] Automatic layout geometry with shared flowColumns...');
+
+  const config = {
+    origin: { x: 360, y: 96 },
+    columnHeight: 600,
+    gapX: 56,
+    gapY: 32,
+    obstacleGap: 22,
+    maxColumns: 8,
+  };
+  const boxes = [
+    { id: 'chalk-z', w: 460, h: 640, order: 1 },
+    { id: 'component-a', w: 420, h: 700, order: 2 },
+    { id: 'note-m', w: 360, h: 160, order: 3 },
+  ];
+  const occupied = [{ id: 'legacy-card', x: 360, y: 96, w: 460, h: 220 }];
+  const occupiedBefore = occupied.map((rect) => ({ ...rect }));
+  const shuffled = [boxes[2], boxes[0], boxes[1]];
+
+  if (boxes.filter((box) => box.h > config.columnHeight).length < 2) {
+    throw new Error('Probe 5: fixture must contain at least two boxes taller than columnHeight');
+  }
+
+  const first = flowColumns(shuffled, occupied, config);
+  const repeated = flowColumns(shuffled, occupied, config);
+  const ordered = flowColumns(boxes, occupied, config);
+  if (first.placements.length !== boxes.length) {
+    throw new Error(`Probe 5: expected ${boxes.length} placements, got ${first.placements.length}`);
+  }
+  const expectedOrder = boxes.map(({ id }) => id);
+  if (JSON.stringify(first.placements.map(({ id }) => id)) !== JSON.stringify(expectedOrder)) {
+    throw new Error(`Probe 5: placements ignored same-batch order (${first.placements.map(({ id }) => id).join(', ')})`);
+  }
+
+  const overlaps = (a, b) =>
+    a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  const obstaclesAndPlacements = [...occupied, ...first.placements];
+  for (let i = 0; i < obstaclesAndPlacements.length; i++) {
+    for (let j = i + 1; j < obstaclesAndPlacements.length; j++) {
+      if (overlaps(obstaclesAndPlacements[i], obstaclesAndPlacements[j])) {
+        throw new Error(
+          `Probe 5: overlapping layout rectangles: ${obstaclesAndPlacements[i].id ?? `rect-${i}`} and ${
+            obstaclesAndPlacements[j].id ?? `rect-${j}`
+          }`
+        );
+      }
+    }
+  }
+  console.log('✓ Probe 5.1 placements do not intersect each other or the occupied legacy card.');
+
+  const sameRect = (a, b) =>
+    a.id === b.id && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+  if (occupied.some((rect, index) => !sameRect(rect, occupiedBefore[index]))) {
+    throw new Error('Probe 5: flowColumns mutated the occupied legacy rectangle');
+  }
+  console.log('✓ Probe 5.2 occupied legacy coordinates remain unchanged.');
+
+  const placementSignature = (result) =>
+    result.placements.map(({ id, x, y, w, h }) => [id, x, y, w, h]);
+  if (JSON.stringify(placementSignature(first)) !== JSON.stringify(placementSignature(ordered))) {
+    throw new Error('Probe 5: shuffled input changed placements despite explicit order');
+  }
+  console.log('✓ Probe 5.3 shuffled input honors same-batch order values.');
+
+  if (JSON.stringify(first) !== JSON.stringify(repeated)) {
+    throw new Error('Probe 5: repeated flowColumns read was not stable');
+  }
+  console.log('✓ Probe 5.4 repeated flowColumns calculation is stable.');
 }
 
 async function runNarrativeRoundTrip() {

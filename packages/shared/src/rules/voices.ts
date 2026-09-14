@@ -113,3 +113,102 @@ export function resolveVoice(name: string): string | null {
 export function voiceEntry(name: string): VoiceEntry | undefined {
   return BY_ALIAS.get(name) ?? BY_ID.get(name);
 }
+
+// ── GPT-Live realtime-call voices (docs/live-voice/00 §2.6) ──────────────────
+//
+// The nook realtime call (third voice channel) speaks through OpenAI's
+// `gpt-live-1`, whose voice vocabulary is NOT DashScope's. This block extends
+// the ONE mapping table rather than opening a second one: a parallel alias
+// table is exactly the "two truths" drift the header warns about.
+//
+// VERIFICATION: every name below returned HTTP 201 from
+// `POST /v1/live/sessions` on 2026-09-14 (docs/live-voice/00 §12 P5/P6).
+// An illegal name is a HARD 403, so a name that was not observed to open a
+// session MUST NOT be added here — same discipline as the palette above.
+
+/** The GPT-Live voices an AIRP character call may use (probe-verified). */
+export const LIVE_VOICES: readonly string[] = [
+  // OpenAI's own gpt-live-1 set (12).
+  'quartz', 'ripple', 'vesper', 'willow', 'stone', 'gleam',
+  'meridian', 'bossa', 'tempo', 'beacon', 'delta', 'cinder',
+  // Realtime-era voices also accepted by gpt-live-1 (10).
+  'marin', 'cedar', 'alloy', 'ash', 'ballad', 'coral',
+  'echo', 'sage', 'shimmer', 'verse',
+];
+
+/** Voice used when a character declares none, or declares an unknown one. */
+export const DEFAULT_LIVE_VOICE = 'marin';
+
+const LIVE_VOICE_SET = new Set(LIVE_VOICES);
+
+/**
+ * alias → GPT-Live voice. Written out per alias on purpose (docs/live-voice/00
+ * L-C1): collapsing to "one voice per gender" would make two same-gender
+ * characters in one world sound identical. Reuse is allowed and deliberate —
+ * 40 DashScope effects do not fit 22 Live voices.
+ *
+ * The gender split below follows OpenAI's published voice descriptions
+ * [INFERENCE] — it is a pragmatic cast, NOT an acoustically verified one.
+ * Whoever next listens to a call SHOULD correct a misgendered row here.
+ */
+const LIVE_BY_ALIAS: Readonly<Record<string, string>> = {
+  // ── female ────────────────────────────────────────────────────────────────
+  'warm-cheerful': 'marin',
+  'gentle-calm': 'sage',
+  'anime-girlfriend': 'ballad',
+  'playful-teasing': 'coral',
+  'sassy-spunky': 'shimmer',
+  'refined-thoughtful': 'willow',
+  'mature-elegant': 'vesper',
+  'cinematic-american': 'marin',
+  'shy-sweet': 'ballad',
+  'moe-child': 'coral',
+  'bold-resonant': 'quartz',
+  'magical-girl': 'shimmer',
+  'girl-next-door': 'marin',
+  'soothing-whisper': 'sage',
+  'child-innocent': 'ballad',
+  'spirited-girlfriend': 'coral',
+  'shanghai-auntie': 'vesper',
+  'sichuan-sweetheart': 'ripple',
+  'cantonese-sweetheart': 'gleam',
+
+  // ── male ──────────────────────────────────────────────────────────────────
+  'warm-energetic': 'cedar',
+  'cool-composed': 'alloy',
+  'soothing-smooth': 'ash',
+  'casual-drawl': 'echo',
+  'dramatic-theatrical': 'verse',
+  'friendly-american': 'cedar',
+  'wise-elder': 'stone',
+  'hoarse-weathered': 'stone',
+  'news-anchor': 'alloy',
+  'scholarly-narrator': 'alloy',
+  'rustic-storyteller': 'stone',
+  'precocious-child': 'echo',
+  'deep-magnetic': 'verse',
+  'sportscaster': 'echo',
+  'beijing-youth': 'cedar',
+  'nanjing-uncle': 'ash',
+  'shaanxi-elder': 'meridian',
+  'minnan-uncle': 'beacon',
+  'tianjin-comic': 'delta',
+  'sichuan-local': 'cinder',
+  'cantonese-uncle': 'bossa',
+};
+
+/**
+ * Resolve a character's declared `voice` to a GPT-Live voice name.
+ *
+ * Accepts the same two vocabularies as `resolveVoice` (an effect alias or a
+ * raw DashScope id), because both flow through `characters/<id>/README.md`.
+ * Anything missing or unknown falls back to `DEFAULT_LIVE_VOICE` — unlike
+ * `resolveVoice`, this NEVER returns null: the call has to pick a voice, and a
+ * missing one is normal (some characters declare none).
+ */
+export function resolveLiveVoice(name: string | undefined): string {
+  if (!name) return DEFAULT_LIVE_VOICE;
+  const entry = voiceEntry(name);
+  const mapped = entry ? LIVE_BY_ALIAS[entry.alias] : undefined;
+  return mapped !== undefined && LIVE_VOICE_SET.has(mapped) ? mapped : DEFAULT_LIVE_VOICE;
+}

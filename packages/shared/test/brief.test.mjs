@@ -12,13 +12,25 @@ const manifest = {
 
 // ------------------------------------------------------------ scene brief
 
+test('scene brief: emits virtual layer id and physical target path', () => {
+  const b = buildSceneInitBrief({ layerId: 'map', targetPath: 'world', manifest });
+  assert.match(b, /^\[Layer ID\] map$/m);
+  assert.match(b, /^\[Target Path\] world$/m);
+  assert.doesNotMatch(b, /map\/README\.md/);
+});
+
 test('scene brief: [Target Path] echoes the given directory', () => {
-  const b = buildSceneInitBrief({ targetPath: 'world/baker-street/crime-scene', manifest });
+  const b = buildSceneInitBrief({
+    layerId: 'world/baker-street/crime-scene',
+    targetPath: 'world/baker-street/crime-scene',
+    manifest,
+  });
   assert.match(b, /^\[Target Path\] world\/baker-street\/crime-scene$/m);
 });
 
 test('scene brief: [Parent Path] follows [Parent Layer] when both are given', () => {
   const b = buildSceneInitBrief({
+    layerId: 'world/a/b',
     targetPath: 'world/a/b',
     manifest,
     parentLayerName: 'A',
@@ -31,23 +43,24 @@ test('scene brief: [Parent Path] follows [Parent Layer] when both are given', ()
 });
 
 test('scene brief: no [Parent Layer]/[Parent Path] when neither is given', () => {
-  const b = buildSceneInitBrief({ targetPath: 'world/x', manifest });
+  const b = buildSceneInitBrief({ layerId: 'world/x', targetPath: 'world/x', manifest });
   assert.doesNotMatch(b, /\[Parent Layer\]/);
   assert.doesNotMatch(b, /\[Parent Path\]/);
 });
 
 test('scene brief: [Parent Path] omitted when only the name is known (independent ifs)', () => {
-  const b = buildSceneInitBrief({ targetPath: 'world/a/b', manifest, parentLayerName: 'A' });
+  const b = buildSceneInitBrief({ layerId: 'world/a/b', targetPath: 'world/a/b', manifest, parentLayerName: 'A' });
   assert.match(b, /\[Parent Layer\] A/);
   assert.doesNotMatch(b, /\[Parent Path\]/);
 });
 
 test('scene brief: player request and known clues are conditional', () => {
-  const bare = buildSceneInitBrief({ targetPath: 'world/x', manifest });
+  const bare = buildSceneInitBrief({ layerId: 'world/x', targetPath: 'world/x', manifest });
   assert.doesNotMatch(bare, /\[Player Request\]/);
   assert.doesNotMatch(bare, /\[Known Clues\]/);
 
   const rich = buildSceneInitBrief({
+    layerId: 'world/x',
     targetPath: 'world/x',
     manifest,
     userPrompt: 'a stormy night',
@@ -57,9 +70,12 @@ test('scene brief: player request and known clues are conditional', () => {
   assert.match(rich, /\[Known Clues\] a key \/ a letter/);
 });
 
-test('scene brief: deliverables say 2–4 objects and defer the report to the prompt', () => {
-  const b = buildSceneInitBrief({ targetPath: 'world/x', manifest });
-  assert.match(b, /2–4 object markdown files/, 'count aligned to 03 body');
+test('scene brief: deliverables say 1–3 objects, 1–2 openings, and defer the report to the prompt', () => {
+  const b = buildSceneInitBrief({ layerId: 'world/x', targetPath: 'world/x', manifest });
+  assert.match(b, /1–3 object markdown files/, 'count aligned to scene contract');
+  assert.match(b, /1–2 opening narrations/, 'opening count aligned to scene contract');
+  assert.match(b, /NN-opening\.md/);
+  assert.match(b, /opening\.md is only the old W2 fallback/);
   assert.match(b, /Report in exactly the three lines the system prompt defines/);
   assert.doesNotMatch(b, /Three lines:/, 'old duplicated report spec is gone');
 });

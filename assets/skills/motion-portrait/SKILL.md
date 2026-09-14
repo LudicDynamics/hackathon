@@ -95,8 +95,7 @@ ffmpeg -c:v libvpx-vp9 -i out.webm -frames:v 1 -f rawvideo -pix_fmt rgba -
 背景视频走层 README 的 `bg:` 字段；前端 `SceneBackdrop` 对 `.mp4/.webm` 自动用
 `<video autoplay loop muted playsinline>` 渲染，无需改代码。
 
-**性能红线**（`AGENTS.md` §7.6）：全屏视频是合成负担。限 720p/960w、全屏同一时刻只留一个 video、
-`document.hidden` 时暂停，并给 `prefers-reduced-motion` 用户降级为静态图。
+**性能建议**（`AGENTS.md` §7.6）：全屏视频是合成负担。优先使用 720p/960w 级别、全屏同一时刻只留一个 video、`document.hidden` 时暂停，并给 `prefers-reduced-motion` 用户降级为静态图；具体分辨率按设备和素材实际效果选择。
 
 ## 画布上的用法
 

@@ -1,8 +1,8 @@
 # doc-11 场景与小天地初始化协议（2026-09-11 定案）
 
-2026-09-13 niko 同步：新增世界的角色 preset 已按 `presets/character.json` 原文补齐平台工具槽、禁用表与记忆压缩配置；角色画像和世界语言保持各自模板定义。模型运行偏好另存 `.airpworld/model-preferences.json`，不改初始化 preset 骨架，详《Agent模型选择与进度》。
+2026-09-13 niko 同步：新增世界的角色 preset 已按 `presets/character.json` 原文补齐平台工具槽、禁用表与记忆压缩配置；角色画像和世界语言保持各自模板定义。模型运行偏好另存 `.airpworld/model-preferences.json`，不改初始化 preset 骨架，详《agent/Agent模型选择与进度》。
 
-作家运行预算（2026-09-13）：主作家启动规格默认 `--thinking low`，可由 `AIRP_WRITER_THINKING` 覆盖；仅调整推理预算，初始化 profile、动态 brief 与 preset 骨架不变。生命周期按无进展超时与整轮 5 分钟上限分开保护，详见《Agent前端接线》。
+作家运行预算（2026-09-13）：主作家启动规格默认 `--thinking low`，可由 `AIRP_WRITER_THINKING` 覆盖；仅调整推理预算，初始化 profile、动态 brief 与 preset 骨架不变。生命周期按无进展超时与整轮 5 分钟上限分开保护，详见《agent/Agent前端接线》。
 
 > 状态：**已定案（2026-09-11）**。原"待设计清单"五条已全部落定，本文取代 2026-09-11 立项版。
 > **2026-09-11 晚复核**：§2.3 的九条 pi-rp 源码级约束中，C1 / C3 / C5 / C7 已被上游修掉，§2.3 / §2.4 / §7.1 / §7.2 随之改写；新增 §2.3.1「vendored dist 的时间差」。
@@ -13,11 +13,11 @@
 
 ## 0. 一句话
 
-初雪日语 Demo 的可选新环境复用 Writer 亲写流程：玩家请求避雪处后，先生成 README、人物 note、物件与入场 Chalk，最后补一张背景；不启用新的 scene-init 委托，不将人物 note 冒充已注册角色 Agent。世界 skill 是执行正文，见《初雪短闭环与AI生长验收》。
+初雪日语 Demo 的可选新环境复用 Writer 亲写流程：玩家请求避雪处后，先生成 README、人物 note、物件与入场 Chalk，最后补一张背景；不启用新的 scene-init 委托，不将人物 note 冒充已注册角色 Agent。世界 skill 是执行正文，见《gameplay/初雪短闭环与AI生长验收》。
 
-日语世界装配补充：`first-snow-jp` 的人物 preset 仍引用共享 `system-char`；新增 `world-language` 文件槽读取世界根 `language.md`，随后加载角色自身四份日语文档。精确 JSON、文件路径与 Writer skill 的日语规则见《世界日语化迁移》§4；不复制平台提示词正文、不启用新初始化路径。
+日语世界装配补充：`first-snow-jp` 的人物 preset 仍引用共享 `system-char`；新增 `world-language` 文件槽读取世界根 `language.md`，随后加载角色自身四份日语文档。精确 JSON、文件路径与 Writer skill 的日语规则见《worlds/世界日语化迁移》§4；不复制平台提示词正文、不启用新初始化路径。
 
-2026-09-12 未写之门实际接线：首次进入 stub 落事件后串行提交作家亲写（W1），R1/R2 尚未启用。writer preset 增加 `"tools": { "deny": ["bash"] }`，原生 write/edit 经 `world-context.ts` 落账。完整范围见 doc-25；下文 R1/R2 为目标协议，不表示该 Demo 已验证委托。
+2026-09-12 未写之门实际接线：首次进入 stub 落事件后串行提交作家亲写（W1），R1/R2 尚未启用。writer preset 增加 `"tools": { "deny": ["bash"] }`，原生 write/edit 经 `world-context.ts` 落账。完整范围见 gameplay/doc-25；下文 R1/R2 为目标协议，不表示该 Demo 已验证委托。
 
 **初始化 = 一次"外包"，不是一次"扮演"。** 世界只认两种初始化路径——**作家委托**（agent 判断该外包了）和**玩家/引擎直唤**（玩家自己动手要一片新地方）。两者共用**同一套 subagent preset**，差别只在"谁来填那份 brief"。
 
@@ -299,6 +299,8 @@ characters/旅店老板/
 ├── 作品.md              # 小天地内容：作品/便签/生活痕迹
 └── 一张旧照片.md        # 沉默细节（与内容文件合计 2~4 个）
 ```
+
+**写入通道（2026-09-14 定）**：上列 `README.md` / `identity.md` / `personality.md` / `memory.md` 四项是**角色根配置**，通用 native `write/edit` 对它们一律拒绝（`extensions/world-context.ts` 的 nook 门禁）。初始化器改用受信的 `edit_character_config` 通道补齐它们，且**只允许创建尚不存在的文件**（create-only；已存在即拒绝），所以"若缺则补"不会退化成"覆盖既有简介"。其余生活痕迹（作品、旧照片等）继续用 native `write`。
 
 **"若缺则补"很关键**：holmes-world 的 `characters/watson/` 至今只有 `README.md` + `preset.json`，而 preset 引用了 `identity.md` / `personality.md`（**两个文件都不存在**）。按 C4，只要 slot 用默认的 `onMissing: skip`，这不会报错——但角色 spawn 时就少了履历。**初始化顺带补齐 preset 引用的缺失文件**是本意。**已修（I1 批次）**：`buildNookInitBrief`（`packages/shared/src/render/brief.ts`）新增 `[Missing Files]` 字段（非空时输出），由 `airp-init` 命令从 `preset.json` 的 file 槽差集算出并传入——纪律不再"永不触发"。
 

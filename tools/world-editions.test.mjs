@@ -14,6 +14,20 @@ const repo = process.cwd();
 const staged = process.env.AIRP_TEST_STAGED_EDITIONS === '1';
 const templates = path.join(repo, staged ? '.artifacts/bilingual-worlds/editions' : 'templates');
 
+test('first snow keeps the stable English firstsnow ID while Japanese stays first-snow-jp', () => {
+  const family = editionFamilies.find(f => f.base === 'firstsnow');
+  assert.ok(family);
+  assert.equal(editionId(family, 'en'), 'firstsnow');
+  assert.equal(editionId(family, 'ja'), 'first-snow-jp');
+});
+
+test('registry contains the seven paired canonical worlds', () => {
+  assert.deepEqual(
+    editionFamilies.flatMap(f => ['en', 'ja'].map(locale => editionId(f, locale))).sort(),
+    ['divergence', 'divergence-jp', 'first-snow-jp', 'firstsnow', 'magic-academy', 'magic-academy-jp', 'moonlit-contract', 'moonlit-contract-jp', 'unwritten-door', 'unwritten-door-jp', 'whitechapel', 'whitechapel-jp', 'wuwu', 'wuwu-jp'],
+  );
+});
+
 test('fourteen editions preserve every file, executable field, character profile and asset', async () => { await checkEditions({ staged }); });
 test('translation guards reject changed or missing paths and dice numbers', () => {
   const text = 'Read world/test/README.md and roll 2d10, >=11.';

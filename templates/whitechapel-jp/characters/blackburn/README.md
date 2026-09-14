@@ -1,6 +1,7 @@
 ---
 type: readme
 name: ブラックバーン編集長
+voice: refined-thoughtful
 avatar: assets/characters/blackburn.webp
 ---
 

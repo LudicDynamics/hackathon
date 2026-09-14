@@ -15,12 +15,6 @@
       "source": "looping/seedance/firstsnow-demo/characters/sumi/base-transparent.webm"
     },
     {
-      "target": "assets/characters/sumi.webp",
-      "bytes": 261030,
-      "sha256": "f3be038c43b752d4c24e6fdbe7d22363d1ed106be016b822c29c52e77f16e30e",
-      "source": "worlds/firstsnow-demo/characters/sumi/base.webp"
-    },
-    {
       "target": "assets/characters/sumi-yukimura.webp",
       "bytes": 261030,
       "sha256": "f3be038c43b752d4c24e6fdbe7d22363d1ed106be016b822c29c52e77f16e30e",

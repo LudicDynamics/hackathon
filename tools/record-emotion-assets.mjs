@@ -31,10 +31,10 @@ const EMOTIONS = ['normal', 'smile', 'shock', 'sad', 'angry', 'thinking'];
 /** id → workshop subdir (differs from id for firstsnow's legacy `sumi/`). */
 const CAST = {
   whitechapel: { workshop: 'whitechapel-demo', cast: { watson: 'watson', edith: 'edith', wayne: 'wayne', blackburn: 'blackburn', tom: 'tom' } },
+  'whitechapel-playtest': { workshop: 'whitechapel-demo', cast: { watson: 'watson', edith: 'edith', wayne: 'wayne', blackburn: 'blackburn', tom: 'tom' } },
   firstsnow: { workshop: 'firstsnow-demo', cast: { nanami: 'nanami', 'sumi-yukimura': 'sumi' } },
-  // first-snow-jp is the Japanese entry of the same world: same bytes, its own
-  // template copy (docs/assets/00 §6). Provenance is recorded per template.
   'first-snow-jp': { workshop: 'firstsnow-demo', cast: { nanami: 'nanami', 'sumi-yukimura': 'sumi' } },
+  'first-snow-jp-playtest': { workshop: 'firstsnow-demo', cast: { nanami: 'nanami', 'sumi-yukimura': 'sumi' } },
 };
 
 const sha256 = (p) => createHash('sha256').update(fs.readFileSync(p)).digest('hex');

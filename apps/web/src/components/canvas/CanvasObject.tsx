@@ -1,14 +1,15 @@
 import React from 'react';
 import { BagItemDialog } from '../BagItemDialog.js';
+import { PhotoDetailDialog } from '../photo/PhotoDetailDialog.js';
 import { CardRenderer } from './CardRenderer.js';
 import { highlightLinks } from './LinkLayer.js';
 import { chalkStyleOf } from '@airp/shared/forms';
+import { appearanceViewOf } from '../../lib/appearance-view.js';
 import type { LayerItem } from '../../state/useWorld.js';
 import { UserRound } from 'lucide-react';
 import { EntityInteractions } from '../narrative/EntityInteractions.js';
 import { highlightChalkAnchor } from '../../lib/chalk-anchor.js';
-import { airpGateway } from '../../lib/airp-gateway.js';
-import { MotionPortrait } from '../overlay/MotionPortrait.js';
+import { airpGateway, type AssetMediaKind } from '../../lib/airp-gateway.js';
 
 /**
  * Absolute-positioned card shell inside the world transform layer (v2 `.object`
@@ -53,15 +54,21 @@ export function pruneLifts(paths: Set<string>): void {
 const SpriteFig: React.FC<{ avatar?: string; video?: string; name: string; still: boolean }> = ({ avatar, video, name, still }) => {
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => setFailed(false), [avatar]);
-  const src = avatar && (/^(?:https?:|data:|blob:|\/)/.test(avatar) ? avatar : airpGateway.assetUrl(avatar));
-  const clip = video && (/^(?:https?:|data:|blob:|\/)/.test(video) ? video : airpGateway.assetUrl(video));
-  return <div className="presence-frame" role="img" aria-label={name}>
-    {(src && !failed) || (clip && !still) ? <MotionPortrait video={clip} poster={failed ? undefined : src} enabled={!still} name={name} onPosterError={() => setFailed(true)} /> : <UserRound size={48} strokeWidth={1.1} aria-hidden="true" />}
+  const src = avatar && (/^(?:https?:|data:|blob:)/.test(avatar) ? avatar : assetUrl(avatar, 'image'));
+  return <div className="presence-orb" role="img" aria-label={name}>
+    {src && !failed ? <img src={src} alt="" onError={() => setFailed(true)} /> : <UserRound size={30} strokeWidth={1.3} aria-hidden="true" />}
   </div>;
 };
 
 /** World-root-relative asset path → URL (contract §5.4, same as SceneBackdrop). */
-const assetUrl = (p: string): string => `/api/asset?path=${encodeURIComponent(p)}`;
+const assetUrl = (p: string, mediaKind: AssetMediaKind): string => {
+  if (p.startsWith('/api/asset')) {
+    const url = new URL(p, 'http://airp.local');
+    const assetPath = url.searchParams.get('path');
+    return assetPath ? airpGateway.assetUrl(assetPath, undefined, mediaKind) : '';
+  }
+  return airpGateway.assetUrl(p.replace(/^\/+/, ''), undefined, mediaKind);
+};
 
 interface PortraitProps {
   video?: string;
@@ -106,14 +113,14 @@ const PortraitFig: React.FC<PortraitProps> = ({ video, poster, caption, title, s
               muted
               playsInline
               preload="metadata"
-              poster={posterOk ? assetUrl(poster!) : undefined}
-              src={assetUrl(video!)}
+              poster={posterOk ? assetUrl(poster!, 'image') : undefined}
+              src={assetUrl(video!, 'video')}
               onError={() => setFailedSrc(video!)}
             />
           ) : posterOk ? (
             <img
               className="portrait__still"
-              src={assetUrl(poster!)}
+              src={assetUrl(poster!, 'image')}
               alt=""
               onError={() => setFailedSrc(poster!)}
             />
@@ -121,7 +128,7 @@ const PortraitFig: React.FC<PortraitProps> = ({ video, poster, caption, title, s
         ) : posterOk ? (
           <img
             className="portrait__still"
-            src={assetUrl(poster!)}
+            src={assetUrl(poster!, 'image')}
             alt=""
             onError={() => setFailedSrc(poster!)}
           />
@@ -167,7 +174,7 @@ function shellStyle(item: CanvasObjectProps['item'], kind: string, reading: bool
     // grows the shell. Mutating width here was a 4th collision authority
     // (docs/footprint §3.5, AGENTS §7.5①).
     width: item.w,
-    zIndex: reading ? 100 : liftFor(item.path, item.z),
+    zIndex: reading ? 'var(--depth-entity-reading)' : liftFor(item.path, item.z),
     '--target-rot': kind === 'chalk' || kind === 'sprite' ? '0deg' : `${item.rot}deg`,
   };
 }
@@ -186,14 +193,27 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
   const kind = item.kind;
   const [reading, setReading] = React.useState(false);
   const pointerStart = React.useRef({ x: 0, y: 0 });
-  const readable = kind !== 'sprite' && kind !== 'gate';
+  const objectRef = React.useRef<HTMLDivElement>(null);
+  // Verified resolution → trusted attrs/vars (docs/components/04 §:79). Memoised in the
+  // adapter, so re-renders cost nothing; a missing resolution simply means legacy defaults.
+  const appearance = item.appearance ? appearanceViewOf(item.appearance) : null;
+  const isGate = kind === 'gate' || item.frontmatter?.type === 'gate' || item.path.endsWith('/README.md');
+  const readable = kind !== 'sprite' && !isGate;
+  const isPhoto = kind === 'photo' && item.frontmatter?.component === 'photo';
+  const photoDialogId = `photo-detail-${item.path.replace(/[^A-Za-z0-9_-]/g, '-')}`;
   const [isDragOver, setIsDragOver] = React.useState(false);
   const [isItemDragging, setIsItemDragging] = React.useState(false);
-  const [isUnlockedEffect, setIsUnlockedEffect] = React.useState(false);
   const anchorCleanup = React.useRef<(() => void) | undefined>(undefined);
+  const enterPendingKey = React.useRef<string | null>(null);
+  const enterPendingTimer = React.useRef<number | null>(null);
   const [hovered, setHovered] = React.useState(false);
   const [focused, setFocused] = React.useState(false);
-  React.useEffect(() => () => anchorCleanup.current?.(), [item.path, item.frontmatter?.anchor]);
+  React.useEffect(() => () => {
+    anchorCleanup.current?.();
+    clearTimeout(enterPendingTimer.current ?? undefined);
+    enterPendingTimer.current = null;
+    enterPendingKey.current = null;
+  }, [item.path, item.frontmatter?.anchor]);
   const highlight = (element: HTMLElement, active: boolean) => {
     highlightLinks(item.path, active);
     anchorCleanup.current?.();
@@ -202,7 +222,19 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
       anchorCleanup.current = highlightChalkAnchor(element, item.path, item.frontmatter.anchor);
     }
   };
-
+  const gateTarget = typeof item.frontmatter?.target === 'string' && item.frontmatter.target.trim()
+    ? item.frontmatter.target
+    : item.path.replace(/\/README\.md$/, '');
+  const requestEnter = (target: string) => {
+    if (enterPendingKey.current === target) return;
+    clearTimeout(enterPendingTimer.current ?? undefined);
+    enterPendingKey.current = target;
+    enterPendingTimer.current = window.setTimeout(() => {
+      enterPendingKey.current = null;
+      enterPendingTimer.current = null;
+    }, 500);
+    onEnterGate?.(target);
+  };
   React.useEffect(() => {
     const onDragStart = () => setIsItemDragging(true);
     const onDragEnd = () => {
@@ -216,40 +248,62 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
       window.removeEventListener('airp:item-drag-end', onDragEnd);
     };
   }, []);
-
   const handleSpriteDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
     const draggedPath = e.dataTransfer.getData('text/plain');
-    if (draggedPath) {
-      setIsUnlockedEffect(true);
-      setTimeout(() => setIsUnlockedEffect(false), 800);
-      onItemDropOnTarget?.(draggedPath, item.path);
-    }
+    if (draggedPath) onItemDropOnTarget?.(draggedPath, item.path);
   };
-
-  const spritePuzzleClasses = `${isItemDragging ? 'puzzle-target-ready' : ''} ${isDragOver ? 'puzzle-target-hover' : ''} ${isUnlockedEffect ? 'puzzle-unlock-burst' : ''}`.trim();
+  const spritePuzzleClasses = `${isItemDragging ? 'puzzle-target-ready' : ''} ${isDragOver ? 'puzzle-target-hover' : ''}`.trim();
 
   return (
     <div
+      ref={objectRef}
       data-path={item.path}
       tabIndex={0}
+      aria-label={isPhoto ? String(item.frontmatter?.title || item.filename) : undefined}
+      aria-expanded={isPhoto ? reading : undefined}
+      aria-controls={isPhoto && reading ? photoDialogId : undefined}
       onPointerDownCapture={event => { pointerStart.current = { x: event.clientX, y: event.clientY }; }}
       onClick={event => {
         if (!readable || (event.target as HTMLElement).closest('button,a,input,textarea,select,.entity-interactions,.cabin-prop,[role="dialog"]')) return;
         if (Math.hypot(event.clientX - pointerStart.current.x, event.clientY - pointerStart.current.y) > 6) return;
         setReading(value => !value);
       }}
-      onKeyDown={event => { if (readable && event.target === event.currentTarget && event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); setReading(value => !value); } }}
+      onKeyDown={event => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          event.stopPropagation();
+          if (isGate) {
+            requestEnter(gateTarget);
+          } else if (readable) {
+            setReading(value => !value);
+          }
+        }
+      }}
       onPointerEnter={event => { setHovered(true); highlight(event.currentTarget, true); }}
       onPointerLeave={event => { setHovered(false); highlight(event.currentTarget, false); }}
       onFocus={event => { setFocused(true); highlight(event.currentTarget, true); }}
       onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) { setFocused(false); highlight(event.currentTarget, false); } }}
       className={`object ink-form${reading ? ' object--reading' : ''}`}
       data-reading={reading ? '' : undefined}
-      style={shellStyle(item, kind, reading)}
+      // Appearance attrs/vars are additive: `shellStyle` still owns position/width/
+      // zIndex/rotation alone (docs/components/04 §:79). Siblings inherit the vars.
+      {...appearance?.attrs}
+      style={{ ...appearance?.style, ...shellStyle(item, kind, reading) }}
     >
-        {reading ? <BagItemDialog inline item={item} onClose={() => setReading(false)} interactions={{ onChoice: onEntityAction, onSelectChoice, onDiceRolled, onEnterGate, onOpenCharacter: onOpenCharacterModal }} /> : kind === 'portrait' ? (
+        {reading && isPhoto ? (
+          <PhotoDetailDialog
+            item={item}
+            appearance={appearance}
+            dialogId={photoDialogId}
+            onClose={() => setReading(false)}
+            returnFocusRef={objectRef}
+          />
+        ) : reading ? (
+          <BagItemDialog inline item={item} appearance={appearance} onClose={() => setReading(false)} />
+        ) : kind === 'portrait' ? (
           <PortraitFig
             video={item.frontmatter?.video}
             poster={item.frontmatter?.poster}
@@ -279,16 +333,17 @@ export const CanvasObject: React.FC<CanvasObjectProps> = ({
         ) : (
           <CardRenderer
             item={item}
+            appearance={appearance}
             index={index}
             onSelectChoice={onSelectChoice}
             onDiceRolled={onDiceRolled}
-            onEnterGate={onEnterGate}
+            onEnterGate={onEnterGate ? requestEnter : undefined}
             onOpenCharacterModal={onOpenCharacterModal}
             onItemDropOnTarget={onItemDropOnTarget}
             onTakeItem={onTakeItem}
           />
         )}
-        {!reading && <EntityInteractions item={item} active={hovered || focused} onChoice={onEntityAction} onSelectChoice={onSelectChoice} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate} onOpenCharacter={onOpenCharacterModal} />}
+        {!reading && <EntityInteractions item={item} active={hovered || focused} onChoice={onEntityAction} onDiceRolled={onDiceRolled} onEnterGate={onEnterGate ? requestEnter : undefined} onOpenCharacter={onOpenCharacterModal} />}
     </div>
   );
 };

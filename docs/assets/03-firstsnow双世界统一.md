@@ -180,17 +180,16 @@ export function verifyParity(pairs) { /* … */ }
   → **本批新增 12 张情绪图必须补上这条人工侧的机检**（§⑩）。
 - **文本层故意不同**（实测 `diff`）：`first-snow-jp/characters/nanami/preset.json` 的 `id` 是 `first-snow-jp-nanami`、多一个 `world-language` 文件槽（`baseDir: cwd, path: language.md`）；`firstsnow` 的 `id` 是 `nanami`、没有该槽。**这不是漂移，是设计。**
 
-### 9.2 本批要建立的新差异
+### 9.2 本批已完成的同步项
 
-- 12 张 jp 情绪图（今天 0 张）。
-- jp 侧落账文件（今天不存在）。
-- `director.webp` / `sumi.webp` / `characters/sumi/` 三个旧 id 遗留的删除。
+- firstsnow、first-snow-jp 及对应 playtest 发布位已同步情绪图和各自的 `character-media.json`。
+- 旧 id 清理仍不在本次素材同步范围内，保留既有内容并由路径门禁单独跟踪。
 
 ### 9.2b 复核当日的工作树实况（重要：`01` 已在落盘）
 
-复核时 `templates/firstsnow/assets/characters/{nanami,sumi-yukimura}/` 已各有 6 张情绪 webp（mtime 2026-09-13 11:10–11:12），尺寸实测「with alpha, 767+1x1375+1」= 9:16（00 §3.1 冻结口径）；`assets/worlds/firstsnow-demo/characters/{nanami,sumi}/variants/` 已有 6 组 `<emo>-green.jpg` + `<emo>.png`。**first-snow-jp 侧仍是 0 张**——镜像尚未跑。这批新图在 `git status` 里是未跟踪（`??`），即**尚未入库**。
+复核时 `templates/firstsnow/assets/characters/{nanami,sumi-yukimura}/`、`templates/first-snow-jp/assets/characters/{nanami,sumi-yukimura}/` 以及 `templates/first-snow-jp-playtest/assets/characters/{nanami,sumi-yukimura}/` 均已有 6 张情绪 webp；对应 `character-media.json` 的 SHA 校验通过。建议的 9:16 只是视觉参考，门禁不因比例不同失败。
 
-由此：本文 §③ 的「镜像」不是重跑生产，是**把已存在的 firstsnow 产物复制过去**；`sumi-yukimura-poster.png` 与 `sumi-yukimura-transparent.webm` 也已出现在 firstsnow 侧，属 `02` 的范围，镜像时一并处理。
+由此：同步仍然是字节复制，不重跑生产；`tools/record-emotion-assets.mjs` 已支持正式模板和 playtest 别名，为每个发布位生成独立账本。
 
 ### 9.3 与 `01` 的交界
 
@@ -225,7 +224,7 @@ cd templates && for f in assets/characters/nanami.webp assets/characters/radio-d
 | `assets/scenes/first-snow.webp` | `27717b50e1effd18c4a0cc7b3a0036f189448e0a4739344c3e12f91535046a0a` | SAME |
 | `assets/motion/seedance/characters/nanami-transparent.webm` | `0cce4fdc12aba40f819ba39f5e5ebc69857c77c8530c4655115057eb4f5536ca` | SAME |
 
-**顺带实测的全树口径**：`firstsnow/assets` 与 `first-snow-jp/assets` 共 23 个同名文件，**22 个 SHA-256 相同**，唯一不同是 `README.md`（英文 vs 日文清单，**故意不同**）。**本批复核这一刻**另有 27 个路径只在 firstsnow 侧存在——其中 13 个是既有遗留（`assets/backgrounds/*` 8 个、`assets/characters/{director,sumi}.webp`、`assets/characters/nanami/{nanami.webm,nanami-poster.png}`、`assets/source-manifest.json`），其余 14 个是**本批正在生成、尚未镜像**的产物（`nanami/` 6 张情绪 webp、`sumi-yukimura/` 6 张情绪 webp + `sumi-yukimura-poster.png`、`motion/seedance/characters/sumi-yukimura-transparent.webm`）——它们正是 §③ 步 2 要镜像过去的对象，镜像完成后应为 0。
+**顺带实测的全树口径**：`firstsnow`、`first-snow-jp` 与 `first-snow-jp-playtest` 的情绪发布位均已同步；旧场景和旧 id 遗留仍按现有模板内容保留，不因本批素材同步擅自删除。
 
 ### 10.2 新增机检（测试用例，逐条可失败）
 

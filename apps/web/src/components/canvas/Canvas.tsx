@@ -13,13 +13,49 @@ import { unlock, playFoley } from '../../lib/audio.js';
 import { whenFontsSettled } from '../../lib/fonts.js';
 import { elementBox, invalidateMeasures } from '../../lib/measure.js';
 import { setParallax } from '../../lib/parallax.js';
+import { portraitPlayStateOf } from '../../lib/motion.js';
+import { PresenceLayer } from './PresenceLayer.js';
+import { PRESENCE_NODE_ATTR } from '../../lib/presence-node.js';
+import { depthClassFor } from '../../lib/depth-surface.js';
 import { useStill } from '../../lib/motion.js';
+import type { CharacterPresenceView } from '../../lib/presence.js';
 import type { LayerItem, LayerLink } from '../../state/useWorld.js';
+
+import type { AssetMediaKind } from '../../lib/airp-gateway.js';
+/** Stable identity for the no-presence path (nook never passes one) so the memo
+ *  deps in PresenceLayer do not churn on every Canvas render. */
+const NO_PRESENCE: CharacterPresenceView[] = [];
+
+const DEPTH_KIND = {
+  background: 'background',
+  world: 'world',
+  entity: 'entity',
+  overlay: 'overlay',
+  writer: 'writer',
+  modal: 'modal',
+  ui: 'ui',
+} as const;
+type CanvasDepthKind = keyof typeof DEPTH_KIND;
+const DEPTH_MARKER = (kind: CanvasDepthKind): string => depthClassFor(DEPTH_KIND[kind]);
 
 interface CanvasProps {
   effectsEnabled?: boolean;
+  /** Optional host visibility seam; ParticleLayer also observes document.hidden. */
+  hidden?: boolean;
+  /** Optional host reduced-motion seam; defaults to the live media preference. */
+  reducedMotion?: boolean;
+  allowChalkDrag?: boolean;
   currentLayer: string;
   items: LayerItem[];
+  /** Same-scene avatars (contract §3.1/§4.1). Only `state === 'in-scene'` characters
+   *  reach here; absent / elsewhere are already filtered by the projection. Absent
+   *  value = no avatars (nook path), matching `/api/nook`'s `presence: []`. */
+  presence?: CharacterPresenceView[];
+  /** World-root-relative asset path → URL, injected from App (contract P-18):
+   *  both existing helpers of this shape are module-private, so the canvas must
+   *  not reach for one itself. Without it, presence avatars fall back to the raw
+   *  `avatar` value (an initial-letter plate) instead of a 404 image. */
+  assetUrl?: (path: string, kind: AssetMediaKind) => string | undefined;
   /** true = no portrait on this canvas may play (global motion preference, nook 03 §③-6). */
   stillPortraits?: boolean;
   links: LayerLink[];
@@ -41,6 +77,7 @@ interface CanvasProps {
   onTakeItem?: (path: string) => void;
   onOpenRadialMenu?: (x: number, y: number, worldX: number, worldY: number) => void;
 }
+
 
 /** Viewport blank-space pan/pinch session (cards never start one). */
 interface PanDragState {
@@ -85,11 +122,16 @@ function readTop(el: HTMLElement): number {
 
 
 export const Canvas: React.FC<CanvasProps> = ({
+  allowChalkDrag = false,
   effectsEnabled = false,
+  hidden = false,
+  reducedMotion,
+  assetUrl,
   currentLayer,
   ghost = null,
   ghostLabel,
   items,
+  presence = NO_PRESENCE,
   stillPortraits = false,
   links,
   bg,
@@ -106,8 +148,8 @@ export const Canvas: React.FC<CanvasProps> = ({
   onOpenRadialMenu,
 }) => {
   const camera = useCamera();
-  const [focusedPortrait, setFocusedPortrait] = React.useState<string | null>(null);
-  const reducedMotion = useStill();
+  const prefersReducedMotion = useStill();
+  const particleReducedMotion = reducedMotion ?? prefersReducedMotion;
 
 
   useEffect(() => { if (!effectsEnabled) setParallax(0, 0); }, [effectsEnabled]);
@@ -253,31 +295,38 @@ export const Canvas: React.FC<CanvasProps> = ({
     void unlock(); // idempotent: any interaction start resumes the audio context
     const target = e.target as HTMLElement;
     const obj = target.closest('.object');
+    // Presence avatars are not cards: a click on one is the dialogue entry
+    // (docs/ux/00 §4.3), so it must start neither a card drag nor a viewport pan.
+    if (target.closest(`[${PRESENCE_NODE_ATTR}]`)) return;
     if (obj) {
       const el = obj as HTMLElement;
-      if (cardDragRef.current) return; // one drag at a time
       const path = el.dataset.path ?? '';
       if (target.closest('button, a, input, select, textarea, [data-no-drag]')) {
         return; // interactive child: plain click, no drag session
       }
+      if (cardDragRef.current) return; // one drag at a time
       const item = itemsByPath.get(path);
-      cardDragRef.current = {
-        pointerId: e.pointerId,
-        el,
-        path,
-        sx: e.clientX,
-        sy: e.clientY,
-        ix: readLeft(el),
-        iy: readTop(el),
-        moved: false,
-        captured: false,
-        pushed: new Set(),
-      };
-      raiseObject(path, el, item?.z ?? 1);
-      el.classList.add('dragging-item');
-      highlightLinks(path, true);
-      e.preventDefault();
-      return;
+      // Locked Chalk remains a viewport gesture target: do not prevent the
+      // event or create any card-drag state, so dragging over it still pans.
+      if (item?.kind !== 'chalk' || allowChalkDrag) {
+        cardDragRef.current = {
+          pointerId: e.pointerId,
+          el,
+          path,
+          sx: e.clientX,
+          sy: e.clientY,
+          ix: readLeft(el),
+          iy: readTop(el),
+          moved: false,
+          captured: false,
+          pushed: new Set(),
+        };
+        raiseObject(path, el, item?.z ?? 1);
+        el.classList.add('dragging-item');
+        highlightLinks(path, true);
+        e.preventDefault();
+        return;
+      }
     }
 
     // Blank viewport → pan + pinch (unchanged from T0.2).
@@ -498,7 +547,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   // World Studio: Right-click on blank canvas summons the Radial Creator Menu
   const handleContextMenu = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
-    if (target.closest('.object') || target.closest('button, a, input')) {
+    if (target.closest('.object') || target.closest('button, a, input') || target.closest(`[${PRESENCE_NODE_ATTR}]`)) {
       return; // Clicking on cards or interactive elements retains native/local behavior
     }
     e.preventDefault();
@@ -525,66 +574,76 @@ export const Canvas: React.FC<CanvasProps> = ({
       onContextMenu={handleContextMenu}
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
-      className="relative w-full h-full overflow-hidden cursor-grab active:cursor-grabbing select-none touch-none"
+      className={`relative w-full h-full overflow-hidden cursor-grab active:cursor-grabbing select-none touch-none ${DEPTH_MARKER('world')}`}
+      data-depth-surface={DEPTH_KIND.world}
       style={{ perspective: '1200px' }}
     >
-      {/* 2.5D Background sheet with 0.25x parallax drift & video support */}
-      <SceneBackdrop bg={bg} effectsEnabled={effectsEnabled} />
+      {/* 2.5D Background sheet with 0.25x parallax drift & video support. */}
+      <div className={`absolute inset-0 ${DEPTH_MARKER('background')}`} data-depth-surface={DEPTH_KIND.background}>
+        <SceneBackdrop bg={bg} effectsEnabled={effectsEnabled} />
+      </div>
 
       {/* World Transform Layer — single transform layer, rAF writes transform.
           Must pin transform-origin to top-left: default is center, which would
           offset every screen↔world mapping by half the content size. */}
-      <div ref={camera.worldRef} className="absolute left-0 top-0 origin-top-left" onPointerOver={event => {
-        const object = (event.target as HTMLElement).closest<HTMLElement>('.object[data-path]');
-        if (object) setFocusedPortrait(object.dataset.path ?? null);
-      }}>
+      <div ref={camera.worldRef} className="absolute inset-0 origin-top-left" data-depth-surface={DEPTH_KIND.world}>
         <LinkLayer links={links} />
-        {/* World-locked 80px hairlines; sized to one viewport, not 6000px. */}
         <CanvasGrid camera={camera} />
 
-        {/* Cards — absolutely positioned at server-seated coords (no flex wrapper).
-            `index` is the gate's ordinal among this layer's gates (01, 02, …). */}
-        {items.map((item) => (
-          <CanvasObject
-            key={item.path}
-            item={item}
-            index={gateOrdinal.get(item.path)}
-            onSelectChoice={onSelectChoice}
-            onEntityAction={onEntityAction}
-            onDiceRolled={onDiceRolled}
-            onEnterGate={onEnterGate}
+        <div className={`absolute inset-0 ${DEPTH_MARKER('entity')}`} data-depth-surface={DEPTH_KIND.entity}>
+          {/* Cards — absolutely positioned at server-seated coords. */}
+          {items.map((item) => (
+            <CanvasObject
+              key={item.path}
+              item={item}
+              index={gateOrdinal.get(item.path)}
+              onSelectChoice={onSelectChoice}
+              onEntityAction={onEntityAction}
+              onDiceRolled={onDiceRolled}
+              onEnterGate={onEnterGate}
+              onOpenCharacterModal={onOpenCharacterModal}
+              onItemDropOnTarget={onItemDropOnTarget}
+              onTakeItem={onTakeItem}
+              still={item.path !== playingPortrait}
+            />
+          ))}
+          <PresenceLayer
+            presence={presence}
+            layerId={currentLayer}
             onOpenCharacterModal={onOpenCharacterModal}
-            onItemDropOnTarget={onItemDropOnTarget}
-            onTakeItem={onTakeItem}
-            still={item.path !== playingPortrait}
+            assetUrl={assetUrl}
           />
-        ))}
-        {/* Provisional "taking shape" card (docs/init/03 §3.5). Rendered with
-            the `.object--ghost` shell — OUTSIDE `items`, so it never enters
-            `itemsByPath`, the drag dispatcher, or footprint measurement, and
-            `pointer-events: none` makes it non-interactive (doc-10 E3). It reuses
-            the image-ghost skeleton visual and sits at the anchor cell the first
-            real product will claim: the handover is a no-jump swap. */}
-        {ghost && (
-          <div
-            data-path={ghost.path}
-            className="object--ghost"
-            style={{ left: ghost.x, top: ghost.y, width: ghost.w, zIndex: ghost.z }}
-            aria-hidden
-          >
-            <div className="ghost-card ghost-card--pending" style={{ height: ghost.h }}>
-              <div className="ghost-card__skeleton" />
-              <div className="ghost-card__stage">{ghostLabel ?? ghost.body}</div>
+        </div>
+
+        <div className={`absolute inset-0 ${DEPTH_MARKER('overlay')}`} data-depth-surface={DEPTH_KIND.overlay}>
+          {ghost && (
+            <div
+              data-path={ghost.path}
+              className="object--ghost"
+              style={{ left: ghost.x, top: ghost.y, width: ghost.w, zIndex: ghost.z }}
+              aria-hidden
+            >
+              <div className="ghost-card ghost-card--pending" style={{ height: ghost.h }}>
+                <div className="ghost-card__skeleton" />
+                <div className="ghost-card__stage">{ghostLabel ?? ghost.body}</div>
+              </div>
             </div>
-          </div>
-        )}
-        <PhantomLayer currentLayer={currentLayer} bgSrc={bg.src} copy={ghostCopy} />
+          )}
+          <PhantomLayer currentLayer={currentLayer} bgSrc={bg.src} copy={ghostCopy} />
+        </div>
       </div>
 
-      {/* Atmospheric 1.35x foreground particle system. Always mounted: show
-          bursts (`playBurst`) draw on this same canvas (docs/perform/05 §4.4),
-          so `effectsEnabled` only toggles the ambient dust/rain field. */}
-      <ParticleLayer key={bg.tone} tone={bg.tone} ambient={effectsEnabled} />
+      {/* Atmospheric particles own separate ambient/burst surfaces. */}
+      <div className="absolute inset-0" data-depth-surface={DEPTH_KIND.background}>
+        <ParticleLayer
+          key={bg.tone}
+          tone={bg.tone}
+          ambient={effectsEnabled}
+          effectsEnabled={effectsEnabled}
+          hidden={hidden}
+          reducedMotion={particleReducedMotion}
+        />
+      </div>
     </div>
   );
 };

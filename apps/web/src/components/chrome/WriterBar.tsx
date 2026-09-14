@@ -1,27 +1,34 @@
 /**
- * WriterBar.tsx — the free-input channel to the writer (prototype #writerBar,
- * L532). Enter submits, then the field clears; Shift+Enter is left to the
- * browser (single-line input ignores it anyway).
+ * WriterBar.tsx — the single prompt surface for the writer.
  *
- * `onSend` is only called with non-empty, trimmed text. The parent owns
- * `disabled` (world frozen / request in flight), so this stays presentational
- * — except for the writer's own busy phase: while the writer is mid-turn the
- * field locks and the placeholder explains why, instead of silently queueing
- * input the writer will never read (docs/perform/01 §6.4).
+ * The text value is controlled when the host supplies `value`/`onChange`
+ * (App's main dock), while the legacy uncontrolled call shape remains valid
+ * for the Nook empty-state fallback. Writer lifecycle and public status always
+ * come from writer-state; this component never mirrors websocket frames.
  */
 import React, { useState } from 'react';
-import { useWriterPhase } from '../../lib/writer-state.js';
-import { guardImeKey } from '../../lib/ime.js';
+import { useLocale } from '../../lib/i18n.js';
+import { useWriterState } from '../../lib/writer-state.js';
 
 export interface WriterBarProps {
-  /** Receives the trimmed prompt text. Called after the field is cleared. */
-  onSend: (text: string) => void;
+  /** Receives the trimmed prompt text. Return false to keep an unaccepted draft. */
+  onSend: (text: string) => void | boolean;
   /** Locks the bar (no input, no submit) when true. */
   disabled?: boolean;
   placeholder?: string;
   /** Copy swapped in while the writer is mid-turn. */
   writingPlaceholder?: string;
   sendLabel?: string;
+  /** Controlled value seam for the App-owned prompt draft. */
+  value?: string;
+  onChange?: (text: string) => void;
+  inputRef?: React.Ref<HTMLInputElement>;
+  inputAriaLabel?: string;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  /** Optional stop adapter for hosts that want the button inside this bar. */
+  onStop?: () => void;
+  stopLabel?: string;
+  embedded?: boolean;
 }
 
 export const WriterBar: React.FC<WriterBarProps> = ({
@@ -30,38 +37,76 @@ export const WriterBar: React.FC<WriterBarProps> = ({
   placeholder = 'Ask the writer…',
   writingPlaceholder = 'The writer is writing…',
   sendLabel = 'Send',
+  value,
+  onChange,
+  inputRef,
+  inputAriaLabel,
+  onKeyDown,
+  onStop,
+  stopLabel = 'Stop writing',
+  embedded = false,
 }) => {
-  const [text, setText] = useState('');
-  const writing = useWriterPhase() === 'writing';
+  const { t } = useLocale();
+  const writer = useWriterState();
+  const [uncontrolledText, setUncontrolledText] = useState('');
+  const text = value ?? uncontrolledText;
+  const writing = writer.phase === 'writing';
   const locked = disabled || writing;
+  const publicState = writer.error
+    ? 'error'
+    : writing
+      ? writer.stopRequested
+        ? 'stopped'
+        : writer.stage
+          ? 'streaming'
+          : 'waiting'
+      : 'idle';
+  const statusText = writer.error
+    ? writer.error.message
+    : publicState === 'stopped'
+      ? t('Stop requested')
+      : publicState === 'streaming'
+        ? writer.stage ?? t('The writer is working…')
+        : publicState === 'waiting'
+          ? t('Waiting for the writer…')
+          : writer.stage ?? t('Ready for your next action');
 
+  const updateText = (next: string): void => {
+    if (onChange) onChange(next);
+    else setUncontrolledText(next);
+  };
   const submit = (): void => {
     const trimmed = text.trim();
     if (!trimmed || locked) return;
-    onSend(trimmed);
-    setText('');
+    if (onSend(trimmed) !== false) updateText('');
   };
 
   return (
     <div
-      className="writer-bar"
+      className={`writer-bar${embedded ? ' writer-bar--embedded' : ''}`}
       data-disabled={disabled ? 'true' : undefined}
       data-writing={writing ? 'true' : undefined}
+      data-writer-state={publicState}
+      style={embedded ? { position: 'relative', left: 'auto', bottom: 'auto', width: '100%', transform: 'none', zIndex: 'auto' } : undefined}
     >
       <input
+        ref={inputRef}
+        aria-label={inputAriaLabel}
         className={writing ? 'writer-bar__input busy' : 'writer-bar__input'}
         type="text"
         value={text}
         placeholder={writing ? writingPlaceholder : placeholder}
         autoComplete="off"
         disabled={locked}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => updateText(e.target.value)}
         onKeyDown={(e) => {
           if (guardImeKey(e)) return;
           if (e.key === 'Enter') {
             e.preventDefault();
-            submit();
+            if (!e.nativeEvent.isComposing) submit();
+            return;
           }
+          onKeyDown?.(e);
         }}
       />
       <button
@@ -72,6 +117,17 @@ export const WriterBar: React.FC<WriterBarProps> = ({
       >
         {sendLabel}
       </button>
+      {onStop && writing && (
+        <button
+          className="writer-bar__stop"
+          type="button"
+          data-writer-stop
+          disabled={writer.stopRequested}
+          onClick={onStop}
+        >
+          {writer.stopRequested ? t('Stop requested') : stopLabel}
+        </button>
+      )}
     </div>
   );
 };

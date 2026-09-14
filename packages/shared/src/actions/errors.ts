@@ -3,6 +3,7 @@ import type { ActionDetails } from './types.js';
 export type ActionErrorCode =
   | 'invalid_argument' // malformed / out-of-range parameters
   | 'invalid_path' // path not world-relative, escaping the root, reserved prefix
+  | 'invalid_asset_ref' // media reference is outside the published asset roots or has the wrong type
   | 'not_found' // target file / directory / entity does not exist
   | 'already_exists' // target exists and this action may not overwrite
   | 'not_movable' // violates 00 §2.4 (README / directory / outside the world)
@@ -23,6 +24,7 @@ export type ActionErrorCode =
 export const HTTP_STATUS: Record<ActionErrorCode, number> = {
   invalid_argument: 400,
   invalid_path: 400,
+  invalid_asset_ref: 400,
   not_found: 404,
   already_exists: 409,
   not_movable: 409,

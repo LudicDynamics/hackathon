@@ -1,33 +1,219 @@
-.declared-action-backdrop { position: fixed; inset: 0; z-index: 120; background: #15101955; display: grid; place-items: center; padding: 24px; }
-.declared-action-dialog { width: min(680px, 100%); max-height: 78dvh; overflow: auto; overscroll-behavior: contain; background: #e8dfcd url('/materials/decoration/opened-letter-paper.webp') repeat; background-size: 512px; color: #302921; border: 1px solid #b6a17e; border-radius: 5px 12px 8px 4px; padding: clamp(20px, 4vw, 36px); box-shadow: 0 18px 45px #0007, inset 0 0 30px #8c703323; font: 18px/1.85 Georgia, 'Noto Serif JP', serif; text-shadow: none; }
-.declared-action-dialog article { border-top: 1px solid #63533c44; margin-top: 20px; padding-top: 8px; }
-.declared-action-dialog button { padding: 8px 14px; border: 1px solid #75624a88; border-radius: 8px; cursor: pointer; margin: 6px 0; }
-.declared-action-dialog input { margin-right: 10px; }
-.entity-interactions-inline { position: relative; margin-top: 20px; }
-.material-slots { border: 0; padding: 0; display: grid; gap: 14px; }
-.material-slot { padding: 14px; border: 1px dashed #75624a88; border-radius: 10px; background: #fff9ed88; }
-.material-slot label { display: grid; gap: 8px; font-weight: 600; }
-.material-slot select { width: 100%; min-height: 40px; background: #f7eddb; color: #352c25; border: 1px solid #75624a88; border-radius: 8px; padding: 8px; }
-.material-slot small { display: block; margin-top: 8px; }
-.material-slot details { margin-top: 10px; }
-.material-slot details p { max-height: 220px; overflow: auto; font-weight: 400; }
-.declared-action-dialog button:disabled { cursor: not-allowed; opacity: .5; }
-.declared-action-dialog button { color: inherit; font: inherit; background: #fff9ed45; }
-.declared-action-dialog button:focus-visible { outline: 2px solid #8c5f97; outline-offset: 3px; }
-.declared-action-dialog [role=alert] { color: #9d3628; }
-.material-slots { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
-.material-slot { min-width: 0; }
-.material-slot.is-active { outline: 2px solid #957345; outline-offset: 2px; }
-.material-slot .material-slot__target { width: 100%; min-height: 95px; border: 0; background: transparent; text-align: left; padding: 0; }
-.material-slot strong { display: block; }
-.material-pool { padding: 18px; border: 1px solid #ad8965; border-radius: 12px; background: #493425 url('/materials/decoration/inventory-suede-lining.webp') repeat; background-size: 512px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; box-shadow: inset 0 2px 12px #0005; }
-.material-pool button { background: #e8dfcd url('/materials/decoration/location-hover-paper.webp') repeat; background-size: 512px; color: #302921; text-align: left; box-shadow: 0 3px 6px #0004; cursor: grab; margin: 0; }
-.material-pool button[aria-pressed=true] { opacity: .65; outline: 2px solid #dbbc80; }
-.material-pool span { display: block; font-size: 28px; }
-.material-pool strong { display: block; font-size: 16px; }
-.material-pool small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; }
-.dice-help { background: #e8dfcd url('/materials/decoration/location-hover-paper.webp'); background-size: 512px; color: #302921; border-radius: 6px; padding: 12px; font: 14px/1.7 Georgia, 'Noto Serif JP', serif; max-width: 360px; }
-.dice-help > div { max-height: 240px; overflow: auto; }
-.dice-outcome-letter { padding: 16px 20px; background: #e8dfcd url('/materials/decoration/opened-letter-paper.webp'); background-size: 512px; color: #302921; font: 17px/1.85 Georgia, 'Noto Serif JP', serif; border: 1px solid #a58b67; border-radius: 4px; box-shadow: 0 4px 14px #0004; text-shadow: none; }
-.dice-outcome-letter summary { cursor: pointer; }
-.dice-outcome-letter[open] > div { max-height: 320px; overflow: auto; margin-top: 16px; }
+.declared-action-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--depth-entity-reading, 100);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--ink) 34%, transparent);
+}
+
+.declared-action-dialog {
+  width: min(680px, 100%);
+  max-height: 78dvh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  padding: clamp(20px, 4vw, 36px);
+  background: var(--appearance-surface, var(--paper));
+  color: var(--appearance-ink, var(--ink));
+  border: 1px solid var(--appearance-border, var(--line));
+  border-radius: var(--appearance-radius, 5px);
+  box-shadow: var(--appearance-shadow, 0 18px 45px color-mix(in srgb, var(--ink) 42%, transparent));
+  font: 18px/1.85 Georgia, 'Noto Serif JP', serif;
+  text-shadow: none;
+}
+
+.declared-action-dialog article {
+  margin-top: 20px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 26%, transparent);
+}
+
+.declared-action-dialog button {
+  margin: 6px 0;
+  padding: 8px 14px;
+  color: inherit;
+  background: color-mix(in srgb, var(--appearance-surface, var(--paper)) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink) 36%, transparent);
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.declared-action-dialog button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.declared-action-dialog button:focus-visible {
+  outline: 2px solid var(--rust);
+  outline-offset: 3px;
+}
+
+.declared-action-dialog__text,
+.declared-action-dialog__body {
+  white-space: pre-wrap;
+}
+
+.declared-action-dialog [role='alert'] {
+  color: var(--rust);
+}
+
+.material-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+  padding: 0;
+  border: 0;
+}
+
+.material-slot {
+  min-width: 0;
+  padding: 14px;
+  background: color-mix(in srgb, var(--cream) 58%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--ink) 36%, transparent);
+  border-radius: 10px;
+}
+
+.material-slot.is-active {
+  outline: 2px solid var(--rust);
+  outline-offset: 2px;
+}
+
+.material-slot small {
+  display: block;
+  margin-top: 8px;
+}
+
+.material-slot__target {
+  width: 100%;
+  min-height: 95px;
+  margin: 0 !important;
+  padding: 0 !important;
+  text-align: left;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.declared-review-draft {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 26%, transparent);
+}
+
+.declared-review-draft label {
+  display: grid;
+  gap: 6px;
+}
+
+.declared-review-draft textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  color: inherit;
+  background: color-mix(in srgb, var(--cream) 68%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink) 36%, transparent);
+  border-radius: 4px;
+  font: 15px/1.55 inherit;
+  resize: vertical;
+}
+
+.material-slot strong {
+  display: block;
+}
+
+.material-slot details {
+  margin-top: 10px;
+}
+
+.material-slot details p {
+  max-height: 220px;
+  overflow: auto;
+  font-weight: 400;
+}
+
+.material-pool {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  padding: 18px;
+  background: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: inset 0 2px 12px color-mix(in srgb, var(--ink) 64%, transparent);
+}
+
+.material-pool button {
+  margin: 0;
+  color: var(--ink);
+  background: var(--paper);
+  text-align: left;
+  box-shadow: 0 3px 6px color-mix(in srgb, var(--ink) 28%, transparent);
+  cursor: grab;
+}
+
+.material-pool button[aria-pressed='true'] {
+  opacity: .65;
+  outline: 2px solid var(--rust);
+}
+
+.material-pool span,
+.material-pool strong {
+  display: block;
+}
+
+.material-pool span {
+  font-size: 28px;
+}
+
+.material-pool small {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dice-help,
+.dice-outcome-letter {
+  padding: 12px 16px;
+  color: var(--ink);
+  background: var(--surface-paper, var(--paper));
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  text-shadow: none;
+}
+
+.dice-help {
+  max-width: 360px;
+  font: 14px/1.7 Georgia, 'Noto Serif JP', serif;
+}
+
+.dice-help > div {
+  max-height: 240px;
+  overflow: auto;
+}
+
+.dice-outcome-letter {
+  font: 17px/1.85 Georgia, 'Noto Serif JP', serif;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--ink) 28%, transparent);
+}
+
+.dice-outcome-letter summary {
+  cursor: pointer;
+}
+
+.dice-outcome-letter[open] > div {
+  max-height: 320px;
+  overflow: auto;
+  margin-top: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .declared-action-dialog button {
+    transition: none;
+  }
+}

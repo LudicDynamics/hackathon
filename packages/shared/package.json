@@ -29,6 +29,26 @@
       "types": "./dist/components/performances.d.ts",
       "import": "./dist/components/performances.js"
     },
+    "./layout": {
+      "types": "./dist/layout/flow-columns.d.ts",
+      "import": "./dist/layout/flow-columns.js"
+    },
+    "./tts-text": {
+      "types": "./dist/rules/tts-text.d.ts",
+      "import": "./dist/rules/tts-text.js"
+    },
+    "./appearance-registry": {
+      "types": "./dist/components/appearance-registry.d.ts",
+      "import": "./dist/components/appearance-registry.js"
+    },
+    "./appearance-schema": {
+      "types": "./dist/schemas/appearance.d.ts",
+      "import": "./dist/schemas/appearance.js"
+    },
+    "./characters": {
+      "types": "./dist/rules/characters.d.ts",
+      "import": "./dist/rules/characters.js"
+    },
     "./dice": {
       "types": "./dist/rules/dice.d.ts",
       "import": "./dist/rules/dice.js"

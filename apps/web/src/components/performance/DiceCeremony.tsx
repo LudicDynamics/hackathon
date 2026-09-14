@@ -10,21 +10,26 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { playFoley, playStinger } from '../../lib/audio.js';
-import { SETTLE_MS } from '../narrative/DiceRoller.js';
-import { type DiceFrameVerdict } from '../../lib/dice-ceremony.js';
+import { ROLL_MS, SETTLE_MS } from '../narrative/DiceRoller.js';
+import {
+  toDiceCeremonyInput,
+  rollingFace,
+  type DiceCeremonyInput,
+  type DiceFrameVerdict,
+} from '../../lib/dice-ceremony.js';
+import { diceStageDisplay } from '../../lib/d10-display.js';
 import { D10Stage } from './D10Stage.js';
 import { useStill } from '../../lib/motion.js';
 
 /** Reduced motion still rolls, just briefly: less movement, same information. */
-
-/** Face swap cadence while tumbling (docs/perform/02 §8). */
-
-/** Highlight duration once settled — one glance back at the judged card. */
+const STILL_ROLL_MS = 180;
+/** Face swap cadence while tumbling. */
+const FACE_SPIN_MS = 90;
+/** Highlight duration once settled. */
 const HIGHLIGHT_MS = 800;
-
 interface DiceCeremonyProps {
-  /** Guarded / de-duped / layer-filtered verdict (lib/dice-ceremony.ts). */
-  verdict: DiceFrameVerdict;
+  /** Canonical input, or the legacy App verdict alias during the mount migration. */
+  verdict: DiceCeremonyInput | DiceFrameVerdict;
   /** End the ceremony (played out, dismissed, or interrupted by a layer switch). */
   onDone: () => void;
 }
@@ -32,34 +37,44 @@ interface DiceCeremonyProps {
 /** The frame path has no charge phase (docs/perform/02 §3.3). */
 type CeremonyPhase = 'rolling' | 'settled';
 
-export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict, onDone }) => {
+export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict, onDone }) => {
+  const input: DiceCeremonyInput | null =
+    'requestKey' in rawVerdict
+      ? rawVerdict
+      : toDiceCeremonyInput(
+          rawVerdict,
+          rawVerdict.source === 'character' ? 'character-frame' : 'writer-frame',
+        );
+  const stageDisplay = input ? diceStageDisplay(input.dice, input.rolls) : null;
   const still = useStill();
   const [phase, setPhase] = useState<CeremonyPhase>('rolling');
 
 
-  // `onDone` identity is not part of the effect contract: holding it in a ref
-  // keeps the settle effect from re-running (and re-firing the stinger) on
-  // every parent render.
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
 
-  // Tumble: roll foley, face spin, then hand over to the settled phase.
   useEffect(() => {
+    if (!input) {
+      onDoneRef.current();
+      return;
+    }
     if (phase !== 'rolling') return;
     playFoley('dice-roll');
-    return () => {};
-  }, [phase, still]);
+    const spin = still ? null : window.setInterval(() => setTick((t) => t + 1), FACE_SPIN_MS);
+    const timer = window.setTimeout(() => setPhase('settled'), still ? STILL_ROLL_MS : ROLL_MS);
+    return () => {
+      if (spin !== null) window.clearInterval(spin);
+      window.clearTimeout(timer);
+    };
+  }, [phase, still, input]);
 
-  // Settle: emotion stinger, one highlight on the judged card, then close.
   useEffect(() => {
-    if (phase !== 'settled') return;
-    if (verdict.crit) playStinger('smile');
-    else if (verdict.fumble) playStinger('shock');
+    if (!input || phase !== 'settled') return;
+    if (input.crit) playStinger('smile');
+    else if (input.fumble) playStinger('shock');
 
-    // The judged card may be absent (layer refresh still in flight, or the card
-    // is elsewhere): the ceremony must not wait on data, so a miss is silent.
     const el = document.querySelector<HTMLElement>(
-      `.object[data-path="${CSS.escape(verdict.path)}"]`
+      `.object[data-path="${CSS.escape(input.path)}"]`
     );
     el?.classList.add('dice-ceremony-highlight');
     const hi = window.setTimeout(() => el?.classList.remove('dice-ceremony-highlight'), HIGHLIGHT_MS);
@@ -69,7 +84,7 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict, onDone }) =
       window.clearTimeout(done);
       el?.classList.remove('dice-ceremony-highlight');
     };
-  }, [phase, verdict]);
+  }, [phase, input]);
 
   const badge = (pass: boolean) =>
     pass ? (
@@ -82,50 +97,60 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict, onDone }) =
       </span>
     );
 
-
-
+  if (!input) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-[rgba(41,40,32,0.55)] backdrop-blur-sm flex items-center justify-center">
-      {verdict.fumble && <div className="fumble-crack" />}
-      <div className={`dice-stage ${verdict.fumble && !still ? 'dice-shake' : ''}`}>
-        {verdict.crit && <div className="crit-glow" />}
-
-        <D10Stage dice={verdict.dice} rolls={verdict.rolls} settled={phase === 'settled'} onLanded={() => setPhase('settled')} />
-
+    <div
+      className="fixed inset-0 z-50 bg-[rgba(41,40,32,0.55)] backdrop-blur-sm flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Dice result ceremony"
+    >
+      {input.fumble && <div className="fumble-crack" />}
+      <div className={`dice-stage ${input.fumble && !still ? 'dice-shake' : ''}`}>
+        {input.crit && <div className="crit-glow" />}
+        {stageDisplay ? (
+          <D10Stage dice={input.dice} rolls={input.rolls} settled={phase === 'settled'} integrated />
+        ) : (
+          <div className="dice-stage__faces">
+            {input.rolls.map((value, i) => (
+              <div key={i} className="dice-face-tile">
+                {phase === 'rolling' ? rollingFace(i, tick, value) : value}
+              </div>
+            ))}
+          </div>
+        )}
         <div className="dice-stage__caption">
-          {verdict.desc !== '' && <span className="font-semibold">{verdict.desc}</span>}
-          {verdict.expect !== '' && (
-            <span className="font-mono text-xs">Requires: {verdict.expect}</span>
+          {input.desc !== '' && <span className="font-semibold">{input.desc}</span>}
+          {input.expect !== '' && (
+            <span className="font-mono text-xs">Requires: {input.expect}</span>
           )}
-          {(verdict.name !== '' || verdict.dice !== '') && (
+          {(input.name !== '' || input.dice !== '') && (
             <span className="font-mono text-xs text-ink/50">
-              {verdict.name}
-              {verdict.name !== '' && verdict.dice !== '' ? ' · ' : ''}
-              {verdict.dice}
+              {input.name}
+              {input.name !== '' && input.dice !== '' ? ' · ' : ''}
+              {input.dice}
             </span>
           )}
         </div>
-
         {phase === 'rolling' && (
           <span className="font-mono text-xs text-ink/60 animate-pulse tracking-widest uppercase">
             The dice of fate are spinning...
           </span>
         )}
-
         {phase === 'settled' && (
           <div className="flex flex-col items-center gap-4">
             <div
               className={`dice-result-number ${
-                verdict.crit
+                input.crit
                   ? 'dice-result-crit'
-                  : verdict.fumble
+                  : input.fumble
                     ? 'dice-result-fumble'
                     : 'text-ink'
               }`}
             >
-              {verdict.result}
+              {input.result}
             </div>
-            {badge(verdict.passed)}
+            {badge(input.passed)}
             <button
               onClick={onDone}
               className="px-5 py-2 rounded-full bg-ink text-white text-xs font-semibold tracking-wide shadow-sm hover:opacity-80 transition-opacity"

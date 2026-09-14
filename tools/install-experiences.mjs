@@ -5,7 +5,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { experiences } from './experiences/index.mjs';
 import { md } from './experiences/common.mjs';
-import { nookProfilePaths } from './experiences/character-nooks.mjs';
 import { templateArchive } from './world-editions.mjs';
 import { parseFrontmatter, WorldManifestSchema } from '../packages/shared/dist/index.js';
 

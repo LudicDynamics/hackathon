@@ -1,6 +1,5 @@
 import { Type } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
-import type { GetComponentDetails } from '../../packages/shared/dist/index.js';
 import { getActionService } from './deps.js';
 import { fail, ok } from './result.js';
 
@@ -8,16 +7,17 @@ import { fail, ok } from './result.js';
  * `get_component` — the read-only facade of the component registry
  * (doc-tools/10 §2.1, §8.4).
  *
- * It answers "which component kinds exist and what frontmatter does each one
- * take", so the model never has to carry every schema in its context. The
- * action lives in `packages/shared/src/actions/component.ts` and touches
- * nothing: no file, no canvas row, no event.
+ * It answers "which component kinds exist, what frontmatter they take, and
+ * (for kinds with a registered appearance profile) which schema, presets, and
+ * axis IDs are legal", so the model never has to carry every contract in its
+ * context. The action lives in `packages/shared/src/actions/component.ts` and
+ * touches nothing: no file, no canvas row, no event.
  */
 export const getComponentTool = defineTool({
   name: 'get_component',
   label: 'Get Component',
   description:
-    'Look up a canvas component kind: its purpose, its frontmatter fields, and a minimal example. ' +
+    'Look up a canvas component kind: its purpose, its frontmatter fields, its appearance schema/options, and a minimal example. ' +
     'Omitting component lists every registered kind in one line each. Read-only; it writes nothing.',
   parameters: Type.Object(
     {
@@ -44,15 +44,17 @@ export const getComponentTool = defineTool({
     { additionalProperties: false }
   ),
   promptSnippet:
-    "get_component(component?) — look up a component kind's frontmatter contract before writing one",
+    "get_component(component?) — look up a component kind's frontmatter and appearance contract before writing one",
   promptGuidelines: [
-    'Use get_component before writing or editing any file with frontmatter "type: component" — it returns the exact fields for that kind.',
+    'Use get_component before writing or editing any file with frontmatter "type: component" — it returns the exact fields and, when registered, appearance options for that kind.',
+    'Write appearance only with IDs returned in the appearance details (preset or explicit axes); recommendations from a world skill are not authorization. Omit appearance to preserve legacy defaults; use appearance: {} only when opting into context defaults.',
+    'Keep appearance in frontmatter, separate from body, title, preview, choice, status, and roll_dice. Never write CSS, classes, URLs, HTML, or theme prose as appearance values.',
     'Use show for one-off performances (spotlight, lights_out, fireworks). show writes nothing; to place a letter or a lock on the canvas, use chalk or write instead.',
   ],
   async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
     try {
       const result = await getActionService(ctx).getComponent({ component: params.component });
-      return ok(result as { text: string; details: GetComponentDetails });
+      return ok(result);
     } catch (err) {
       return fail(err);
     }

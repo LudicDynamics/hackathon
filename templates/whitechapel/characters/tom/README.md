@@ -1,6 +1,7 @@
 ---
 type: readme
 name: Tom Hale
+voice: casual-drawl
 avatar: assets/characters/tom.webp
 ---
 

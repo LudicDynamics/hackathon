@@ -94,6 +94,95 @@ export function clampPageIndex(i: number, len: number): number {
   return Math.min(Math.max(i, 0), len - 1);
 }
 
+/** A single character turn, preserving assistant message boundaries. */
+export interface CharacterTurnBuffer {
+  /** Non-empty assistant messages in upstream message_end order. */
+  messages: string[];
+  /** Delta text for the currently open assistant message. */
+  openDelta: string;
+  /** Whether character_idle has closed this turn. */
+  ended: boolean;
+}
+
+export type CharacterTurnFrame =
+  | { type: 'character_delta'; delta: string }
+  | { type: 'character_message'; text: string }
+  | { type: 'character_idle' };
+
+export interface CharacterTurnProjection {
+  buffer: CharacterTurnBuffer;
+  /** Messages plus the open delta, with newline message boundaries. */
+  rawText: string;
+  messageClosed: boolean;
+  turnClosed: boolean;
+  changed: boolean;
+}
+
+export function createCharacterTurn(): CharacterTurnBuffer {
+  return { messages: [], openDelta: '', ended: false };
+}
+
+export function resetCharacterTurn(): CharacterTurnBuffer {
+  return createCharacterTurn();
+}
+
+function projectCharacterTurn(buffer: CharacterTurnBuffer): string {
+  if (buffer.messages.length === 0) return buffer.openDelta;
+  if (buffer.openDelta === '') return buffer.messages.join('\n');
+  return `${buffer.messages.join('\n')}\n${buffer.openDelta}`;
+}
+
+/** Consume one character-lane frame without mutating the input buffer. */
+export function consumeCharacterFrame(
+  buffer: CharacterTurnBuffer,
+  frame: CharacterTurnFrame
+): CharacterTurnProjection {
+  if (buffer.ended) {
+    return {
+      buffer,
+      rawText: projectCharacterTurn(buffer),
+      messageClosed: false,
+      turnClosed: true,
+      changed: false,
+    };
+  }
+
+  const next: CharacterTurnBuffer = {
+    messages: [...buffer.messages],
+    openDelta: buffer.openDelta,
+    ended: buffer.ended,
+  };
+  let messageClosed = false;
+  let turnClosed = false;
+
+  if (frame.type === 'character_delta') {
+    next.openDelta += frame.delta;
+  } else if (frame.type === 'character_message') {
+    messageClosed = true;
+    // message_end is authoritative for this message. A matching delta is
+    // sealed exactly once; a mismatching delta is replaced, never appended.
+    if (frame.text.trim() !== '') next.messages.push(frame.text);
+    next.openDelta = '';
+  } else {
+    if (next.openDelta.trim() !== '') next.messages.push(next.openDelta);
+    next.openDelta = '';
+    next.ended = true;
+    turnClosed = true;
+  }
+
+  return {
+    buffer: next,
+    rawText: projectCharacterTurn(next),
+    messageClosed,
+    turnClosed,
+    changed:
+      next.ended !== buffer.ended ||
+      next.openDelta !== buffer.openDelta ||
+      next.messages.length !== buffer.messages.length ||
+      next.messages.some((message, index) => message !== buffer.messages[index]),
+  };
+}
+
 /** mock greeting line (contract §7.1, frozen copy — do not change). */
 export const GREETING_LINE: Record<'en' | 'ja', { text: string; emo: Emotion }> = {
   en: { text: 'Something on your mind?', emo: 'normal' },

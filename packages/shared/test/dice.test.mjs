@@ -338,7 +338,7 @@ test('patchRollDiceResult output keeps result numeric and passed boolean under Y
 
 test('patchRollDiceResult on the shipped template differs by exactly two lines (10.1 #10)', async () => {
   const fs = await import('node:fs/promises');
-  const url = new URL('../../../templates/holmes-world/world/baker-street/evening.md', import.meta.url);
+  const url = new URL('../../../archive/templates/pre-bilingual-2026-09-14/holmes-world/world/baker-street/evening.md', import.meta.url);
   const raw = await fs.readFile(url, 'utf-8');
   const out = patchRollDiceResult(raw, 62, true);
   assert.equal(out.replace('  result: 62\n', '').replace('  passed: true\n', ''), raw);

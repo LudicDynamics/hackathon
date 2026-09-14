@@ -353,7 +353,7 @@ test('arrange rejects w/h with unsupported and writes nothing (§11 冲突 1)', 
       isActionError('unsupported')
     );
     const row = store.getLayerCards(['world/inn/a.md'])[0];
-    assert.equal(row.x, 960 - 460 / 2, 'no x/y write when w is present');
+    assert.equal(row.x, 360, 'initial flow-column x remains unchanged when w is present');
     assert.equal(row.w, 460);
 
     await store.placeCard('world/inn', 'world/inn/a.md', { x: 10, y: 10 });

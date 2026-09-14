@@ -1,568 +1,169 @@
 # AGENTS.md — AIRP
 
-选项分发：声明式 `choice_actions` 的直接操作不进入作家栏；普通旧 choice 与明确 `writer` 请求仍先填草稿、Send 才执行。悬停与展开阅读复用 `EntityInteractions`。`stage.slots` 多槽准备经 `/api/material-review` 校验文件版本，只返回审核草稿、不调用 Agent，不等于确认执行。契约见 `docs/gameplay/多槽材料与统一行动入口.md`。
-
-六世界体验版直接动作：`choice_actions` 以选项英文 ID 声明阅读／拿取／材料预览／进层／角色入口／短反馈／作家请求，HTTP 外层组合既有动作；不自动起作家，生成请求仍需 Send。`dice_outcomes` 在玩家 `/dice` 后把短结果与后续选项写回原 Chalk，低点数保留推进路线。无声明的旧内容保留原设置语义，详见 `docs/gameplay/六世界选项解耦与骰子解谜.md`。
-
-D10 演出：`D10Stage` 按需加载夜辉 GLB，玩家与 Agent 共用；1d100 由两颗 D10 显示十位/个位。裁决仍由动作层写回原实体，Chalk 常驻显示已有结果。测试模板 `dice-lab`，详见 `docs/perform/D10骰子动画.md`。
-
-作家短回合：`extensions/toolkit/writer-beat-guard.ts` 在 agent_start 重置单轮预算，正常 writer 最多 24 次工具调用、一份 Chalk，允许同文件 edit，重复违规停止；初始化命令不受普通回合限制。不修改 pi-rp。`WorldActivityToast` 只根据成功世界事件合并物品提示；`WriterResult` 负责右上角阶段与最终回执。选项点击先填入作家栏，Send 才执行；小天地入口见 doc-06。
-
-当前存档被外部删除时，世界路由解除失效 store、停止 Agent 与监听，以 `409 no_active_world` 通知前端清空画布并打开世界选择；不自动恢复存档。世界列表和连接设置不依赖活跃世界。连接设置路由 `GET/POST /api/connection-settings` 只允许本机访问，密钥不回显，保存到后端 `.env.local`，详见 `docs/tts/TTS设置面板.md`。
-
-语音设置：`GET /api/tts/config` 仅暴露配置就绪状态、线上模型和默认音色；前端“声音与设置”控制本浏览器语音开关、语音与背景音乐音量，未配置时停止合成请求并单次提醒。角色语音区可配置七海本机服务基址、声音 ID、超时和可选密钥，经连接设置路由保存后下次合成立即生效，失败仍警告并回落线上；面板文案支持英中日。详情见 `docs/tts/TTS设置面板.md`。
-
-七海本机语音：`AIRP_TTS_LOCAL_BASE_URL` 启用 first-snow / first-snow-jp、旧 firstsnow 及 school-romance（世界 ID `sakura-academy`）与其派生存档中 nanami 的 Fish TTS 优先路由。角色请求附带 `characterId` / `emotion`；本机失败 console 警告并回落原线上音色，双来源缓存隔离，恢复后重新优先本机。见 `docs/tts/10-本机角色语音与线上兜底.md`。
-
-图片适配边界：`extensions/toolkit/image-openai-provider.ts` 在项目内实现 `ImageProvider`，直接请求 OpenAI-compatible Images 接口；OpenRouter 继续复用 pi-rp。图片供应商接入不修改引擎内建注册表，动作层仍负责素材落盘与复用。
-
-模型与执行进度：`apps/server/src/engine/model-preferences.ts` 管理世界存档内的运行偏好，`GET/POST /api/agent-settings` 与 `agent_progress` 接前端 Agents 面板和行动状态。协议及验证见 `docs/agents/Agent模型选择与进度.md`。这不是独立叙事状态文件；正文仍是世界真相源。
-每世界设置：`apps/server/src/engine/world-settings.ts` 管理存档内的玩法偏好（`<worldRoot>/.airpworld/settings.json` 的 `autoWrite`），`GET/POST /api/world-settings` 接前端 Agents 面板。三态 `off`（默认，回到 doc-21 §5.5）/ `scenes` / `scenes-and-choices`：**「进未写场景」走 I1 初始化器（门），「玩家选项」才可能起作家一轮**；`/api/enter-layer` MUST NOT 起作家。契约见 `docs/settings/00-共同上下文.md`。这不是独立叙事状态文件；正文仍是世界真相源。
-
-> 在这个仓库里干活的人与 agent 的入口手册。
+> 这是仓库级入口手册：只放所有 Agent 在每次工作前都必须知道的项目意图、架构不变量和协作规则。专项契约与实现细节放在 `docs/`、模块目录和 skills 中，不在这里重复。
 > **本文与 `docs/` 都是设计真相源：架构一变，本文同步改。**
-> 设计文档 2026-09-11 从 `infini-canvas` 项目迁入本仓库；`infini-canvas` 已退休，只留前端原型（见 §4）。
 
----
+## 1. 项目定位
 
-## 1. 这是什么
-
-**AIRP（AI Role-Playing Narrative Canvas）** —— 一款 AI 互动叙事游戏。玩家在一张"活的无限画布"里以角色身份活动，作家（LLM）用 `type: chalk` 的叙事旁白统摄全场，多模态演出（视差 / 声场 / 立绘）与实体道具交互（以物解谜 / 掷骰）承担玩法主力。
+AIRP（AI Role-Playing Narrative Canvas）是一款 AI 互动叙事游戏：玩家在无限画布中探索世界，作家 Agent 负责叙事，多模态演出和实体互动负责玩法。
 
 一句话架构：**画布是全空间，黑板是缓冲，消息是指路牌，叙事是世界的灵魂。**
 
-| 层 | 技术 |
+| 层 | 位置 |
 |---|---|
-| 前端 | React 19 + Vite + Tailwind（`apps/web`） |
-| 后端 | Node + Express + ws（`apps/server`），端口 3001 |
-| 共享协议 | Zod schema + 文件/ SQLite store（`packages/shared`） |
-| 叙事引擎 | **pi-rp** —— `vendor/pi-rp` git submodule，独立仓库 |
-| 包管理 | pnpm workspace |
+| 前端 | `apps/web`：React 19 + Vite + Tailwind |
+| 后端 | `apps/server`：Node + Express + ws，默认端口 3001 |
+| 共享协议与动作层 | `packages/shared`：Zod schema、文件/SQLite store、动作服务 |
+| Agent 引擎 | `vendor/pi-rp`：git submodule，独立仓库 |
+| 扩展与提示词 | `extensions/`、`presets/`、`skills/` |
+| 世界模板与存档 | `templates/`、`worlds/` |
 
-### 1.1 语言规范（硬要求）
+## 2. 必须保持的架构不变量
 
-**稳定 ID 一律英文；标题、正文与世界提示词随世界语言；内部文档中文。** 2026-09-13 用户最新确认：所有体验版世界统一 ASCII 小写 kebab-case 文件/目录/人物 ID，日语世界仍显示日语。路径与显示名分离，迁移清单见 `docs/worlds/世界日语化迁移.md`。
+### 文件和事件是真相源
 
-| 范围 | 语言 | 理由 |
-|---|---|---|
-| 样板世界 UI 默认语言、演示内容、世界文本 | **日语** | 日语版世界载入时切到日语；通用 UI 保留语言切换 |
-| 世界提示词、标题、正文、人物显示名 | **随世界语言：日语 / 英文** | 新生成内容也遵守 |
-| 世界/地点/时间/人物/物品/Chalk 的文件、目录与 ID | **英文 kebab-case** | 跳转与关联用稳定路径，不用显示标题 |
-| 世界内资产文件名与说明 | **稳定英文文件名；说明随世界语言** | 图形字节及既有引用可复用；共享技术资产不擅自重命名 |
-| 代码注释、报错文案、日志 | **英文** | 仓库是公开的黑客松产物，评审会直接读代码 |
-| commit message、与队友/用户沟通 | **中文** | 开发者都是中国人 |
-| `docs/**`、本文件、根 `README.md` | **中文** | 内部设计文档 |
+- **文件即真相**。世界正文、实体、互动字段以世界目录中的文件为真相源；不要引入第二份叙事状态文件。
+- 内容存文件系统；画布布局、历史、事件和游标等架构状态存 `.airpworld/` 下的 SQLite。
+- 写世界的动作必须经过动作层并落事件；`fs.watch` 只能触发重取，不能代替事件落账。
+- 玩家 UI、作家 Agent、角色 Agent 和扩展工具共享 `createActionService(store, actor)` 的动作语义。
+- 不新增 `get_state`、`set_state`、`state_update`、`watch_state` 或同类状态命名空间。
+- 动作工具如果已经通过动作层执行并落账，`tool_result` 只能兜原生 `write`/`edit`；两份名单必须互斥，否则同一笔 chalk 或文件修改会被重复记账。
+- 作家上下文的读取、渲染和游标推进必须以轮边界为单位；注入成功后才推进作家游标。角色流程不得误推进作家游标，相关代码必须守卫 `actor.type === "writer"`。
+- `status.data`、`choice`、`roll_dice` 是实体文件的 frontmatter，不是独立状态系统；不要把它们扩展成第二套状态真相。
 
-黑客松官方语言是 **英文 / 日语**。世界运行时的人类可读内容随世界语言，普通内容路径与 ID 固定英文。平台共用规则复用，不按世界复制；共享提示词语言的验收与内容路径迁移分开。
+### 高风险边界
 
-**保留名**：`README.md`、`world.json`、`SKILL.md`、协议键/枚举/工具名保持原样。示例 `world/harbor-chart/amber-cafe/README.md` 内写 `title: 琥珀カフェ`；生成新的子目录、人物文档与 Chalk 也使用英文稳定路径。
+- 世界路由发现当前存档被外部删除时，必须解除失效 store、停止 Agent 和监听，并以 `409 no_active_world` 通知前端清空画布、打开世界选择；不要自动恢复被删除的存档。
+- 世界列表和连接设置不依赖活跃世界。`/api/connection-settings` 只允许本机访问，密钥不回显，并保存到后端 `.env.local`。
+- `GET /api/tts/config` 只暴露配置就绪状态、模型和默认音色；浏览器语音开关由前端控制。未配置时不得发起合成请求，并只提醒一次。
 
-改世界内容时**目录名即层 id**——**层不是声明出来的，是扫描出来的**：`world/**/` 下每个目录就是一个层，目录里的 `README.md` 是它的场景配置。改名必须同步所有引用、`characters[].home`、preset 文件槽、Gate target、物件门槛、图片路径、存档定位与测试；`world.json` 里**没有** `layers`。体验版的既有模板与存档通过离线迁移工具同步路径；先备份，保留背包、剧情、骰子与画布坐标。非体验版不在本次范围。不能只改目录不改引用。
+### 世界、层与小天地
 
----
+- `world/**/` 下的目录就是层；层由目录树扫描得到，不在 `world.json` 中声明。
+- 层改名必须同步路径引用、角色归属、Gate、物品门槛、图片路径、存档定位和测试；不能只改目录名。
+- `characters/<id>/` 是独立的角色小天地，不是层；通过 `/api/nook` 及 `NookView` 处理，不要让它进入普通层派生。
+- `/api/enter-layer` 不直接启动作家轮；未写场景的入口走 I1 初始化器，玩家选项是否启动作家由每世界 `autoWrite` 设置决定。契约见 `docs/settings/00-共同上下文.md`。
+- 父层只展示自己的 Markdown 和直接子层的门牌，不要递归把子场景内部卡片铺到父层。当前层的 `README.md` 可作为 `scene` 返回，但不能恢复成独立的固定入场面板；旧 README-only 场景若需要可读正文或选项，必须建立场内实体。
+- Gate 的物品门槛比较稳定的精确文件路径；不要用显示标题或模糊名称代替路径。nook 同样只取角色目录的直接子级卡片。
 
-## 2. 目录
+### Agent、注入与通信
 
-```text
-apps/
-  server/src/
-    index.ts            # Express + WS 入口（/api、静态托管 apps/web/dist、端口 3001）；入站 WS 分流（writer_prompt / airp_init）
-    routes/world.ts     # 玩家 UI 路由 → 动作服务（/move, /dice, /use-item, /choice, /enter-layer, /layer, /nook, /card/*, /god-action, /audio, …）
-    routes/tts.ts       # POST /api/tts 合成 + GET /api/tts/audio/:file 回放；唯一合成点，无模块级状态（docs/tts/01）
-    world-shelf.ts      # 世界/存档书架投影与可恢复删除；见 docs/worlds/世界与存档.md
-                        # Agent 帧到前端的身份与状态接线见 docs/wiring/Agent前端接线.md
-    engine/
-      launch.ts         # spawn 参数单一来源（preset / --session-dir / --continue / env / AIRP_AGENT_ROLE / --model(--provider) / --thinking / --no-* 资源隔离 / modelPreferenceArgs），服务端与探针共用
-      lifecycle.ts      # Agent 生命周期编排（单例复用 / spawn / warmup / 崩溃退避重启 / stopAll）
-      event-bridge.ts   # 引擎事件 → WS 帧；尾部读 events 表 → world_event 广播（见 §3.2）
-      chalk-delta.ts    # chalk 落墨的逐字差分，`writer_delta` 演出源（docs/perform/01）
-      presets.ts        # preset 安装到 <worldRoot>/.airpworld/prompt-presets/；extensionArgs/skillArgs/airpEnv
-  web/src/
-    lib/                   # 纯前端库：camera（插值相机）/ collide（软碰撞）/ seat（排座镜像）/ measure（卡片盒尺寸缓存）/ parallax（指针视差模块态，走 DOM 不触发 React 渲染）/ footprint（实测盒回写）/ audio（采样优先声场，synth 兜底）
-                           #   phantom + phantom-seat + ghost（生成中占位与座位过户，docs/perform/03）/ canvas-patch（增量合并）/ writer-state（笔尖状态机）/ chalk-reveal / dice-ceremony / motion / i18n / md / fm
-                           #   ui-shell.mjs（Header / journal 独立显隐、人物分区与测量后排版）
-    state/                 # useCamera（相机与层级记忆）/ useWorld（层数据 + WS + 落库；唯一 WebSocket）/ useAudio（声场主轨）
-    prototype.css          # 沉浸式原型外壳样式（niko 界面批次）
-    scene-shell.css        # 素材版世界 UI：暖纸栏、玩家身份与人物圆牌
-    components/canvas/     # 无限画布（相机 / 卡片渲染 / 关系线 / CanvasGrid 视口网格 / ParticleLayer 粒子）
-    components/narrative/  # chalk 叙事卡、骰子
-    components/overlay/    # 角色特写遮罩
-    components/sidebar/    # 右侧边栏（背包 + 角色）
-    components/nook/       # 小天地视图（NookView，复用 Canvas，不自己 useWorld）
-    components/chrome/     # 画布外框件（指南针 / 小地图 / 提示条 / 层徽 / 静音钮 / 作家栏）
-    components/god/        # 上帝模式工具栏
-    components/performance/ # 演出层（DiceCeremony 骰子仪式 / WriterInkLayer 湿墨）
-packages/shared/src/    # schema + store + sqlite + 动作层
-  schemas/              # world / frontmatter（互动字段通用化）/ components / events / forms / canvas
-  store/                # local-store（fs + canvas.db + history.db）/ layers（层树派生）/ world-store（接口）
-  inject/               # 每轮注入：turn-cache（轮边界单槽缓存）/ collect（分节采集 + 备忘录 + 三步 fail-soft）
-  db/schema.ts          # 两库建表：cards / links / presence / viewpoint / entries / events(seq) / read_cursors
-  rules/                # 零依赖纯规则：dice（expect 解析）/ interactive（choice 归一化）/ characters（角色 id + nookIdOf + nookCardPaths，docs/nook §5.2 唯一实现）/ emptiness（isLayerEmpty / isNookEmpty / hasInitProduct）/ init-fallback（w2SceneTemplate）/ voices（音色调色板）
-  render/               # 文本视图：spatial（人话方位）/ layer-page（目录展开）/ state（注入块装配）/ sections（分节表）/ events（事件人话）/ next-step（"下一步"）/ viewpoint（视点量化）/ sanitise（注入面消毒）/ brief（buildSceneInitBrief / buildNookInitBrief，I1 从 apps/server 下沉）——look_at、状态块与前端共用
-  components/           # 官方组件注册表（kind / schema / CARD_FORMS 联动 / use_item handler）
-  actions/              # 动作层：createActionService(store, actor) —— server 路由与扩展工具的唯一共同入口
-presets/                # 提示词预设：writer, character, scene-init, nook-init
-extensions/
-  instructions.ts       # 平台提示词正文（slot writer-char / system-char / scene-init-instruction / nook-init-instruction）
-  tools.ts              # 唯一 registerTool 入口：注册 AIRP 动作工具（extensions/toolkit/ 是 jiti 直跑的薄壳）
-  context.ts            # 每轮注入（状态块 + 事件段 + "下一步"），挂 `context` 钩子（临时不落盘）；按 AIRP_AGENT_ROLE 分节（writer 6 节 / character 4 节）
-  world-context.ts      # 仅原生 write/edit 落账，排除 AIRP 工具；每轮注入统一复用 context.ts
-  toolkit/              # 工具壳 + 共享 helper（deps/actor/turn/result）；init-command.ts = `airp-init` 初始化执行内核（R2 直唤：扩展命令 → ctx.spawnAgent）——子目录，不会被当扩展加载
-skills/                 # 项目级 skills：跨世界通用手艺（生图 / 组件叙事 / 音色选角 / 节奏 / 玩法咬合）
-                        #   component-narration / tool-craft / voice-casting（音色选角，docs/tts/08）
-templates/              # 已入 Git 的七世界双语正式模板；无后缀英文，-jp 日文
-  <world>[-jp]/        # wuwu / whitechapel / divergence / first-snow / magic-academy / unwritten-door / moonlit-contract
-  unwritten-door/       # 第六个体验 Demo：信封、手机与空白门外，见 doc-25
-  <world>/skills/       # 世界级 skills：该世界自己的文风与剧情，与 world/ 同级、随包分发
-worlds/                 # 脚手架产出的玩家世界（.gitignore）
-archive/templates/      # pre-bilingual-2026-09-14：18 个旧模板可恢复归档，不参与新游戏扫描
-vendor/pi-rp/           # 叙事引擎 submodule
+- `extensions/context.ts` 的每轮注入是临时请求上下文，不得使用会持久化并逐轮累积的消息接缝代替它。
+- 注入由状态块、事件增量和下一步组成；重计算在轮边界完成，handler 只读取缓存并拼装文本。详细契约见 `docs/hooks/00-共同上下文.md`。
+- `useWorld` 是前端唯一 WebSocket；新增帧必须同时更新服务端发射面、前端消费面和 WS 契约文档，并运行 `pnpm check:ws`。
+- Agent 资源发现必须隔离；修改 `launch.ts`、preset 或扩展加载逻辑前，先检查 `docs/后端实现计划.md` 和 `vendor/pi-rp/packages/coding-agent/docs/` 的对应文档。
+- 模型解析通常遵循 CLI 显式覆盖 → 已有会话记录 → settings 默认值；只改 `settings.json` 不会改变已经存在会话的模型。排查“改了默认模型却没生效”时，先检查 launch 参数和会话文件，不要盲目改用户目录。
+- 两条 launch spec 必须保留 `--no-extensions --no-skills --no-context-files --no-prompt-templates --no-themes`；这些开关隔离的是自动发现，不影响显式传入的 extension/skill。缺失时，世界包扩展、上溯发现的仓库 `AGENTS.md` 或本机 skills 可能被意外注入 Agent。
+- AIRP 使用仓库内 `.pi/agent/` 作为 `PI_CODING_AGENT_DIR`，不要通过修改 `~/.pi/agent/` 试图改变 AIRP 配置。模型覆盖顺序和世界级 `.airpworld/settings.json` 的优先级以 `launch.ts` 与 pi-rp 文档为准。
+- `context` handler 不得重新扫描目录、读取数据库或重复渲染；这些重活只在 `agent_start` 的轮边界缓存一次。
 
-tools/                  # 单一职责脚本：探针（probe-*）/ 门禁（check-*）/ 工作流
-  check-world-editions.mjs # 七世界双语：文件、协议、语言、路径与素材一致性（pnpm check:worlds）
-  scaffold.mjs          # 模板 → 新世界（pnpm scaffold）
-  pi-rp.mjs             # pi-rp 子模块工作流（pnpm pi status|build|update|commit，见 §7.2）
-  motion-clip.mjs       # 微动立绘 / 背景视频生产（pnpm motion）：绿幕→透明 webm，成片→循环 webm
-                        #   手艺包见 assets/skills/motion-portrait/SKILL.md（alpha 解码陷阱在彼）
-  flow-gen.mjs          # 生图 / 生视频（pnpm gen）：调本地反代 ../flow-proxy-api，封装异步轮询与降级告警
-                        #   手艺包见 assets/skills/flow-media/SKILL.md（认证链与静默降级在彼）
-  gen-emotions.mjs      # 6 情绪差分批产（docs/assets/00 §4.1）：base.png --(img2img)→ 绿幕图 → chromakey → 透明 webp；**图片链路不扣额度**
-  gen-motion.mjs        # 角色微动立绘批产（docs/assets/00 §4.2）：绿幕 normal 图 --(i2v 720p 6s)→ motion-clip 360w 乒乓；**扣额度（实测 10/条）**
-  record-emotion-assets.mjs # 本批媒体溯源：写 templates/<world>/assets/character-media.json；--check 可核验（不并入 sync-* 的两张账）
-  probe-writer.mjs      # 全链路探针（pnpm probe）
-  probe-tools.mjs       # 工具面探针：jiti 载入 extensions/tools.ts，断言注册表 + 真执行（probe:tools 第一段）
-  probe-tools-engine.mjs # 工具面探针（强形式）：真 spawn 引擎，断言 AIRP 工具被引擎执行（probe:tools 第二段）
-  probe-inject.mjs      # 注入探针：真 spawn 作家引擎，断言每请求恰好一份注入块、且不落盘（pnpm probe:inject）
-  probe-prompt.mjs / probe-prompt-character.mjs # 提示词 wire 探针（作家 + 角色），断言 slot 真进了模型、[emo: tag] 六标签在（pnpm probe:prompt）
-  probe-init.mjs        # 初始化探针：真 spawn 作家，发 /airp-init，断言产物落盘 + 事件落账 + 幂等 + 零 AI 路径（pnpm probe:init）
-  *-probe-provider.ts / prompt-dump-provider.ts # 各探针的确定性 provider（把 wire payload 落文件供断言）
-  check-ws-contract.mjs # 跨端 WS 契约门禁（pnpm check:ws）：服务端发射面 ↔ 前端消费面 ↔ 契约表求 diff
-  check-request-bodies.mjs # HTTP 请求体门禁（pnpm check:bodies）：前端 body 键集 ↔ docs/wiring/00 §6 冻结形状
-  check-hooks-docs.mjs  # 设计文档门禁（pnpm check:docs）：symbol ownership / barrel union / sentinel（hooks 批语料）+ **file:line 引用核验（hooks + audio + AGENTS.md + assets/README.md）**；单测 tools/check-hooks-docs.test.mjs
-  check-skills.mjs      # skill 语料门禁（pnpm check:skills）：frontmatter 真解析 / 语言分层 / 命名 / 非法工具名
-  check-voices.mjs      # 音色门禁（pnpm check:voices）：角色 voice 必须解析到调色板（docs/tts/07）
-  check-i18n.mjs        # i18n 键门禁（pnpm check:i18n）：`t('…')` 字面量必须解析到 messages.json 且 zh-CN/ja 翻译齐全（缺键会静默回落成英文）
-  check-merge-log.mjs   # 合并登记门禁（pnpm check:merge）：first-parent merge 必须有 docs/merge/<title>-<7hex>-<作者>.md；单测 tools/check-merge-log.test.mjs（§6.6）
+## 3. 语言、命名和内容规则
 
-assets/                 # worldlines-assets 素材车间；整树 .gitignore，**白名单 audio/、skills/ 与已批准的 D10 模型**（见 §7.8）
-  audio/                # 平台级音频池（已入库）：bgm（3 情绪主线）/ themes（逐世界主题曲）/ ambient（基础三轨 + pool/ 声场族）/ foley（拟音）+ PLAN.md 需求清单 + CREDITS.md
-  skills/               # 素材生产手艺包（文本，无大二进制）：character-asset-batch（6 情绪+微动立绘整链）/ motion-portrait / flow-media
-  worlds/ _inbox/       # AI 生图原始产出与筛选（约 587MB，不入库）——发布位是平台 IP 包，不是这里
+- 稳定的世界、层、地点、人物、物品和 Chalk ID 使用 ASCII 小写 kebab-case 英文；显示标题、正文、人物显示名和提示词随世界语言。
+- 代码注释、日志和报错使用英文；`docs/**`、根 `README.md`、本文件和开发者沟通使用中文——开发者都是中国人，产品面向的客户使用英文 / 日语。
+- 路径与显示名分离。不要用显示标题作为稳定路径或关联 ID。
+- 世界内容改动必须同时检查所有引用；优先使用现有迁移工具和测试，不手工留下旧路径兼容层。
 
-docs/                   # 设计文档（真相源）；各实现批次目录见 §4
-  README.md             # 按主题导航；00-文档骨架.md 保留全量说明与历史沿革
-  product/ ui/ agents/ protocols/ development/ # 产品、界面、Agent、协议与开发计划
-  gameplay/             # 通用玩法、Chalk 判定与执行验收
-    worlds/             # 六世界节拍、结局与逐世界验收
-  worlds/               # 世界包、模板、存档与稳定路径规范（不放剧本）
-  init/                 # 初始化执行（I1）：00 冻结契约 + 01–04 分篇 + REVIEW-*
-  nook/ footprint/      # 角色小天地 N1 / 卡片占位尺寸
-  audio/                # 音频接线（A1）：00 契约 + 01 服务端路由与解析 / 02 采样链与主轨 / 03 前端贯通 / 04 Foley 与 stinger / 05 素材缺口 / 06 回写
-  tools/ hooks/ wiring/ perform/ prompts/ tts/ # 各实现批次：00 冻结契约 + 分篇 + REVIEW-*（§4 有逐批说明）
-  merge/                # 合并登记（§6.6）：00-合并纪律.md（契约）+ BASELINE.md（立法前豁免 SHA）+ 逐次登记 + archive/ 两份 niko 复盘原始报告
-  wiring/前端接线体检.md # 2026-09-12 跨端 WS 契约静默漂移的核实报告（含缺陷分级与文档漂移清单）
-```
+## 4. 修改前的文档入口
 
----
+先读与改动最接近的冻结契约，再读实现。不要在 `AGENTS.md` 中复制专项文档。
 
-## 3. 架构
-
-```mermaid
-graph LR
-  W["apps/web<br/>React 无限画布"] -->|"HTTP /api/*"| S["apps/server<br/>Express + ws"]
-  S -->|"WebSocket 事件流"| W
-  S -->|"调用动作服务"| A["packages/shared/actions<br/>createActionService(store, actor)"]
-  S --> L["engine/lifecycle<br/>进程编排"]
-  L -->|"JSONL commands / stdio（pi-rp RpcClient）"| P["vendor/pi-rp<br/>pi 引擎（作家 / 角色 agent）"]
-  P -->|"extensions/tools.ts 注册 AIRP 工具"| A
-  P -->|"extensions/context.ts 挂 `context` 钩子"| SB["每轮注入状态块<br/>状态块 + 事件段 + 下一步<br/>临时不落盘"]
-  A -->|"落盘 + 落账"| FS["世界目录<br/>*.md + world.json"]
-  A --> DB[".airpworld/<br/>canvas.db + history.db"]
-  P -.->|"读取"| PR["presets/*.json<br/>→ .airpworld/prompt-presets/"]
-```
-
-### 3.1 单轮管线（作家）
-
-未写之门 Demo 的 choice、自由输入与 stub 首次进入，经 `lifecycle.submitWriter` 串行派发作家；新场景当前走亲写 W1，未启用 scene-init 委托。根 `.env.local` 指定模型/图像网关/超时；图像经 pi-ai 调用。从模板加载先复制到 worlds 再游玩。范围见 `docs/gameplay/worlds/doc-25-未写之门Demo.md`。
-
-**「交互 → 叙事后果」默认不自动发生**：玩家的 choice / 掷骰 / 用物 / 开门 / 上帝动作默认**只落一条事件**，作家在下一轮输入时经 Hook 注入读到；只有每世界开关 `autoWrite`（默认 `off`）显式打开才自动起作家一轮。**唯一真相源与逐交互档位表：`docs/settings/00-共同上下文.md §1bis`**；`/api/enter-layer` MUST NOT 起作家（门走 I1 初始化器）。
-
-Hook 注入场景上下文 → chalk 落正文 → edit 回写 frontmatter → write/edit 演化场景物件 → 轻量收敛。
-**chat history 不进画布，只有 chalk 落板。**
-
-**注入挂 `context` 钩子（不是 `before_agent_start` 的 `message`——那个会被持久化并逐轮累积），只在本次 LLM 请求里存在、不落会话条目。** 每轮注入 = **一个自足的状态块**（当前值，全量）+ **一个事件段**（变化，游标增量）+ **一句"下一步"**（祈使，由事实推出）；三者拼成一条自定义消息追加到消息尾部。重活（扫目录 / 读库 / 渲染）只在**轮边界**（`agent_start`）算一次并缓存，`context` handler 只做字符串拼接与缓存读取。作家 6 节 / 角色 4 节，按 `AIRP_AGENT_ROLE` 选表。协议见 `docs/hooks/00…06`。
-
-### 3.2 文件即真相
-
-前端 Markdown 类型渲染与互动分离：`CanvasObject` 统一挂载 `EntityInteractions`，共享 `buildInteractiveFields` 归一化 `choice / status / roll_dice`，`actions` 保留为带源文件上下文的文字请求。Chalk 锚点为临时呈现态。玩家 `/api/choice` 与 Agent choose 共用 `createActionService().chooseOption` 校验并落账，通过 `world_event` 广播；详 `docs/protocols/doc-09`。
-
-模板玩家身份可用 `world.json.player`（id / name / avatar）声明；角色列表仍只承载 NPC。图片随世界放在该世界的 `assets/` 下，同步来源与 SHA-256 见各世界的 `templates/<world>/assets/source-manifest.json`（由 `tools/sync-template-assets.mjs` 生成）。同步范围与未决剧情见 `docs/worlds/模板资源对齐清单.md`。
-
-默认服务入口载入 `templates/wuwu`（Fogwharf）。前端世界外 Header 与 journal 默认收起；场景画布首次显示测量实际内容边界，修正遮挡后通过原坐标 API 保存，初始镜头按窗口适配。素材版根场景采用叙事与证物分区；当前实现每次重新载入页面会重新整理根场景，保留手动排版是后续验收项。
-
-世界目录本身就是真相源，**没有独立状态文件**。`status.data` / `choice` / `roll_dice` 是实体通用 frontmatter，不局限于 chalk；玩家 UI、作家与角色通过同一个引擎动作层触发互动。**`status` 不是状态系统，它只是某个实体（含 chalk）的一份快照**——读它 = 读那个文件。
-分层存储：**内容走文件系统，架构状态与历史走 SQLite**（`canvas.db` / `history.db`）。
-
-**事件是唯一变更来源，`fs.watch` 不落账**：一切写世界的动作先落 `history.db` 的 `events` 表（`seq` 自增主键是唯一游标；五种 `actor`：player/god/writer/character/engine；十五个封闭 `type`，见 `docs/protocols/doc-21`）。经过动作函数的工具**自己落账**，扩展的 `tool_result` hook 只兜原生 `write`/`edit`（两份名单 MUST 互斥，否则 chalk 落两次）。`fs.watch` 只做前端重取的触发器。**扩展在 agent 进程、WS 在 server 进程，两者不通**——server 侧**尾部读 `events` 表**（`getEventsSince(lastSeq)`）再把新事件合成 `world_event` 帧广播给前端。
-
-**作家注入的轮边界在 `agent_start`，游标在注入成功后推进**：读取与渲染是轮边界的一次结算；作家游标在**注入成功后**推到 `getMaxSeq()`，角色游标在**关遮罩时**推进（**须 `actor.type === 'writer'` 守卫**，否则角色进程每轮也推作家语义）。详见 `docs/hooks/00` §1 §6。
-
-**state 绝对不做（架构不相容，非排期）**：不引入 `get_state` / `set_state` / `state_update` / `watch_state`，不引入状态文件、状态命名空间、状态栏。理由：那会产生第二个真相源——agent 绕过 `edit` 改状态时 `fs.watch` 与事件表都看不见，同时打穿"文件即真相"与"事件是唯一变更来源"两条地基。详见 `docs/protocols/doc-20` §2.3。
-
-### 3.3 preset 即 Agent 人格
-
-初始化只有一个可委托 profile（`scene-init`），作家委托（R1）与引擎直唤（R2）共用它，靠**动态 brief** 区分任务。详见 `docs/init/doc-11`。
-
-**层由目录树扫描得出**，不在 `world.json` 里声明：`world/**/` 的每个目录是一个层，目录里的 `README.md` 是它的场景配置。父层页面只显示自己目录的 md + **每个直接子层的门牌**（子层 README，或无 README 的 stub 门），绝不伸进子层内部——这是「子场景的卡全糊在基层上」那个 bug 的根因。派生逻辑在 `packages/shared/src/store/layers.ts`（纯函数，前后端共用）。
-
-`world.json.entry` 指定打开世界后的 0 级导入层（缺省 `map`）。当前层自己的 `README.md` 由 `/api/layer` 单独作为 `scene` 返回（场景配置与小天地元信息用它）；**但它不再自动显示为屏幕固定的入场面板**——niko 的展示约定删除了独立 `SceneChalk` 面板（依据 `docs/ui/doc-06` 开头该条裁决，门禁 `tools/no-scene-panel.test.mjs` 禁止复活）。场内正文只通过 `.object > .chalk--bare` 与 `EntityInteractions` 呈现；README 在父层仍是 Gate，不进入普通卡片排座。**旧 README-only 场景若需让玩家读到正文/选项，MUST 把可读正文建成场内实体，不能靠恢复固定面板补齐。** P0 Gate 可用 README 的 `requires.items` 要求玩家背包中的精确文件路径，详见 `docs/doc-15` 与 `docs/protocols/doc-20`。
-
-**角色小天地（nook）是与「层」并列的一条通路，不是层**（2026-09-13 落地）。`characters/<id>/` 根目录本身就是小天地（doc-06 §4.1 / doc-11 §4），但它**被层派生显式排除**（`layers.ts` 只收 `world/` 子树；`resolveLayer()` 对 `characters/**` 返回 `null`）。因此它走**独立端点** `GET /api/nook?character=<id>`——返回体与 `LayerState` 同形（`layer` 字段填 `characters/<id>`、`scene` 为角色 README、`items` 只含**直接子级 md**（`nookCardPaths`）、`links`/`presence` 为空）。前端入口在**角色 tab 每行的第 4 个按钮**，视图是 `apps/web/src/components/nook/NookView.tsx`（复用 `Canvas`，**不自己 `useWorld()`**，避免第二个 WebSocket）。小天地里的卡片同样有 `cards` 行（`layer` 列存完整 nookId）、同样走 `POST /api/card/footprint` 回写（该路由对 `characters/<id>` 有并列分支）；拖卡走 `arrangeCards`（其 place/layout 两条分支均有 nook 分支）。微动立绘是 `portrait` kind（room pack，`component: portrait` + `video:` + `poster:`，透明 VP9 webm 由 `tools/motion-clip.mjs` 从绿幕产出）。设计真相源：`docs/nook/00…05`。
-
----
-
-## 4. 文档导航
-
-主入口 **[`docs/README.md`](docs/README.md)**（按主题进入）；[文档骨架](docs/00-文档骨架.md) 保留全量说明和历史沿革。玩法放 `docs/gameplay/`，逐世界体验与结局放 `docs/gameplay/worlds/`，世界包与存档规范放 `docs/worlds/`；原 doc 编号保留。最常看的几份：
-
-| 文档 | 什么时候看 |
+| 改动范围 | 先读 |
 |---|---|
-| `docs/product/doc-05-AIRP产品构想.md` | **产品设计起点**——要理解任何设计的动机，先看它 |
-| `docs/ui/doc-06-演出与交互设计.md` | 动交互 / 演出层 |
-| `docs/development/doc-07-AIRP黑客松作战计划.md` | Fri–Tue 执行看板、分工、未分配任务、排期与风险 |
-| `docs/init/doc-11-场景与小天地初始化协议.md` | 初始化协议（**已定案**，含 preset 骨架与 pi-rp 源码级约束） |
-| `docs/protocols/doc-20-agent工具与互动字段协议.md` | 作家/角色共享工具、互动字段、移动/选择/骰子/跟随协议（**已定案**） |
-| `docs/ui/doc-04-视觉设计风格.md` | 前端视觉基准（**§10 为准**） |
-| `docs/gameplay/doc-19-多模态与游戏性交互升级.md` | 视听动升级定案（评委导向） |
-| `docs/gameplay/worlds/doc-24-五世界可玩Demo体验设计.md` | **五世界内容设计入口（等待评审）**：6–10 分钟短闭环、五条主观流程、P0 停止边界与逐世界待选项；用户确认前不继续补完整关卡或批量生图 |
-| `docs/ui/前端改造计划.md` | `apps/web/` 的施工单 |
-| `docs/development/后端实现计划.md` | `apps/server/` + `extensions/` 的施工单（引擎接通 / 工具面 / Hook 注入 / 角色上下文） |
-| `docs/tools/` | **B1 工具面设计与实现真相源**：`00-共同上下文.md` 是冻结契约（路径/事件/身份/存储/注册/反模式），`01`–`12` 逐个工具的设计，`REVIEW-评审报告.md` 是评审裁决。**动动作层 / 注册工具 / 改路由前必读** |
-| `docs/hooks/` | **B2/B3 每轮注入协议真相源**：`00-共同上下文.md` 是冻结契约（注入接缝/分节/游标/身份/消毒/barrel 反模式），`01`–`06` 逐篇设计，`AUDIT-doc-22体检.md` 记录 doc-22 哪些断言为假。**改 `extensions/context.ts`、注入块、视点链路前必读** |
-| `docs/wiring/前端接线体检.md` | 动 WS 帧 / 前端消费面 / `useWorld.ts` 前必读——冻结契约的机械核验（`pnpm check:ws`）与已知漂移清单 |
-| `docs/wiring/` | **前端接线 A 档（止血 + 文档回写）真相源**：`00-共同上下文.md` 是冻结契约（角色身份/去重/转发集合/请求体），`01`–`04` 逐模块设计，`05-文档回写.md` 是回写清单。**动 `useWorld.ts` WS switch / `CharacterModal` / `DiceRoller` / 角色帧载荷前必读** |
-| `docs/perform/` | **演出通道（残余 9 条 DARK 接线）真相源**：`00-共同上下文.md` 是冻结契约（`writer_delta` 来源流 / 幻影与座位过户 / `show_frame` 分发 / `canvas_patched` 归属 / 声响落点 / phantom 字段集），`01`–`05` 逐帧设计 + `06-文档回写.md` 回写清单 + `REVIEW-R1..R5` 五视角评审。**动 `event-bridge.ts` 帧映射 / `useWorld.ts` WS switch / `lib/{phantom,phantom-seat,writer-state,ghost,canvas-patch}.ts` / 演出组件前必读** |
-| `docs/tts/` | **角色语音 TTS 批次真相源**：`00-共同上下文.md` 是冻结契约（`POST /api/tts` 请求/响应体、缓存 key、角色 `voice` frontmatter、前端 `playVoice`/`stopVoice`/`isVoicing`、页语义、env），`01`–`06` 逐模块设计，**`07` 音色别名映射 + `08` 音色 skill/门禁**。**动 `routes/tts.ts` / `lib/audio.ts` 语音面 / `CharacterModal` 分页 / `skills/voice-casting` / `voices.ts` 前必读** |
-| `docs/agents/doc-08~18` | 各专题（多为待完善），实现对应模块前再读 |
-| `docs/init/` | **初始化执行（I1）真相源**：`00-共同上下文.md` 是冻结契约（`airp-init` 命令形状 / 执行序 / 并发防线 / brief 字段 / 边界），`01`–`04` 逐模块设计，`REVIEW-{Consistency,Semantics,Implementability}` 三份独立评审。**动 `init-command.ts` / brief / 空判定 / 前端 `first` 消费前必读** |
-| `docs/nook/` | **角色小天地（N1）真相源**：`00-共同上下文.md` 是冻结契约（`GET /api/nook` 形状 / nookId = `characters/<id>` / `layer` 列 / footprint 门禁分支），`01`–`05` 分篇（取数 / 视图入口 / 立绘 / 占位回写 / 验收）+ `RESEARCH-初始化链路.md` + 三份评审。**动 `routes/world.ts` 的 nook 分支 / `NookView` / `portrait` kind / 排座 nook 分支前必读** |
-| `docs/footprint/` | **卡片占位尺寸真相源**：`00-共同上下文.md` 是冻结契约（`cards` 行写入路径 / measuredAt 与 formVersion / reseat 漂移判据），`01`–`05` 分篇。**动 `cards` 行建行 / `/api/card/footprint` / `lib/{measure,footprint}.ts` 前必读**（与 AGENTS §7.5 配套）|
-| `docs/audio/` | **音频接线（A1）真相源**：`00-共同上下文.md` 是冻结契约（`ambient`/`bgm` frontmatter / `/api/audio` 路径解析 / 采样优先合成兜底 / stinger 触发），`01`–`06` 分篇。素材清单在 `assets/audio/PLAN.md`（P0 已完成，P1/P2 缺口逐条登记）。**动 `lib/audio.ts` / `routes/world.ts` 的 `/audio` / 世界主题曲声明前必读** |
-| `docs/prompts/` | **提示词与 skill 体系真相源**：`00-共同上下文.md` 是冻结契约，`01`–`03` 是作家/角色/初始化器**正文逐字源**（`extensions/instructions.ts` 与之对应），`04` skill 体系，`05` 装配与验证 + 四份评审。**改任何 preset / skill / instruction slot 前必读** |
-| `docs/assets/` | **角色素材批次真相源（6 情绪差分 + 微动立绘 + 氛围音）**：`00-共同上下文.md` 是冻结契约（`EMOTIONS` 六枚举 / `assets/characters/<id>/<emo>.webp` 约定 / `/api/characters` 的 `emotions`（6 张全在才回传）/ 微动片归小天地 `portrait`），`01`–`04` 分篇。生产工具 `tools/gen-emotions.mjs`、`tools/gen-motion.mjs`、`tools/record-emotion-assets.mjs`。**动 `routes/world.ts` 的 `/characters` / `CharacterModal` 立绘 / 6 情绪素材 / nook portrait 前必读** |
-| `docs/settings/` | **每世界设置（S1）真相源**：`00-共同上下文.md` 是冻结契约（`autoWrite` 三态语义 / `.airpworld/settings.json` 形状 / `GET|POST /api/world-settings` / 门控点：门走 I1、选项走 dispatch）。**动 `routes/world.ts` 的 `/choice`·`/enter-layer` / `useWorld.enterLayer` / `AgentSettings` 前必读** |
-| `docs/merge/` | **合并纪律真相源**：`00-合并纪律.md` 是契约（登记命名 `/ 必含三节 / 合并执行清单 / 强制机制 / `origin/niko` 复盘）；`BASELINE.md` 是立法前豁免 SHA 名单。**每次 `git merge` 动手前必读**（§6.6） |
+| 工具、动作层、互动字段 | `docs/tools/00-共同上下文.md`、`docs/doc-20-agent工具与互动字段协议.md` |
+| 每轮注入、游标、上下文 | `docs/hooks/00-共同上下文.md` |
+| WS 帧、前端消费、请求体 | `docs/前端接线体检.md`、`docs/wiring/00-共同上下文.md`、`docs/tools/12` |
+| 演出通道、幻影、writer delta | `docs/perform/00-共同上下文.md` |
+| 角色在场、跟随、画布在场头像、右侧角色栏 | `docs/presence/00-共同上下文.md`（跨端冻结契约）、`docs/tools/05-move-to与set-following.md` |
+| 组件骨架屏、`card_writing`、幻影第三档 | `docs/skeleton/00-共同上下文.md`、`docs/perform/00-共同上下文.md` |
+| Agent activity、角色 turn、TTS 动作过滤 | `docs/agent-awareness/00-共同上下文.md` |
+| 初始化器、`airp-init`、空场景 | `docs/init/00-共同上下文.md` |
+| 角色小天地 | `docs/nook/00-共同上下文.md` |
+| 世界命令（`command/*.yaml`、`on` 触发、自动发奖/扣物） | `docs/command/00-共同上下文.md` |
+| 卡片尺寸、footprint、排座 | `docs/footprint/00-共同上下文.md`、`docs/layout/00-共同上下文.md` |
+| 音频与素材 | `docs/audio/00-共同上下文.md`、`docs/assets/00-共同上下文.md`、对应 `assets/skills/*/SKILL.md` |
+| TTS 与音色 | `docs/tts/00-共同上下文.md`、`docs/tts/07-音色别名映射.md` |
+| 实时语音通话（nook 内 GPT-Live） | `docs/live-voice/00-共同上下文.md` |
+| prompt、preset、skill | `docs/prompts/00-共同上下文.md`、`docs/doc-23-提示词写作规范.md` |
+| 每世界设置 | `docs/settings/00-共同上下文.md` |
+| pi-rp 引擎 | `vendor/pi-rp/packages/coding-agent/docs/` 对应文档；仓库内操作使用 `pnpm pi` |
 
-**参考实现（都在本项目的兄弟目录，不进本仓库）**：
+根入口和完整设计索引见 `docs/00-文档骨架.md`。如果代码与当前文档冲突，先确认哪一份是该领域标注的冻结契约，不要凭旧实现猜语义。
 
-| 项目 | 是什么 | 学什么 |
-| `~/projects/worldlines-rivet` | 同构架构：世界包 + 多 agent + pi-rp 引擎，已跑生产 | **后端**：`services/gateway/` 的协议单一事实源 / WS 外壳 / 会话域三层切法、`launch.mjs` 启动参数单一来源。**注意：它的"角色上下文分层"（state/knowledge/scene_brief 组装）是它自己的多角色编排配套，AIRP 明确不搬**（逐条取舍见 `docs/development/后端实现计划.md` §2） |
-| `~/projects/infini-canvas` | 前端原型与旧设计文档（已退休） | **前端**视觉语汇与交互机制。它的 `worldlines-canvas/` 用的是另一套 harness + Python 后端，**引擎部分不迁移** |
+## 5. 不能省略的工程教训
 
-**前端原型不进本仓库**：`画布世界v1-yoshi.html`、`画布世界v2-niko.html`、`角色-yoshi.html`、`角色-世界v3.html/`、`assets/` 都在 `infini-canvas` 项目里——把它 clone 到本项目的兄弟目录即可对照。文档里出现的原型文件名一律指那里。
+这些规则看起来具体，但它们分别对应过数据重复、能力静默丢失、运行旧代码、布局跳动、性能回退和 Agent 越权等真实故障；修改相关模块时必须保留。
 
----
+### pi-rp 与 preset
 
-## 5. 常用命令
+- 设计 pi-rp 侧功能时先读上游文档，再读源码确认，最后才决定是否修改引擎。不要用仓库里的旧实测结论替代引擎当前行为。
+- `--preset` 接受 preset id，不接受文件路径；`tools.allow` 只过滤已有工具，不会把工具加入工具集；文件槽使用 `onMissing: "skip"`，否则 `onMissing: "error"` 可能让整个 Agent 启动失败。
+- preset 的系统提示词进入 `items` 或显式注册的 AIRP slot，不要添加不存在的顶层 `system` 字段或臆造内建 slot。平台提示词正文以 `extensions/instructions.ts` 为源，不能在各模板 preset 中复制多份。
+- 修改 `vendor/pi-rp` 必须在当前仓库的 vendored 副本中进行。子模块 HEAD 改变后，`dist` 可能仍是旧产物；只提交指针而不重建会让运行时静默执行旧代码。`pnpm pi status` 报 stale 或指针未对齐时，先修复再继续。
 
-Windows 日常运行用根目录 `Start-AIRP.cmd`（`tools/start-local.ps1`）：安装依赖、检查引擎构建新鲜度、编译并重启本项目后端，直接在 `http://localhost:3001/` 提供页面。更新先 `git pull --ff-only --recurse-submodules` 再启动。启动沿用本地模型配置与存档，不运行模型调用或整套开发探针；详细说明见 README 的 Windows 日常更新与启动。
+### 画布布局与性能
 
-```bash
-pnpm install                                    # 装依赖（含 submodule）
-pnpm build                                      # 编译全仓库
-pnpm test                                       # 单元/集成测试（shared + server + web + tools 门禁单测）
-pnpm probe                                      # 全链路探针，PASSED 才算地基没坏
-pnpm dev                                        # 全栈开发（web 5173 / server 3001）
-pnpm probe:tools                                # 工具面探针（注册表断言 + 真引擎执行 AIRP 工具），PASSED 才算工具面没坏
-pnpm typecheck:extensions                       # extensions/ 类型体检（jiti 直跑的 TS 不在 workspace 里）
-pnpm probe:inject                               # 注入探针（真 spawn 作家引擎，断言每请求恰好一份注入块且不落盘）
-pnpm check:ws                                   # 跨端 WS 契约门禁（服务端广播面 ↔ 前端消费面 ↔ docs/tools/12 §6.2）
-pnpm check:bodies                               # HTTP 请求体门禁（前端 fetch body 键集 ↔ docs/wiring/00 §6）
-pnpm check:docs                                 # 设计文档门禁（符号归属 / barrel union / 引用核验；引用面含 assets/ 与入口文档）
-pnpm probe:prompt                               # 提示词 wire 探针（作家 + 角色），断言补上的 slot 真的进了模型
-pnpm probe:init                                 # 初始化探针（真 spawn 作家，发 /airp-init，断言产物落盘 + 事件落账 + 幂等 + 零 AI 路径）
-pnpm check:skills                               # skill 语料门禁（frontmatter / 语言分层 / 命名 / 平台清单与触发词）
-pnpm check:voices                               # 音色门禁（角色 voice 解析到调色板；docs/tts/07）
-pnpm check:i18n                                 # i18n 键门禁（`t('…')` 键必须解析到 messages.json 且 zh-CN/ja 齐全）
-pnpm check:emotions                             # 角色素材门禁（6/6 齐备 + 真透明 + 9:16 + webm 真 alpha + 溯源 SHA；见 docs/assets/00 §7）
-pnpm check:merge                                # 合并登记门禁（first-parent merge 必须有 docs/merge/<title>-<7hex>-<作者>.md；见 §6.6）
-pnpm hooks:install                              # 启用 pre-push 钩子（git config core.hooksPath .githooks），每台机器一次
-pnpm pi status                                  # pi-rp 子模块 + dist 新鲜度体检（见 §7.2）
-pnpm motion <绿幕.mp4> -o out.webm --scale 360   # 微动立绘 / 背景视频（见 assets/skills/motion-portrait）
-pnpm gen image --prompt "..." -o assets/_inbox/   # 生图 / 生视频（见 assets/skills/flow-media）
-pnpm gen video --prompt "..." --seconds 6 -o out.mp4
-node tools/gen-emotions.mjs --world whitechapel   # 6 情绪差分批产（图片免费，见 docs/assets/00 §4.1）
-node tools/gen-motion.mjs --world whitechapel --parallel 2   # 角色微动立绘批产（扣额度 ~10/条）
-node tools/record-emotion-assets.mjs             # 写 character-media.json 溯源；--check 核验
-#   角色素材整链（6 情绪 + 微动立绘）见 assets/skills/character-asset-batch/SKILL.md
-node tools/scaffold.mjs --template holmes-world --out worlds/my-holmes
-pnpm --filter @airp/server dev                  # 只起后端
-```
+- 卡片宽度的唯一声明来源是 `CARD_FORMS`；高度以 `cards.width/height` 和前端实测 footprint 协作决定。禁止在第三处重新计算 `cardFormOf` 作为碰撞尺寸，也禁止落入通用的 `280/180` 默认尺寸。
+- `Canvas` 的取景 effect 只能移动相机，不能把首帧排版结果回写卡片坐标；否则首次拖拽可能让整层跳位。
+- 高频 `pointermove` 不得进入 React state；拖拽循环内不得读取 `offsetHeight`、`getBoundingClientRect` 等会强制同步布局的属性。使用测量缓存和视口缓存。
+- 新增全屏 canvas 或动画层前先评估合成成本；隐藏页面时应跳过不必要的帧，粒子和网格不能退回固定巨型贴图或每帧创建昂贵对象。
+
+### 合并、资源和静默失败
+
+- 合并检查不能只看冲突块；合并可能在无冲突的行中丢掉 WS 发送方、前端消费方、i18n 键、角色音色或 preset slot。必须按生产端/消费端成对检查，并运行对应门禁。
+- `assets/audio/**`、`assets/skills/**` 和已批准的模型目录属于入库素材；`assets/worlds/**` 与 `assets/_inbox/**` 是车间产物，不是发布位。音频变更同步 `PLAN.md` 和 `CREDITS.md`；角色情绪素材变更同步 `character-media.json` 并运行素材门禁。
+- 文档中的路径、行号和目录职责也会失效；移动代码或改职责后运行 `pnpm check:docs`，不要保留“看起来还能用”的旧路径说明。
 
 ---
 
+## 6. 工程安全规则
 
-### 5.1 pi-rp agent 配置（`.pi/agent/`）
+### 并行协作
 
-引擎 spawn 时由 `launch.ts` 注入 `PI_CODING_AGENT_DIR=.pi/agent/`（与 worldlines-rivet 同款），**不用** `~/.pi/agent/`——否则每台机器跑的是各自的 provider，行为会漂。
+- 把工作区中别人未提交的修改视为在途工作；不要 `stash`、`checkout`、`restore`、格式化或覆盖它们。
+- 提交前先看 `git status`，只暂存自己改动的文件或 hunk；禁止 `git add .` 和 `git add -A`。
+- **提交时必须只暂存自己的改动**：按文件或 hunk 使用 `git add <自己修改的路径>` / `git add -p`，不得因为文件里混有自己的改动就整文件暂存；提交前用 `git diff --cached --name-only` 和 staged diff 核对，确认没有带入其他 Agent 或用户的未提交内容。**不得以工作区还存在其他暂存或大批改动为借口不提交自己的改动**；必须拆分并及时提交属于自己的文件或 hunk。绝不使用 `git add .`、`git add -A` 或等价的全量暂存命令。
+- 同一文件有重叠修改时先协调归属；不要把别人的改动顺手带进提交。
+- 不要假设只有一个分支或一个 Agent 在推送；修改别人分支前先沟通。
 
-- `.pi/agent/models.json` = provider 与 API key；**不入库**（本仓是公开的黑客松产物，钥匙不能进 git）。从队友的 checkout 拷一份，或指向 wl 的 `~/.projects/worldlines-rivet/.pi/agent/`。
-- 缺这个文件不报错：pi-rp `ModelConfig.load` 对 `ENOENT` 静默回落内建 provider（只是没有自定义模型可选）。`pnpm probe` 走离线确定性 provider，**不需要**它。
-- 探针的真模型分支（`AIRP_PROBE_REAL=1`）与手工全链路演示才需要真 provider。
-- **`.pi/agent/settings.json` = 默认模型**（另两个文件是 `models.json`（provider 与 key）、`auth.json`）。三者互相独立：`models.json` 只说"有哪些模型可选"，**选哪个**由 `settings.json` 的 `defaultProvider` + `defaultModel` 决定。同样不入库。
-- 当前实际生效的是 **`GG / gemini-2.5-pro`**（会话首行 `model_change` 记录为证）——**在没有任何显式覆盖时**。`launch.ts` 现在**会传 `--model`**：作家取 `AIRP_WRITER_MODEL`、角色取 `AIRP_CHARACTER_MODEL || AIRP_WRITER_MODEL`，两者都未设时不传；`--thinking` 作家取 `AIRP_WRITER_THINKING || 'low'`。此外两条 spec 都追加 `modelPreferenceArgs(worldRoot, role)`，从世界存档的 `.airpworld/model-preferences.json` 读 `--provider/--model/--thinking`（Agents 面板写这份文件，见 `docs/agents/Agent模型选择与进度.md`）。这些都没设时才回落到上面那份默认。
-- **模型解析顺序**（`main.ts:480` `buildSessionOptions` → `sdk.ts:240` → `model-resolver.ts:621`）：① CLI `--model`/`--provider`——有则直接填 `options.model`（`main.ts:493-494`），且 `launch.ts` 的 `--model` 与环境变量会走这条；② 否则已有会话 → 恢复会话里记的模型（`sdk.ts:244` 的 `if (!model && hasExistingSession && existingSession.model)`）；③ 否则 `settings.json` 的 `defaultProvider`/`defaultModel`（**须该 provider 有 auth**）；④ 否则 `defaultModelPerProvider` 表里第一个有 key 的；⑤ 否则第一个可用模型。所以 **CLI 一旦给了 `--model` 就跳过了已有会话里记的模型**；而**只换 `settings.json` 默认对已存在的会话无效**（会话里记的模型优先于 settings）——要删 `char-<id>.jsonl` 才会重新解析。
-- **改哪个 settings**：全局落点 `<PI_CODING_AGENT_DIR>/settings.json`（即 `.pi/agent/`，对所有世界生效）；世界级落点 `<worldRoot>/<PI_PROJECT_CONFIG_DIR>/settings.json`（即 `<world>/ .airpworld/settings.json`，随世界走、覆盖全局）。**两者都已 gitignore**。实测 world 级能覆盖 global（project > global），global 能切到 `models.json` 里任一 provider。
-- `~/.pi/agent/settings.json` **读不到**：`PI_CODING_AGENT_DIR` 已 pin 到仓库内，user scope 整个指向那里——改自己 home 下的默认模型对 AIRP 无影响（实测：`~/.pi` 写的是 `clineFree`，AIRP 实际跑 `GG`）。
+### Git 与合并
 
-**资源发现必须隔离**（`launch.ts::ISOLATION_ARGS`）：两条 launch spec 都带
-`--no-extensions --no-skills --no-context-files --no-prompt-templates --no-themes`。
-不加这几个开关，pi-rp 会顺着发现路径把**我们没交给 agent 的东西**灌进去，实测三处：
+- commit 后立即 push；push 前先 fetch。
+- 远端有新提交时使用 merge，不要 rebase 已被他人拉取的提交；禁止 force-push `main`。
+- 每次 merge 必须在同一个提交中登记到 `docs/merge/<title>-<merge短哈希>-<作者>.md`，并运行 `pnpm check:merge`。完整流程见 `docs/merge/00-合并纪律.md`。
+- 合并后按连接面检查 WS、HTTP body、i18n、音色、preset 和删除文件，不能只看冲突块。
 
-- **`<home>/.agents/skills/`（本机 37 个）** —— 作家进程命令表里冒出 `skill:tdd` /
-  `skill:character-sim` / `skill:llm-writing` …全部进 system prompt；
-- `<cwd>/.airpworld/extensions/*.ts` —— 世界包能植入任意扩展并在 agent 进程里执行；
-- 从世界根**逐级上溯**读到的仓库根 `AGENTS.md` —— 18KB 中文开发手册直接进 system prompt。
+### 构建和生成物
 
-注意 `<home>/.pi/agent/**` **不在**这张清单里：`PI_CODING_AGENT_DIR` 已 pin 到仓库内
-`.pi/agent/`（见上一条），pi-rp 的 user scope 整个指向那里，开发者自己的 agent dir 碰不到。
-显式 `--extension` / `--skill` 在 `--no-*` 下**照常加载**（被砍的是"发现"而非"显式路径"），
-pi-rp 自带的隐藏 inline 扩展（llama.cpp / memories / opening）也不受影响——隔离的是
-**发现**，不是能力。`tools/probe-writer.mjs` 有静态 + 动态两条断言守着（§5 命令表）。
+- 修改 `packages/shared/src` 或 `apps/web/src` 后必须运行 `pnpm build`；生产端读取的是对应 `dist`，类型检查不能替代构建。
+- 修改 `vendor/pi-rp` 时使用 `pnpm pi build` 或 `pnpm pi commit`，同时确认子模块工作区没有别人的修改。
+- `extensions/` 由 jiti 直接执行 TypeScript；不要手工生成或提交同名 `.js` 文件，也不要把扩展编译产物放进 `extensions/`。
 
----
+## 7. 验证
 
-## 6. 开发纪律
-
-### 6.1 提交即推送（硬要求）
-
-**`git commit` 之后立刻 `git push`，不要攒在本地。**
-
-- push 前先 `git fetch`，确认与远端的关系。
-- 远端有新提交 → **merge**，不要 rebase 别人已经拉过的分支；**每次 merge 都要按 §6.6 写登记**（`docs/merge/<title>-<7hex>-<作者>.md`），没登记推不出去。
-- **绝不 `force-push` `main`。**
-
-**并发下的暂存纪律**（工作区经常同时有多个 agent 在改，已实际发生过）：
-
-- 提交前先 `git status` 看清本次改动范围，**只 add 自己动过的文件/目录**——`git add .` / `git add -A` 会把别人没写完的改动一起卷走；
-- 提交前 `git diff --cached` 复核暂存内容，提交信息写清这次改了什么；
-- 双方改到同一文件：改动不重叠时用 `git add -p` 只暂存自己的 hunk；改在同一处拆不开时先协调归属，别擅自带走对方的改动；
-- 改完就提交，别攒大堆。
-
-**绝不动别人在途的文件**（2026-09-13 爽约一次）：门禁/测试失败时，**先判断失败根源是不是自己的改动**——如果是别人未提交的在途工作（`git status` 显示 `M`/`??` 且非你所改），**正确做法是忽略该失败、照常提交自己那片**，绝不去 `git stash` / `git checkout` / `git restore` / 格式化他们的文件。理由：那些人**可能正开着编辑器或在另一个进程里改同一文件**，你一 stash 他们一写就是冲突、覆盖、丢改动——"我只是想跑个测试"变成"我把同事的活弄没了"。验证别人的失败是否与己无关，用**只读**手段：`git show HEAD:<file>` 取已提交版本对照，或读源码，**不碰工作树**。（`git restore --staged` 把别人误 `add` 的文件放回工作树是安全的——它只动索引、不动文件内容；但 `stash`/`checkout` 会动文件，禁止。）
-
-### 6.2 分支：可能多人多线并行
-
-不要假设只有你一个人在推。
-
-- 动别人的分支之前先打招呼；协作时各自开分支（如 `feat/<主题>` / `dev-<名字>`），做完合回 `main`。
-- 长期分支收工前先同步 `main`，别让分叉攒大。
-- **`main` 必须保持可编译、可跑**（`pnpm build` + `pnpm probe` 通过）。
-
-### 6.3 架构文档必须跟着代码走
-
-改了架构就必须在**同一个 commit** 里改文档，不留"回头补"：
-
-| 改了什么 | 必须同步改 |
-|---|---|
-| 目录 / 模块职责 / 数据流 | 本文（`AGENTS.md`）§2 §3 |
-| 协议（frontmatter / WS 消息 / API 路由） | `packages/shared` schema + `docs/protocols/doc-09` 或 `doc-05` |
-| 提示词 / preset / 初始化流程 | `presets/*.json` + `docs/init/doc-11`（**骨架与文件必须逐字一致**） |
-| 提示词正文 / slot 装配 | `docs/prompts/01…03`（正文逐字源）+ `presets/*.json` + **全部 9 份** `templates/*/characters/*/preset.json`；跑 `pnpm probe:prompt`（作家 + 角色 wire 断言）|
-| skill 体系（平台级 / 世界级） | `docs/prompts/04` + `skills/**` + `templates/*/skills/**`；跑 `pnpm check:skills`（frontmatter 真解析 / 语言分层 / 命名 / 非法工具名 / **平台清单与按 skill 分触发词**）。**新增平台级 skill 必须同步登记**（`tools/check-skills.mjs` 的 `EXPECTED_PLATFORM` 与 `TRIGGERS_BY_SKILL`）|
-| 角色语音 / 音色（`voice:` 声明、调色板、TTS 引擎） | `docs/tts/**`（`00` 冻结契约 + `07` 音色映射唯一真相源）+ `packages/shared/src/rules/voices.ts`；跑 `pnpm check:voices`（**增删音色 MUST 先实测出声**）|
-| 交互 / 演出 / 视觉 | `docs/ui/doc-06` / `doc-04`（视觉以 §10 为准） |
-| 注入协议 / 钩子接线 / 分节表 | `docs/hooks/00…06`（冻结契约 `00` 唯一真相源） |
-| 角色 preset 的 compaction | `presets/character.json` 是**唯一真源模板**（新角色从它复制）；改 `hiddenOverrides.compaction` 必须**同 commit** 铺到 **全部**模板/world 角色 preset，并跑 `apps/server/test/character-preset-parity.test.mjs`（逐字一致，缺一份即静默失效） |
-| 跨端 WS 帧契约（增删帧 / 改载荷 / 前端消费面） | `docs/tools/12` §6.2（唯一帧清单）+ `docs/wiring/前端接线体检.md`；跑 `pnpm check:ws`（门禁会因两端不一致而红） |
-| 角色来源的 WS 帧载荷（`characterId`） | `docs/wiring/00` §3（唯一形状源）+ `apps/server/src/engine/{lifecycle,event-bridge}.ts` 的 sink 链 |
-| 初始化执行（`airp-init` 命令 / brief 字段 / 空判定 / W2 兜底） | `docs/init/00`（冻结契约）+ `01…04`；`extensions/toolkit/init-command.ts`、`packages/shared/src/{render/brief,rules/emptiness,rules/init-fallback,rules/characters}.ts`；跑 `pnpm probe:init`（真 spawn 端到端）|
-| 音频（`ambient`/`bgm` frontmatter、`/api/audio`、stinger） | `docs/audio/00`（冻结契约）+ `01…06`；`apps/server/src/routes/world.ts` 的 `/audio` 分支与 `readLayerAudio`、`apps/web/src/lib/audio.ts`；**素材入库口径见 §7.8**——增删 `assets/audio/**` MUST 同步 `assets/audio/PLAN.md` 与 `CREDITS.md` |
-| 小天地（`GET /api/nook`、nookId、`layer` 列、footprint 门禁） | `docs/nook/00`（冻结契约）+ `01…05`；`apps/server/src/routes/world.ts` 的 nook 分支、`components/nook/NookView.tsx`、`packages/shared/src/rules/characters.ts` 的 `nookCardPaths` |
-| 卡片占位尺寸（`cards` 行 / footprint 回写 / reseat 漂移） | `docs/footprint/00`（冻结契约）+ `01…05`；`packages/shared/src/store/local-store.ts` 的建行路径、`lib/{measure,footprint}.ts`（与 §7.5 三条契约配套）|
-| 角色素材（6 情绪枚举 / `<id>/<emo>.webp` 约定 / `/api/characters` 的 `emotions`） | `docs/assets/00`（冻结契约）+ `01…04`；`packages/shared/src/rules/emotions.ts`（枚举唯一源）、`apps/server/src/routes/world.ts` 的 `/characters` 探测、`apps/web/src/components/overlay/CharacterModal.tsx` 的立绘分支、`tools/{gen-emotions,gen-motion,record-emotion-assets}.mjs`；跑 `node tools/record-emotion-assets.mjs --check` + `pnpm test` |
-| 每世界设置（`autoWrite` 三态、`.airpworld/settings.json`、`/api/world-settings`） | `docs/settings/00`（冻结契约）；`packages/shared/src/schemas/world-settings.ts`（档位谓词唯一源）、`apps/server/src/engine/world-settings.ts`、`apps/server/src/routes/world.ts` 的 `/choice`·`/enter-layer`、`apps/web/src/state/useWorld.ts::enterLayer`、`components/AgentSettings.tsx`；**门走 I1（`airp_init`）、选项走 `dispatch`**，`/enter-layer` MUST NOT dispatch |
-| 文档里写的仓库路径（目录树 / 链接 / `file:line` 引用） | 无需手改同步表——**跑 `pnpm check:docs` 即可**：它核验 `docs/hooks` + `docs/audio` + `AGENTS.md` + `assets/README.md` 里的每条路径引用能否解析。改名/移动文件后引用悬空，门禁直接红 |
-| 合并（任何 `git merge` 落在这条线上） | **同 commit 写 `docs/merge/<title>-<merge 短哈希 7 位>-<作者>.md`**，跑 `pnpm check:merge`；见 §6.6 |
-
-文档里已被推翻的说法**直接改掉**，不要另起一段解释——`docs/archive/` 才是存废案的地方。
-
-### 6.4 收工自检
+根据改动范围运行最小充分验证，不要把无关失败归因于自己的改动：
 
 ```bash
-pnpm build && pnpm test && pnpm probe && pnpm probe:inject && pnpm check:ws && pnpm check:bodies && pnpm check:docs && pnpm probe:prompt && pnpm check:skills && pnpm check:voices && pnpm check:i18n && pnpm probe:init && pnpm check:emotions && pnpm check:merge
+pnpm build
+pnpm test
+pnpm check:ws
+pnpm check:bodies
+pnpm check:docs
+pnpm check:i18n
+pnpm check:merge
 ```
 
-`pnpm test` 覆盖 `packages/shared/test/`、`apps/server/test/`、`apps/web/test/`、`tools/*.test.mjs` 四处（纯函数与非空性断言落在这里）。
+涉及 Agent、提示词、初始化、素材或引擎时，再运行对应的 `pnpm probe:*`、`pnpm check:*` 或专项测试。改动引擎或 preset 后确认探针没有 `not found`、`unknown slot` 等警告。
 
-`pnpm check:ws` 是**跨端 WS 契约门禁**：服务端广播面、前端消费面、`docs/tools/12 §6.2` 契约三集合求 diff。**改了任何 WS 帧（增删帧名 / 改载荷 / 前端 case）必须让它变绿**——它会把"两端各自绿、合起来死"的漂移抓出来（2026-09-12 实际抓到 14 条）。
+UI 改动应启动实际应用并验证用户路径；行为改动应运行覆盖该契约的测试或探针。不要只以类型检查或单个文件编译作为完成证明。
 
-`pnpm check:bodies` 是**HTTP 请求体门禁**（`tools/check-request-bodies.mjs`）：比对前端 `fetch('<route>', … JSON.stringify({...}))` 的键集合与 `docs/wiring/00 §6` 冻结的请求体。WS 门禁管帧名，这条管 body——`/api/dice` 曾因前端发 `{filePath,rollType,expect}` 而服务端只读 `body.path` 静默 400（2026-09-12 修复）。
+## 8. 高频入口
 
-`pnpm check:i18n` 是**文案键门禁**（`tools/check-i18n.mjs`）：`translate()` 在缺键时**回落成 key 本身**，于是 `t('Some English')` 少了 messages.json 条目就在**每个语言**下都显示英文——静默去本地化。origin/niko 合并正是这样丢了 7 个键（场景 Chalk / 图片失败提示 / 作家书写提示）+ 1 个新增调用点。门禁只对**用到的键必须翻译齐全**这一向失败（死键只 warn，因为 `t(variable)` 扫不到）。
-
-`pnpm check:docs` 是**设计文档门禁**（`tools/check-hooks-docs.mjs`）：符号归属 / barrel union / sentinel 三条只在 hooks 批契约内成立，故只扫 `docs/hooks/`；**引用核验（file:line 必须能解析）跑更宽的语料**——`docs/hooks/` + `docs/audio/` + `AGENTS.md` + `assets/README.md`——因为"死路径在哪都是死路径"，而**入口文档的路径表恰恰是最容易悄悄过期的地方**（2026-09-13 加：§7.8 与 `assets/README.md` 都写过一句已经变了的 gitignore）。`assets/` 引用只核验 **git-tracked** 的文本路径（平台音频池 `assets/audio/PLAN.md` 等），世界相对的 `assets/...`（`<worldRoot>/assets/audio/rain.mp3`，测试 fixture）与媒体文件一律跳过——它们只是共享 `assets/` 这个前缀。**改了文档里的任何路径引用必须让它变绿**；批次文档顶部声明 `NEW` 的文件享文档级豁免。
-
-`pnpm check:merge` 是**合并登记门禁**（`tools/check-merge-log.mjs`）：`git log --merges --first-parent HEAD` 上的每个 merge（`docs/merge/BASELINE.md` 的豁免名单除外）**都必须有 `docs/merge/<title>-<7hex>-<author>.md`**，且含三节、引用 merge 与两个父提交、`## 2. 冲突处理` 非空。**没登记就推不出去**（`tools/git-hooks/pre-push`）。规矩见 §6.6。
-
-改动涉及引擎或 preset 时，额外确认探针里**没有 `not found` / `unknown slot` 警告**。
-
-### 6.5 Build 红线：改了 src 不 build，运行时会静悄悄跑旧代码
-
-**构建产物不入库，只对本机生效。** 类型检查过了 ≠ 运行时生效——这一条踩过，代价是一整天的错误结论。
-
-| 改了哪里 | 运行时实际读的是 | 提交前必须 |
-|---|---|---|
-| `vendor/pi-rp/**/src/` | `vendor/pi-rp/packages/*/dist/`（gitignored） | `pnpm pi build`（见 §7.2），或直接走 `pnpm pi commit` 的内置红线 |
-| `packages/shared/src/` | `packages/shared/dist/`（`tools/*.mjs` 与服务端都 import 它） | `pnpm build` |
-| `apps/web/src/` | 生产由服务端伺服 `apps/web/dist/` | `pnpm build`（vite dev 的 HMR 只证明 dev 模式对） |
-
-判据很简单：**`import` 的是 `dist` 就必须 build**。不确定时比对 `dist/` 的 mtime，或直接 grep 新逻辑在不在产物里。
-
-### 6.6 合并必须登记（硬要求，2026-09-13 立）
-
-**每一次 `git merge` 落在本分支线上，都必须写一份人看得懂的登记；没有登记，不许推送。** 全文（命名规则 / 必含三节 / 执行清单 / 强制机制 / `origin/niko` 复盘）见 **`docs/merge/00-合并纪律.md`**——**动手合并前先读它**。
-
-为什么值得单独立法：合并是**唯一一种「git 自己会改你的代码、改错了还不报错」的操作**。`813c0f3` 合 `origin/niko` 时**静默丢了入站 `airp_init` WS 帧**（前端发送方消失、服务端 handler 还在——"半条链"读起来像"已弃用"而非"丢了"）、**8 个 i18n 键**、**21 个角色的 `voice:`**；三处都不在冲突块里，事后两天才靠人肉清点补回。
-
-```text
-docs/merge/<title>-<merge 短哈希 7 位>-<作者>.md      # 例：niko-沉浸式界面-813c0f3-yoshi.md
-```
-
-顺序不可颠倒：`merge` → **写登记** → `pnpm check:merge` 绿 → `commit` → `push`。
-
-```bash
-pnpm hooks:install   # 每台机器一次：git config core.hooksPath .githooks（装 pre-push 兜底）
-pnpm check:merge     # 门禁
-```
-
-**合完之后必做「静默丢失自查」**（§3.3，按连接面整面扫，不按冲突块扫）：WS 帧 `check:ws` / 请求体 `check:bodies` / i18n `check:i18n` / 音色 `check:voices` / preset slot `probe:prompt` / 删除文件 `--diff-filter=D`。**一个能力若生产端与消费端只有一端存活，去两侧查它原来是不是成对的。**
-
----
-
-## 7. 关键约定与坑
-
-### 7.1 术语：pi-rp 不是 omp
-
-- **pi-rp** = 本项目的叙事引擎，源码在 `vendor/pi-rp`（submodule）或 `~/projects/pi-rp`。**查引擎行为一律查这里。**
-- **omp / oh-my-pi** = 部分人本地跑 agent 的 harness，与本项目无关，**绝不要拿它当 pi-rp 查源码**。
-
-### 7.2 pi-rp 子模块工作流（`pnpm pi`）
-
-`pi-rp` 与本项目由同一批人开发、被多个项目消费，多会话并发是常态。**别手搓 submodule 命令**，一律走 `tools/pi-rp.mjs`（移植自 worldlines-rivet 的同名工具，同一个子模块、同样两个坑）：
-
-```bash
-pnpm pi status                              # 两边状态 + dist 新鲜度一览；不一致先修再干别的
-pnpm pi build                               # 只重建 dist（HEAD 没动但产物旧了）
-pnpm pi update [--no-build] [--no-push]     # 拉 origin/main → build → 更新本仓指针
-pnpm pi commit "fix(...): …" [--no-build]   # build 红线 → 子模块 commit+push → 本仓指针 commit+push
-```
-
-两条它专门用来挡的不变量（**都已经咬过我们**）：
-
-1. **dist 是本地产物，不随指针走**。`vendor/pi-rp/packages/*/dist/` 被 pi-rp 自己的 `.gitignore` 排除，而服务端与探针跑的是 `dist/cli.js`。HEAD 一动而 dist 没动，运行时会**毫无告警地继续执行旧构建**——实测踩过：源码里子代理默认工具集已含 `write`/`edit`，本机 dist 还停在四天前，于是"改了源码没生效"。所以**凡是动 HEAD 的路径都会重建**，`pnpm pi status` 也会报 dist 是否 STALE。
-2. **指针必须等于子模块 HEAD**。HEAD 漂了（本地 main 落后、实验性 checkout 没恢复）还提交指针，等于把漂移洗白成一次正常的版本推进。`verifyPointerAligned` 直接拒绝并给出两种对齐命令。
-
-其余纪律：
-
-- 改 pi-rp 一律在**本项目的 vendored 副本**里改，不要另开独立克隆（`~/projects/pi-rp` 不当工作副本）；
-- 发现 pi-rp 有 bug 或缺能力，**直接在子模块里补掉再 `pnpm pi commit`**——两个项目同进退，不要在 AIRP 侧绕开引擎；
-- push 前必须 `fetch`；分叉先 merge；**绝不 force-push `main`**；
-- 核对 remote 确实是 pi-rp 再推——**绝不把本仓库的提交推到 pi-rp**；
-- `pnpm pi commit` 在子模块里是 `git add -A` 整体提交，跑之前先 `git -C vendor/pi-rp status` 确认里面没有别人的改动；
-- `--no-build` 只用于纯文档等不可能影响运行时的改动；
-- 新机器引导：`cd vendor/pi-rp && npm install`（**勿 `--ignore-scripts`**，否则 tsgo 等根级工具链不落地）→ `pnpm pi build`（内含 `hydrate:model-data`，要联网；跳过它 `build:offline` 会在 `check:model-data` 处失败）。
-
-### 7.3 设计 pi-rp 侧的功能前，先扫上游文档（不要从源码开始猜）
-
-**引擎的能力分布在三个互不重叠的面上，只查一面就下结论一定会错。** 上游文档就在仓库里，`vendor/pi-rp/packages/coding-agent/docs/`（30+ 篇，与源码同仓同步，**不属于 §6.3 说的那种会过期的"实测结论"**）。
-
-| 面 | 先读 | 能解决什么 |
-|---|---|---|
-| **扩展** | `extensions.md` | 事件钩子（`before_agent_start` / `tool_call` / `tool_result` / `session_compact`…）、注册工具与 slot、customType 与其策略、`spawnAgent` |
-| **预设** | **`prompt-presets.md`** | system prompt 装配、内建/自定义 slot、宏、资源策略、正则规则、**隐藏提示词覆盖**、子代理委托、命令 |
-| **运行时** | `environment-variables.md`、`settings.md`、`rpc.md`、`skills.md`、`state-schemas.md`、`compaction.md`、`sessions.md` | 启动参数、会话与存档、RPC 协议、技能、压缩 |
-
-**特别是 preset 那份——里面能翻到各种意想不到的功能，很多需求根本不用写代码。** 它的目录本身就值得先过一遍：`Character Charter` / `Built-in Slots` / `Macros` / `Custom Slots via Extension` / `Resource Policies` / `Regex Rules` / `Hidden Prompt Overrides` / `Subagent Delegation` / `Commands`。
-
-**顺序：先文档 → 再源码确认 → 确认真缺才补上游。** 两次踩过的实例：
-
-- **压缩摘要的口径**：只查了扩展 API，看见自动触发的压缩把 `customInstructions` 硬编码成 `undefined`、`SessionBeforeCompactResult` 又没有回写口，就断言"扩展改不了自动压缩的摘要指令，要给 pi-rp 补两行"。实际入口在 preset 的 `hiddenOverrides.compaction`（五个字段，手动与自动走同一份：`agent-session.ts:3133` / `:3480` / `:4835`），而且 pi-rp 自带的文档示例**正好就是一段中文剧情总结提示词**。**引擎不缺东西，是我找错了面。**
-- **子代理工具集**：照抄了本仓库文档里的旧"实测结论"，而源码当天已经改掉（§6.3 的反面教材）。
-
-反过来，**确认真缺就直接补上游**（§7.2：在 vendored 副本里改、`pnpm pi commit` 同步指针）——不要在 AIRP 侧绕开引擎。判断"是 bug 还是设计"的标准不是有没有 JSDoc 写过，而是**这个行为跟引擎自己在别处的语义一致不一致**。
-
-### 7.4 preset 格式铁律（实测，踩过坑）
-
-> 写 preset 前先读上游那份 `prompt-presets.md`（§7.3）。**下面五条只是我们踩过的坑，不是 preset 能力的全集**——把它当清单会错过一大半功能。
->
-> 本节管的是 **JSON 语法**。提示词**正文怎么写**（流程写全、坑写成后果、给判据不给形容词、"不做"也是合法输出、常驻薄 + 细则懒加载），见 **`docs/prompts/doc-23-提示词写作规范.md`**——动手写任何 preset 或 skill 前先读它。
->
-> 另注意：**平台侧提示词正文在 `extensions/instructions.ts` 的四个导出常量里**（slot `writer-char` / `system-char` / `scene-init-instruction` / `nook-init-instruction`），preset JSON 只是装配单，用一条 `{"kind":"slot","slot":"…"}` 把它引进来。**改平台口径改那一处即可，不要逐个 preset 维护，更不要在世界模板的 preset 里另抄一份**（抄了必然改一处漏 N-1 处）。它是源码，所以"改了能力就同 commit 改提示词"（§6.3 同级要求）天然成立。
-
-1. **顶层没有 `system` 字段**——提示词一律进 `items`。
-2. **不存在内建的 `system` slot**——但可通过扩展注册专属 instruction slot（AIRP 在 `extensions/instructions.ts` 注册了 `writer-char`、`system-char`、`scene-init-instruction`、`nook-init-instruction`，各 agent 职责隔离、slot id 与 name 互不混用）。
-3. **`--preset` 只认 id，不认文件路径**；配置目录由 `PI_PROJECT_CONFIG_DIR=.airpworld` 指定。发现范围是 `<configDir>/prompt-presets/` **整棵树**（2026-09-11 起递归子目录），但**树外的文件够不着**——`characters/<名>/preset.json` 仍须由引擎安装进去（`presets.ts::installPreset`）。
-4. `onMissing: "error"` 是**致命的**（整个 subagent 起不来），文件槽一律用 `onMissing: "skip"`。
-5. `tools.allow` 是**过滤器不是扩展器**——写 `allow:["write"]` 加不出工具，只会把现有工具集过滤成子集。
-
-细节与全部 9 条源码级约束（含 2026-09-11 复核标注的"已失效"四条）见 `docs/init/doc-11` §2.3。
-
-
-### 7.5 画布卡片的尺寸与旋转契约（实测，踩过坑）
-
-**一张卡片的可见框，必须等于它的声明框。** 踩过的坑是三个尺寸来源互不协商：外壳 `.object` 用 form 表写死 `w/h`、内层组件 CSS 各自硬编码宽度（`.note` 200 / `.gate` 288 / `.letter` 224）、内容再自然撑高（chalk 声明 190px、实际 578px），于是拖拽时露出空壳、文字溢出、两张纸叠在一起。
-
-规则（改卡片渲染前先读）：
-
-1. **宽度只有一个真相源**：`packages/shared/src/schemas/forms.ts` 的 `CARD_FORMS`。`.object` 外壳吃 `item.w`，内层形态一律 `width: 100%`——**内层禁止写死宽度**。
-2. **外壳不写死高度**：`CanvasObject` 只给 `width`，高度由内容撑开，外壳（和拖拽碰撞读到的 `offsetHeight`）自然贴合。**排座用的高度从 `cards.height` 列读**（初值来自 form 表，之后由前端实测回写，见第 7 条）——`form.h` 只是初值，不是排座的最终输入。
-3. **旋转只归外壳**：`--target-rot`（`rotOf` 派生）只写在外壳上。内层形态**禁止自带 `rotate`**（`.note` 曾自带 `-1.2deg`，与外壳叠加成 -4.2°）。**`chalk` 与 `sprite` 恒为 `0deg`**——叙事板正是"板正的板书"，不倾斜。
-4. **文字不溢出**：卡面摘要走 `plainExcerpt`（剥掉 `#`/`<b>`/换行等 markdown 原文），多行用 `-webkit-line-clamp` 截断；正文绝不会以裸 markdown 源码出现在卡面。
-5. **第二层阅读的标准形态 = 模态框**（`letter` 的 `letterFocus`、v3 `DetailPanel`：类型章 + 全文 + 回跳 + 续写；见 doc-10 E2/E9 与 §E11 对照表）。**点击展开是默认**，hover 只是它的替代——当卡片的**单击语义已被占用**（`gate` 单击 = 进门，不能再抢去开阅读），或形态上不适合弹模态框的组件，才改走 hover 浮层。`gate` 的 README 全文即此例：`.gate__detail` 绝对定位浮在卡片上沿、`z-index` 盖过邻卡、`pointer-events` 默认 none。**无论走哪种，"全文绝不塞进卡片撑破布局"这条不变。**
-6. **z 序**：`.object` 的 `z-index` 是内联写的（服务端行序），所以交互态抬升必须 `!important`——hover `.object{z-index:30}`、拖拽 `.object.dragging-item{z-index:40}`（拖拽值必须更高，否则被邻卡 hover 盖住）。
-
-7. **碰撞尺寸只有一个真相源**：服务端读 `cards.width/height`（列），前端拖拽读本地实测（`lib/measure.ts` 的 `offsetHeight`）。**MUST NOT 出现第三处现算 `cardFormOf` 的碰撞点。** `cards` 行的建行路径（`seatUnplaced`/`seatNear`/`arrange` 前的 seat）必须写入该 kind 的真实占位——**绝不落下 schema DEFAULT `280/180`**。前端实测经 `POST /api/card/footprint` 回写 `width/height` + `metadata.measuredAt`；`metadata` 另有 `formVersion`（kind 定义 hash）与 `seatW/seatH`（上次排座所用尺寸）。`reseatLayer` 据此判漂移：kind 改尺寸 → 用 declared 重排并清 `measuredAt`（**先于**实测判定）；实测占位变化 → 用行值重排。细则见 `docs/footprint/00-共同上下文.md`。
-
-8. **`Canvas` 的取景 effect 只许动相机，绝不许改卡坐标**（2026-09-13 实测）。首帧按 `separateBounds` 重排并把 x/y 经 `onMoveCard` 落库，是**第三处碰撞权威**（违反第 7 条）：它与拖拽松手的 `relaxAll` 布局不一致，于是**首次拖拽松手瞬间整层跳位**——实测四张卡同时跳（含未被推挤的卡），A/B（同树同脚本，`frame()` 开/关）确认因果。现在该 effect 只 `camera.flyTo` 包围盒，测量走 `whenFontsSettled()`。**任何"进层自动排版"需求都不得回写服务端座位。**
-
-### 7.6 前端性能红线（实测，2026-09-12 诊断）
-
-**全屏动画层是这台机器上最贵的东西；高频指针事件绝不允许走 React。** 四条纪律（改画布/粒子/视差/网格前先读）：
-
-1. **整屏 canvas 每帧重绘 = 一帧预算的一半**。实测（WSL2 软件渲染 + 真 GPU 两种环境同向）：仅一个 1×1 缓冲区、全屏 CSS 盒的空 canvas 就把 57fps 压到 34fps；隐藏即回到 57fps。代价在**合成**而非绘制——所以 `ParticleLayer` 现在 ① 尘埃 glow 用一张预渲染 sprite（`drawImage`）而不是每帧 `createRadialGradient`（旧写法 48 粒 × 60fps ≈ 2880 次渐变/秒），② 限到 30fps（漂移极慢，肉眼无差），③ `document.hidden` 时整帧跳过。**新增全屏 canvas 前先想清楚它是否值得半帧预算。**
-2. **pointermove 不进 React**。旧 `Canvas` 的视差用 `setParallax` state，每次鼠标移动都重渲染整棵画布子树（代价随卡片数涨）。现在视差走模块态 `lib/parallax.ts`：`Canvas` 只写值，`SceneBackdrop` 自己写 transform、`ParticleLayer` 每帧采样——零 React 工作。任何"跟随指针"的效果都照此办理。
-3. **拖拽循环内禁止强制同步布局**。卡片外壳无内联高度（见 §7.5），所以 `offsetHeight`/`getBoundingClientRect` 这类读会触发 reflow；旧拖拽每 move 读 ~6 次 `offsetHeight`（profile 里第一大头，300 move ≈ 256ms）。现在尺寸走 `lib/measure.ts` 的按代缓存（`invalidateMeasures()` 在层数据/窗口尺寸变化时失效），视口 rect 缓存在 `viewportRectRef`。**拖拽路径里一旦出现 `el.offsetXxx` / `getBoundingClientRect` 就是 bug。**
-4. **世界网格 `CanvasGrid` 不再是一张 6000×6000 的巨型贴图**（合成器曾为它保留 5707×5700 图层）——它是"视口 + 一格余量"的 sheet，随相机重写 left/top/width/height 且图案原点吸附世界网格。改它时别把尺寸写回固定值。
-
-### 7.7 `extensions/` 绝不手搓 `.js`（实测，2026-09-12 踩过坑）
-
-**pi 运行时用 jiti 直接执行 `extensions/*.ts`，不需要任何编译；手搓一份同名的 `.js` 会与 `.ts` 双双被加载，冲突报错。**
-
-- **引擎侧**：`launch.ts::extensionArgs`（`apps/server/src/engine/presets.ts`）扫 `extensions/` 时**同时收 `.ts` 与 `.js`**，两个都进 `--extension`。`extensions/instructions.js` 曾因手工 transpile 留在盘上，于是同一批 slot **被注册两次**——`registerSlot`/`registerTool` 是裸 `Map.set`，谁赢由 readdir 顺序决定，**静默错、不报错**。（2026-09-12 已让 `extensionArgs` 优先 `.ts`、同基名跳过 `.js` 孪生，并删除该文件；但**这是兜底，不是许可**。）
-- **jiti 侧**：`extensions/` 是 jiti 直跑的 TS，**不在 pnpm workspace 里**——`pnpm build` 的 tsc 根本不碰它。`extensions/tsconfig.json` 是 `noEmit: true`（只做 `pnpm typecheck:extensions` 类型体检），**所以 `.js` 产物永远不会由正常流程生成**，只会由手工 `tsc`/`transpileModule`/旧脚本产生。
-
-**纪律**：
-
-1. **不要手动编译 `extensions/*.ts`**，也不要提交任何 `extensions/*.js`（`extensions/toolkit/**` 同理）。改完 `.ts` 直接跑，无需构建。
-2. 若确实需要 emit（例如给某个不退让的工具链），**产物必须落在 `extensions/` 之外**（如 `dist/`），绝不留同名 `.js` 在扩展目录里。
-3. 怀疑踩到：`node tools/check-*.mjs` 之外，直接 `find extensions -name '*.js'` —— 有输出就是 bug。
-4. `.d.ts` 不受影响（`extensionArgs` 与 jiti 都跳过），但同样不该手写。
-
-
-### 7.8 素材车间 `assets/` 的入库口径（2026-09-13 核实）
-
-`assets/` 是 **worldlines-assets 素材车间**（`assets/README.md`），**整树被 `.gitignore` 排除**，白名单音频、手艺包与用户批准的 D10 模型：
-
-| 子目录 | 入库 | 说明 |
-|---|---|---|
-| `assets/audio/**` | ✅ | 我们自己产出的音乐（Pixabay 免版税 BGM / 环境声 / 拟音）。**平台级音频池的真相源**就是这里——`routes/world.ts` 的 `AUDIO_ROOT` 指 `assets/audio`，`/api/audio?path=…` 从这里伺服。需求清单/缺口登记在 `assets/audio/PLAN.md`，授权信息在 `CREDITS.md` |
-| `assets/skills/**` | ✅ | 素材生产手艺包（纯文本，无大二进制）：`character-asset-batch`（6 情绪差分 + 透明微动立绘整链）、`motion-portrait`（抠像/循环）、`flow-media`（生图/生视频） |
-| `assets/models/arcane-d10/` | ✅ | 用户批准入库的夜辉 D10：Blender 工程、GLB、纹理、预览、重建脚本与验证数据；本机 MCP 配置及日志不入库。见该目录 `README.md` |
-| `assets/worlds/**`、`assets/_inbox/**` | ❌ | AI 生图原始产出与筛选（**合计约 587MB**），只作生产参考。**发布位不是这里**——定稿后经平台上传端点落入 IP 包，runtime 读 IP 包 |
-
-**坑（2026-09-13 实际踩到）**：`assets/README.md` 写的是"本目录不进 git"，**这句已过期**——`audio/` 与 `skills/` 现在是入库的。找音频资产时**不要只查 `apps/web/public/` 或 `templates/**/`**，平台池在仓库根 `assets/audio/`；世界级样本则走 `templates/<world>/assets/`（`/api/asset` 伺服）。判据：平台池 = `/api/audio?path=…`，世界级 = `/api/asset?…`。
-
-**改素材时**：音频走 `docs/audio/`（`00` 冻结契约）；`assets/audio/**` 增删 MUST 同步 `assets/audio/PLAN.md` 的状态列与 `CREDITS.md`（授权合规）。**路径引用由 `pnpm check:docs` 守着**——`assets/` 下 git-tracked 的文本路径（PLAN/CREDITS/skills）都有引用核验，写错即红；世界相对的 `assets/...` 与媒体自动跳过（见 §6.4）。
-
-**改角色素材时**（6 情绪差分 / 微动立绘）：**先读手艺包 `assets/skills/character-asset-batch/SKILL.md`**（整链操作手册：车间→发布位→前端接线→验收），规格走 `docs/assets/`（`00` 冻结契约）。车间落点 `<world>-demo/characters/<id>/variants/`，发布位 `templates/<world>/assets/characters/<id>/<emo>.webp` 与 `assets/motion/seedance/characters/<id>-transparent.webm`。**增删后 MUST 跑 `node tools/record-emotion-assets.mjs` 重写 `templates/<world>/assets/character-media.json`**（`--check` 可核验，`pnpm check:emotions` 是总门禁）；**不并入** `source-manifest.json` / `motion/seedance/manifest.json`（其测试断言精确行数绑死各自的 sync 工具，见 `docs/assets/00 §4.4`）。
+- 全栈开发：`pnpm dev`
+- 仅后端：`pnpm --filter @airp/server dev`
+- 全量构建：`pnpm build`
+- 全量测试：`pnpm test`
+- 全链路探针：`pnpm probe`
+- pi-rp 状态与构建：`pnpm pi status`、`pnpm pi build`
+- 设计文档总索引：`docs/00-文档骨架.md`
+- 代码与文档发生架构变化时，必须同步更新对应的冻结契约，而不是只改本文件。

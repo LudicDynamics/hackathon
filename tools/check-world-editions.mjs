@@ -4,8 +4,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { parseFrontmatter, WorldManifestSchema, LocalWorldStore } from '../packages/shared/dist/index.js';
-import { editionFamilies, editionId, templateArchive } from './world-editions.mjs';
+import { parseFrontmatter, WorldManifestSchema } from '../packages/shared/dist/index.js';
+import { editionFamilies, editionId } from './world-editions.mjs';
 import { filesUnder, mapText } from './localize-world-editions.mjs';
 
 const repo = fileURLToPath(new URL('../', import.meta.url));
@@ -38,7 +38,7 @@ async function media(root, value) {
 
 export async function checkEditions({ staged = false } = {}) {
   const base = path.join(repo, staged ? '.artifacts/bilingual-worlds/editions' : 'templates');
-  const sources = path.join(repo, staged ? '.artifacts/bilingual-worlds/sources' : templateArchive);
+  const sources = path.join(repo, staged ? '.artifacts/bilingual-worlds/sources' : 'templates');
   const expectedIds = editionFamilies.flatMap(f => ['en', 'ja'].map(l => editionId(f, l))).sort();
   const actualIds = [];
   for (const d of await fs.readdir(base)) if (await fs.access(path.join(base, d, 'world.json')).then(() => true).catch(() => false)) actualIds.push(d);
@@ -46,17 +46,27 @@ export async function checkEditions({ staged = false } = {}) {
   const skills = new Set(); let files = 0; let dice = 0;
   const digest = {};
   for (const family of editionFamilies) {
-    const source = path.join(sources, family.source); const sourceFiles = await filesUnder(source);
+    // Published checks use the canonical English edition as the executable
+    // contract. Staged builds still compare against their snapshotted source.
+    const sourceId = staged ? family.source : editionId(family, 'en');
+    const source = path.join(sources, staged ? family.source : sourceId);
+    const sourceFiles = await filesUnder(source);
+    const targetFile = (f, locale) => {
+      if (!f.startsWith('skills/')) return f;
+      const skill = family.base === 'firstsnow'
+        ? (locale === 'en' ? 'first-snow-play' : 'first-snow-jp-play')
+        : `${family.base}${locale === 'ja' ? '-jp' : ''}-play`;
+      return f.replace(/^skills\/[^/]+/, `skills/${skill}`);
+    };
     for (const locale of ['en', 'ja']) {
       const id = editionId(family, locale), root = path.join(base, id);
-      const targetFile = f => f.replace(/^(skills\/)([^/]+)(\/)/, (_, a, n, b) => a + n.replace(family.source, id) + b);
-      assert.deepEqual((await filesUnder(root)).sort(), sourceFiles.map(targetFile).sort(), `${id}: no lost or extra content`);
+      assert.deepEqual((await filesUnder(root)).sort(), sourceFiles.map(f => targetFile(f, locale)).sort(), `${id}: no lost or extra content`);
       const manifest = WorldManifestSchema.parse(await json(path.join(root, 'world.json')));
       assert.equal(manifest.id, id); assert.equal(manifest.locale, locale);
       assert.doesNotMatch(manifest.name, /playtest|体験版/i);
       await media(root, manifest);
       for (const f of sourceFiles) {
-        const target = targetFile(f), absolute = path.join(root, target);
+        const target = targetFile(f, locale), absolute = path.join(root, target);
         assert.match(target, /^[a-zA-Z0-9/_.-]+$/, `${id}: ASCII stable path`);
         digest[`${id}/${target}`] = sha(await fs.readFile(absolute)); files++;
         if (!isText(f)) { assert.equal(digest[`${id}/${target}`], sha(await fs.readFile(path.join(source, f))), `${id}/${f}: shared asset bytes`); continue; }

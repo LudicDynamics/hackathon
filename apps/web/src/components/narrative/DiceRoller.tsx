@@ -1,14 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { Dices } from 'lucide-react';
-import { unlock, playFoley } from '../../lib/audio.js';
-import { D10Stage } from '../performance/D10Stage.js';
-import { useLocale } from '../../lib/i18n.js';
-
-export const CHARGE_MS = 1200;
+import React, { useState } from 'react';
+import { Dices, CheckCircle2, AlertCircle } from 'lucide-react';
+import { actionKey } from '../../lib/action-feedback.js';
+/** Shared ceremony timings. DiceCeremony is the only renderer; these remain a
+ * stable import seam for the two components. */
 export const ROLL_MS = 1200;
-export const SETTLE_MS = 4000;
+export const SETTLE_MS = 1300;
 export const FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+import { ingestPlayerRoll, parsePlayerDiceResponse, type DiceCeremonyInput } from '../../lib/dice-ceremony.js';
 
 interface DiceVerdict {
   dice: string;
@@ -29,68 +27,120 @@ export function parseDiceVerdict(raw: unknown): DiceVerdict | null {
 }
 interface DiceRollerProps {
   filePath: string;
-  rollDice: { type?: string; desc: string; expect: string; result?: number; passed?: boolean };
+  rollDice: {
+    desc: string;
+    expect: string;
+    result?: number;
+    passed?: boolean;
+  };
+  /** Retained for the existing card projection; called after an accepted verdict. */
   onRollComplete?: (result: number, passed: boolean) => void;
 }
 
-/** The HTTP verdict is authoritative. A portal keeps the throw outside transformed cards. */
+interface RolledSummary {
+  result: number;
+  passed: boolean;
+  crit?: boolean;
+  fumble?: boolean;
+}
+
+function playerRequestKey(path: string): string {
+  return actionKey('dice', path);
+}
+
+/** The card is a trigger and result summary; DiceCeremony owns all animation. */
 export const DiceRoller: React.FC<DiceRollerProps> = ({ filePath, rollDice, onRollComplete }) => {
-  const { locale } = useLocale();
-  const [open, setOpen] = useState(false);
-  const [verdict, setVerdict] = useState<DiceVerdict | null>(null);
-  const [settled, setSettled] = useState(false);
-  const [error, setError] = useState('');
-  const running = useRef(false);
-  const alive = useRef(true);
-  const completed = useRef(false);
-  const callback = useRef(onRollComplete); callback.current = onRollComplete;
-  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  const result = verdict?.result ?? rollDice.result;
-  const passed = verdict?.passed ?? rollDice.passed;
-  const grade = verdict?.outcomeGrade ?? (verdict?.crit ? 'great-success' : passed ? 'success' : 'failure');
-  const resultLabel = grade === 'great-success' ? (locale === 'ja' ? '大成功' : locale === 'zh-CN' ? '大成功' : 'Great success') : passed ? (locale === 'ja' ? '成功' : locale === 'zh-CN' ? '成功' : 'Success') : (locale === 'ja' ? '不成功・次の手掛かりへ' : locale === 'zh-CN' ? '未成功 · 还有下一步' : 'Setback · a way forward remains');
+  const [rolled, setRolled] = useState<RolledSummary | null>(() => {
+    const r = rollDice.result;
+    const p = rollDice.passed;
+    return r !== undefined && p !== undefined ? { result: r, passed: p } : null;
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const roll = async () => {
-    if (running.current || result !== undefined) return;
-    running.current = true; completed.current = false;
-    setError(''); setSettled(false); setOpen(true);
-    void unlock(); playFoley('dice-roll');
+    if (busy || rolled) return;
+    setError(null);
+    if (filePath === '') {
+      setError('Could not roll: this card has no world-relative path.');
+      return;
+    }
+    setBusy(true);
     try {
-      if (!filePath) throw new Error('This card has no world-relative path.');
-      const res = await fetch('/api/dice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: filePath }) });
-      const raw = await res.json();
-      if (!res.ok || raw?.ok === false) throw new Error(raw?.error || `/api/dice → ${res.status}`);
-      const value = parseDiceVerdict(raw);
-      if (!value) throw new Error('The dice response was not the expected shape.');
-      if (alive.current) setVerdict(value);
-    } catch (reason) {
-      if (alive.current) { setOpen(false); setError(`Could not roll: ${reason instanceof Error ? reason.message : String(reason)}`); }
-    } finally { running.current = false; }
+      const res = await fetch('/api/dice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: filePath }),
+      });
+      const raw: unknown = await res.json().catch(() => null);
+      const rawObj = raw !== null && typeof raw === 'object' ? raw as Record<string, unknown> : null;
+      // The action envelope is authoritative: a 2xx response without ok:true is
+      // not a domain success and must never enter the ceremony.
+      if (!res.ok || rawObj?.ok !== true) {
+        const code = typeof rawObj?.code === 'string' ? rawObj.code : `HTTP ${res.status}`;
+        const message = typeof rawObj?.error === 'string' ? rawObj.error : code;
+        throw new Error(message);
+      }
+      const details = parsePlayerDiceResponse(raw, res.ok);
+      if (!details) throw new Error(`/api/dice → ${res.status} (missing authoritative roll details)`);
+      // Domain facts are parsed before the sole ceremony is staged. A duplicate
+      // request is not replayed and is not reported as a fresh roll.
+      const input: DiceCeremonyInput | null = ingestPlayerRoll(details, playerRequestKey(filePath));
+      if (!input) throw new Error('This roll result was already presented or was incomplete.');
+      setRolled({ result: input.result, passed: input.passed, crit: input.crit, fumble: input.fumble });
+      onRollComplete?.(input.result, input.passed);
+    } catch (err) {
+      setError(`Could not roll: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(false);
+    }
   };
-  const land = () => {
-    if (!verdict || completed.current) return;
-    completed.current = true; setSettled(true);
-    if (grade === 'great-success') playFoley('crit-chime');
-    else if (verdict.passed) playFoley('unlock');
-    else playFoley('page-turn');
-    callback.current?.(verdict.result, verdict.passed);
-  };
-  return <div className="mt-4 p-4 rounded-2xl bg-paper-wall/60 border border-ink/10">
-    <div className="flex items-center gap-2"><Dices size={18} /><strong>{rollDice.desc}</strong></div>
-    <small>{rollDice.type} · Requires: {rollDice.expect}</small>
-    {result !== undefined && passed !== undefined ? <p role="status"><strong>{result}</strong> · {passed ? 'Check Passed' : 'Check Failed'}</p>
-      : <button type="button" className="block mt-3 px-4 py-2 rounded-full bg-rust text-white" onClick={() => void roll()}>Roll the Dice</button>}
-    {error && <p role="alert">{error}</p>}
-    {open && createPortal(<div className="d10-overlay" data-no-drag
-      onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}
-      onClick={e => e.stopPropagation()} onWheel={e => e.stopPropagation()}
-      onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') setOpen(false); }}>
-      <div className={`d10-dialog ${settled ? `dice-landed dice-landed--${grade}` : ''}`} role="dialog" aria-modal="true" aria-label={rollDice.desc}>
-        <strong>{rollDice.desc}</strong>
-        <D10Stage integrated dice={verdict?.dice ?? rollDice.type ?? ''} rolls={verdict?.rolls} settled={settled} onLanded={land} />
-        {!settled && <p role="status">{verdict ? 'Rolling…' : 'Waiting for the roll…'}</p>}
-        {settled && verdict && <><output className="dice-result-number">{verdict.result}</output><p role="status">{resultLabel} · {rollDice.expect}</p></>}
-        <button type="button" autoFocus onClick={() => setOpen(false)}>{settled ? 'Done' : 'Close'}</button>
+
+  const badge = (pass: boolean) =>
+    pass ? (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+        <CheckCircle2 className="w-3.5 h-3.5" /> Check Passed
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full">
+        <AlertCircle className="w-3.5 h-3.5" /> Check Failed
+      </span>
+    );
+
+  return (
+    <div className="mt-4 p-4 rounded-2xl bg-paper-wall/60 border border-ink/10 shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Dices className="w-5 h-5 text-rust" />
+          <span className="text-sm font-semibold tracking-wide text-ink">{rollDice.desc}</span>
+        </div>
+        <span className="font-mono text-xs px-2 py-0.5 rounded bg-ink/5 text-ink/70">
+          Requires: {rollDice.expect}
+        </span>
       </div>
-    </div>, document.body)}
-  </div>;
+
+      {rolled ? (
+        <div className="flex items-center gap-4">
+          <div className="dice-cube dice-cube-compact" aria-hidden="true"><Dices className="w-7 h-7" /></div>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-xl font-bold text-ink">{rolled.result}</span>
+            {badge(rolled.passed)}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => void roll()}
+            disabled={busy}
+            className="self-start px-4 py-1.5 rounded-full bg-rust hover:bg-rust-light text-white text-xs font-medium tracking-wide shadow-sm transition-all disabled:opacity-60"
+          >
+            {busy ? 'Resolving…' : 'Roll the Dice'}
+          </button>
+          <span className="text-xs text-ink/50">The result will be shown in the dice ceremony.</span>
+          {error && <p role="alert" className="text-xs text-rose-700">{error}</p>}
+        </div>
+      )}
+    </div>
+  );
 };

@@ -23,16 +23,25 @@ import {
   listBackpack,
   nookCardPaths,
   nookIdOf,
+  NookNoteInputSchema,
+  NookNoteOutcomeSchema,
+  writeNookNote,
   parseFrontmatter,
   cardFormOf,
   cardKindOf,
+  componentDefOf,
+  resolveAppearance,
   sanitiseForBlock,
+  assertAssetReference,
   type Actor,
   type CardRecord,
+  type SeatFile,
   type ViewRect,
 } from '@airp/shared';
 import type { AgentLifecycleManager } from '../engine/lifecycle.js';
 import type { EventBridge } from '../engine/event-bridge.js';
+import { prepareMaterialReview, runDeclaredChoice, serialDeclared } from '../engine/declared-actions.js';
+import type { LiveCallRegistry } from '../engine/live-session.js';
 
 interface LayerItem {
   path: string;
@@ -192,6 +201,50 @@ function storedSizeOf(
   return { kind: declared.kind, w, h };
 }
 
+type SeatOrderInput = Pick<SeatFile, 'path' | 'kind' | 'order'>;
+
+function asciiCompare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function numericPrefixOf(filePath: string): number | null {
+  const name = path.basename(filePath);
+  const match = /^(\d+)-/.exec(name);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+
+function seatStageOf(kind: string | undefined): number {
+  if (kind === 'chalk') return 0;
+  if (componentDefOf(kind)) return 1;
+  return 2;
+}
+
+/**
+ * Canonical page order for one automatic seating batch. Explicit finite order
+ * is authoritative; the remaining files use Chalk/component/other stages,
+ * numeric filename prefixes, and finally POSIX path bytes.
+ */
+function stableSeatOrderOf(files: readonly SeatOrderInput[]): Array<{ path: string; order: number }> {
+  const sorted = [...files].sort((a, b) => {
+    const stage = seatStageOf(a.kind) - seatStageOf(b.kind);
+    if (stage !== 0) return stage;
+    const aOrder = Number.isFinite(a.order);
+    const bOrder = Number.isFinite(b.order);
+    if (aOrder !== bOrder) return aOrder ? -1 : 1;
+    if (aOrder && bOrder && a.order !== b.order) return a.order! - b.order!;
+    const aPrefix = numericPrefixOf(a.path);
+    const bPrefix = numericPrefixOf(b.path);
+    if (aPrefix === null && bPrefix !== null) return 1;
+    if (aPrefix !== null && bPrefix === null) return -1;
+    if (aPrefix !== null && bPrefix !== null && aPrefix !== bPrefix) return aPrefix - bPrefix;
+    return asciiCompare(a.path, b.path);
+  });
+  return sorted.map((file, order) => ({ path: file.path, order }));
+}
+
 /**
  * Layer background config from the layer README (doc-10 E0: bg is a README field).
  * `bgStyle` is a NESTED block (templates/holmes-world/world/README.md:6-8); a bare
@@ -233,7 +286,7 @@ const AUDIO_POOL: Record<'ambient' | 'bgm', readonly string[]> = {
 
 /**
  * One audio value → URL. Three shapes (docs/audio/00 §1/§3.1):
- *   - `assets/…` → direct world-relative file → `/api/asset?path=<enc>` (missing → null)
+ *   - `assets/…` → direct world-relative file → `/api/asset?path=<enc>&kind=audio` (missing → null)
  *   - a value containing `/` that is NOT `assets/`-prefixed → contract violation:
  *     warn + null (fail-loud, response shape unchanged)
  *   - a bare name → the 5-step override chain: world-level (all candidates, override)
@@ -257,7 +310,7 @@ function resolveAudioRef(
     // A declared-but-absent world path folds to null (declared silence), NOT a
     // frontend fetch failure (which would fall back to synthesis, 00 §7).
     if (!existsSync(abs)) return null;
-    return `/api/asset?path=${encodeURIComponent(val)}`;
+    return `/api/asset?path=${encodeURIComponent(val)}&kind=audio`;
   }
 
   if (val.includes('/')) {
@@ -270,7 +323,7 @@ function resolveAudioRef(
       const cand = tpl.replace('{n}', val);
       if (level === 'world') {
         if (existsSync(path.resolve(store.worldRoot, 'assets/audio', cand))) {
-          return `/api/asset?path=${encodeURIComponent(`assets/audio/${cand}`)}`;
+          return `/api/asset?path=${encodeURIComponent(`assets/audio/${cand}`)}&kind=audio`;
         }
       } else if (existsSync(path.join(audioRoot, cand))) {
         return `/api/audio?path=${encodeURIComponent(cand)}`;
@@ -314,12 +367,47 @@ async function readLayerItems(store: LocalWorldStore, paths: string[]): Promise<
   );
 }
 
+/** Read the world/layer material context used by the shared appearance resolver. */
+async function appearanceContext(
+  store: LocalWorldStore,
+  layerId: string
+): Promise<{ worldId: string; worldMaterial: string | null; layerId: string; layerMaterial: string | null }> {
+  // Appearance context only needs the two world-level leaves. Do not call
+  // `getManifest()` here: nook reads are also valid for legacy fixtures whose
+  // character records predate the required `home` field, and resolving a card
+  // appearance must not turn that unrelated manifest compatibility issue into
+  // a 500 response.
+  let worldId = path.basename(store.worldRoot);
+  let worldMaterial: string | null = null;
+  try {
+    const raw = JSON.parse(await store.readFile('world.json')) as Record<string, unknown>;
+    if (typeof raw.id === 'string' && raw.id.trim() !== '') worldId = raw.id;
+    if (typeof raw.material === 'string') worldMaterial = raw.material;
+  } catch {
+    // The layer can still render with base/kind appearance defaults.
+  }
+  let layerMaterial: string | null = null;
+  const readmePath = layerId === 'map' ? 'world/README.md' : `${layerId}/README.md`;
+  try {
+    const fm = parseFrontmatter(await store.readFile(readmePath)).frontmatter;
+    layerMaterial = typeof fm?.material === 'string' ? fm.material : null;
+  } catch {
+    // A stub layer/nook has no README and therefore no local material override.
+  }
+  return { worldId, worldMaterial, layerId, layerMaterial };
+}
+
 export function createWorldRouter(
   repoRoot: string,
   lifecycle: AgentLifecycleManager,
   eventBridge: EventBridge,
   getActiveStore: () => LocalWorldStore | null,
-  setActiveStore: (store: LocalWorldStore | null) => void
+  setActiveStore: (store: LocalWorldStore | null) => void,
+  // Live calls are torn down with the world (docs/live-voice/00 §2.4 freeze 3):
+  // a call points at a character agent inside one specific world root, so it
+  // cannot outlive that world. Optional — tests and any caller without a voice
+  // channel get a no-op, so this router gains no hard dependency on the registry.
+  liveCalls: Pick<LiveCallRegistry, 'closeAll'> = { closeAll: async () => {} }
 ): Router {
   const router = Router();
   let releasingWorld: Promise<void> | null = null;
@@ -328,12 +416,16 @@ export function createWorldRouter(
     if (store && !existsSync(path.join(store.worldRoot, 'world.json'))) {
       setActiveStore(null);
       eventBridge.close();
+      // Fire-and-forget on the 409 path: this branch must return quickly
+      // (AGENTS.md §2 — the client needs `no_active_world` immediately), and
+      // `closeAll` may await socket teardown. Its own errors are swallowed.
+      void liveCalls.closeAll().catch(() => {});
       releasingWorld = lifecycle.stopAll().finally(() => { store.close(); releasingWorld = null; });
     }
     if (releasingWorld) {
       try { await releasingWorld; } catch { /* The unavailable world stays detached. */ }
     }
-    const needsWorld = ['/agent-settings', '/manifest', '/nook', '/layer', '/backpack', '/characters', '/move', '/card/position', '/card/footprint', '/dice', '/use-item', '/choice', '/material-review', '/enter-layer', '/viewpoint', '/freeze', '/god-action', '/asset', '/audio'].includes(req.path);
+    const needsWorld = ['/agent-settings', '/manifest', '/nook', '/nook-note', '/layer', '/backpack', '/characters', '/following', '/move', '/card/position', '/card/footprint', '/dice', '/use-item', '/choice', '/material-review', '/enter-layer', '/viewpoint', '/freeze', '/god-action', '/snapshot', '/rollback', '/asset', '/audio'].includes(req.path);
     if (!getActiveStore() && needsWorld) {
       return res.status(409).json({ code: 'no_active_world', error: 'Choose a world or start a new save.' });
     }
@@ -420,10 +512,21 @@ export function createWorldRouter(
       }
 
       worldFrozen = false;
+      // Hang up every live call before the character agents go away, so no
+      // sideband survives into the next world (docs/live-voice/00 §2.4 freeze 3).
+      await liveCalls.closeAll();
       await lifecycle.stopCharacters();
 
       const current = getActiveStore();
-      if (current) current.close();
+      if (current) {
+        // Session-end snapshot point (doc-07 C4 / doc-16 §3): the world being
+        // left behind gets a restore point. Best effort — a snapshot failure
+        // must never block loading the next world.
+        await serviceFor(current, { type: 'engine' })
+          .snapshotWorld({ reason: 'session end' })
+          .catch((err) => console.warn('[Snapshot Warning]', err instanceof Error ? err.message : String(err)));
+        current.close();
+      }
 
       const store = new LocalWorldStore(resolvedPath);
       setActiveStore(store);
@@ -506,7 +609,7 @@ export function createWorldRouter(
       }
 
       // `listFiles(prefix)` walks RECURSIVELY, so the direct-child cut is ours
-      // to make — `nookCardPaths` does it (direct-child .md minus README).
+      // to make — `nookCardPaths` does it (direct-child .md minus four root configuration files).
       const mdFiles = nookCardPaths(await store.listFiles(nookId), nookId);
       const items = await readLayerItems(store, mdFiles);
 
@@ -525,12 +628,20 @@ export function createWorldRouter(
         rowByPath.set(row.id, row);
       }
 
+      const context = await appearanceContext(store, nookId);
       const enriched = items.map((it) => {
         const row = rowByPath.get(it.path);
         const { kind, w, h } = storedSizeOf(it, row);
+        const appearance = resolveAppearance({
+          kind,
+          entityPath: it.path,
+          frontmatter: it.frontmatter,
+          context,
+        });
         return {
           ...it,
           kind,
+          appearance,
           x: row ? row.x : SEAT_ANCHOR.x,
           y: row ? row.y : SEAT_ANCHOR.y,
           w,
@@ -575,6 +686,40 @@ export function createWorldRouter(
     }
   });
 
+  /**
+   * Leave a player-authored note in a character's Nook. The request is a
+   * deliberately narrow transport seam: it carries no path, frontmatter,
+   * link, or actor. `writeNookNote` performs the shared id/path checks and
+   * delegates serialization + entity_created to the existing writeChalk action.
+   * The event bridge's tail reader observes that event and the normal
+   * world_event refresh path re-reads the Nook.
+   */
+  router.post('/nook-note', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const parsed = NookNoteInputSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return res.status(400).json({
+        ok: false,
+        code: 'invalid_argument',
+        error: issue?.message ?? 'Invalid nook note input',
+      });
+    }
+
+    const service = serviceFor(store, { type: 'player' });
+    await reply(res, async () => {
+      const result = await writeNookNote(service.ctx, parsed.data);
+      const details = NookNoteOutcomeSchema.parse({
+        path: result.details.path,
+        eventSeq: result.details.eventSeq,
+        actor: result.details.actor,
+        created: result.details.created,
+      });
+      return { details };
+    });
+  });
+
   // Get layer contents (cards, files)
   router.get('/layer', async (req, res) => {
     const store = getActiveStore();
@@ -610,36 +755,78 @@ export function createWorldRouter(
       const items = allItems.filter(it => it.filename !== 'README.md' || !targets.has(it.path.replace(/\/README\.md$/, '')));
       const mdFiles = items.map((it) => it.path);
 
-      // Card rows keyed by path (never by layer column - a nested layer README
-      // appears in both its parent layer list and its own list).
-      const rowByPath = new Map(store.getLayerCards(mdFiles).map((r) => [r.id, r]));
-
-      // Seat and persist any card that has no row yet (placed cards never re-seat).
-      const unseated = items
-        .filter((it) => !rowByPath.has(it.path))
-        .map((it) => ({ path: it.path, ...storedSizeOf(it, rowByPath.get(it.path)) }));
-      if (unseated.length > 0) {
-        for (const row of await store.seatUnplaced(layer, unseated)) {
-          rowByPath.set(row.id, row);
+      // Store seating receives the complete page, including existing rows and
+      // cross-layer README doors, then re-reads rows inside its write transaction.
+      const initialRows = new Map(store.getLayerCards(mdFiles).map((row) => [row.id, row]));
+      const eventOrderByPath = new Map<string, number>();
+      for (const event of await store.getEvents(1000)) {
+        if (event.type === 'entity_created') {
+          const eventPath = event.detail.path;
+          if (typeof eventPath === 'string' && !eventOrderByPath.has(eventPath)) {
+            eventOrderByPath.set(eventPath, event.seq);
+          }
+        } else if (event.type === 'layer_initialized' && event.detail.layer === layer) {
+          const eventFiles = event.detail.files;
+          if (Array.isArray(eventFiles)) {
+            eventFiles.forEach((eventPath, index) => {
+              if (typeof eventPath === 'string' && !eventOrderByPath.has(eventPath)) {
+                eventOrderByPath.set(eventPath, event.seq * 1000 + index);
+              }
+            });
+          }
         }
       }
+      const orderHints = stableSeatOrderOf(
+        items.map((item) => {
+          const declared = declaredSizeOf(item);
+          const rawOrder = item.frontmatter?.order;
+          return {
+            path: item.path,
+            kind: declared.kind,
+            order:
+              typeof rawOrder === 'number' && Number.isFinite(rawOrder)
+                ? rawOrder
+                : eventOrderByPath.get(item.path),
+          };
+        })
+      );
+      const orderByPath = new Map(orderHints.map((entry) => [entry.path, entry.order]));
+      const seatFiles: SeatFile[] = items.map((item) => ({
+        path: item.path,
+        ...storedSizeOf(item, initialRows.get(item.path)),
+        order: orderByPath.get(item.path),
+      }));
+      const rowByPath = new Map(initialRows);
 
-      // Re-flow any card whose stored footprint drifted: a kind was resized in
-      // code (declared hash mismatch) or the front end measured a new size.
-      // Both live in `reseatLayer` (00 §5.1); without this the old seats overlap.
+      // The store filters rowless files again while holding BEGIN IMMEDIATE;
+      // passing the full page makes every existing page row an obstacle.
+      for (const row of await store.seatUnplaced(layer, seatFiles)) {
+        rowByPath.set(row.id, row);
+      }
+
+      // Re-flow only cards whose declared or measured footprint legitimately
+      // drifted. Stable rows retain their current x/y/z.
       for (const row of await store.reseatLayer(
         layer,
-        items.map((it) => ({ path: it.path, ...declaredSizeOf(it) }))
+        items.map((item) => ({ path: item.path, ...declaredSizeOf(item), order: orderByPath.get(item.path) }))
       )) {
         rowByPath.set(row.id, row);
       }
 
+      const context = await appearanceContext(store, layer);
       const enriched = items.map((it) => {
         const row = rowByPath.get(it.path);
         const { kind, w, h } = storedSizeOf(it, row);
+        const appearance = resolveAppearance({
+          kind,
+          entityPath: it.path,
+          frontmatter: it.frontmatter,
+          context,
+        });
         return {
           ...it,
           kind,
+          appearance,
           x: row ? row.x : SEAT_ANCHOR.x,
           y: row ? row.y : SEAT_ANCHOR.y,
           // w/h come from the stored row: since F1 those columns are the card's
@@ -716,10 +903,11 @@ export function createWorldRouter(
       }));
 
       const presence = (store.queryCanvas(
-        'SELECT character_id, x, y, following FROM presence WHERE layer = ?',
+        'SELECT character_id, x, y, following FROM presence WHERE layer = ? ORDER BY character_id',
         [layer]
       ) as Array<Record<string, unknown>>).map((row) => ({
         characterId: String(row.character_id),
+        x: Number(row.x),
         y: Number(row.y),
         following: Number(row.following) === 1,
       }));
@@ -733,7 +921,7 @@ export function createWorldRouter(
   // Get backpack items (player/ directory). The scan lives in shared so the
   // injection-side `bag` section and this route name one fact once
   // (docs/hooks/02 §3.1/§4.2); `BagItem`'s field names are the contract the
-  // sidebar reads (`RightSidebar.tsx`), so they are not this route's to change.
+  // backpack chrome reads, so they are not this route's to change.
   router.get('/backpack', async (_req, res) => {
     const store = getActiveStore();
     if (!store) return res.status(400).json({ error: 'No active world' });
@@ -750,6 +938,13 @@ export function createWorldRouter(
     if (!store) return res.status(400).json({ error: 'No active world' });
     try {
       const manifest = await store.getManifest();
+      // `presence` is the ONE cross-layer fact the character rail needs:
+      // `home` is only the initial layer baked into world.json
+      // (docs/tools/05 §6.5), never "where they are now". Read the whole
+      // presence table once and index it — one query, not one per character.
+      const presenceByCharacter = new Map(
+        store.getPresence().map((row) => [row.characterId, row])
+      );
       const chars = await Promise.all(
         (manifest.characters || []).map(async (c) => {
           let avatar = c.avatar;
@@ -780,11 +975,16 @@ export function createWorldRouter(
             EMOTIONS.map(async (e) => (await store.statKind(portraits[e])) === 'file')
           );
           const emotions = present.every(Boolean) ? portraits : undefined;
+          const row = presenceByCharacter.get(c.id);
           return {
             ...c,
             avatar: avatar || '/assets/characters/portraits/fella_1.png',
             avatarVideo,
             bio,
+            // The key is ALWAYS present; `null` means "not in the world"
+            // (no `presence` row), never "the key is missing"
+            // (docs/presence/00 §3.2 / P-11).
+            presence: row ? { layer: row.layer, following: row.following } : null,
             ...(voice ? { voice } : {}),
             ...(emotions ? { emotions } : {}),
           };
@@ -794,6 +994,26 @@ export function createWorldRouter(
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
+  });
+
+  // Toggle a character's following state (05 §3.6.1 / docs/presence/00 §2.4).
+  // The body carries the TERMINAL state, not a toggle: the UI inverts, the
+  // action writes. A repeat is an idempotent no-op that lands no event — the
+  // writer may have flipped it in the meantime, so the client MUST NOT hold
+  // the truth (`presence.following` is the only source).
+  router.post('/following', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const { character, following } = req.body as { character?: unknown; following?: unknown };
+    if (typeof character !== 'string' || character === '') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'character must be a non-empty character id' });
+    }
+    if (typeof following !== 'boolean') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'following must be a boolean' });
+    }
+    await reply(res, () =>
+      serviceFor(store, { type: 'player' }).setFollowing({ character, following })
+    );
   });
 
   // Move item (backpack <-> scene, etc.) — the single action, no local rules.
@@ -968,8 +1188,24 @@ export function createWorldRouter(
   // Player picks one of the public options an entity declares (06 §2.5).
   router.post('/material-review', async (req, res) => {
     const store = getActiveStore();
-    if (!store || req.body?.world !== store.worldRoot) return res.status(409).json({ error: 'The active world changed. Reopen the materials panel.' });
-    await reply(res, () => serialDeclared(store.worldRoot, () => prepareMaterialReview(serviceFor(store, { type: 'player' }), req.body)));
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    await serialDeclared(store.worldRoot, async () => {
+      try {
+        const result = await prepareMaterialReview(serviceFor(store, { type: 'player' }), req.body);
+        res.json({ ok: true, details: result.details });
+      } catch (err) {
+        if (err instanceof ActionError) {
+          const http = err.toHttp();
+          res.status(http.status).json(http.body);
+          return;
+        }
+        res.status(500).json({
+          ok: false,
+          code: 'internal',
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
   });
 
   router.post('/choice', async (req, res) => {
@@ -984,7 +1220,6 @@ export function createWorldRouter(
     }
     await reply(res, () => serialDeclared(store.worldRoot, async () => {
       const declared = await runDeclaredChoice(serviceFor(store, { type: 'player' }), choicePath, choice);
-      if (declared) Object.assign(declared.details.action, { world: store.worldRoot });
       if (declared) return declared;
       const result = await serviceFor(store, { type: 'player' }).chooseOption({ path: choicePath, choice });
       // Auto-turn is opt-in per world (docs/settings/00). `off` — the default —
@@ -1080,6 +1315,37 @@ export function createWorldRouter(
     res.json({ ok: true, at });
   });
 
+
+  /**
+   * World snapshot (doc-16 §3). Engine-initiated points — a plot beat, session
+   * end, before a god-scale rewrite — plus an explicit player/god request. The
+   * action owns the zip and the `world_snapshot` event; this route only resolves
+   * the actor and the reason.
+   */
+  router.post('/snapshot', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const body = req.body as { reason?: unknown };
+    const reason = typeof body.reason === 'string' && body.reason.trim() !== ''
+      ? body.reason.trim()
+      : 'manual snapshot';
+    await reply(res, () => serviceFor(store, { type: 'god' }).snapshotWorld({ reason }));
+  });
+
+  /**
+   * Roll back the world FILES to a snapshot (doc-16 §4). The event table is
+   * append-only: this appends `world_rolled_back` and pushes every read cursor,
+   * so the writer is told the world moved back but no history is deleted.
+   */
+  router.post('/rollback', async (req, res) => {
+    const store = getActiveStore();
+    if (!store) return res.status(400).json({ error: 'No active world' });
+    const body = req.body as { snapshot?: unknown };
+    if (typeof body.snapshot !== 'string' || body.snapshot.trim() === '') {
+      return res.status(400).json({ ok: false, code: 'invalid_argument', error: 'snapshot must be a non-empty id' });
+    }
+    await reply(res, () => serviceFor(store, { type: 'engine' }).rollbackWorld({ snapshot: body.snapshot }));
+  });
   // God mode toggle freeze — a presentation toggle, not an action: it writes no
   // event and broadcasts a演出 frame directly (docs/tools/12 §2.4).
   router.post('/freeze', (_req, res) => {
@@ -1151,25 +1417,44 @@ export function createWorldRouter(
   });
 
   /**
-   * Serve a world asset (scene backdrop, portrait, …) from the active world root.
-   * The frontend requests `/api/asset?path=<world-relative>`; the store path
-   * resolver strips any `../` traversal, and we refuse anything outside the
-   * world root as a second belt. Assets are frequently absent in templates, so
-   * a miss is a plain 404 — the client degrades to the material skin.
+   * Serve a world asset through an explicit media lane. The endpoint is shared
+   * by scene images, portrait video and world audio; `kind` is required so a
+   * caller cannot widen an image reference into another media type.
    */
   router.get('/asset', async (req, res) => {
     const store = getActiveStore();
     if (!store) return res.status(400).json({ error: 'No active world' });
-    const rel = String(req.query.path || '').replace(/^\/+/, '');
+    const rel = typeof req.query.path === 'string' ? req.query.path : '';
     if (!rel) return res.status(400).json({ error: 'path required' });
+    const kind = typeof req.query.kind === 'string' ? req.query.kind : '';
+    if (kind !== 'image' && kind !== 'video' && kind !== 'audio') {
+      return res.status(400).json({
+        ok: false,
+        code: 'invalid_argument',
+        error: 'kind must be one of: image, video, audio',
+      });
+    }
     try {
-      const abs = path.resolve(store.worldRoot, rel);
-      if (!abs.startsWith(store.worldRoot + path.sep)) {
-        return res.status(403).json({ error: 'path escapes world root' });
-      }
-      res.sendFile(abs);
+      const { absolutePath, mimeType } = await assertAssetReference(
+        store.worldRoot,
+        rel,
+        kind,
+      );
+      res.type(mimeType);
+      res.sendFile(absolutePath, (err) => {
+        if (err && !res.headersSent) {
+          res.status(404).json({ ok: false, code: 'not_found', error: err.message });
+        }
+      });
     } catch (err) {
-      res.status(404).json({ error: err instanceof Error ? err.message : String(err) });
+      if (err instanceof ActionError) {
+        const body = err.toHttp().body;
+        const status = err.code === 'invalid_asset_ref'
+          ? (err.details.reason === 'not_found' ? 404 : 403)
+          : err.httpStatus;
+        return res.status(status).json(body);
+      }
+      return res.status(404).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 

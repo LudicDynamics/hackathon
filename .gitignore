@@ -11,9 +11,13 @@ dist/
 .env.*.local
 .artifacts/
 worlds/
-# Canonical bilingual editions live directly in templates; legacy playtests are archived.
+# Canonical bilingual editions live directly in templates; playtests are experimental.
 templates/*-playtest/
 templates/*-playtest-*/
+
+# Keep the documentation namespace visible despite the runtime `worlds/` rule.
+!docs/worlds/
+!docs/worlds/**
 
 # --- assets/ : worldlines-assets 素材车间 ---
 # AI 生图候选（PNG/JPG）合计约 587MB，作为生产参考太占库，整树不追踪。
@@ -58,6 +62,13 @@ assets/**
 # commit real dialogue. Same three-dir policy as above — deliberately not
 # `**/.airpworld/`, which would block future tracked content.
 **/.airpworld/sessions/
+
+# World snapshots live at <worldRoot>/.airpworld/snapshots/*.zip (doc-16, B7).
+# Same class as sessions/ above: a per-machine runtime product, ~18MB each, and
+# a nook or template loaded in place will write one here on world switch. The
+# world-scoped *.db*/presets rules above do not cover a plain directory, so a
+# `git add .` after a dev run would otherwise commit the player's whole world.
+**/.airpworld/snapshots/
 
 # pi-rp agent config (PI_CODING_AGENT_DIR -> .pi/agent). models.json holds real API keys
 # and settings.json holds per-machine prefs — this repo is a public hackathon artifact,

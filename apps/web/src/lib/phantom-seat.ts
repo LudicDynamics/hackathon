@@ -1,17 +1,13 @@
 /**
- * Phantom seating — the ONE seater for provisional cards (contract §5, ruling D).
+ * Phantom seating — the ONE adapter for provisional cards.
  *
- * Owner: docs/perform/03. 01's chalk phantoms MUST call `phantomSeatFor`; nobody
- * builds a second seater (`nextInkSeat` was deleted in review). It mirrors the
- * server's `seatUnplaced` algorithm via `lib/seat.ts` (same Ulam spiral, same
- * anchor/step), but the INPUT SET differs — front-end = items ∪ phantoms,
- * server = its own view. Isomorphism of the algorithm does not imply identical
- * output, so phantoms are placed "optimistically": the real refetched seat wins
- * on handover (docs/perform/00 §5).
+ * Phantom seats and server seats use the same shared `flowColumns` geometry.
+ * The input set differs: the front end sees the last fetched rows plus
+ * currently active phantoms, while the server sees its own database view.
+ * A real refetch remains authoritative during handover.
  */
 
-import { makeBox, overlap, type Box } from './collide.js';
-import { SEAT_ANCHOR, seatSpiral } from './seat.js';
+import { flowColumns, type AutoLayoutRect } from '@airp/shared/layout';
 import { getPhantomsSnapshot, type PhantomSeat } from './phantom.js';
 
 /** Measure complete provisional text before paint. Only its own DOM moves;
@@ -42,35 +38,49 @@ let seatItems: readonly SeatItem[] = [];
 /**
  * `useWorld` publishes the current layer's rows after `fetchLayer` succeeds.
  * The layer is recorded: if `phantomSeatFor` is asked about a different layer,
- * the stale rows are ignored (better overlapping phantoms than phantom boxes
- * pushing real cards around).
+ * stale rows are ignored rather than pushing a phantom away from its layer.
  */
 export function publishSeatItems(layer: string, items: readonly SeatItem[]): void {
   seatLayer = layer;
   seatItems = items;
 }
 
-function isVisibleIn(entryLayer: string | undefined, layer: string): boolean {
-  return entryLayer === undefined || entryLayer === layer;
-}
-
 /**
- * Local seat for a new phantom: the spiral over (current items ∪ visible
- * phantoms) so two concurrent generations never overlap. Returns the seat plus
- * the occupied boxes it considered.
+ * Allocate one provisional seat from the shared column flow.
+ *
+ * Existing rows and every non-evicted phantom in this layer are obstacles.
+ * The returned occupied snapshot is the exact obstacle set supplied to
+ * `flowColumns`; callers must not use it as a second seating algorithm.
  */
 export function phantomSeatFor(
   size: { w: number; h: number },
   layer: string
-): { seat: PhantomSeat; occupied: Box[] } {
+): { seat: PhantomSeat; occupied: AutoLayoutRect[] } {
   const items = seatLayer === layer ? seatItems : [];
-  const occupied = [
-    ...items.map((it) => makeBox(it.x, it.y, it.w, it.h)),
+  const occupied: AutoLayoutRect[] = [
+    ...items.map((it) => ({ x: it.x, y: it.y, w: it.w, h: it.h })),
     ...getPhantomsSnapshot()
-      .filter((p) => p.phase !== 'evicted' && isVisibleIn(p.layer, layer))
-      .map((p) => makeBox(p.seat.x, p.seat.y, p.seat.w, p.seat.h)),
+      .filter((p) => p.phase !== 'evicted' && (p.layer === undefined || p.layer === layer))
+      .map((p) => ({
+        id: p.toolCallId,
+        x: p.seat.x,
+        y: p.seat.y,
+        w: p.seat.w,
+        h: p.seat.h,
+      })),
   ];
-  const { x, y } = seatSpiral(SEAT_ANCHOR, occupied, size.w, size.h);
+  const candidate = { id: `phantom:${layer}`, w: size.w, h: size.h };
+  const result = flowColumns([candidate], occupied);
+  const placement = result.placements[0];
+  if (!placement) {
+    throw new Error('flowColumns returned no placement for a phantom');
+  }
+  if (result.exhausted) {
+    console.warn(`Phantom layout exhausted for layer ${layer}; using the final candidate`);
+  }
   const z = 1 + items.reduce((m, it) => Math.max(m, it.z), 0);
-  return { seat: { x, y, w: size.w, h: size.h, z }, occupied };
+  return {
+    seat: { x: placement.x, y: placement.y, w: placement.w, h: placement.h, z },
+    occupied,
+  };
 }

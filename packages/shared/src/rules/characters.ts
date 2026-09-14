@@ -53,10 +53,35 @@ export function characterIdOfPath(path: string): string | null {
 }
 
 /**
- * The markdown a nook page shows: direct-child `.md` under `characters/<id>/`,
- * minus `README.md` (docs/nook/01 §2.4). Shared by `GET /api/nook` and
- * `arrangeCards`'s nook branch so the "direct child, minus README" rule has one
- * home instead of two (docs/nook/01 §2.4).
+ * The four immutable configuration files at a character nook root.
+ *
+ * This deliberately accepts world-root-relative paths only and reuses the
+ * canonical character path parser; nested files with the same basename are
+ * ordinary lived traces, not configuration.
+ */
+export function characterRootConfigOf(
+  path: string
+): 'README.md' | 'identity.md' | 'personality.md' | 'memory.md' | null {
+  const characterId = characterIdOfPath(path);
+  if (characterId === null) return null;
+  const prefix = `characters/${characterId}/`;
+  if (!path.startsWith(prefix)) return null;
+  const filename = path.slice(prefix.length);
+  if (filename.includes('/')) return null;
+  if (
+    filename === 'README.md' ||
+    filename === 'identity.md' ||
+    filename === 'personality.md' ||
+    filename === 'memory.md'
+  ) {
+    return filename;
+  }
+  return null;
+}
+
+/**
+ * The markdown a nook page shows: direct-child `.md` under
+ * `characters/<id>/`, minus the four root configuration files.
  *
  * Distinct question from `characterIdOfPath`: this one answers "what does the
  * page display" (direct children only), that one answers "which character owns
@@ -64,6 +89,10 @@ export function characterIdOfPath(path: string): string | null {
  */
 export function nookCardPaths(allFiles: readonly string[], nookId: string): string[] {
   return directChildrenOf(allFiles, nookId)
-    .filter((name) => name.endsWith('.md') && name !== 'README.md')
+    .filter(
+      (name) =>
+        name.endsWith('.md') &&
+        characterRootConfigOf(`${nookId}/${name}`) === null
+    )
     .map((name) => `${nookId}/${name}`);
 }

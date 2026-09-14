@@ -1,74 +1,208 @@
 {
-  "Voice is unavailable. Check voice settings; text dialogue still works.": { "zh-CN": "语音暂不可用。请检查语音设置；文字对话仍可正常使用。", "ja": "音声を利用できません。音声設定を確認してください。テキストの会話はそのまま使えます。" },
-  "Dismiss voice notice": { "zh-CN": "关闭语音提示", "ja": "音声のお知らせを閉じる" },
-  "Character voice": { "zh-CN": "角色语音", "ja": "キャラクター音声" },
-  "Enable character voice on this browser": { "zh-CN": "在此浏览器中启用角色语音", "ja": "このブラウザでキャラクター音声を有効にする" },
-  "Voice service is unavailable. Text dialogue still works.": { "zh-CN": "语音服务暂不可用，文字对话仍可正常使用。", "ja": "音声サービスを利用できません。テキストの会話はそのまま使えます。" },
-  "Configured · availability is checked when speaking": { "zh-CN": "已配置 · 实际可用性将在朗读时确认", "ja": "設定済み · 利用できるかは再生時に確認します" },
-  "TTS is not configured. Text dialogue remains available.": { "zh-CN": "尚未配置 TTS，文字对话仍可正常使用。", "ja": "TTS は未設定です。テキストの会話はそのまま使えます。" },
-  "Checking configuration…": { "zh-CN": "正在检查配置……", "ja": "設定を確認しています…" },
-  "Online model": { "zh-CN": "线上模型", "ja": "オンラインモデル" },
-  "Online fallback voice": { "zh-CN": "线上兜底音色", "ja": "オンラインのフォールバック音声" },
-  "Characters may override it": { "zh-CN": "角色可使用自己的音色", "ja": "キャラクターごとの音声が優先されます" },
-  "Add a DashScope API key below, or configure Nanami local voice. Text dialogue remains available.": { "zh-CN": "请在下方添加 DashScope API key，或配置七海本机语音。文字对话仍可正常使用。", "ja": "下で DashScope API key を追加するか、七海のローカル音声を設定してください。テキストの会話はそのまま使えます。" },
-  "Recheck voice configuration": { "zh-CN": "重新检查语音配置", "ja": "音声設定を再確認" },
-  "Server connections": { "zh-CN": "服务连接", "ja": "サービス接続" },
-  "Keys stay on this server in .local.env when it exists, otherwise in .env.local. Blank key fields keep their current values. Flow configures media generation, not the writer model.": { "zh-CN": "密钥只保存在此服务器中：存在 .local.env 时优先使用，否则使用 .env.local。密钥输入框留空会保留原值。Flow 用于媒体生成，不会更改作家模型。", "ja": "キーはこのサーバー内だけに保存されます。.local.env があればそちらを使い、なければ .env.local を使います。キー欄を空のままにすると現在の値を維持します。Flow はメディア生成用で、作家モデルは変更しません。" },
-  "DeepSeek V4.1 Flash uses https://api.deepseek.com with model deepseek-flash. Save, restart existing agents, then select deepseek / deepseek-flash in Agents → Model.": { "zh-CN": "DeepSeek V4.1 Flash 使用 https://api.deepseek.com 和模型 deepseek-flash。保存后重启已有 Agent，再到 Agents → Model 选择 deepseek / deepseek-flash。", "ja": "DeepSeek V4.1 Flash は https://api.deepseek.com とモデル deepseek-flash を使います。保存後に既存の Agent を再起動し、Agents → Model で deepseek / deepseek-flash を選んでください。" },
-  "Service URL": { "zh-CN": "服务 URL", "ja": "サービス URL" },
-  "{service} service URL": { "zh-CN": "{service} 服务 URL", "ja": "{service} のサービス URL" },
-  "API key": { "zh-CN": "API 密钥", "ja": "API キー" },
-  "Configured": { "zh-CN": "已配置", "ja": "設定済み" },
-  "Not configured": { "zh-CN": "未配置", "ja": "未設定" },
-  "{service} API key": { "zh-CN": "{service} API 密钥", "ja": "{service} の API キー" },
-  "Leave blank to keep the current key": { "zh-CN": "留空以保留现有密钥", "ja": "空欄のままにすると現在のキーを維持" },
-  "OpenAI-compatible": { "zh-CN": "OpenAI 兼容", "ja": "OpenAI 互換" },
-  "Flow media proxy": { "zh-CN": "Flow 媒体代理", "ja": "Flow メディアプロキシ" },
-  "Saving…": { "zh-CN": "正在保存……", "ja": "保存しています…" },
-  "Save connections": { "zh-CN": "保存服务连接", "ja": "サービス接続を保存" },
-  "Open this page on localhost to configure server connections.": { "zh-CN": "请通过 localhost 打开此页面以配置服务连接。", "ja": "サービス接続を設定するには、このページを localhost で開いてください。" },
-  "Could not save connections. Check the service URLs and server permissions.": { "zh-CN": "无法保存服务连接。请检查服务 URL 和服务器权限。", "ja": "サービス接続を保存できませんでした。サービス URL とサーバー権限を確認してください。" },
-  "Connections saved. TTS applies immediately; restart existing agents before using new agent credentials.": { "zh-CN": "服务连接已保存。TTS 立即生效；新的 Agent 凭据需要重启已有 Agent 后使用。", "ja": "サービス接続を保存しました。TTS はすぐに反映されます。新しい Agent 認証情報を使うには、既存の Agent を再起動してください。" },
-  "Nanami local voice": { "zh-CN": "七海本机语音", "ja": "七海のローカル音声" },
-  "Nanami uses this local voice when available. If it fails, AIRP automatically falls back to the online voice.": { "zh-CN": "七海会优先使用此本机语音；服务失败时，AIRP 会自动回落到线上音色。", "ja": "七海は利用可能なとき、このローカル音声を優先します。失敗した場合は AIRP が自動でオンライン音声に切り替えます。" },
-  "Local TTS service": { "zh-CN": "本机 TTS 服务", "ja": "ローカル TTS サービス" },
-  "Base URL": { "zh-CN": "基址 URL", "ja": "ベース URL" },
-  "Nanami local TTS base URL": { "zh-CN": "七海本机 TTS 基址 URL", "ja": "七海のローカル TTS ベース URL" },
-  "Enter the service base URL without /v1/tts. Clear it and save to disable local voice.": { "zh-CN": "填写服务基址，不要包含 /v1/tts。清空后保存即可关闭本机语音。", "ja": "サービスのベース URL を入力し、/v1/tts は含めないでください。空にして保存するとローカル音声を無効にできます。" },
-  "Voice ID": { "zh-CN": "音色 ID", "ja": "音声 ID" },
-  "Nanami local voice ID": { "zh-CN": "七海本机音色 ID", "ja": "七海のローカル音声 ID" },
-  "Timeout (seconds)": { "zh-CN": "超时（秒）", "ja": "タイムアウト（秒）" },
-  "Nanami local TTS timeout in seconds": { "zh-CN": "七海本机 TTS 超时秒数", "ja": "七海のローカル TTS タイムアウト秒数" },
-  "API key (optional)": { "zh-CN": "API 密钥（可选）", "ja": "API キー（任意）" },
-  "Nanami local TTS API key": { "zh-CN": "七海本机 TTS API 密钥", "ja": "七海のローカル TTS API キー" },
-  "Save Nanami voice": { "zh-CN": "保存七海语音", "ja": "七海の音声を保存" },
-  "Open this page on localhost to manage Nanami local voice.": { "zh-CN": "请通过 localhost 打开此页面以管理七海本机语音。", "ja": "七海のローカル音声を設定するには、このページを localhost で開いてください。" },
-  "Could not save Nanami local voice settings.": { "zh-CN": "无法保存七海本机语音设置。", "ja": "七海のローカル音声設定を保存できませんでした。" },
-  "Nanami local voice settings saved. New dialogue uses them immediately.": { "zh-CN": "七海本机语音设置已保存，新对话立即生效。", "ja": "七海のローカル音声設定を保存しました。新しい会話からすぐに反映されます。" },
-  "Enter a valid local TTS base URL without /v1/tts.": { "zh-CN": "请输入有效的本机 TTS 基址，且不要包含 /v1/tts。", "ja": "/v1/tts を含まない有効なローカル TTS ベース URL を入力してください。" },
-  "Voice ID must use letters, numbers, underscores, or hyphens.": { "zh-CN": "音色 ID 只能使用字母、数字、下划线或连字符。", "ja": "音声 ID には英数字、アンダースコア、ハイフンだけを使用してください。" },
-  "Timeout must be between 1 and 120 seconds.": { "zh-CN": "超时必须在 1 至 120 秒之间。", "ja": "タイムアウトは 1〜120 秒で入力してください。" },
-  "Sound & settings": { "zh-CN": "声音与设置", "ja": "サウンドと設定" },
-  "Close sound settings": { "zh-CN": "关闭声音设置", "ja": "サウンド設定を閉じる" },
-  "Audio volume": { "zh-CN": "音量", "ja": "音量" },
-  "Voice volume": { "zh-CN": "语音", "ja": "音声" },
-  "Background music": { "zh-CN": "背景音乐", "ja": "BGM" },
-  "All sound is muted. Volume changes will apply after sound is turned on.": { "zh-CN": "当前已总静音。调整会保留，开启声音后生效。", "ja": "現在、すべての音がミュートされています。調整は保存され、音をオンにすると反映されます。" },
-  "Turn sound on": { "zh-CN": "开启声音", "ja": "音をオンにする" },
-  "Volumes are saved on this browser. Master mute still silences all audio.": { "zh-CN": "音量保存在此浏览器。总静音仍会关闭全部声音。", "ja": "音量はこのブラウザに保存されます。全体ミュートはすべての音を消します。" },
-  "Initialize to furnish this space from the character’s history.": { "zh-CN": "点击初始化，根据角色的经历布置这里。", "ja": "初期化を押すと、来歴に合う空間を作ります。" },
-  "Initializing private space…": { "zh-CN": "正在初始化小天地…", "ja": "小天地を作っています…" },
-  "Visit private space": { "zh-CN": "进入小天地", "ja": "小天地に入る" },
-  "Initialize private space": { "zh-CN": "初始化小天地", "ja": "小天地を作る" },
-  "Leave the nook": { "zh-CN": "离开小天地", "ja": "小天地を出る" },
-  "Nothing here yet": { "zh-CN": "这里还没有内容", "ja": "まだ何もない部屋" },
-  "Traces of moving in, and nothing else.": { "zh-CN": "这里只留下搬进来的痕迹。", "ja": "引っ越してきた跡だけが残っている。" },
-  "Leave it blank — what fits their history will appear.": { "zh-CN": "点击初始化，根据角色的经历布置这里。", "ja": "初期化を押すと、来歴に合う空間を作ります。" },
-  "Could not open this nook": { "zh-CN": "无法打开小天地", "ja": "小天地を開けませんでした" },
-  "Try again": { "zh-CN": "重试", "ja": "再試行" },
-  "Currently here": { "zh-CN": "此刻在这里", "ja": "ここに居る" },
-  "Selected: {action}. Review and press Send.": { "zh-CN": "已选择：{action}。请确认后点击发送。", "ja": "選択：{action}。内容を確認して送信してください。" },
-  "Ready to send: {action}": { "zh-CN": "待发送：{action}", "ja": "送信待ち：{action}" },
+  "Use this item": {
+    "zh-CN": "使用这个物品",
+    "ja": "このアイテムを使う"
+  },
+  "Voice playback is off; text dialogue remains available.": {
+    "zh-CN": "语音播放已关闭；文字对话仍然可用。",
+    "ja": "音声再生はオフです。テキスト会話は引き続き使えます。"
+  },
+  "TTS is not configured. Text dialogue remains available.": {
+    "zh-CN": "TTS 尚未配置。文字对话仍然可用。",
+    "ja": "TTS が設定されていません。テキスト会話は引き続き使えます。"
+  },
+  "Use {item}.": {
+    "zh-CN": "使用{item}。",
+    "ja": "{item}を使う。"
+  },
+  "Please enter an action before sending.": {
+    "zh-CN": "发送前请先输入行动。",
+    "ja": "送信する前に行動を入力してください。"
+  },
+  "The writer is listening…": {
+    "zh-CN": "作家正在倾听……",
+    "ja": "作家が聞いています……"
+  },
+  "The writer is already working.": {
+    "zh-CN": "作家已经在工作。",
+    "ja": "作家はすでに執筆中です。"
+  },
+  "Load a world and wait for the scene to appear before asking for a hint.": {
+    "zh-CN": "请先载入世界，等场景出现后再请求提示。",
+    "ja": "世界を読み込み、場面が表示されてからヒントを求めてください。"
+  },
+  "Next-step hint draft ready. Review it, then press Send.": {
+    "zh-CN": "下一步提示草稿已准备好。请确认后点击发送。",
+    "ja": "次の一歩のヒント草稿を用意しました。確認してから送信してください。"
+  },
+  "Item selected. Review it, then press Send.": {
+    "zh-CN": "物品已选中。请确认后点击发送。",
+    "ja": "アイテムを選びました。確認してから送信してください。"
+  },
+  "This item is no longer available. Please refresh.": {
+    "zh-CN": "这个物品已经不可用，请刷新。",
+    "ja": "このアイテムはもう使えません。更新してください。"
+  },
+  "Continue · next-step hint": {
+    "zh-CN": "Continue · 下一步提示",
+    "ja": "Continue · 次の一歩のヒント"
+  },
+  "Continue · next-step hint →": {
+    "zh-CN": "Continue · 下一步提示 →",
+    "ja": "Continue · 次の一歩のヒント →"
+  },
+  "Your action has been processed.": {
+    "zh-CN": "你的行动已处理。",
+    "ja": "あなたの行動を処理しました。"
+  },
+  "Audio levels": {
+    "zh-CN": "音量",
+    "ja": "音量"
+  },
+  "Music volume": {
+    "zh-CN": "音乐音量",
+    "ja": "音楽音量"
+  },
+  "Voice volume": {
+    "zh-CN": "语音音量",
+    "ja": "音声音量"
+  },
+  "{value}%": {
+    "zh-CN": "{value}%",
+    "ja": "{value}%"
+  },
+  "Voice playback is off; text dialogue still works.": {
+    "zh-CN": "语音播放已关闭；文字对话仍然可用。",
+    "ja": "音声再生はオフです。テキスト会話は引き続き使えます。"
+  },
+  "TTS is not configured. Text dialogue still works.": {
+    "zh-CN": "TTS 尚未配置。文字对话仍然可用。",
+    "ja": "TTS が設定されていません。テキスト会話は引き続き使えます。"
+  },
+  "World changes": {
+    "zh-CN": "世界变化",
+    "ja": "世界の変化"
+  },
+  "Show event details": {
+    "zh-CN": "显示事件详情",
+    "ja": "イベントの詳細を表示"
+  },
+  "Hide event details": {
+    "zh-CN": "隐藏事件详情",
+    "ja": "イベントの詳細を隠す"
+  },
+  "Dismiss world change": {
+    "zh-CN": "关闭世界变化提示",
+    "ja": "世界の変化を閉じる"
+  },
+  "Activity details": {
+    "zh-CN": "活动详情",
+    "ja": "活動の詳細"
+  },
+  "Close activity details": {
+    "zh-CN": "关闭活动详情",
+    "ja": "活動の詳細を閉じる"
+  },
+  "Expand all activity turns": {
+    "zh-CN": "展开全部活动轮次",
+    "ja": "すべての活動ターンを展開"
+  },
+  "Collapse all activity turns": {
+    "zh-CN": "折叠全部活动轮次",
+    "ja": "すべての活動ターンを折りたたむ"
+  },
+  "Activity details for {name}": {
+    "zh-CN": "{name}的活动详情",
+    "ja": "{name}の活動の詳細"
+  },
+  "Activity log for {agents}: {count} activities, {running} in progress, {completed} completed, {failed} failed": {
+    "zh-CN": "{agents}活动记录：{count}项，进行中{running}项，完成{completed}项，失败{failed}项",
+    "ja": "{agents}の活動記録：{count}件、進行中 {running}件、完了 {completed}件、失敗 {failed}件"
+  },
+  "In progress": {
+    "zh-CN": "进行中",
+    "ja": "進行中"
+  },
+  "Not completed": {
+    "zh-CN": "未完成",
+    "ja": "未完了"
+  },
+  "Completed": {
+    "zh-CN": "已完成",
+    "ja": "完了"
+  },
+  "Stopped": {
+    "zh-CN": "已停止",
+    "ja": "停止しました"
+  },
+  "Took too long": {
+    "zh-CN": "等待超时",
+    "ja": "時間がかかりすぎました"
+  },
+  "{name} · {count} activities · {status}": {
+    "zh-CN": "{name} · {count}项活动 · {status}",
+    "ja": "{name} · 活动 {count}件 · {status}"
+  },
+  "Created \"{name}\". The object is now in {layer}. Next step: open it to view its contents.": {
+    "zh-CN": "已创建“{name}”。物件现在位于{layer}。下一步：打开它查看内容。",
+    "ja": "「{name}」を作成しました。物件は{layer}にあります。次に開いて内容を確認してください。"
+  },
+  "\"{name}\" moved to {to}. Its position is updated. Next step: view it in its new location.": {
+    "zh-CN": "“{name}”已移动到{to}，位置已更新。下一步：前往新位置查看。",
+    "ja": "「{name}」を{to}へ移動しました。位置を更新しました。次に新しい場所で確認してください。"
+  },
+  "\"{name}\" moved to {to}. Its position is updated; {dangling} references need checking. Next step: view it in its new location.": {
+    "zh-CN": "“{name}”已移动到{to}，位置已更新；有{dangling}条引用需要检查。下一步：前往新位置查看。",
+    "ja": "「{name}」を{to}へ移動しました。位置を更新しました。{dangling}件の参照を確認してください。次に新しい場所で確認してください。"
+  },
+  "Deleted \"{name}\". The object is no longer at its original location. Next step: review the current scene.": {
+    "zh-CN": "已删除“{name}”。物件不再位于原位置。下一步：查看当前场景。",
+    "ja": "「{name}」を削除しました。物件は元の場所にありません。次に現在の場面を確認してください。"
+  },
+  "\"{name}\" updated. The object change is recorded. Next step: open it again to review.": {
+    "zh-CN": "“{name}”已更新，物件变化已记录。下一步：重新打开查看。",
+    "ja": "「{name}」を更新しました。物件の変化を記録しました。次にもう一度開いて確認してください。"
+  },
+  "Choice \"{choice}\" recorded for {name}. Next step: review the scene or wait for a response.": {
+    "zh-CN": "已为{name}记录选择“{choice}”。下一步：查看场景或等待回应。",
+    "ja": "{name}的选择「{choice}」を記録しました。次に場面を確認するか、返答を待ってください。"
+  },
+  "The roll for \"{name}\" is settled: {result}, passed. Next step: review the scene according to the result.": {
+    "zh-CN": "“{name}”的掷骰结果已确定：{result}，通过。下一步：根据结果查看场景。",
+    "ja": "「{name}」のダイス結果が確定しました：{result}、成功。次に結果に沿って場面を確認してください。"
+  },
+  "The roll for \"{name}\" is settled: {result}, not passed. Next step: review the scene according to the result.": {
+    "zh-CN": "“{name}”的掷骰结果已确定：{result}，未通过。下一步：根据结果查看场景。",
+    "ja": "「{name}」のダイス結果が確定しました：{result}、失敗。次に結果に沿って場面を確認してください。"
+  },
+  "Recorded using \"{itemName}\" on \"{targetName}\". Next step: check whether the target shows a clear change.": {
+    "zh-CN": "已记录使用“{itemName}”作用于“{targetName}”。下一步：检查目标是否出现明确变化。",
+    "ja": "「{itemName}」を「{targetName}」に使った記録です。次に対象に明確な変化があるか確認してください。"
+  },
+  "Entered \"{name}\". The current scene has changed. Next step: review this layer for clues.": {
+    "zh-CN": "已进入“{name}”。当前场景已改变。下一步：查看这一层寻找线索。",
+    "ja": "「{name}」に入りました。現在の場面が変わりました。次にこの層の手掛かりを確認してください。"
+  },
+  "\"{name}\" finished initializing. Scene content is in place. Next step: open the scene to review it.": {
+    "zh-CN": "“{name}”已完成初始化，场景内容已经就位。下一步：打开场景查看。",
+    "ja": "「{name}」の初期化が完了しました。場面の内容が配置されています。次に開いて確認してください。"
+  },
+  "\"{layerName}\" is not initialized yet. Reason: {reason}. Next step: view the template and retry.": {
+    "zh-CN": "“{layerName}”尚未初始化。原因：{reason}。下一步：查看模板后重试。",
+    "ja": "「{layerName}」はまだ初期化されていません。理由：{reason}。次にテンプレートを確認して再試行してください。"
+  },
+  "\"{layerName}\" is not initialized yet. Reason: {reason}. Next step: return to the previous layer or retry later.": {
+    "zh-CN": "“{layerName}”尚未初始化。原因：{reason}。下一步：返回上一层或稍后重试。",
+    "ja": "「{layerName}」はまだ初期化されていません。理由：{reason}。次に前の層へ戻るか、後で再試行してください。"
+  },
+  "{count} {verb} objects. Objects: {objects}. Next step: open the scene to review them.": {
+    "zh-CN": "{count}个物件已{verb}。物件：{objects}。下一步：打开场景查看。",
+    "ja": "{count}件の物件を{verb}しました。物件：{objects}。次に場面を開いて確認してください。"
+  },
+  "Scene updated {count} items. Objects: {objects}. Next step: review the current layer.": {
+    "zh-CN": "场景更新了{count}项。物件：{objects}。下一步：查看当前层。",
+    "ja": "場面を{count}件更新しました。物件：{objects}。次に現在の層を確認してください。"
+  },
   "Place in current scene": {
     "zh-CN": "放回当前场景",
     "ja": "今のシーンに置く"
@@ -553,5 +687,369 @@
   "Could not move item": {
     "zh-CN": "无法移动物品",
     "ja": "アイテムを移動できませんでした"
+  },
+  "Reading {subject}…": {
+    "zh-CN": "正在读取 {subject}…",
+    "ja": "{subject}を読んでいます…"
+  },
+  "Reading…": {
+    "zh-CN": "正在读取…",
+    "ja": "読んでいます…"
+  },
+  "Creating {subject}…": {
+    "zh-CN": "正在创建 {subject}…",
+    "ja": "{subject}を作成しています…"
+  },
+  "Creating…": {
+    "zh-CN": "正在创建…",
+    "ja": "作成しています…"
+  },
+  "Writing {subject}…": {
+    "zh-CN": "正在写入 {subject}…",
+    "ja": "{subject}を書いています…"
+  },
+  "Writing…": {
+    "zh-CN": "正在写入…",
+    "ja": "書いています…"
+  },
+  "Editing {subject}…": {
+    "zh-CN": "正在修改 {subject}…",
+    "ja": "{subject}を編集しています…"
+  },
+  "Editing…": {
+    "zh-CN": "正在修改…",
+    "ja": "編集しています…"
+  },
+  "Deleting {subject}…": {
+    "zh-CN": "正在删除 {subject}…",
+    "ja": "{subject}を削除しています…"
+  },
+  "Deleting…": {
+    "zh-CN": "正在删除…",
+    "ja": "削除しています…"
+  },
+  "Moving {subject}…": {
+    "zh-CN": "正在移动 {subject}…",
+    "ja": "{subject}を移動しています…"
+  },
+  "Moving…": {
+    "zh-CN": "正在移动…",
+    "ja": "移動しています…"
+  },
+  "Using {subject}…": {
+    "zh-CN": "正在使用 {subject}…",
+    "ja": "{subject}を使っています…"
+  },
+  "Using…": {
+    "zh-CN": "正在使用…",
+    "ja": "使っています…"
+  },
+  "Rolling the dice…": {
+    "zh-CN": "正在掷骰…",
+    "ja": "サイコロを振っています…"
+  },
+  "Making a choice…": {
+    "zh-CN": "正在做出选择…",
+    "ja": "選択しています…"
+  },
+  "Preparing the scene…": {
+    "zh-CN": "正在准备场景…",
+    "ja": "シーンを準備しています…"
+  },
+  "Read {subject}": {
+    "zh-CN": "读完了 {subject}",
+    "ja": "{subject}を読みました"
+  },
+  "Read": {
+    "zh-CN": "读完了",
+    "ja": "読みました"
+  },
+  "Created {subject}": {
+    "zh-CN": "创建了 {subject}",
+    "ja": "{subject}を作成しました"
+  },
+  "Created": {
+    "zh-CN": "创建完成",
+    "ja": "作成しました"
+  },
+  "Wrote {subject}": {
+    "zh-CN": "写下了 {subject}",
+    "ja": "{subject}を書きました"
+  },
+  "Wrote": {
+    "zh-CN": "写完了",
+    "ja": "書きました"
+  },
+  "Edited {subject}": {
+    "zh-CN": "修改了 {subject}",
+    "ja": "{subject}を編集しました"
+  },
+  "Edited": {
+    "zh-CN": "修改完成",
+    "ja": "編集しました"
+  },
+  "Deleted {subject}": {
+    "zh-CN": "删除了 {subject}",
+    "ja": "{subject}を削除しました"
+  },
+  "Deleted": {
+    "zh-CN": "删除完成",
+    "ja": "削除しました"
+  },
+  "Moved {subject}": {
+    "zh-CN": "移动了 {subject}",
+    "ja": "{subject}を移動しました"
+  },
+  "Moved": {
+    "zh-CN": "移动完成",
+    "ja": "移動しました"
+  },
+  "Used {subject}": {
+    "zh-CN": "使用了 {subject}",
+    "ja": "{subject}を使いました"
+  },
+  "Used": {
+    "zh-CN": "使用完成",
+    "ja": "使いました"
+  },
+  "Rolled the dice": {
+    "zh-CN": "掷骰完成",
+    "ja": "サイコロを振りました"
+  },
+  "Chose an option": {
+    "zh-CN": "做出了选择",
+    "ja": "選択しました"
+  },
+  "Scene is ready": {
+    "zh-CN": "场景已就绪",
+    "ja": "シーンの準備ができました"
+  },
+  "Done": {
+    "zh-CN": "完成",
+    "ja": "完了"
+  },
+  "Could not read {subject}": {
+    "zh-CN": "无法读取 {subject}",
+    "ja": "{subject}を読めませんでした"
+  },
+  "Could not read": {
+    "zh-CN": "无法读取",
+    "ja": "読み込めませんでした"
+  },
+  "Could not create {subject}": {
+    "zh-CN": "无法创建 {subject}",
+    "ja": "{subject}を作成できませんでした"
+  },
+  "Could not create": {
+    "zh-CN": "无法创建",
+    "ja": "作成できませんでした"
+  },
+  "Could not write {subject}": {
+    "zh-CN": "无法写入 {subject}",
+    "ja": "{subject}を書けませんでした"
+  },
+  "Could not write": {
+    "zh-CN": "无法写入",
+    "ja": "書き込めませんでした"
+  },
+  "Could not edit {subject}": {
+    "zh-CN": "无法修改 {subject}",
+    "ja": "{subject}を編集できませんでした"
+  },
+  "Could not edit": {
+    "zh-CN": "无法修改",
+    "ja": "編集できませんでした"
+  },
+  "Could not delete {subject}": {
+    "zh-CN": "无法删除 {subject}",
+    "ja": "{subject}を削除できませんでした"
+  },
+  "Could not delete": {
+    "zh-CN": "无法删除",
+    "ja": "削除できませんでした"
+  },
+  "Could not move {subject}": {
+    "zh-CN": "无法移动 {subject}",
+    "ja": "{subject}を移動できませんでした"
+  },
+  "Could not move": {
+    "zh-CN": "无法移动",
+    "ja": "移動できませんでした"
+  },
+  "Could not use {subject}": {
+    "zh-CN": "无法使用 {subject}",
+    "ja": "{subject}を使えませんでした"
+  },
+  "Could not use": {
+    "zh-CN": "无法使用",
+    "ja": "使えませんでした"
+  },
+  "Could not roll the dice": {
+    "zh-CN": "无法掷骰",
+    "ja": "サイコロを振れませんでした"
+  },
+  "Could not make that choice": {
+    "zh-CN": "无法做出选择",
+    "ja": "選択できませんでした"
+  },
+  "Could not prepare the scene": {
+    "zh-CN": "无法准备场景",
+    "ja": "シーンを準備できませんでした"
+  },
+  "That action failed": {
+    "zh-CN": "该操作失败了",
+    "ja": "その操作は失敗しました"
+  },
+  "Writer": {
+    "zh-CN": "作家",
+    "ja": "作家"
+  },
+  "Character": {
+    "zh-CN": "角色",
+    "ja": "キャラクター"
+  },
+  "Background task": {
+    "zh-CN": "后台任务",
+    "ja": "バックグラウンド処理"
+  },
+  "{name} is reading {subject}…": {
+    "zh-CN": "{name}正在读取 {subject}…",
+    "ja": "{name}が{subject}を読んでいます…"
+  },
+  "{name} is working…": {
+    "zh-CN": "{name}正在处理…",
+    "ja": "{name}が処理しています…"
+  },
+  "{name} finished {subject}": {
+    "zh-CN": "{name}完成了 {subject}",
+    "ja": "{name}が{subject}を完了しました"
+  },
+  "{name} is done": {
+    "zh-CN": "{name}完成了",
+    "ja": "{name}は完了しました"
+  },
+  "{name} could not use {subject}": {
+    "zh-CN": "{name}无法使用 {subject}",
+    "ja": "{name}は{subject}を使えませんでした"
+  },
+  "{name} could not act": {
+    "zh-CN": "{name}的操作失败了",
+    "ja": "{name}の操作は失敗しました"
+  },
+  "{name} took too long": {
+    "zh-CN": "{name}等待超时",
+    "ja": "{name}は時間がかかりすぎました"
+  },
+  "{name} stopped": {
+    "zh-CN": "{name}已停止",
+    "ja": "{name}は停止しました"
+  },
+  "{count} action in progress": {
+    "zh-CN": "{count} 项进行中",
+    "ja": "{count}件進行中"
+  },
+  "{count} actions in progress": {
+    "zh-CN": "{count} 项进行中",
+    "ja": "{count}件進行中"
+  },
+  "{count} action finished": {
+    "zh-CN": "{count} 项已完成",
+    "ja": "{count}件完了"
+  },
+  "{count} actions finished": {
+    "zh-CN": "{count} 项已完成",
+    "ja": "{count}件完了"
+  },
+  "Stop requested": {
+    "zh-CN": "正在请求停止",
+    "ja": "停止を要求中"
+  },
+  "Nothing readable here.": {
+    "zh-CN": "这里没有可读取的内容。",
+    "ja": "ここには読める内容がありません。"
+  },
+  "Characters": {
+    "zh-CN": "角色",
+    "ja": "登場人物"
+  },
+  "In this scene": {
+    "zh-CN": "在这个场景",
+    "ja": "この場面にいる"
+  },
+  "Elsewhere": {
+    "zh-CN": "在别处",
+    "ja": "別の場所にいる"
+  },
+  "Not here": {
+    "zh-CN": "不在场",
+    "ja": "ここにはいない"
+  },
+  "Following you": {
+    "zh-CN": "跟随中",
+    "ja": "同行中"
+  },
+  "Go to them": {
+    "zh-CN": "去 ta 那里",
+    "ja": "彼のもとへ行く"
+  },
+  "Follow": {
+    "zh-CN": "跟随",
+    "ja": "同行"
+  },
+  "Dismiss": {
+    "zh-CN": "解散",
+    "ja": "解散する"
+  },
+  "Visit their nook": {
+    "zh-CN": "去 ta 的小天地",
+    "ja": "彼の小天地へ"
+  },
+  "Actions for {name}": {
+    "zh-CN": "{name} 的操作",
+    "ja": "{name} の操作"
+  },
+  "They are not here right now.": {
+    "zh-CN": "ta 此刻不在这里。",
+    "ja": "彼は今ここにはいません。"
+  },
+  "They are in another scene. Go to them instead.": {
+    "zh-CN": "ta 在另一个场景。用「去 ta 那里」吧。",
+    "ja": "彼は別の場面にいます。「彼のもとへ行く」を使ってください。"
+  },
+  "We could not travel there right now.": {
+    "zh-CN": "现在无法前往那里。",
+    "ja": "今はそこへ行けませんでした。"
+  },
+  "They moved before you arrived.": {
+    "zh-CN": "你到之前 ta 已经离开了。",
+    "ja": "あなたが着く前に彼は移動していました。"
+  },
+  "Could not change whether {name} follows you.": {
+    "zh-CN": "无法改变 {name} 是否跟随你。",
+    "ja": "{name} の同行状態を変更できませんでした。"
+  },
+  "Could not load the world roster. Please retry.": {
+    "zh-CN": "无法加载角色名单，请重试。",
+    "ja": "登場人物の一覧を読み込めませんでした。再試行してください。"
+  },
+  "Already inside a nook.": {
+    "zh-CN": "已经在某个小天地里了。",
+    "ja": "すでに小天地の中にいます。"
+  },
+  "Some of the party could not follow you.": {
+    "zh-CN": "有一部分同伴没能跟过来。",
+    "ja": "同行者の一部はついて来られませんでした。"
+  },
+  "Could not load the world data. Please retry.": {
+    "zh-CN": "无法加载世界数据，请重试。",
+    "ja": "ワールドデータを読み込めませんでした。再試行してください。"
+  },
+  "Waiting for the writer…": {
+    "zh-CN": "作家等待中…",
+    "ja": "作家を待っています…"
+  },
+  "Ready for your next action": {
+    "zh-CN": "可以进行下一步行动",
+    "ja": "次の行動に進めます"
   }
 }

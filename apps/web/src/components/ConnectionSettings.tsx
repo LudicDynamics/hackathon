@@ -49,21 +49,16 @@ export function ConnectionSettings({ onSaved }: { onSaved: () => void }) {
       setSaving(false);
     }
   };
-  return <section className="connection-settings">
-    <h3>{t('Server connections')}</h3>
-    <p>{t('Keys stay on this server in .local.env when it exists, otherwise in .env.local. Blank key fields keep their current values. Flow configures media generation, not the writer model.')}</p>
-    <p>{t('DeepSeek V4.1 Flash uses https://api.deepseek.com with model deepseek-flash. Save, restart existing agents, then select deepseek / deepseek-flash in Agents → Model.')}</p>
-    {available && services.map(([label, key, url]) => {
-      const serviceName = label === 'OpenAI-compatible'
-        ? t('OpenAI-compatible')
-        : label === 'Flow media proxy' ? t('Flow media proxy') : label;
-      return <fieldset key={key} disabled={saving}>
-        <legend>{serviceName}</legend>
-        {url && <label>{t('Service URL')}<input aria-label={t('{service} service URL', { service: serviceName })} type="url" value={draft[url] ?? String(config[url] ?? '')} onChange={event => setDraft(previous => ({ ...previous, [url]: event.target.value }))} /></label>}
-        <label>{t('API key')} · {t(config[key] ? 'Configured' : 'Not configured')}<input aria-label={t('{service} API key', { service: serviceName })} type="password" autoComplete="new-password" spellCheck={false} value={draft[key] ?? ''} placeholder={t('Leave blank to keep the current key')} onChange={event => setDraft(previous => ({ ...previous, [key]: event.target.value }))} /></label>
-      </fieldset>;
-    })}
-    {available && <button disabled={saving} onClick={() => void save()}>{t(saving ? 'Saving…' : 'Save connections')}</button>}
-    <p role="status">{statusKey ? t(statusKey) : ''}</p>
+  return <section style={{ marginTop: 24 }}>
+    <h3>Server connections</h3>
+    <p>Keys stay on the server in .env.local. Blank fields keep existing values. Flow configures the media proxy, not the writer model.</p>
+    <p>DeepSeek V4.1 Flash appears as <code>deepseek / deepseek-flash</code> in Agents → Model after saving. Restart existing agents before switching.</p>
+    {available && services.map(([label, key, url]) => <fieldset key={key} disabled={saving} style={{ margin: '16px 0', display: 'grid', gap: 8 }}>
+      <legend>{label}</legend>
+      {url && <label>Service URL<input aria-label={`${label} URL`} type="url" value={draft[url] ?? String(config[url] ?? '')} onChange={e => setDraft(d => ({ ...d, [url]: e.target.value }))} style={{ display: 'block', width: '100%', color: '#272321', background: '#f5efdf', padding: 8 }} /></label>}
+      <label>API key · {config[key] ? 'Configured' : 'Not configured'}<input aria-label={`${label} API key`} type="password" autoComplete="new-password" spellCheck={false} value={draft[key] ?? ''} placeholder="Leave blank to keep current key" onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))} style={{ display: 'block', width: '100%', color: '#272321', background: '#f5efdf', padding: 8 }} /></label>
+    </fieldset>)}
+    {available && <button disabled={saving} onClick={() => void save()}>{saving ? 'Saving…' : 'Save connections'}</button>}
+    <p role="status">{status}</p>
   </section>;
 }

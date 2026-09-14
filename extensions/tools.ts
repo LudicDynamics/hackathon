@@ -32,10 +32,12 @@ import { arrangeTool } from './toolkit/arrange.js';                // doc-tools/
 import { getComponentTool } from './toolkit/component.js';         // doc-tools/10
 import { showTool } from './toolkit/show.js';                      // doc-tools/10
 import { generateImageTool } from './toolkit/generate-image.js';   // doc-tools/11
+import { createCharTool } from './toolkit/create-char.js';      // create-char
+import { editCharacterConfigTool } from './toolkit/edit-character-config.js'; // nook configuration gate
 import { registerTurnTracking } from './toolkit/turn.js';          // doc-tools/12
 import { registerWriterBeatGuard } from './toolkit/writer-beat-guard.js';
 import { registerInitCommand } from './toolkit/init-command.js';   // docs/init/00
-
+import { registerWriterToolCallGuard } from './toolkit/writer-beat-guard.js'; // docs/ux/14
 /**
  * The complete AIRP tool face, in registration order.
  *
@@ -62,12 +64,18 @@ export const AIRP_TOOLS: ReadonlyArray<{ name: string; tool: ToolDefinition }> =
   { name: 'delete', tool: deleteTool },
   { name: 'get_component', tool: getComponentTool },
   { name: 'show', tool: showTool },
+  { name: 'create_char', tool: createCharTool },
+  { name: 'edit_character_config', tool: editCharacterConfigTool },
   { name: 'generate_image', tool: generateImageTool },
 ];
 
 /** The names alone, in registration order — what the model sees and what `tools.allow` filters on. */
 export const AIRP_TOOL_NAMES: readonly string[] = AIRP_TOOLS.map((entry) => entry.name);
 export default function registerAirpTools(pi: ExtensionAPI): void {
+  // Runtime total-call safety for only the top-level Writer (docs/ux/14).
+  // This remains outside AIRP_TOOLS so it never changes the model tool face.
+  registerWriterToolCallGuard(pi);
+
   // Turn anchor for the A entry (docs/tools/01 §3.7). Registered BEFORE the tools
   // so the very first tool call of the first turn already has an anchor.
   registerTurnTracking(pi);
