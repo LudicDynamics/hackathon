@@ -477,10 +477,11 @@ function conflictForFence(
  * read transaction; Markdown/source material is fenced before and after the
  * transaction so a cross-store torn read becomes an explicit conflict.
  */
-export async function readCanvasSnapshot(
+async function readCanvasSnapshotInternal(
   store: WorldStore,
   input: { layer?: string },
-  opts: CanvasSnapshotReadOptions = {},
+  opts: CanvasSnapshotReadOptions,
+  transactionAlreadyOpen: boolean,
 ): Promise<CanvasSnapshot> {
   const now = Number.isFinite(opts.now) ? Number(opts.now) : Date.now();
   const viewpointForDefault = input?.layer === undefined ? store.readViewpoint(now) : null;
@@ -494,15 +495,19 @@ export async function readCanvasSnapshot(
   const transactionPaths = beforeMaterials.visible.map((material) => material.path);
 
   let state: DbCanvasState;
-  let transactionOpen = false;
+  let startedTransaction = false;
   try {
-    store.execCanvas('BEGIN');
-    transactionOpen = true;
+    if (!transactionAlreadyOpen) {
+      store.execCanvas('BEGIN');
+      startedTransaction = true;
+    }
     state = readDbStateInTransaction(store, layerId, transactionPaths, now);
-    store.execCanvas('COMMIT');
-    transactionOpen = false;
+    if (startedTransaction) {
+      store.execCanvas('COMMIT');
+      startedTransaction = false;
+    }
   } catch (error) {
-    if (transactionOpen) {
+    if (startedTransaction) {
       try {
         store.execCanvas('ROLLBACK');
       } catch {
@@ -562,6 +567,26 @@ export async function readCanvasSnapshot(
   // always part of snapshotId, while the frozen response has no raw-content field.
   void opts.includeSourceDigests;
   return snapshot;
+}
+
+export async function readCanvasSnapshot(
+  store: WorldStore,
+  input: { layer?: string },
+  opts: CanvasSnapshotReadOptions = {},
+): Promise<CanvasSnapshot> {
+  return readCanvasSnapshotInternal(store, input, opts, false);
+}
+
+/**
+ * Read while the caller owns an open SQLite transaction. This is the writer
+ * seam: it never starts, commits, or rolls back a nested transaction.
+ */
+export async function readCanvasSnapshotInTransaction(
+  store: WorldStore,
+  input: { layer?: string },
+  opts: CanvasSnapshotReadOptions = {},
+): Promise<CanvasSnapshot> {
+  return readCanvasSnapshotInternal(store, input, opts, true);
 }
 
 export function snapshotSummary(snapshot: CanvasSnapshot): string {

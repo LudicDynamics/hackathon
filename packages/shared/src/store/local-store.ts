@@ -29,6 +29,7 @@ import { CARD_FORMS, cardFormOf, cardFormVersionOf, cardKindOf } from '../schema
 import { flowColumns } from '../layout/flow-columns.js';
 import type { PresenceRecord, SeatPresenceResult, ViewpointRecord } from './world-store.js';
 import type { AutoLayoutRect } from '../layout/flow-columns.js';
+import { readCanvasSnapshot, readCanvasSnapshotInTransaction } from '../render/canvas-snapshot.js';
 
 /** Seating anchor (world coords, viewport agnostic). Cards spiral outward from here. */
 export const SEAT_ANCHOR = { x: 960, y: 540 };
@@ -1384,17 +1385,29 @@ export class LocalWorldStore implements WorldStore {
    * inserts seeds/writes coordinates/version in the same transaction.
    */
   async arrangeCanvasLayer(input: ArrangeCanvasLayerInput): Promise<ArrangeCanvasLayerResult> {
-    if (input.snapshotId.trim() !== '') {
-      throw new ActionError({
-        code: 'unsupported',
-        message: 'Canvas snapshot identity is not connected to this store.',
-      });
-    }
     const compat = input as ArrangeCanvasCompatInput;
     const paths = compat.paths ? [...new Set(compat.paths)].sort(compareCanvasPath) : undefined;
     this.execCanvas('BEGIN IMMEDIATE');
     try {
-      const currentVersion = this.getCanvasVersion(input.layer);
+      const lockedSnapshot =
+        input.snapshotId.trim() === ''
+          ? null
+          : await readCanvasSnapshotInTransaction(this, { layer: input.layer });
+      if (lockedSnapshot && lockedSnapshot.identity.snapshotId !== input.snapshotId) {
+        throw new ActionError({
+          code: 'conflict',
+          message: `Canvas snapshot conflict on layer "${input.layer}".`,
+          details: {
+            layer: input.layer,
+            expectedSnapshotId: input.snapshotId,
+            currentSnapshotId: lockedSnapshot.identity.snapshotId,
+            expectedCanvasVersion: input.expectedCanvasVersion,
+            currentCanvasVersion: lockedSnapshot.identity.canvasVersion,
+            currentCanvasRevision: lockedSnapshot.identity.canvasRevision,
+          },
+        });
+      }
+      const currentVersion = lockedSnapshot?.identity.canvasVersion ?? this.getCanvasVersion(input.layer);
       if (currentVersion !== input.expectedCanvasVersion) {
         throw new ActionError({
           code: 'conflict',
@@ -1403,6 +1416,13 @@ export class LocalWorldStore implements WorldStore {
             layer: input.layer,
             expectedCanvasVersion: input.expectedCanvasVersion,
             currentCanvasVersion: currentVersion,
+            ...(lockedSnapshot
+              ? {
+                  expectedSnapshotId: input.snapshotId,
+                  currentSnapshotId: lockedSnapshot.identity.snapshotId,
+                  currentCanvasRevision: lockedSnapshot.identity.canvasRevision,
+                }
+              : {}),
           },
         });
       }
@@ -1522,16 +1542,18 @@ export class LocalWorldStore implements WorldStore {
       }
       this.execCanvas('COMMIT');
       const resultRows = this.getLayerCards(targetIds);
+      const afterSnapshot =
+        input.snapshotId.trim() === '' ? null : await readCanvasSnapshot(this, { layer: input.layer });
       return {
         kind: 'cards',
         action: 'arrangeCanvasLayer',
         operationId: input.operationId,
         layer: input.layer,
         mode: input.mode,
-        canvasVersion: version,
-        canvasRevision: '',
-        snapshotIdBefore: '',
-        snapshotIdAfter: '',
+        canvasVersion: afterSnapshot?.identity.canvasVersion ?? version,
+        canvasRevision: afterSnapshot?.identity.canvasRevision ?? '',
+        snapshotIdBefore: input.snapshotId,
+        snapshotIdAfter: afterSnapshot?.identity.snapshotId ?? '',
         cards: resultRows.map((row) => ({
           path: row.id,
           x: row.x,
@@ -1541,7 +1563,7 @@ export class LocalWorldStore implements WorldStore {
           h: row.h,
         })),
         movedCount,
-        overlapCount: 0,
+        overlapCount: afterSnapshot?.overlaps.length ?? 0,
         committed: true,
       };
     } catch (err) {

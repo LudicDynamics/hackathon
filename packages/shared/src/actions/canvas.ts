@@ -449,18 +449,32 @@ export async function arrangeCanvas(
   if (input.policy !== 'deoverlap' || input.allowMoveStableCards !== true || input.preserveLinks !== true) {
     fail('invalid_argument', 'arrangeCanvas requires deoverlap, allowMoveStableCards, and preserveLinks.');
   }
-  const revision = await ctx.store.getMaxSeq();
-  if (revision !== input.expectedRevision) {
-    fail('conflict', 'World revision changed before canvas arrangement.', {
-      expectedRevision: input.expectedRevision,
-      currentRevision: revision,
+  const snapshot = await readCanvasSnapshot(ctx.store, { layer: input.layer });
+  if (
+    snapshot.identity.canvasVersion !== input.expectedCanvasVersion ||
+    snapshot.identity.snapshotId !== input.snapshotId
+  ) {
+    fail('conflict', `Canvas snapshot conflict on layer "${input.layer}".`, {
+      layer: input.layer,
       expectedCanvasVersion: input.expectedCanvasVersion,
-      currentCanvasVersion: ctx.store.getCanvasVersion(input.layer),
+      currentCanvasVersion: snapshot.identity.canvasVersion,
+      expectedSnapshotId: input.snapshotId,
+      currentSnapshotId: snapshot.identity.snapshotId,
+      currentCanvasRevision: snapshot.identity.canvasRevision,
     });
   }
-  // LocalWorldStore currently has no canonical CanvasSnapshotV1 source-digest
-  // reader. Refusing the write is safer than treating a made-up digest as proof.
-  fail('unsupported', 'Canvas snapshot identity is not connected to this store.');
+
+  const result = await ctx.store.arrangeCanvasLayer(input);
+  return {
+    text: `Arranged ${result.movedCount} card(s) on layer "${input.layer}" in a ${input.mode}.`,
+    details: {
+      ...result,
+      action: 'arrangeCanvas',
+      expectedRevision: input.expectedRevision,
+      revision: input.expectedRevision,
+      expectedCanvasVersion: input.expectedCanvasVersion,
+    },
+  };
 }
 
 export async function arrangeCards(

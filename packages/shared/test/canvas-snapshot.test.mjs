@@ -6,6 +6,8 @@ import { test } from 'node:test';
 
 import { LocalWorldStore } from '../dist/store/local-store.js';
 import { readCanvasSnapshot } from '../dist/render/canvas-snapshot.js';
+import { arrangeCanvas } from '../dist/actions/canvas.js';
+import { ActionError } from '../dist/actions/errors.js';
 
 async function fixture() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'airp-canvas-snapshot-'));
@@ -117,6 +119,88 @@ test('CanvasSnapshotV1 binds source content without changing canvasRevision', as
     const after = await readCanvasSnapshot(store, { layer: 'world/room' }, { now: Date.now() });
     assert.equal(after.identity.canvasRevision, before.identity.canvasRevision);
     assert.notEqual(after.identity.snapshotId, before.identity.snapshotId);
+  } finally {
+    store.close();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('arrangeCanvas rejects a stale snapshot before writing', async () => {
+  const { root, store } = await fixture();
+  try {
+    await store.seatUnplaced('world/room', [
+      { path: 'world/room/a.md', w: 240, h: 168 },
+      { path: 'world/room/b.md', w: 240, h: 168 },
+    ]);
+    const stale = await readCanvasSnapshot(store, { layer: 'world/room' });
+    await store.placeCard('world/room', 'world/room/a.md', { x: 2400, y: 1800 });
+    const rowsBeforeAttempt = store.getLayerCards(['world/room/a.md', 'world/room/b.md']);
+    const versionBeforeAttempt = store.getCanvasVersion('world/room');
+    const expectedRevision = await store.getMaxSeq();
+
+    await assert.rejects(
+      () =>
+        arrangeCanvas(
+          { store, actor: { type: 'writer' }, turn: 'arrange:stale' },
+          {
+            operationId: 'arrange-stale',
+            layer: 'world/room',
+            mode: 'grid',
+            expectedRevision,
+            expectedCanvasVersion: stale.identity.canvasVersion,
+            snapshotId: stale.identity.snapshotId,
+            policy: 'deoverlap',
+            allowMoveStableCards: true,
+            preserveLinks: true,
+          },
+        ),
+      (error) => {
+        assert.ok(error instanceof ActionError);
+        assert.equal(error.code, 'conflict');
+        assert.equal(error.details.expectedSnapshotId, stale.identity.snapshotId);
+        return true;
+      },
+    );
+    assert.deepEqual(store.getLayerCards(['world/room/a.md', 'world/room/b.md']), rowsBeforeAttempt);
+    assert.equal(store.getCanvasVersion('world/room'), versionBeforeAttempt);
+  } finally {
+
+    store.close();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('arrangeCanvas accepts a current snapshot and returns the fenced result identity', async () => {
+  const { root, store } = await fixture();
+  try {
+    await store.seatUnplaced('world/room', [
+      { path: 'world/room/a.md', w: 240, h: 168 },
+      { path: 'world/room/b.md', w: 240, h: 168 },
+    ]);
+    await store.placeCard('world/room', 'world/room/a.md', { x: 0, y: 0 });
+    await store.placeCard('world/room', 'world/room/b.md', { x: 100, y: 100 });
+    const before = await readCanvasSnapshot(store, { layer: 'world/room' });
+    const result = await arrangeCanvas(
+      { store, actor: { type: 'writer' }, turn: 'arrange:current' },
+      {
+        operationId: 'arrange-current',
+        layer: 'world/room',
+        mode: 'grid',
+        expectedRevision: await store.getMaxSeq(),
+        expectedCanvasVersion: before.identity.canvasVersion,
+        snapshotId: before.identity.snapshotId,
+        policy: 'deoverlap',
+        allowMoveStableCards: true,
+        preserveLinks: true,
+      },
+    );
+    const after = await readCanvasSnapshot(store, { layer: 'world/room' });
+    assert.equal(result.details.committed, true);
+    assert.equal(result.details.snapshotIdBefore, before.identity.snapshotId);
+    assert.equal(result.details.snapshotIdAfter, after.identity.snapshotId);
+    assert.equal(result.details.canvasRevision, after.identity.canvasRevision);
+    assert.equal(result.details.overlapCount, 0);
+    assert.ok(result.details.canvasVersion > before.identity.canvasVersion);
   } finally {
     store.close();
     await fs.rm(root, { recursive: true, force: true });
