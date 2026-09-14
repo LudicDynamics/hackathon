@@ -252,7 +252,11 @@ export function App() {
     readLayerState: world.readLayerState,
     enterLayer: world.enterLayer,
     camera,
-    notify,
+    // `lib/presence.ts` stays pure and emits English KEY strings for its
+    // notices (docs/presence/04 §7); translate them at the boundary, like the
+    // rail does. Passing `notify` straight through leaked English into a
+    // Japanese session.
+    notify: (key: string) => notify(t(key)),
   });
   // Ids whose follow request is in flight. UI only — NOT the follow truth:
   // nothing reads it as `following` (docs/presence/00 §2.4).
