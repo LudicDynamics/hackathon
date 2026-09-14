@@ -5,6 +5,10 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import type {
+  ArrangeCanvasLayerInput,
+  ArrangeCanvasLayerResult,
+  CanvasCommit,
+  CanvasPositionInput,
   CardRecord,
   CharacterCreationTransaction,
   LinkRecord,
@@ -104,6 +108,93 @@ function* spiralCells(): Generator<[number, number]> {
     step++;
   }
 }
+
+function compareCanvasPath(a: string, b: string): number {
+  return a === b ? 0 : a < b ? -1 : 1;
+}
+
+function canvasBoxesOverlap(
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+): boolean {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
+function canvasModePositions(
+  mode: ArrangeCanvasLayerInput['mode'],
+  rows: readonly CardRecord[],
+): Array<{ path: string; x: number; y: number }> {
+  const items = [...rows].sort((a, b) => compareCanvasPath(a.id, b.id));
+  if (items.length === 0) return [];
+  if (mode === 'row') {
+    const pitch = Math.max(SEAT_STEP, Math.max(...items.map((row) => row.w)) + SEAT_PAD);
+    return items.map((row, i) => ({
+      path: row.id,
+      x: SEAT_ANCHOR.x + (i - (items.length - 1) / 2) * pitch - row.w / 2,
+      y: SEAT_ANCHOR.y - row.h / 2,
+    }));
+  }
+  if (mode === 'circle') {
+    const n = items.length;
+    const radius = n === 1
+      ? SEAT_STEP
+      : Math.max(SEAT_STEP, (Math.max(...items.map((row) => Math.hypot(row.w, row.h))) + SEAT_PAD) / (2 * Math.sin(Math.PI / n)));
+    return items.map((row, i) => {
+      const theta = -Math.PI / 2 + (2 * Math.PI * i) / n;
+      return {
+        path: row.id,
+        x: SEAT_ANCHOR.x + radius * Math.cos(theta) - row.w / 2,
+        y: SEAT_ANCHOR.y + radius * Math.sin(theta) - row.h / 2,
+      };
+    });
+  }
+  const cols = Math.ceil(Math.sqrt(items.length));
+  const rowCount = Math.ceil(items.length / cols);
+  const pitchX = Math.max(SEAT_STEP, Math.max(...items.map((row) => row.w)) + SEAT_PAD);
+  const pitchY = Math.max(SEAT_STEP, Math.max(...items.map((row) => row.h)) + SEAT_PAD);
+  return items.map((row, i) => ({
+    path: row.id,
+    x: SEAT_ANCHOR.x + ((i % cols) - (cols - 1) / 2) * pitchX - row.w / 2,
+    y: SEAT_ANCHOR.y + (Math.floor(i / cols) - (rowCount - 1) / 2) * pitchY - row.h / 2,
+  }));
+}
+
+function canvasOverlapPairs(
+  positions: readonly { path: string; x: number; y: number }[],
+  targets: readonly CardRecord[],
+  obstacles: readonly { id: string; x: number; y: number; w: number; h: number }[],
+): Array<[string, string]> {
+  const byId = new Map(targets.map((row) => [row.id, row]));
+  const pairs: Array<[string, string]> = [];
+  const placed = positions
+    .map((position) => {
+      const row = byId.get(position.path);
+      return row ? { id: row.id, x: position.x, y: position.y, w: row.w, h: row.h } : null;
+    })
+    .filter((row): row is { id: string; x: number; y: number; w: number; h: number } => row !== null);
+  for (let i = 0; i < placed.length; i++) {
+    for (let j = i + 1; j < placed.length; j++) {
+      if (canvasBoxesOverlap(placed[i], placed[j])) pairs.push([placed[i].id, placed[j].id]);
+    }
+    for (const obstacle of obstacles) {
+      if (canvasBoxesOverlap(placed[i], obstacle)) pairs.push([placed[i].id, obstacle.id]);
+    }
+  }
+  return pairs.sort((a, b) => compareCanvasPath(a[0], b[0]) || compareCanvasPath(a[1], b[1]));
+}
+
+function canvasPositionsOverlap(
+  positions: readonly { path: string; x: number; y: number }[],
+  targets: readonly CardRecord[],
+  obstacles: readonly { id: string; x: number; y: number; w: number; h: number }[],
+): boolean {
+  return canvasOverlapPairs(positions, targets, obstacles).length > 0;
+}
+
+type ArrangeCanvasCompatInput = ArrangeCanvasLayerInput & {
+  paths?: readonly string[];
+  seeds?: ReadonlyArray<{ path: string; w: number; h: number }>;
+};
 
 export class LocalWorldStore implements WorldStore {
   public worldRoot: string;
@@ -1274,25 +1365,309 @@ export class LocalWorldStore implements WorldStore {
     const result = this.canvasDb.prepare('DELETE FROM links WHERE id = ?').run(id);
     return Number(result.changes) > 0;
   }
+  getCanvasVersion(layerId: string): number {
+    const row = this.queryCanvas(
+      'SELECT position_version FROM canvas_meta WHERE layer = ?',
+      [layerId]
+    )[0] as { position_version?: unknown } | undefined;
+    if (row) return Number(row.position_version) || 0;
+    this.execCanvas(
+      'INSERT INTO canvas_meta (layer, position_version) VALUES (?, 0) ON CONFLICT(layer) DO NOTHING',
+      [layerId]
+    );
+    return 0;
+  }
+
+  /**
+   * The sole safe layout kernel. It locks the layer in SQLite, reads every
+   * stored row as an obstacle, plans selected rows deterministically, then
+   * inserts seeds/writes coordinates/version in the same transaction.
+   */
+  async arrangeCanvasLayer(input: ArrangeCanvasLayerInput): Promise<ArrangeCanvasLayerResult> {
+    if (input.snapshotId.trim() !== '') {
+      throw new ActionError({
+        code: 'unsupported',
+        message: 'Canvas snapshot identity is not connected to this store.',
+      });
+    }
+    const compat = input as ArrangeCanvasCompatInput;
+    const paths = compat.paths ? [...new Set(compat.paths)].sort(compareCanvasPath) : undefined;
+    this.execCanvas('BEGIN IMMEDIATE');
+    try {
+      const currentVersion = this.getCanvasVersion(input.layer);
+      if (currentVersion !== input.expectedCanvasVersion) {
+        throw new ActionError({
+          code: 'conflict',
+          message: `Canvas version conflict on layer "${input.layer}".`,
+          details: {
+            layer: input.layer,
+            expectedCanvasVersion: input.expectedCanvasVersion,
+            currentCanvasVersion: currentVersion,
+          },
+        });
+      }
+      for (const seed of compat.seeds ?? []) {
+        if (!Number.isFinite(seed.w) || !Number.isFinite(seed.h) || seed.w <= 0 || seed.h <= 0) {
+          throw new ActionError({
+            code: 'invalid_argument',
+            message: `Invalid declared footprint for "${seed.path}".`,
+          });
+        }
+        this.execCanvas(
+          `INSERT INTO cards (id, layer, x, y, width, height, z_index, metadata)
+           VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT MAX(z_index) + 1 FROM cards WHERE layer = ?), 1), NULL)
+           ON CONFLICT(id) DO NOTHING`,
+          [
+            seed.path,
+            input.layer,
+            SEAT_ANCHOR.x - seed.w / 2,
+            SEAT_ANCHOR.y - seed.h / 2,
+            seed.w,
+            seed.h,
+            input.layer,
+          ],
+        );
+      }
+      const allRows = this.queryCanvas(
+        'SELECT id, layer, x, y, width, height, z_index, metadata FROM cards WHERE layer = ? ORDER BY id',
+        [input.layer],
+      ).map((row) => this.toCardRecord(row as Record<string, unknown>));
+      const targetIds = paths ?? allRows.map((row) => row.id).sort(compareCanvasPath);
+      const byId = new Map(allRows.map((row) => [row.id, row]));
+      for (const id of targetIds) {
+        if (!byId.has(id)) {
+          throw new ActionError({
+            code: 'not_found',
+            message: `Card "${id}" is not on layer "${input.layer}".`,
+          });
+        }
+      }
+      if (allRows.some((row) => !Number.isFinite(row.w) || !Number.isFinite(row.h) || row.w <= 0 || row.h <= 0)) {
+        throw new ActionError({
+          code: 'invalid_argument',
+          message: `Cannot arrange cards with invalid footprints on "${input.layer}".`,
+        });
+      }
+      const obstacles = allRows
+        .filter((row) => !targetIds.includes(row.id))
+        .filter((row) => row.w > 0 && row.h > 0)
+        .map((row) => ({ id: row.id, x: row.x, y: row.y, w: row.w, h: row.h }));
+      const obstaclePairs: Array<[string, string]> = [];
+      for (let i = 0; i < obstacles.length; i++) {
+        for (let j = i + 1; j < obstacles.length; j++) {
+          if (canvasBoxesOverlap(obstacles[i], obstacles[j])) {
+            obstaclePairs.push([obstacles[i].id, obstacles[j].id]);
+          }
+        }
+      }
+      if (obstaclePairs.length > 0) {
+        throw new ActionError({
+          code: 'invalid_argument',
+          message: `Cannot arrange around overlapping unselected cards on layer "${input.layer}".`,
+          details: { overlaps: obstaclePairs },
+        });
+      }
+      if (boxes.some((box) => !Number.isFinite(box.w) || !Number.isFinite(box.h) || box.w <= 0 || box.h <= 0)) {
+        throw new ActionError({
+          code: 'invalid_argument',
+          message: `Cannot arrange cards with invalid footprints on "${input.layer}".`,
+        });
+      }
+      const requested = canvasModePositions(input.mode, targets);
+      let positions = requested;
+      if (canvasPositionsOverlap(requested, targets, obstacles)) {
+        const flow = flowColumns(
+          boxes,
+          obstacles,
+          { origin: { ...SEAT_ANCHOR }, obstacleGap: SEAT_PAD, gapX: SEAT_STEP, gapY: SEAT_PAD },
+        );
+        if (flow.exhausted) {
+          throw new ActionError({
+            code: 'no_free_seat',
+            message: `No collision-free layout is available on layer "${input.layer}".`,
+          });
+        }
+        positions = flow.placements.map((placement) => ({
+          path: placement.id,
+          x: placement.x,
+          y: placement.y,
+        }));
+      }
+      if (canvasPositionsOverlap(positions, targets, obstacles)) {
+        throw new ActionError({
+          code: 'invalid_argument',
+          message: `Cannot commit layout: selected card overlaps an unselected obstacle.`,
+          details: { overlaps: canvasOverlapPairs(positions, targets, obstacles) },
+        });
+      }
+      let movedCount = 0;
+      for (const position of positions) {
+        const row = byId.get(position.path)!;
+        if (row.x !== position.x || row.y !== position.y) movedCount++;
+        this.execCanvas('UPDATE cards SET x = ?, y = ? WHERE id = ?', [
+          position.x,
+          position.y,
+          position.path,
+        ]);
+      }
+      let version = currentVersion;
+      if (movedCount > 0 || (compat.seeds?.length ?? 0) > 0) {
+        version = currentVersion + 1;
+        this.execCanvas('UPDATE canvas_meta SET position_version = ? WHERE layer = ?', [
+          version,
+          input.layer,
+        ]);
+      }
+      this.execCanvas('COMMIT');
+      const resultRows = this.getLayerCards(targetIds);
+      return {
+        kind: 'cards',
+        action: 'arrangeCanvasLayer',
+        operationId: input.operationId,
+        layer: input.layer,
+        mode: input.mode,
+        canvasVersion: version,
+        canvasRevision: '',
+        snapshotIdBefore: '',
+        snapshotIdAfter: '',
+        cards: resultRows.map((row) => ({
+          path: row.id,
+          x: row.x,
+          y: row.y,
+          z: row.z,
+          w: row.w,
+          h: row.h,
+        })),
+        movedCount,
+        overlapCount: 0,
+        committed: true,
+      };
+    } catch (err) {
+      try {
+        this.execCanvas('ROLLBACK');
+      } catch {
+        // Preserve the original error.
+      }
+      throw err;
+    }
+  }
+
+  async applyCanvasPositions(
+    layerId: string,
+    rows: readonly CanvasPositionInput[],
+    expectedCanvasVersion?: number,
+  ): Promise<CanvasCommit> {
+    if (rows.length === 0) {
+      return { layer: layerId, cards: [], canvasVersion: this.getCanvasVersion(layerId) };
+    }
+    this.execCanvas('BEGIN IMMEDIATE');
+    try {
+      const currentVersion = this.getCanvasVersion(layerId);
+      if (expectedCanvasVersion !== undefined && currentVersion !== expectedCanvasVersion) {
+        throw new ActionError({
+          code: 'conflict',
+          message: `Canvas version conflict on layer "${layerId}".`,
+          details: { layer: layerId, expectedCanvasVersion, currentCanvasVersion: currentVersion },
+        });
+      }
+      const all = this.queryCanvas(
+        'SELECT id, layer, x, y, width, height, z_index, metadata FROM cards WHERE layer = ?',
+        [layerId]
+      ).map((row) => this.toCardRecord(row as Record<string, unknown>));
+      const byId = new Map(all.map((row) => [row.id, row]));
+      const next = new Map(all.map((row) => [row.id, { x: row.x, y: row.y, w: row.w, h: row.h }]));
+      for (const row of rows) {
+        const existing = byId.get(row.path);
+        if (!existing) throw new ActionError({ code: 'not_found', message: `Card "${row.path}" is not on layer "${layerId}".` });
+        const x = row.x ?? existing.x;
+        const y = row.y ?? existing.y;
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+          throw new ActionError({ code: 'invalid_argument', message: `Coordinates for "${row.path}" must be finite.` });
+        }
+        next.set(row.path, { x, y, w: existing.w, h: existing.h });
+      }
+      const pairs: Array<[string, string]> = [];
+      const ids = [...next.keys()].sort(compareCanvasPath);
+      for (let i = 0; i < ids.length; i++) {
+        const a = next.get(ids[i])!;
+        if (a.w <= 0 || a.h <= 0) continue;
+        for (let j = i + 1; j < ids.length; j++) {
+          const b = next.get(ids[j])!;
+          if (b.w <= 0 || b.h <= 0) continue;
+          if (canvasBoxesOverlap(a, b)) pairs.push([ids[i], ids[j]]);
+        }
+      }
+      if (pairs.length > 0) {
+        throw new ActionError({
+          code: 'invalid_argument',
+          message: `Cannot commit positions with overlapping cards.`,
+          details: { overlaps: pairs },
+        });
+      }
+      let changed = false;
+      for (const row of rows) {
+        const existing = byId.get(row.path)!;
+        const value = next.get(row.path)!;
+        if (existing.x !== value.x || existing.y !== value.y || (row.z !== undefined && existing.z !== row.z)) changed = true;
+        if (row.z === undefined) {
+          this.execCanvas('UPDATE cards SET x = ?, y = ? WHERE id = ?', [value.x, value.y, row.path]);
+        } else {
+          this.execCanvas('UPDATE cards SET x = ?, y = ?, z_index = ? WHERE id = ?', [value.x, value.y, row.z, row.path]);
+        }
+      }
+      const version = changed ? currentVersion + 1 : currentVersion;
+      if (changed) this.execCanvas('UPDATE canvas_meta SET position_version = ? WHERE layer = ?', [version, layerId]);
+      this.execCanvas('COMMIT');
+      return { layer: layerId, cards: rows.map((row) => this.cardById(row.path)), canvasVersion: version };
+    } catch (err) {
+      try {
+        this.execCanvas('ROLLBACK');
+      } catch {
+        // Preserve the original error.
+      }
+      throw err;
+    }
+  }
+
 
   async placeCard(
     layer: string,
     path: string,
     box: { x?: number; y?: number; z?: number }
   ): Promise<CardRecord> {
-    this.applyPlaceCard(layer, path, box);
-    return this.cardById(path);
+    this.execCanvas('BEGIN IMMEDIATE');
+    try {
+      const before = this.getCanvasVersion(layer);
+      this.applyPlaceCard(layer, path, box);
+      const after = before + 1;
+      this.execCanvas('UPDATE canvas_meta SET position_version = ? WHERE layer = ?', [after, layer]);
+      this.execCanvas('COMMIT');
+      return this.cardById(path);
+    } catch (err) {
+      try {
+        this.execCanvas('ROLLBACK');
+      } catch {
+        // Preserve the original error.
+      }
+      throw err;
+    }
   }
 
   async placeCards(
     rows: Array<{ layer: string; path: string; x: number; y: number; z?: number }>
   ): Promise<CardRecord[]> {
     if (rows.length === 0) return [];
-    // One transaction: a half-reflowed layer is worse than an un-reflowed one,
-    // and a reader may poll between statements (doc-09 §3.2 step 3).
     this.execCanvas('BEGIN IMMEDIATE');
     try {
+      const layers = [...new Set(rows.map((row) => row.layer))];
+      const before = new Map(layers.map((layer) => [layer, this.getCanvasVersion(layer)]));
       for (const row of rows) this.applyPlaceCard(row.layer, row.path, row);
+      for (const layer of layers) {
+        this.execCanvas(
+          'UPDATE canvas_meta SET position_version = ? WHERE layer = ?',
+          [before.get(layer)! + 1, layer]
+        );
+      }
       this.execCanvas('COMMIT');
     } catch (err) {
       try {
@@ -2037,4 +2412,12 @@ function declaredOf(f: SeatFile): { w: number; h: number } | null {
  */
 function declaredVersionOf(f: SeatFile, d: { w: number; h: number }): string | null {
   return f.formVersion ?? (f.kind ? cardFormVersionOf(f.kind, d.w, d.h) : null);
+}
+
+/** Public kernel seam used by ActionService; LocalWorldStore owns the transaction. */
+export async function arrangeCanvasLayer(
+  store: WorldStore,
+  input: ArrangeCanvasLayerInput,
+): Promise<ArrangeCanvasLayerResult> {
+  return store.arrangeCanvasLayer(input);
 }

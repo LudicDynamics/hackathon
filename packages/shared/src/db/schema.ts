@@ -17,6 +17,14 @@ export function initCanvasDatabase(db: DatabaseSync): void {
     );
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS canvas_meta (
+      layer TEXT PRIMARY KEY,
+      position_version INTEGER NOT NULL DEFAULT 0
+    );
+  `);
+
+
   // Presence is one row per character: "where is he right now" must have ONE
   // answer, or the canvas paints two Watsons (05 §3.4). That is what the
   // `character_id UNIQUE` constraint buys, and it is also what makes the

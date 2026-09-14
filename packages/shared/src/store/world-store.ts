@@ -109,6 +109,47 @@ export interface CharacterCreationTransaction {
 }
 
 
+export interface ArrangeCanvasLayerInput {
+  operationId: string;
+  layer: string;
+  mode: 'grid' | 'circle' | 'row';
+  expectedRevision: number;
+  expectedCanvasVersion: number;
+  snapshotId: string;
+  policy: 'deoverlap';
+  allowMoveStableCards: true;
+  preserveLinks: true;
+}
+
+export interface ArrangeCanvasLayerResult {
+  kind: 'cards';
+  action: 'arrangeCanvasLayer';
+  operationId: string;
+  layer: string;
+  mode: 'grid' | 'circle' | 'row';
+  canvasVersion: number;
+  canvasRevision: string;
+  snapshotIdBefore: string;
+  snapshotIdAfter: string;
+  cards: Array<{ path: string; x: number; y: number; z: number; w: number; h: number }>;
+  movedCount: number;
+  overlapCount: number;
+  committed: boolean;
+}
+
+export interface CanvasPositionInput {
+  path: string;
+  x?: number;
+  y?: number;
+  z?: number;
+}
+
+export interface CanvasCommit {
+  layer: string;
+  cards: CardRecord[];
+  canvasVersion: number;
+}
+
 export interface WorldStore {
   worldRoot: string;
   readFile(relPath: string): Promise<string>;
@@ -267,6 +308,16 @@ export interface WorldStore {
   }): Promise<LinkRecord>;
   /** Delete one line; `false` when there was nothing to delete. */
   deleteLink(id: string): Promise<boolean>;
+  /** Current per-layer position-write version (canvas.db only). */
+  getCanvasVersion(layerId: string): number;
+  /** Canonical arrangement kernel; implementations must commit atomically. */
+  arrangeCanvasLayer(input: ArrangeCanvasLayerInput): Promise<ArrangeCanvasLayerResult>;
+  /** Atomic position batch shared by legacy arrange/position callers. */
+  applyCanvasPositions(
+    layerId: string,
+    rows: readonly CanvasPositionInput[],
+    expectedCanvasVersion?: number,
+  ): Promise<CanvasCommit>;
   /**
    * Overwrite x/y/z of one card. `layer` is resolved by the CALLER via
    * `resolveLayer` (`cards.layer` is NOT NULL); w/h are never touched — they

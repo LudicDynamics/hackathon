@@ -15,6 +15,7 @@ export type ActionErrorCode =
   | 'dice_forced_not_allowed' // forcedResult is god-only (doc-21 §4.3)
   | 'near_out_of_layer' // `near` is not in the destination layer (doc-20 §4)
   | 'no_free_seat' // seating failed
+  | 'conflict' // optimistic canvas/version or snapshot fence failed
   | 'unsupported' // legal but not implemented in this phase
   | 'write_failed' // disk write failed (incl. atomic write failure)
   | 'event_failed' // append failed after the file write already succeeded
@@ -27,6 +28,7 @@ export const HTTP_STATUS: Record<ActionErrorCode, number> = {
   invalid_asset_ref: 400,
   not_found: 404,
   already_exists: 409,
+  conflict: 409,
   not_movable: 409,
   not_interactive: 422,
   choice_not_found: 422,

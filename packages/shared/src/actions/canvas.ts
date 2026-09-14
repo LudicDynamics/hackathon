@@ -7,21 +7,19 @@
  * `details`, which `event-bridge` maps into a `canvas_patched` frame.
  */
 import type { ActionContext, ActionResult } from './types.js';
+import type { ArrangeInput, LayoutMode, LinkColor, LinkInput, LinkRecord, LinkStyle } from '../schemas/canvas.js';
 import type {
-  ArrangeInput,
-  LayoutMode,
-  LinkColor,
-  LinkInput,
-  LinkRecord,
-  LinkStyle,
-} from '../schemas/canvas.js';
+  ArrangeCanvasLayerInput,
+  ArrangeCanvasLayerResult,
+  WorldStore,
+} from '../store/world-store.js';
 import { LAYOUT_MODES, LINK_COLORS, LINK_STYLE_TOKENS } from '../schemas/canvas.js';
 import { cardFormOf, type CardForm } from '../schemas/forms.js';
 import { parseFrontmatter } from '../schemas/frontmatter.js';
 import { ActionError, fail } from './errors.js';
 import { registerAction } from './service.js';
-import type { CardRecord, SeatFile, WorldStore } from '../store/world-store.js';
-import { SEAT_ANCHOR, SEAT_PAD, SEAT_STEP } from '../store/local-store.js';
+import type { CardRecord, SeatFile } from '../store/world-store.js';
+import { SEAT_ANCHOR, SEAT_PAD, SEAT_STEP, arrangeCanvasLayer as arrangeCanvasLayerKernel } from '../store/local-store.js';
 import { characterIdOfPath, nookCardPaths, nookIdOf } from '../rules/characters.js';
 
 const MAX_COORD = 4000;
@@ -41,6 +39,12 @@ export type ArrangeDetails = {
   layer: string;
   cards: Array<{ path: string; x: number; y: number; z: number }>;
   path?: string;
+};
+export type ArrangeCanvasDetails = Omit<ArrangeCanvasLayerResult, 'action'> & {
+  action: 'arrangeCanvas';
+  expectedRevision: number;
+  revision: number;
+  expectedCanvasVersion: number;
 };
 
 /**
@@ -420,6 +424,44 @@ async function seatDeclaredRows(store: WorldStore, layer: string, paths: string[
   if (files.length > 0) await store.seatUnplaced(layer, files);
 }
 
+export async function arrangeCanvas(
+  ctx: ActionContext,
+  input: ArrangeCanvasLayerInput,
+): Promise<ActionResult<ArrangeCanvasDetails>> {
+  if (!input || typeof input !== 'object') fail('invalid_argument', 'arrangeCanvas input must be an object.');
+  if (typeof input.operationId !== 'string' || input.operationId.trim() === '') {
+    fail('invalid_argument', 'operationId must be a non-empty string.');
+  }
+  if (typeof input.layer !== 'string' || input.layer.trim() === '') {
+    fail('invalid_argument', 'layer must be a non-empty string.');
+  }
+  if (!LAYOUT_MODES.includes(input.mode)) fail('invalid_argument', 'mode must be grid, circle, or row.');
+  if (!Number.isInteger(input.expectedRevision) || input.expectedRevision < 0) {
+    fail('invalid_argument', 'expectedRevision must be a non-negative integer.');
+  }
+  if (!Number.isInteger(input.expectedCanvasVersion) || input.expectedCanvasVersion < 0) {
+    fail('invalid_argument', 'expectedCanvasVersion must be a non-negative integer.');
+  }
+  if (typeof input.snapshotId !== 'string' || input.snapshotId.trim() === '') {
+    fail('invalid_argument', 'snapshotId must be a non-empty string.');
+  }
+  if (input.policy !== 'deoverlap' || input.allowMoveStableCards !== true || input.preserveLinks !== true) {
+    fail('invalid_argument', 'arrangeCanvas requires deoverlap, allowMoveStableCards, and preserveLinks.');
+  }
+  const revision = await ctx.store.getMaxSeq();
+  if (revision !== input.expectedRevision) {
+    fail('conflict', 'World revision changed before canvas arrangement.', {
+      expectedRevision: input.expectedRevision,
+      currentRevision: revision,
+      expectedCanvasVersion: input.expectedCanvasVersion,
+      currentCanvasVersion: ctx.store.getCanvasVersion(input.layer),
+    });
+  }
+  // LocalWorldStore currently has no canonical CanvasSnapshotV1 source-digest
+  // reader. Refusing the write is safer than treating a made-up digest as proof.
+  fail('unsupported', 'Canvas snapshot identity is not connected to this store.');
+}
+
 export async function arrangeCards(
   ctx: ActionContext,
   input: ArrangeInput
@@ -558,21 +600,32 @@ export async function arrangeCards(
     }
   }
 
-  // Row-creating path: every path must carry a real footprint before `boxesOf`
-  // reads it, or the first `arrange` writes the 280×180 DEFAULT and the second
-  // one lays out against that lie (contract §5.5 / 反模式 12).
-  await seatDeclaredRows(store, layer, paths);
-
-  // Layout re-assigns x/y only — stacking order is not a layout concern, and
-  // overwriting it would silently re-front cards on every re-flow (doc-09 §3.2).
-  const positions = LAYOUT_COMPUTERS[layout.mode](await boxesOf(store, paths));
-  const rows = positions.map((pos) => ({
-    layer: layer!,
-    path: pos.path,
-    x: clampCoord(pos.x, 'x'),
-    y: clampCoord(pos.y, 'y'),
-  }));
-  const placed = await store.placeCards(rows);
+  const existing = new Set(store.getLayerCards(paths).map((row) => row.id));
+  const seeds: Array<{ path: string; w: number; h: number }> = [];
+  for (const p of paths) {
+    if (existing.has(p)) continue;
+    const { frontmatter } = parseFrontmatter(await store.readFile(p));
+    const form = cardFormOf(frontmatter, p.split('/').pop() ?? p);
+    seeds.push({ path: p, w: form.w, h: form.h });
+  }
+  const legacyInput = {
+    operationId: `legacy-arrange:${layer}`,
+    layer,
+    mode: layout.mode,
+    expectedRevision: await store.getMaxSeq(),
+    expectedCanvasVersion: store.getCanvasVersion(layer),
+    snapshotId: '',
+    policy: 'deoverlap',
+    allowMoveStableCards: true,
+    preserveLinks: true,
+    paths,
+    seeds,
+  } as ArrangeCanvasLayerInput & {
+    paths: readonly string[];
+    seeds: ReadonlyArray<{ path: string; w: number; h: number }>;
+  };
+  const kernelResult = await arrangeCanvasLayerKernel(store, legacyInput);
+  const placed = kernelResult.cards;
 
   if (placed.length === 0) {
     return {
@@ -587,10 +640,11 @@ export async function arrangeCards(
       kind: 'cards',
       action: 'laid-out',
       layer,
-      cards: placed.map((c) => ({ path: c.id, x: c.x, y: c.y, z: c.z })),
+      cards: placed.map((c) => ({ path: c.path, x: c.x, y: c.y, z: c.z })),
     },
   };
 }
 
 registerAction('linkCards', (ctx, input) => linkCards(ctx, input as unknown as LinkInput));
 registerAction('arrangeCards', (ctx, input) => arrangeCards(ctx, input as unknown as ArrangeInput));
+registerAction('arrangeCanvas', (ctx, input) => arrangeCanvas(ctx, input as unknown as ArrangeCanvasLayerInput));

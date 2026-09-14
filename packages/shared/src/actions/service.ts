@@ -55,7 +55,8 @@ export interface ActionService {
   // — doc-09 (no event; canvas.db state only) —
   linkCards(input: ActionInput): Promise<ActionResult>;
   arrangeCards(input: ActionInput): Promise<ActionResult>;
-  // — doc-10 (read-only / broadcast only) —
+  /** Canonical collision-safe canvas arrangement for the functional agent. */
+  arrangeCanvas(input: ActionInput): Promise<ActionResult>;
   getComponent(input: ActionInput): Promise<ActionResult>;
   showComponent(input: ActionInput): Promise<ActionResult>;
   // — doc-11 —
@@ -93,6 +94,7 @@ export const ACTION_METHODS = [
   'useItemOn',
   'linkCards',
   'arrangeCards',
+  'arrangeCanvas',
   'getComponent',
   'showComponent',
   'generateImage',

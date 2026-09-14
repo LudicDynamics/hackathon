@@ -430,6 +430,66 @@ test('arrange layout re-flows a whole layer from scratch and is deterministic', 
   }
 });
 
+test('arrange subset treats unselected cards as obstacles and falls back safely (E-GEO-02)', async () => {
+  const { store, root } = await tempStore();
+  try {
+    await store.seatUnplaced('world/inn', [
+      { path: 'world/inn/a.md', w: 200, h: 180 },
+      { path: 'world/inn/b.md', w: 200, h: 180 },
+    ]);
+    const selectedOnly = computeRow([{ path: 'world/inn/a.md', w: 200, h: 180 }])[0];
+    await store.placeCard('world/inn', 'world/inn/b.md', { x: selectedOnly.x, y: selectedOnly.y });
+    const obstacle = store.getLayerCards(['world/inn/b.md'])[0];
+    const oldOverlap =
+      selectedOnly.x < obstacle.x + obstacle.w &&
+      obstacle.x < selectedOnly.x + 200 &&
+      selectedOnly.y < obstacle.y + obstacle.h &&
+      obstacle.y < selectedOnly.y + 180;
+    assert.equal(oldOverlap, true, 'the selected-only candidate overlaps the unselected fixture card');
+    const staleVersion = store.getCanvasVersion('world/inn');
+    const svc = service(store);
+    await svc.arrangeCards({
+      layout: { mode: 'row', layer: 'world/inn', paths: ['world/inn/a.md'] },
+    });
+    assert.ok(store.getCanvasVersion('world/inn') > staleVersion, 'a committed position advances canvasVersion');
+    await assert.rejects(
+      () => store.arrangeCanvasLayer({
+        operationId: 'stale-version',
+        layer: 'world/inn',
+        mode: 'row',
+        expectedRevision: 0,
+        expectedCanvasVersion: staleVersion,
+        snapshotId: '',
+        policy: 'deoverlap',
+        allowMoveStableCards: true,
+        preserveLinks: true,
+        paths: ['world/inn/a.md'],
+      }),
+      isActionError('conflict')
+    );
+    const rows = store.queryCanvas(
+      'SELECT id, x, y, width, height FROM cards WHERE layer = ? ORDER BY id',
+      ['world/inn']
+    );
+    for (let i = 0; i < rows.length; i++) {
+      for (let j = i + 1; j < rows.length; j++) {
+        const a = rows[i];
+        const b = rows[j];
+        assert.equal(
+          a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height,
+          false,
+          `${a.id} and ${b.id} do not overlap after safe arrange`
+        );
+      }
+    }
+    assert.equal(store.getLayerCards(['world/inn/b.md'])[0].x, selectedOnly.x, 'obstacle x is preserved');
+    assert.equal(store.getLayerCards(['world/inn/b.md'])[0].y, selectedOnly.y, 'obstacle y is preserved');
+  } finally {
+    store.close();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('arrange layout is all-or-nothing: one bad path moves nothing', async () => {
   const { store, root } = await tempStore();
   try {
