@@ -20,7 +20,7 @@
 | 已实现范围 | 当前实现与下一步运行时证据 |
 |---|---|
 | 静态 checker 与 depth marker | `tools/ux-contract.json:159-171` 和 `tools/check-ux-contract.mjs` 已扩展为同一 checker 的 visual-literal/depth/projection 规则；当前 `pnpm check:ux` 通过 18 rules。运行时 marker 仍由浏览器矩阵补证，不把静态 clean 当成运行时证明。 |
-| App/Canvas marker 覆盖边界 | App layer/Nook 分支互斥，`App.tsx:1208-1212`、`NookView.tsx:491-499` 各自仅在所属 stage 提供 active marker；CharacterModal 按 15 §10.4 为 overlay-only，底层 `aria-hidden/inert`，不新增第三 marker。基础 Chromium 已验证 layer 单 marker/单 Canvas，完整 dialogue/Nook transition 仍待回放。 |
+| App/Canvas marker 覆盖边界 | App layer/Nook 分支互斥，`App.tsx:1208-1212`、`NookView.tsx:491-499` 各自仅在所属 stage 提供 active marker；CharacterModal 按 15 §10.4 为 overlay-only，底层 `aria-hidden/inert`，不新增第三 marker。Chromium 已验证 layer 单 marker/单 Canvas，并完成 layer→Nook→Escape→layer 回放；dialogue marker 仍需专门回放。 |
 | Nook PerformanceLayer | `App.tsx:1265-1273` 在 `.prototype-world` 内 stable sibling 挂载唯一 `PerformanceLayer`；`PerformanceLayer.tsx:547-585` 绑定唯一 show listener/liveCtx、projection replacement 与卸载清理，Nook 不复制 WS/演出 owner。 |
 | dialogue 内 Escape 归属 | `App.tsx:700-733` 使用统一 document-capture router；Declared/Photo/Gate 通过 FocusSurface lease 接入，Gate 由 App 装配，局部组件不再拥有独立的全局 Escape 真相。 |
 

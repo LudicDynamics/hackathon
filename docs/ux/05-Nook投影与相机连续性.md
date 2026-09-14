@@ -22,7 +22,7 @@
 
 | 已实现范围 | 当前实现与下一步运行时证据 |
 |---|---|
-| App/Canvas marker 覆盖边界 | `App.tsx:1208-1212`、`NookView.tsx:491-499` 的 stage marker 随互斥分支切换；CharacterModal `:780-792` overlay-only，底层 stage 用 `aria-hidden/inert` 隔离，不新增 marker。基础 Chromium 已验证 layer 单 marker/单 Canvas，完整 dialogue/Nook transition 仍待回放。 |
+| App/Canvas marker 覆盖边界 | `App.tsx:1208-1212`、`NookView.tsx:491-499` 的 stage marker 随互斥分支切换；CharacterModal `:780-792` overlay-only，底层 stage 用 `aria-hidden/inert` 隔离，不新增 marker。Chromium 已验证 layer 单 marker/单 Canvas，并完成 layer→Nook→Escape→layer 回放；dialogue marker 仍需专门回放。 |
 | Nook PerformanceLayer | `App.tsx:1265-1273` stable sibling 以当前 `layer`/`characters/<id>` identity 服务两个 stage；`PerformanceLayer.tsx:547-585` 负责唯一 listener/liveCtx、context replacement、hidden/effects/reduced/frozen 和卸载清理。 |
 | 组件内 Escape | `App.tsx:700-733` 是唯一 document-capture dispatch；Nook Back、CharacterModal、Photo、Declared、Gate 通过 coordinator surface lease 逐层关闭并恢复焦点。 |
 | 右侧角色/背包形态 | 统一引用 `docs/presence/00 §4.2.1`：CharacterRail 上、Bag 下；Nook 本文不再登记旧双 tab 入口。 |
