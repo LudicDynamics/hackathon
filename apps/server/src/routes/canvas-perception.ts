@@ -187,10 +187,11 @@ export function createCanvasPerceptionRouter(getActiveStore: () => LocalWorldSto
       const url = new URL('/', origin);
       url.searchParams.set('airpPerception', '1');
       url.searchParams.set('layer', snapshot.layer.id);
-      url.searchParams.set('snapshotId', snapshot.identity.snapshotId);
-      if (body.region) url.searchParams.set('region', JSON.stringify(body.region));
       const requestAbort = new AbortController();
-      req.once('close', () => requestAbort.abort());
+      req.once('aborted', () => requestAbort.abort());
+      res.once('close', () => {
+        if (!res.writableFinished) requestAbort.abort();
+      });
       const capture = async (): Promise<{ png: Uint8Array; dimensions: { width: number; height: number }; evidence: { renderedGeometry: CanvasScreenshotResponse['renderedGeometry']; geometryEvidence: CanvasScreenshotResponse['geometryEvidence'] } }> => withCanvasBrowserGate(
         (browser, signal) => captureCanvasPage(browser, {
           url: url.toString(),
