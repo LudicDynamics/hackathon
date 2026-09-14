@@ -3,8 +3,8 @@ import fs from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { resolveVoice, sanitiseTtsText, type LocalWorldStore } from '@airp/shared';
-import { LocalTtsError, isLocalTtsCharacter, localTtsEmotion, localTtsHash, readLocalTtsConfig, synthesiseLocal } from './local-tts.js';
+import { resolveVoice, sanitiseTtsText, parseFrontmatter, type LocalWorldStore } from '@airp/shared';
+import { LocalTtsError, characterLocalVoice, isLocalTtsCharacter, localTtsEmotion, localTtsHash, readLocalTtsConfig, synthesiseLocal } from './local-tts.js';
 
 /**
  * Server-side TTS: the ONE synthesis point (docs/tts/00 §1, docs/tts/01).
@@ -334,25 +334,33 @@ export function createTtsRouter(
     // Step 6 — world locale short code → DashScope `language_type`.
     const languageType = typeof rawLanguage === 'string' ? (LANGUAGE_MAP[rawLanguage] ?? 'Auto') : 'Auto';
 
-    // Local Nanami audio always gets first refusal, even if an online fallback
-    // for this line is cached. A recovered local service must regain its voice.
+    // Character-local voice gets first refusal; an unavailable service falls
+    // through to the existing online provider without exposing credentials.
     const local = readLocalTtsConfig();
-    if (local.baseUrl && characterId === 'nanami') {
+    if (local.baseUrl && typeof characterId === 'string') {
       try {
         const manifest = await store.getManifest();
-        if (isLocalTtsCharacter(manifest.id, characterId) && manifest.characters?.some(c => c.id === characterId)) {
+        const registered = manifest.characters?.some(character => character.id === characterId);
+        let declared: Record<string, unknown> = {};
+        if (registered && /^[a-z0-9][a-z0-9-]*$/.test(characterId)) {
+          try { declared = parseFrontmatter(await store.readFile(`characters/${characterId}/README.md`)).frontmatter ?? {}; } catch { /* legacy */ }
+        }
+        const override = (process.env.AIRP_TTS_CHARACTER_VOICES ?? '').split(',').some(pair => pair.trim().startsWith(`${characterId}=`));
+        const selected = characterLocalVoice(characterId, declared.voice, declared.gender)
+          ?? (!override && isLocalTtsCharacter(manifest.id, characterId) ? local.voice : null);
+        if (registered && selected) {
+          const localConfig = { ...local, voice: selected };
           const language = typeof rawLanguage === 'string' && rawLanguage in LANGUAGE_MAP ? rawLanguage : 'auto';
           const emotion = localTtsEmotion(rawEmotion);
-          const file = `${localTtsHash(local, text, language, emotion)}.wav`;
-          const abs = path.join(store.worldRoot, '.airpworld', 'tts-cache', file);
-          const cached = existsSync(abs);
-          if (!cached) await writeAtomic(abs, await synthesiseLocal(local, text, language, emotion));
-          return res.json({ ok: true, url: `/api/tts/audio/${file}`, cached, characters: text.length, truncated });
+          const localFile = `${localTtsHash(localConfig, text, language, emotion)}.wav`;
+          const localAbs = path.join(store.worldRoot, '.airpworld', 'tts-cache', localFile);
+          const cached = existsSync(localAbs);
+          if (!cached) await writeAtomic(localAbs, await synthesiseLocal(localConfig, text, language, emotion));
+          return res.json({ ok: true, url: `/api/tts/audio/${localFile}`, cached, characters: text.length, truncated });
         }
-      } catch (err) {
-        // Only a safe diagnostic is exposed; never log keys, URLs or dialogue.
-        const reason = err instanceof LocalTtsError ? err.message : err instanceof Error ? err.name : 'Error';
-        console.warn(`[AIRP TTS] Local TTS failed for nanami (${reason}); falling back to online TTS.`);
+      } catch (error) {
+        const reason = error instanceof LocalTtsError ? error.message : error instanceof Error ? error.name : 'Error';
+        console.warn(`[AIRP TTS] Local character TTS failed (${reason}); falling back to online TTS.`);
         res.setHeader('X-AIRP-TTS-Fallback', 'local-to-online');
       }
     }

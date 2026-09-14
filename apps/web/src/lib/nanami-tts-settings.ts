@@ -3,6 +3,7 @@ export type NanamiTtsDraft = {
   voice?: string;
   timeoutSeconds?: string;
   apiKey?: string;
+  characterVoices?: string;
 };
 
 export type NanamiValidationKey =
@@ -58,5 +59,6 @@ export function buildNanamiTtsPayload(draft: NanamiTtsDraft): Record<string, str
     payload.AIRP_TTS_LOCAL_TIMEOUT_MS = String(milliseconds);
   }
   if (draft.apiKey !== undefined && draft.apiKey) payload.AIRP_TTS_LOCAL_API_KEY = draft.apiKey;
+  if (draft.characterVoices !== undefined) payload.AIRP_TTS_CHARACTER_VOICES = draft.characterVoices;
   return payload;
 }

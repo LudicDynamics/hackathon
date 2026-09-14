@@ -2,10 +2,9 @@ import { Router, type Request } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { readLocalTtsConfig } from './local-tts.js';
+import { readLocalTtsConfig, parseCharacterVoices } from './local-tts.js';
 
-const fields = ['DASHSCOPE_API_KEY', 'AIRP_TTS_BASE_URL', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'FLOW_API_KEY', 'FLOW_API_BASE', 'DEEPSEEK_API_KEY',
-  'AIRP_TTS_LOCAL_BASE_URL', 'AIRP_TTS_LOCAL_VOICE', 'AIRP_TTS_LOCAL_TIMEOUT_MS', 'AIRP_TTS_LOCAL_API_KEY'] as const;
+const fields = ['DASHSCOPE_API_KEY', 'AIRP_TTS_BASE_URL', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'FLOW_API_KEY', 'FLOW_API_BASE', 'DEEPSEEK_API_KEY', 'AIRP_TTS_LOCAL_BASE_URL', 'AIRP_TTS_LOCAL_VOICE', 'AIRP_TTS_LOCAL_TIMEOUT_MS', 'AIRP_TTS_LOCAL_API_KEY', 'AIRP_TTS_CHARACTER_VOICES'] as const;
 const defaults: Record<string, string> = {
   AIRP_TTS_BASE_URL: 'https://dashscope-intl.aliyuncs.com/api/v1',
   OPENAI_BASE_URL: 'https://api.openai.com/v1',
@@ -31,11 +30,13 @@ export function saveConnectionSettings(repoRoot: string, input: unknown) {
     // An explicitly empty local URL disables this optional provider. Empty
     // credentials still mean "keep", as for every existing service setting.
     if (!value) {
-      if (key === 'AIRP_TTS_LOCAL_BASE_URL') updates[key] = '';
+      if (key === 'AIRP_TTS_LOCAL_BASE_URL' || key === 'AIRP_TTS_CHARACTER_VOICES') updates[key] = '';
       continue;
     }
     if (value.length > 4096 || /[\r\n"'\\\x00]/.test(value)) throw new Error('Invalid setting value');
-    if (key === 'AIRP_TTS_LOCAL_VOICE') {
+    if (key === 'AIRP_TTS_CHARACTER_VOICES') {
+      parseCharacterVoices(value);
+    } else if (key === 'AIRP_TTS_LOCAL_VOICE') {
       if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(value)) throw new Error('Invalid local voice ID');
     } else if (key === 'AIRP_TTS_LOCAL_TIMEOUT_MS') {
       if (!/^\d+$/.test(value) || Number(value) < 1000 || Number(value) > 120000) throw new Error('Invalid local TTS timeout');

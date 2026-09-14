@@ -1,4 +1,21 @@
 import { createHash } from 'node:crypto';
+import { VOICES } from '@airp/shared';
+
+export function parseCharacterVoices(value: string): Record<string, string> {
+  if (!value.trim()) return {};
+  const entries = value.split(',').map(pair => pair.trim().split('='));
+  if (entries.length > 100 || entries.some(pair => pair.length !== 2 || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(pair[0]) || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(pair[1]))) throw new Error('Invalid character voice mapping');
+  return Object.fromEntries(entries);
+}
+
+/** Character IDs are deployment-wide; declared gender wins over voice category. */
+export function characterLocalVoice(characterId: string, declaredVoice: unknown, gender?: unknown): string | null {
+  let overrides: Record<string, string> = {};
+  try { overrides = parseCharacterVoices(process.env.AIRP_TTS_CHARACTER_VOICES ?? ''); } catch { /* Ignore malformed external configuration. */ }
+  if (Object.hasOwn(overrides, characterId)) return overrides[characterId] === 'online' ? null : overrides[characterId];
+  const female = gender === 'female' || (gender !== 'male' && typeof declaredVoice === 'string' && VOICES.some(v => (v.id === declaredVoice || v.alias === declaredVoice) && v.gender === 'female'));
+  return female ? readLocalTtsConfig().voice : null;
+}
 
 /** Messages contain only our own diagnostics, never upstream bodies or secrets. */
 export class LocalTtsError extends Error {}
