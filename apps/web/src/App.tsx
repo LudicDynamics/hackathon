@@ -50,6 +50,7 @@ import { usePresence } from './state/usePresence.js';
 import { airpGateway, onWorldUnavailable, AirpRequestError, type AssetMediaKind, type WorldShelf } from './lib/airp-gateway.js';
 import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
 import { WorldLauncher } from './components/WorldLauncher.js';
+import { LAUNCHER_THEME } from './lib/world-launcher.js';
 import { BagItemDialog } from './components/BagItemDialog.js';
 import { guardImeKey } from './lib/ime.js';
 import { initialShell, transitionShell } from './lib/ui-shell.mjs';
@@ -490,16 +491,24 @@ export function App() {
   }, []);
 
   const themeUrl = manifest?.audio?.theme ?? null;
+  // While the launcher is open the world's beds stay silent under its own music;
+  // closing it re-runs these and brings the world's sound back.
   useEffect(() => {
-    if (!state) return;
+    if (!state || launcherOpen) return;
     setAmbient(state.audio.ambient ?? null);
     setBGM(state.audio.bgm ?? null);
     const urls = [state.audio.ambient, state.audio.bgm, themeUrl].filter(
       (url): url is string => typeof url === 'string' && url.length > 0
     );
     if (urls.length) void preloadAudio(urls);
-  }, [state?.audio?.ambient, state?.audio?.bgm, themeUrl, setAmbient, setBGM]);
-  useEffect(() => { setTheme(themeUrl); }, [themeUrl, setTheme]);
+  }, [state?.audio?.ambient, state?.audio?.bgm, themeUrl, setAmbient, setBGM, launcherOpen]);
+  useEffect(() => { if (!launcherOpen) setTheme(themeUrl); }, [themeUrl, setTheme, launcherOpen]);
+  useEffect(() => {
+    if (!launcherOpen) return;
+    setAmbient(null);
+    setBGM(null);
+    setTheme(LAUNCHER_THEME);
+  }, [launcherOpen, setAmbient, setBGM, setTheme]);
 
   useEffect(() => {
     const src = state?.bg?.src;

@@ -502,7 +502,7 @@ export function createWorldRouter(
   // Launcher covers (docs/ui/世界Launcher.md): a template's cover image,
   // read-only and independent of the active world (`/asset` serves only that).
   router.get('/worlds/cover', async (req, res) => {
-    const file = await templateCover(repoRoot, req.query.id).catch(() => null);
+    const file = await templateCover(repoRoot, req.query.id, req.query.kind === 'video' ? 'video' : 'image').catch(() => null);
     if (!file) return res.status(404).json({ ok: false, code: 'not_found', error: 'No cover for this world.' });
     res.set('Cache-Control', 'public, max-age=3600');
     res.sendFile(file, (err) => {

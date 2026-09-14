@@ -3,6 +3,12 @@ import type { WorldShelf } from './airp-gateway.js';
 /** World launcher helpers (docs/ui/世界Launcher.md). */
 export type ShelfGroup = NonNullable<WorldShelf['groups']>[number];
 
+/**
+ * The launcher's own music (a platform clip, `assets/audio/`). A calm stand-in
+ * until a dedicated lobby track is produced: swap this one path.
+ */
+export const LAUNCHER_THEME = '/api/audio?path=bgm%2Fcalm.mp3';
+
 /** Edition suffixes (tools/world-editions.mjs): English `<id>`, Japanese `<id>-jp`, Chinese `<id>-zh`. */
 const EDITION_SUFFIX = /-(jp|zh)$/;
 const editionLocale = (group: ShelfGroup) => group.locale ?? 'en';

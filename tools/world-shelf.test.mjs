@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { readWorldShelf, trashWorldSave } from '../apps/server/dist/world-shelf.js';
+import { readWorldShelf, templateCover, trashWorldSave } from '../apps/server/dist/world-shelf.js';
 
 test('saves group under their template and deletion is recoverable and scoped', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'airp-shelf-'));
@@ -24,6 +24,16 @@ test('saves group under their template and deletion is recoverable and scoped', 
     assert.equal(shelf.groups.find(g => g.id === 'snow-jp').saves.length, 1);
     assert.equal(shelf.groups.find(g => g.id === 'orphan').templatePath, null);
     assert.equal(shelf.groups.find(g => g.id === 'snow').saves.find(s => s.id === 'snow-one').active, true);
+    // Launcher media (docs/ui/世界Launcher.md): intro image and video; never outside templates/.
+    await fs.mkdir(path.join(root, 'templates/snow/assets/scenes'), { recursive: true });
+    await fs.writeFile(path.join(root, 'templates/snow/assets/scenes/intro.webm'), 'webm');
+    await fs.writeFile(path.join(root, 'templates/snow/assets/scenes/intro.webp'), 'webp');
+    const media = (await readWorldShelf(root, active)).groups;
+    assert.equal(media.find(g => g.id === 'snow').cover, '/api/worlds/cover?id=snow');
+    assert.equal(media.find(g => g.id === 'snow').coverVideo, '/api/worlds/cover?id=snow&kind=video');
+    assert.equal(media.find(g => g.id === 'snow-jp').coverVideo, null);
+    assert.match(await templateCover(root, 'snow', 'video'), /intro\.webm$/);
+    assert.equal(await templateCover(root, '../worlds', 'image'), null);
     for (const invalid of ['templates/snow', 'worlds/..', 'worlds/.trash', 'worlds/snow-one/world', '/tmp', null]) {
       await assert.rejects(trashWorldSave(root, invalid, active));
     }

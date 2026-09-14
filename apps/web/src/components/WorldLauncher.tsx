@@ -1,8 +1,16 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { WorldShelf } from '../lib/airp-gateway.js';
 import { useLocale } from '../lib/i18n.js';
 import { useStill } from '../lib/motion.js';
-import { brickGeometry, brickWorld, editionLabel, launcherWorlds, visibleBricks, worldTitle } from '../lib/world-launcher.js';
+import {
+  brickGeometry,
+  brickWorld,
+  editionLabel,
+  launcherWorlds,
+  visibleBricks,
+  worldTitle,
+  type ShelfGroup,
+} from '../lib/world-launcher.js';
 import './world-launcher.css';
 
 const LANGUAGES = [['ja', '日本語'], ['zh-CN', '中文'], ['en', 'English']] as const;
@@ -13,6 +21,97 @@ const GLIDE_WINDOW_MS = 80;
 /** Fastest glide after a fling, px/ms: a flick must not throw the wall a million pixels. */
 const MAX_GLIDE_SPEED = 3;
 const clampSpeed = (value: number) => Math.max(-MAX_GLIDE_SPEED, Math.min(MAX_GLIDE_SPEED, value));
+/** Wheel and keys ease towards their target: share of the remaining distance per 60fps frame. */
+const EASE_PER_FRAME = 0.16;
+/** Wheel ticks in quick succession speed the wall up, to at most this factor. */
+const MAX_WHEEL_BOOST = 2.2;
+/** How many bricks play their world's video at once: those nearest the centre, plus the hovered one. */
+const PLAYING_BRICKS = 5;
+
+type Translate = ReturnType<typeof useLocale>['t'];
+
+interface BrickProps {
+  brickKey: string;
+  world: ShelfGroup;
+  index: number;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  active: boolean;
+  open: boolean;
+  playing: boolean;
+  loading: string | null;
+  t: Translate;
+  onHover: (key: string | null) => void;
+  onToggle: (key: string) => void;
+  onLoad: (path: string) => void;
+}
+
+/** One glass brick. Memoised: panning mounts and unmounts bricks at the edges only. */
+const Brick = memo(function Brick({ brickKey, world, index, left, top, width, height, active, open, playing, loading, t, onHover, onToggle, onLoad }: BrickProps) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => { if (!playing) setReady(false); }, [playing]);
+  const title = worldTitle(world.name);
+  const latest = world.saves[0];
+  const current = world.saves.some(save => save.active);
+  const cover = { backgroundImage: `url("${world.cover}")` };
+  return (
+    <article
+      className={`world-launcher__tile${active ? ' is-active' : ''}`}
+      style={{ left, top, width, height }}
+      onPointerEnter={() => onHover(brickKey)}
+      onPointerLeave={() => onHover(null)}
+    >
+      <span className="world-launcher__image" style={cover} aria-hidden="true" />
+      {playing && world.coverVideo && (
+        <video
+          className={`world-launcher__video${ready ? ' is-ready' : ''}`}
+          src={world.coverVideo}
+          muted
+          loop
+          playsInline
+          autoPlay
+          preload="auto"
+          aria-hidden="true"
+          onLoadedData={() => setReady(true)}
+        />
+      )}
+      {/* The slab's thick edge: the same picture, magnified, seen only in a band. */}
+      <span className="world-launcher__rim" aria-hidden="true"><span style={cover} /></span>
+      <span className="world-launcher__fringe" aria-hidden="true" />
+      <span className="world-launcher__sheen" aria-hidden="true" />
+      <button
+        type="button"
+        className="world-launcher__hit"
+        aria-expanded={open}
+        aria-label={title}
+        onClick={() => onToggle(brickKey)}
+        onFocus={() => onHover(brickKey)}
+      />
+      <span className="world-launcher__meta" aria-hidden="true">
+        <span><i>{String(index + 1).padStart(2, '0')}</i>{editionLabel(world.locale)}</span>
+        <span>{current ? t('Current game') : t('{count} saves', { count: world.saves.length })}</span>
+      </span>
+      <div className="world-launcher__caption">
+        <b>{title}</b>
+        {world.description && <small>{world.description}</small>}
+        {open && (
+          <div className="world-launcher__actions">
+            {latest && (
+              <button type="button" disabled={loading !== null} onClick={() => onLoad(latest.path)}>
+                {t('Continue latest save')}{loading === latest.path ? t(' · opening…') : ''}
+              </button>
+            )}
+            <button type="button" disabled={loading !== null} onClick={() => onLoad(world.templatePath!)}>
+              {t('＋ Start a new game')}{loading === world.templatePath ? t(' · opening…') : ''}
+            </button>
+          </div>
+        )}
+      </div>
+    </article>
+  );
+});
 
 /**
  * The world launcher (docs/ui/世界Launcher.md): an endless wall of thick glass
@@ -41,14 +140,18 @@ export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves }
   // Pan position (the wall point at the stage's top-left). Moving it touches
   // only the layer's transform; React re-renders when a brick boundary is crossed.
   const pan = useRef<{ x: number; y: number } | null>(null);
+  // Where wheel and keys are easing the wall to; null while dragging or at rest.
+  const target = useRef<{ x: number; y: number } | null>(null);
   const [anchor, setAnchor] = useState({ x: 0, y: 0 });
   const [hovered, setHovered] = useState<string | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ id: number; x: number; y: number; t: number; vx: number; vy: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
-  const tiltFrame = useRef(0);
-  const glide = useRef(0);
+  const boost = useRef({ at: 0, factor: 1 });
+  const frames = useRef({ tilt: 0, glide: 0, ease: 0 });
+  const loadRef = useRef(onLoad);
+  loadRef.current = onLoad;
   const active = opened ?? hovered;
 
   useEffect(() => {
@@ -76,6 +179,7 @@ export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves }
     place();
   }, [geometry, size, place]);
 
+  /** Direct movement (drag, glide). */
   const panBy = useCallback((dx: number, dy: number) => {
     if (!pan.current) return;
     pan.current.x += dx;
@@ -83,7 +187,55 @@ export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves }
     place();
   }, [place]);
 
-  useEffect(() => () => { cancelAnimationFrame(tiltFrame.current); cancelAnimationFrame(glide.current); }, []);
+  const stopMotion = useCallback(() => {
+    cancelAnimationFrame(frames.current.glide);
+    cancelAnimationFrame(frames.current.ease);
+    frames.current.ease = 0;
+    target.current = null;
+  }, []);
+
+  /** Wheel and keys: ease towards a target; quick successive ticks accelerate. */
+  const scrollBy = useCallback((dx: number, dy: number) => {
+    const at = pan.current;
+    if (!at) return;
+    const now = performance.now();
+    const speed = boost.current;
+    speed.factor = now - speed.at < 140 ? Math.min(MAX_WHEEL_BOOST, speed.factor * 1.06) : 1;
+    speed.at = now;
+    const from = target.current ?? { x: at.x, y: at.y };
+    target.current = { x: from.x + dx * speed.factor, y: from.y + dy * speed.factor };
+    if (still) {
+      at.x = target.current.x;
+      at.y = target.current.y;
+      target.current = null;
+      place();
+      return;
+    }
+    if (frames.current.ease) return;
+    let last = now;
+    const step = (time: number) => {
+      const goal = target.current;
+      const p = pan.current;
+      if (!goal || !p) { frames.current.ease = 0; return; }
+      const share = 1 - Math.pow(1 - EASE_PER_FRAME, Math.min(64, time - last) / 16.7);
+      last = time;
+      p.x += (goal.x - p.x) * share;
+      p.y += (goal.y - p.y) * share;
+      if (Math.abs(goal.x - p.x) + Math.abs(goal.y - p.y) < 0.5) {
+        p.x = goal.x;
+        p.y = goal.y;
+        target.current = null;
+        frames.current.ease = 0;
+        place();
+        return;
+      }
+      place();
+      frames.current.ease = requestAnimationFrame(step);
+    };
+    frames.current.ease = requestAnimationFrame(step);
+  }, [place, still]);
+
+  useEffect(() => () => { cancelAnimationFrame(frames.current.tilt); stopMotion(); }, [stopMotion]);
 
   // Wheel and trackpad: both axes at once, so the wall scrolls in any direction.
   useEffect(() => {
@@ -91,20 +243,20 @@ export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves }
     if (!element) return;
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
-      cancelAnimationFrame(glide.current);
+      cancelAnimationFrame(frames.current.glide);
       const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? element.clientHeight : 1;
-      panBy(event.deltaX * unit, event.deltaY * unit);
+      scrollBy(event.deltaX * unit, event.deltaY * unit);
     };
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => element.removeEventListener('wheel', onWheel);
-  }, [panBy]);
+  }, [scrollBy]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const step = { ArrowLeft: [-cellW / 2, 0], ArrowRight: [cellW / 2, 0], ArrowUp: [0, -cellH / 2], ArrowDown: [0, cellH / 2] }[event.key];
+      const step = { ArrowLeft: [-cellW * 0.6, 0], ArrowRight: [cellW * 0.6, 0], ArrowUp: [0, -cellH * 0.6], ArrowDown: [0, cellH * 0.6] }[event.key];
       if (step && !(event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement)) {
         event.preventDefault();
-        panBy(step[0], step[1]);
+        scrollBy(step[0], step[1]);
       } else if (event.key === 'Escape') {
         if (opened) setOpened(null);
         else if (onClose) onClose();
@@ -117,12 +269,13 @@ export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [cellW, cellH, onClose, opened, panBy]);
+  }, [cellW, cellH, onClose, opened, scrollBy]);
 
-  // Lean is written to CSS variables, not React state.
+  // Lean is written to a CSS variable pair read only by the wall's transform:
+  // the bricks themselves never repaint when the pointer moves.
   const lean = (x: number, y: number) => {
-    cancelAnimationFrame(tiltFrame.current);
-    tiltFrame.current = requestAnimationFrame(() => {
+    cancelAnimationFrame(frames.current.tilt);
+    frames.current.tilt = requestAnimationFrame(() => {
       root.current?.style.setProperty('--tilt-x', x.toFixed(3));
       root.current?.style.setProperty('--tilt-y', y.toFixed(3));
     });
@@ -130,7 +283,7 @@ export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves }
 
   const onPointerDown = (event: React.PointerEvent) => {
     if (event.button !== 0) return;
-    cancelAnimationFrame(glide.current);
+    stopMotion();
     drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, t: performance.now(), vx: 0, vy: 0, moved: false };
   };
   const onPointerMove = (event: React.PointerEvent) => {
@@ -178,15 +331,31 @@ export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves }
       const decay = Math.pow(0.94, dt / 16);
       vx *= decay;
       vy *= decay;
-      if (Math.hypot(vx, vy) > 0.02) glide.current = requestAnimationFrame(step);
+      if (Math.hypot(vx, vy) > 0.02) frames.current.glide = requestAnimationFrame(step);
     };
-    glide.current = requestAnimationFrame(step);
+    frames.current.glide = requestAnimationFrame(step);
   };
+
+  const onHover = useCallback((key: string | null) => {
+    if (!drag.current?.moved) setHovered(key);
+  }, []);
+  const onToggle = useCallback((key: string) => setOpened(value => (value === key ? null : key)), []);
+  const load = useCallback((path: string) => loadRef.current(path), []);
 
   const bricks = useMemo(
     () => visibleBricks(anchor.x, anchor.y, size.w + cellW, size.h + cellH, geometry, 1),
     [anchor, size, geometry, cellW, cellH],
   );
+  // Videos play only near the centre of the view: decoding one per brick would stall the wall.
+  const playing = useMemo(() => {
+    if (still) return new Set<string>();
+    const centreX = anchor.x + cellW / 2 + size.w / 2;
+    const centreY = anchor.y + cellH / 2 + size.h / 2;
+    const ranked = bricks
+      .map(brick => ({ key: `${brick.col}:${brick.row}`, distance: Math.hypot(brick.left + geometry.w / 2 - centreX, brick.top + geometry.h / 2 - centreY) }))
+      .sort((a, b) => a.distance - b.distance);
+    return new Set(ranked.slice(0, PLAYING_BRICKS).map(entry => entry.key));
+  }, [anchor, bricks, cellW, cellH, geometry, size, still]);
 
   return (
     <div
@@ -229,55 +398,26 @@ export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves }
           <div ref={layer} className="world-launcher__layer">
             {worlds.length > 0 && bricks.map(brick => {
               const index = brickWorld(brick.col, brick.row, worlds.length);
-              const world = worlds[index];
               const key = `${brick.col}:${brick.row}`;
-              const title = worldTitle(world.name);
-              const latest = world.saves[0];
-              const isOpen = opened === key;
-              const current = world.saves.some(save => save.active);
-              const cover = { backgroundImage: `url("${world.cover}")` };
               return (
-                <article
+                <Brick
                   key={key}
-                  className={`world-launcher__tile${active === key ? ' is-active' : ''}`}
-                  style={{ left: brick.left, top: brick.top, width: geometry.w, height: geometry.h }}
-                  onPointerEnter={() => { if (!drag.current?.moved) setHovered(key); }}
-                  onPointerLeave={() => setHovered(value => (value === key ? null : value))}
-                >
-                  <span className="world-launcher__image" style={cover} aria-hidden="true" />
-                  {/* The slab's thick edge: the same picture, magnified, seen only in a band. */}
-                  <span className="world-launcher__rim" aria-hidden="true"><span style={cover} /></span>
-                  <span className="world-launcher__fringe" aria-hidden="true" />
-                  <span className="world-launcher__sheen" aria-hidden="true" />
-                  <button
-                    type="button"
-                    className="world-launcher__hit"
-                    aria-expanded={isOpen}
-                    aria-label={title}
-                    onClick={() => setOpened(isOpen ? null : key)}
-                    onFocus={() => setHovered(key)}
-                  />
-                  <span className="world-launcher__meta" aria-hidden="true">
-                    <span><i>{String(index + 1).padStart(2, '0')}</i>{editionLabel(world.locale)}</span>
-                    <span>{current ? t('Current game') : t('{count} saves', { count: world.saves.length })}</span>
-                  </span>
-                  <div className="world-launcher__caption">
-                    <b>{title}</b>
-                    {world.description && <small>{world.description}</small>}
-                    {isOpen && (
-                      <div className="world-launcher__actions">
-                        {latest && (
-                          <button type="button" disabled={loading !== null} onClick={() => onLoad(latest.path)}>
-                            {t('Continue latest save')}{loading === latest.path ? t(' · opening…') : ''}
-                          </button>
-                        )}
-                        <button type="button" disabled={loading !== null} onClick={() => onLoad(world.templatePath!)}>
-                          {t('＋ Start a new game')}{loading === world.templatePath ? t(' · opening…') : ''}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </article>
+                  brickKey={key}
+                  world={worlds[index]}
+                  index={index}
+                  left={brick.left}
+                  top={brick.top}
+                  width={geometry.w}
+                  height={geometry.h}
+                  active={active === key}
+                  open={opened === key}
+                  playing={!still && (playing.has(key) || active === key)}
+                  loading={loading}
+                  t={t}
+                  onHover={onHover}
+                  onToggle={onToggle}
+                  onLoad={load}
+                />
               );
             })}
           </div>

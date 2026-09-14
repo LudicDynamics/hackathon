@@ -1,11 +1,18 @@
 /* World launcher (docs/ui/世界Launcher.md): an endless wall of thick glass
    bricks that repeats in every direction and leans with the pointer; the gaps
-   glow with a blur of the covers. */
+   glow with a blur of the covers.
+
+   Performance: the pointer only drives the wall's transform (composited). Nothing
+   inside a brick reads the tilt, so bricks never repaint while the pointer moves;
+   bricks carry no 3D context, blend modes or animated filters. */
 .world-launcher {
   --tilt-x: 0; /* -1…1 from the pointer, set by WorldLauncher */
   --tilt-y: 0;
   --ease: cubic-bezier(.2, .7, .2, 1);
   --edge: clamp(16px, 2.4vw, 36px);
+  --glass-line: rgba(255, 255, 255, .22);
+  --glass-fill: rgba(16, 17, 27, .62);
+  --accent: #c9f27a;
   position: fixed;
   inset: 0;
   z-index: calc(var(--depth-modal) + 20);
@@ -20,7 +27,7 @@
   font-family: "Helvetica Neue", Inter, var(--ux-font-ui, system-ui), sans-serif;
 }
 
-/* Every cover, blurred into one dim field behind the wall. */
+/* Every cover, blurred into one dim field behind the wall (static). */
 .world-launcher__ambient {
   position: absolute;
   inset: -15%;
@@ -48,8 +55,8 @@
 .world-launcher__top nav { display: flex; flex-wrap: wrap; gap: 8px; }
 .world-launcher__pill,
 .world-launcher__langs {
-  border: 1px solid rgba(255, 255, 255, .24);
-  background: rgba(20, 22, 32, .55);
+  border: 1px solid var(--glass-line);
+  background: var(--glass-fill);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -95,15 +102,14 @@
 .world-launcher__tilt {
   position: absolute;
   inset: 0;
-  transform-style: preserve-3d;
   transform: rotateY(calc(var(--tilt-x) * 6deg)) rotateX(calc(var(--tilt-y) * -4deg)) scale(1.04);
   transition: transform .6s var(--ease);
+  will-change: transform;
 }
 .world-launcher__layer {
   position: absolute;
   left: 0;
   top: 0;
-  transform-style: preserve-3d;
   will-change: transform;
 }
 
@@ -111,35 +117,43 @@
   --tile-radius: clamp(26px, 9cqw, 52px);
   position: absolute;
   container-type: size;
+  contain: layout paint;
   overflow: hidden;
   isolation: isolate;
   border-radius: var(--tile-radius);
-  box-shadow: 0 50px 90px -40px rgba(0, 0, 0, .9), 0 0 0 1px rgba(255, 255, 255, .16);
-  transform: translateZ(0);
-  transition: transform .5s var(--ease), box-shadow .5s;
+  box-shadow: 0 26px 44px -22px rgba(0, 0, 0, .8), 0 0 0 1px rgba(255, 255, 255, .16);
+  transition: transform .45s var(--ease), box-shadow .45s;
 }
 .world-launcher__tile.is-active {
-  transform: translateZ(42px);
-  box-shadow: 0 60px 110px -40px rgba(0, 0, 0, .95), 0 0 0 1px rgba(255, 255, 255, .3);
+  transform: scale(1.035);
+  box-shadow: 0 34px 60px -24px rgba(0, 0, 0, .9), 0 0 0 1px rgba(255, 255, 255, .32);
 }
 .world-launcher.is-dragging .world-launcher__tile { transition: none; }
 
-.world-launcher__image {
+.world-launcher__image,
+.world-launcher__video {
   position: absolute;
   inset: 0;
-  background: center / cover no-repeat;
-  filter: saturate(.92) brightness(.86);
-  transform: scale(1.02);
-  transition: filter .5s, transform .9s var(--ease);
+  width: 100%;
+  height: 100%;
   pointer-events: none;
 }
-.world-launcher__image::after {
+.world-launcher__image { background: center / cover no-repeat; filter: saturate(.92) brightness(.86); }
+.is-active .world-launcher__image { filter: none; }
+/* The intro video fades in over the still once it has a frame. */
+.world-launcher__video { object-fit: cover; opacity: 0; transition: opacity .6s ease; }
+.world-launcher__video.is-ready { opacity: 1; }
+.world-launcher__sheen::after,
+.world-launcher__tile::after {
   content: '';
+}
+.world-launcher__tile::after {
   position: absolute;
   inset: 0;
+  z-index: 0;
   background: linear-gradient(to top, rgba(4, 5, 12, .8), rgba(4, 5, 12, .12) 50%, transparent 72%);
+  pointer-events: none;
 }
-.is-active .world-launcher__image { filter: none; transform: scale(1.06); }
 
 /* Thick edge: a band around the brick shows the picture magnified and
    over-saturated, as if bent through the glass. */
@@ -161,9 +175,8 @@
   position: absolute;
   inset: 0;
   background: center / cover no-repeat;
-  filter: blur(1.2px) saturate(1.8) contrast(1.12) brightness(1.12);
-  transform: scale(1.16) translate(calc(var(--tilt-x) * -1.5%), calc(var(--tilt-y) * -1.5%));
-  transition: transform .6s var(--ease);
+  filter: saturate(1.7) contrast(1.1) brightness(1.12);
+  transform: scale(1.16);
 }
 /* Colour fringe on the outermost edge. */
 .world-launcher__fringe {
@@ -171,26 +184,25 @@
   inset: 0;
   z-index: 2;
   box-sizing: border-box;
-  padding: 6px;
+  padding: 5px;
   border-radius: inherit;
-  background: conic-gradient(from calc(200deg + var(--tilt-x) * 40deg),
-    rgba(255, 60, 120, .5), rgba(255, 210, 60, .35), rgba(60, 255, 190, .4),
-    rgba(60, 140, 255, .5), rgba(200, 80, 255, .4), rgba(255, 60, 120, .5));
-  mix-blend-mode: overlay;
-  opacity: .7;
+  background: conic-gradient(from 200deg,
+    rgba(255, 60, 120, .9), rgba(255, 210, 60, .7), rgba(60, 255, 190, .8),
+    rgba(60, 140, 255, .9), rgba(200, 80, 255, .8), rgba(255, 60, 120, .9));
+  opacity: .32;
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
   pointer-events: none;
 }
-/* Bevel light, a soft reflection that moves with the lean, and two glints. */
+/* Bevel light, a soft reflection and two glints (static). */
 .world-launcher__sheen {
   position: absolute;
   inset: 0;
   z-index: 3;
   border-radius: inherit;
-  background: radial-gradient(55% 38% at calc(28% + var(--tilt-x) * 22%) calc(8% + var(--tilt-y) * 14%), rgba(255, 255, 255, .2), transparent 70%);
+  background: radial-gradient(55% 38% at 28% 8%, rgba(255, 255, 255, .2), transparent 70%);
   box-shadow:
     inset 0 2px 1px rgba(255, 255, 255, .8),
     inset 0 -3px 6px rgba(255, 255, 255, .2),
@@ -210,21 +222,17 @@
   min-height: 4px;
   border-radius: 50%;
   background: #fff;
-  filter: blur(.6px);
-  transform: translate(calc(var(--tilt-x) * -10px), 0) rotate(38deg);
+  transform: rotate(38deg);
   opacity: .9;
 }
 .world-launcher__sheen::after {
-  content: '';
   position: absolute;
   left: 2.6%;
   top: 16%;
-  width: 4px;
+  width: 3px;
   height: 46%;
   border-radius: 99px;
-  background: linear-gradient(transparent, rgba(255, 255, 255, .8), transparent);
-  filter: blur(.8px);
-  transform: translateY(calc(var(--tilt-y) * -12px));
+  background: linear-gradient(transparent, rgba(255, 255, 255, .75), transparent);
 }
 
 .world-launcher__hit {
@@ -253,7 +261,7 @@
   pointer-events: none;
   white-space: nowrap;
 }
-.world-launcher__meta i { font-style: normal; color: #c9f27a; margin-right: 1.4em; }
+.world-launcher__meta i { font-style: normal; color: var(--accent); margin-right: 1.4em; }
 
 .world-launcher__caption {
   position: absolute;
@@ -287,18 +295,19 @@
   opacity: .85;
 }
 .world-launcher__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; pointer-events: auto; }
-.world-launcher__actions button {
+.world-launcher__actions button,
+body:has(.world-launcher) .world-directory button {
   padding: 10px 16px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, .34);
-  background: rgba(20, 22, 32, .6);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, .3);
+  background: var(--glass-fill, rgba(16, 17, 27, .62));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28);
+  color: #f5f3ee;
   font: 500 12px/1.2 ui-monospace, "SFMono-Regular", monospace;
   letter-spacing: .12em;
   text-transform: uppercase;
 }
+.world-launcher__actions button { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 .world-launcher__actions button:hover { background: rgba(255, 255, 255, .18); }
 .world-launcher__actions button:disabled { opacity: .5; cursor: wait; }
 
@@ -311,8 +320,6 @@
   padding: 7px 14px;
   border-radius: 999px;
   background: rgba(10, 11, 18, .55);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   font: 500 11px/1 ui-monospace, "SFMono-Regular", monospace;
   letter-spacing: .16em;
   text-transform: uppercase;
@@ -321,8 +328,76 @@
   pointer-events: none;
 }
 
-/* Opened from the launcher, the save manager sits above it. */
-body:has(.world-launcher) .prototype-world-picker { z-index: calc(var(--depth-modal) + 30); }
+/* The save manager, opened from the launcher, wears the launcher's glass. */
+body:has(.world-launcher) .prototype-world-picker.world-directory {
+  z-index: calc(var(--depth-modal) + 30);
+  left: auto;
+  right: clamp(16px, 2.4vw, 36px);
+  top: 70px;
+  width: min(400px, calc(100vw - 32px));
+  max-height: calc(100dvh - 110px);
+  padding: 24px 26px 26px;
+  color: #f5f3ee;
+  background: rgba(14, 15, 24, .74);
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 28px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 40px 80px -30px rgba(0, 0, 0, .85);
+  backdrop-filter: blur(26px) saturate(1.4);
+  -webkit-backdrop-filter: blur(26px) saturate(1.4);
+  font-family: "Helvetica Neue", Inter, var(--ux-font-ui, system-ui), sans-serif;
+}
+body:has(.world-launcher) .world-directory__header {
+  font: 500 11px/1 ui-monospace, "SFMono-Regular", monospace;
+  letter-spacing: .18em;
+  color: rgba(245, 243, 238, .7);
+}
+body:has(.world-launcher) .world-directory__header button {
+  padding: 4px 11px 6px;
+  font: 400 20px/1 var(--ux-font-ui, system-ui);
+  letter-spacing: 0;
+}
+body:has(.world-launcher) .world-directory h2 {
+  margin: 12px 0 18px;
+  font: 700 28px/1.1 "Helvetica Neue", Inter, var(--ux-font-ui, system-ui), sans-serif;
+  letter-spacing: -.02em;
+}
+body:has(.world-launcher) .world-directory h3 {
+  margin: 22px 0 6px;
+  font: 500 11px/1 ui-monospace, "SFMono-Regular", monospace;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: rgba(245, 243, 238, .6);
+}
+body:has(.world-launcher) .world-directory p { color: rgba(245, 243, 238, .75); }
+/* World rows and the save list: hairlines instead of pills. */
+body:has(.world-launcher) .prototype-world-picker.world-directory > .world-directory__entry,
+body:has(.world-launcher) .world-directory .world-save-open {
+  width: 100%;
+  padding: 13px 4px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+}
+body:has(.world-launcher) .prototype-world-picker.world-directory > .world-directory__entry:hover,
+body:has(.world-launcher) .world-directory .world-save-open:hover { background: rgba(255, 255, 255, .06); }
+body:has(.world-launcher) .world-directory__entry > small { color: var(--accent, #c9f27a); }
+body:has(.world-launcher) .world-directory__entry b,
+body:has(.world-launcher) .world-directory .world-save-open b { font: 600 16px/1.3 "Helvetica Neue", Inter, var(--ux-font-ui, system-ui), sans-serif !important; }
+body:has(.world-launcher) .world-directory__entry span,
+body:has(.world-launcher) .world-directory .world-save-open span { color: rgba(245, 243, 238, .6); font-size: 12px; }
+body:has(.world-launcher) .world-directory .world-save-row { padding: 0; margin: 0; border: 0; border-radius: 0; }
+body:has(.world-launcher) .world-directory .world-save-row > button:last-of-type { margin: 8px 0 12px; padding: 7px 12px; font-size: 11px; }
+body:has(.world-launcher) .world-directory .world-save-confirm { padding: 10px 0; border-color: rgba(255, 255, 255, .12); }
+body:has(.world-launcher) .world-directory .world-save-confirm button { margin: 0 8px 0 0; }
+body:has(.world-launcher) .prototype-world-picker.world-directory > button:not(.world-directory__entry) { margin: 6px 8px 0 0; }
+body:has(.world-launcher) .world-directory button:hover:not(:disabled) { background: rgba(255, 255, 255, .16); }
+body:has(.world-launcher) .world-directory button:disabled { opacity: .45; }
 
 @media (prefers-reduced-motion: reduce) {
   .world-launcher__tilt { transform: none; }

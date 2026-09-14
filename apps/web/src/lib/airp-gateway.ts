@@ -10,6 +10,8 @@ export interface WorldShelf {
     templatePath: string | null;
     /** Launcher cover URL (`/api/worlds/cover`); templates only. */
     cover?: string | null;
+    /** Launcher video URL; templates with an intro video only. */
+    coverVideo?: string | null;
     locale?: string | null;
     description?: string;
     saves: { id: string; path: string; updatedAt: string; active: boolean }[];
