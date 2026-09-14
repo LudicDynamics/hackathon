@@ -4,7 +4,9 @@
 > 上位契约：`docs/command/00-共同上下文.md`（下称"契约"）。冲突时以它为准；本文发现它有问题的地方一律写在 §11，不就地修改。
 > **本文已按 2026-09-14 的契约变更（§3.2/§3.3：命令文件改为 `command/<id>.yaml`、取消 `type` 与 Markdown 正文、顶层四键 `name`/`desc`/`params`/`do`、strict）重写。**§6.2 的写入门禁要求也随之从"加一个前缀"变成"按前缀分派扩展名"（契约 §6.2 逐字：「MUST NOT 改成"放行 `command/` 下的任意扩展名"」）。
 > 本文**拥有**：写入门禁的精确改动、写入即校验的落点与实现、错误回传给 Agent 的文案、Agent 如何知道有哪些效果可用、Agent 何时该写命令的判据、命令的可发现性与注入成本、`[C-2]`（不落账）与 `[C-3]`（writer 专属）的判定记录与落地清单、可直接使用的提示词草稿。
-> **2026-09-14 收口**：按契约 §11.3 的 B2 项，§5.1/§5.2/§11.3/§12.1/§12.2 已按评审门实测证据改判并重写论据（`[C-2]`=A、`[C-3]`=A），行号按当前工作树修正（`resolveLayer`→`local-store.ts:859-873`、`useWorld.ts`→`:387-401`、`App.tsx`→`:464`），`parseOnBindings` 归属按契约 §R.16 改为"`02` 实现、`07` 调用"。
+> **2026-09-14 收口**：按契约 §11.3 的 B2 项，§5.1/§5.2/§11.3/§12.1/§12.2 已按评审门实测证据改判并重写论据（`[C-2]`=A、`[C-3]`=A），行号按当前工作树修正（`resolveLayer`→`local-store.ts:859-873`、`useWorld.ts`→`:387-401`、`App.tsx`→`:464`），`parseOnBindings` 归属按契约 §R.16 改为"`02` 实现、`07` 调用"。<!-- recon 50dd228: 上述三个行号现为 local-store.ts:951-964、useWorld.ts:579-593、App.tsx:595-596；本文各处已就近改双记法 -->
+
+> **2026-09-15 复核（recon `50dd228`，88 个提交之后）**：本文的 `file:line` 是 **2026-09-14 工作树**（`9af9c9b`）的快照。此后仓库前进 88 个提交（canvas arranger、Nook 立绘拖拽、STT、zh-CN 模板、Vercel 部署等），下列引用**已漂移**，本批已就近改写为「旧标 :X（快照）/ 现 :Y」双记法：`world.ts` 的 `/api/dice` 与 `/api/choice`（§3.6 判据 0、§13.1 成本表）、`local-store.ts` 的 `resolveLayer` 与 `appendEvent` 的 dev `safeParse`、`useWorld.ts`/`App.tsx`/`NookView.tsx` 的前端刷新链、`tools/check-skills.mjs`、`extensions/tools.ts`、`actor.ts`。**语义与函数名未变**；实现前 MUST 以语义 grep 定位，MUST NOT 照抄行号。
 > 本文**不拥有**：命令文件的 schema（→ `01`）、`on` 字段的形状与变量集（→ `02`）、条件求值与执行序（→ `03`）、效果名与参数（→ `04`）、幂等真相源（→ `05`）、玩家侧渲染（→ `06`）、多租户与物理层隔离（→ `09`）。
 
 ---
@@ -232,9 +234,11 @@ Wrote command/investigate-clue.yaml: 4 steps, 2 params. Entities can bind it wit
 
 具体形态（三条，覆盖本模块的三个触发点，`02 §2.2`）：
 
-- 玩家**自己**点掷骰按钮（`POST /api/dice` → `apps/server/src/routes/world.ts:1100-1138` 直接进动作层，agent 进程此刻没被唤醒——契约 §2.2 末行）；
-- 玩家**自己**点一个 `choice` 选项（`POST /api/choice`，`world.ts:1170-1173`）；
-- 玩家**自己**把一个物件用在另一个东西上（`POST /api/use-item`）。
+- 玩家**自己**点掷骰按钮（`POST /api/dice` → `apps/server/src/routes/world.ts:1243-1257` 直接进动作层，agent 进程此刻没被唤醒——契约 §2.2 末行；**旧标 `:1100-1138`**）；
+- 玩家**自己**点一个 `choice` 选项（`POST /api/choice`，`world.ts:1284-1309`；**旧标 `:1170-1173`**）；
+- 玩家**自己**把一个物件用在另一个东西上（`POST /api/use-item`，`world.ts:1261-1272`）。
+
+<!-- recon 50dd228: world.ts /api/dice 1100-1138 → 1243-1257；/api/choice 1170-1173 → 1284-1309（新增 /worlds/cover 与角色 presence 接线使路由整体下移；`65fa09d` 时 :1100 已是 `/card/footprint`，见 :1092） -->
 
 **是 → 必须写命令。** 因为这三条路径**都不经过 agent 进程**，你的叙述根本不会被执行——不是"执行得慢"，是**永远不会发生**。
 
@@ -339,7 +343,7 @@ chalk.
 | `command_id_invalid` | `"<id>" is not a valid command id (ASCII lowercase kebab-case, 1-48 chars, must not start with a hyphen). Got "<file>".` |
 **放行 `command/` 之后 `tool_result` 会发生什么**（契约 §6.2 点名要回答）——完整推演与四条后果见 §5.1，结论三条：
 
-1. `resolveLayer('command/x.yaml')` 返回 **`null`**（`local-store.ts:859-873`：非 `world/**` 一律 `null`；且这是**设计**而非缺陷，见 `:828-833` 的注释）；
+1. `resolveLayer('command/x.yaml')` 返回 **`null`**（`local-store.ts:951-964`，旧标 `:859-873`：非 `world/**` 一律 `null`；且这是**设计**而非缺陷，见 `:945-950` 的注释，旧标 `:853-858` 的注释）；
 2. `kind` 只能填 **`'other'`**（`fm` 是 `null`，`:102` 的四个 `fm?.type` 比较全 false）；
 3. **这条 `entity_created` 能成功落账**，因为 `kind: 'other'` 在 `EventDetailSchemas.entity_created` 的封闭枚举里（`schemas/events.ts:43-48`）——**不需要改任何 schema**。
 
@@ -452,7 +456,7 @@ function proposedFileText(previous: string, toolName: 'write' | 'edit', input: R
        → 'x.yaml'（注意：basename 去的是 `.md`，对 `.yaml` 无效，所以得到 "x.yaml" 而不是 "x"）
        ↓
 :87   layer = await store.resolveLayer('command/x.yaml')
-       → null（local-store.ts:859-873：非 world/** 一律 null）
+      → null（local-store.ts:951-964，旧标 :859-873：非 world/** 一律 null）
        ↓
 :90   !existed && file.endsWith('/README.md') → false（不是 README）
        ↓
@@ -463,16 +467,16 @@ function proposedFileText(previous: string, toolName: 'write' | 'edit', input: R
                     detail: { path: 'command/x.yaml', name: 'x.yaml', kind: 'other' } })
 ```
 
-**这条 `appendEvent` 会成功，不会抛**：`EventDetailSchemas.entity_created` 是 `{ path, name, kind: enum(['chalk','component','note','letter','other']) }`（`packages/shared/src/schemas/events.ts:43-48`），而 `kind: 'other'` **在枚举里**。dev 模式的 `safeParse` 门槛（`local-store.ts:668-679`、`:450-458`）因此通过。**不需要改任何 schema 就能落这条账——这恰恰是问题所在。**
+**这条 `appendEvent` 会成功，不会抛**：`EventDetailSchemas.entity_created` 是 `{ path, name, kind: enum(['chalk','component','note','letter','other']) }`（`packages/shared/src/schemas/events.ts:43-48`），而 `kind: 'other'` **在枚举里**。dev 模式的 `safeParse` 门槛（`local-store.ts:758-771`，旧标 `:666-679`；内部还有一个 `appendEventLocked` 的副本在 `:539-550`，旧标 `:448-458`）因此通过。**不需要改任何 schema 就能落这条账——这恰恰是问题所在。**
 
 **落下去之后会发生什么**（四处可观测的后果，都有 `file:line`）：
 
 | 后果 | 机制 | 严重度 |
 |---|---|---|
 | **向玩家弹一条假话** | `apps/web/src/lib/world-event-toast.ts` 的 `validDetail`（`:212-217`）对 `entity_created` 取 `detail.kind`，而 `ENTITY_KIND_VALUES`（`:35`）**含 `'other'`** → 画像通过 → 弹 `Created "x.yaml". The object is now in {layer}.`；而 `layerLabel(event)`（`:121-123`）在 `event.layer === null` 时**硬编码返回 `'the current scene'`**。`command/**` 的 `layer` 是 `null` ⇒ **每次写命令，玩家都看到一条断言"这个对象现在在'当前场景'里"的假话。** 这是 `[C-2]` 判 A 的**主因**：选 B 要么弹假话，要么改 `layerLabel` 的 null 语义 + i18n 消息键。 | **高**（玩家可见，且是假事实） |
-| **前端做一次全量 chrome 重载** | `apps/web/src/state/useWorld.ts:387-401`：`entity_created` 在转发集合里 → `dispatch('airp:world-event')` → `apps/web/src/App.tsx:464` 的 `onWorldEvent` 调 `loadChromeData()`（`App.tsx:342`）；`apps/web/src/components/nook/NookView.tsx:269-291` 也会因此重新 `load()`。**行号依 2026-09-14 工作树** | **低但真实**：写命令不该触发画布刷新 |
+| **前端做一次全量 chrome 重载** | `apps/web/src/state/useWorld.ts:579-593`（旧标 `:387-401`）：`entity_created` 在转发集合里 → `dispatch('airp:world-event')` → `apps/web/src/App.tsx:595-596`（旧标 `:464`）的 `onWorldEvent` 调 `loadChromeData()`（`App.tsx:472`，旧标 `:342`）；`apps/web/src/components/nook/NookView.tsx:378-413`（旧标 `:269-291`，那一段现在是初始化的 `airp:layer-init` 监听；世界事件监听移至 `:380`）也会因此重新 `load()`。**行号依 2026-09-15 工作树（`50dd228`）** | **低但真实**：写命令不该触发画布刷新 |
 | **事件表里多一条"实体"历史** | 命令不是 entity（契约 §6.3 逐字：「它不成层、不是实体、不出现在画布上」）。历史面板若按 `kind` 过滤，`other` 会混进玩家可见的记录 | **中**：世界史里出现了一条关于"规则文件"的记录，叙事上不对 |
-| ~~作家注入里多一句假事实~~ | ~~`render/events.ts:209-227` 的 `kind:'other'` 落 `default` 分支~~ **此条对 writer 不成立，已撤回**：作家注入的事件读带 `excludeActor: actor`（`inject/collect.ts:251` + `local-store.ts:770-774`，`docs/hooks/00:178`「作家不把自己刚写的念给自己听」），命令是作家自己写的 ⇒ 那条 `entity_created` 的 `actor_type='writer'` ⇒ **被排除，作家注入里不出现**。该后果**只在角色写命令时成立**，而 `[C-3]` 判 A（角色不可写）后整条不存在 | — |
+| ~~作家注入里多一句假事实~~ | ~~`render/events.ts:209-227`（现 `:211-229`）的 `kind:'other'` 落 `default` 分支~~ **此条对 writer 不成立，已撤回**：作家注入的事件读带 `excludeActor: actor`（`inject/collect.ts:251` + `local-store.ts:862-865`，旧标 `:770-774`，`docs/hooks/00:178`「作家不把自己刚写的念给自己听」），命令是作家自己写的 ⇒ 那条 `entity_created` 的 `actor_type='writer'` ⇒ **被排除，作家注入里不出现**。该后果**只在角色写命令时成立**，而 `[C-3]` 判 A（角色不可写）后整条不存在 | — |
 
 > **为什么第 1 行才是主因、第 4 行被撤回**：`07` 先前把"作家注入里多一句假事实"列为第一条后果——**它说反了适用对象**。作家看不到自己的写入（`excludeActor`）；真正被那条假事实击中、且每次都击中的是**玩家**（toast，第 1 行）。判 A 的决定性论据因此落在 toast 上，不在作家注入上。
 
@@ -488,7 +492,7 @@ function proposedFileText(previous: string, toolName: 'write' | 'edit', input: R
 
 1. **主因：`entity_created` 的主要消费者是玩家可见的 toast。** `apps/web/src/lib/world-event-toast.ts` 画像通过（`:35` 含 `'other'`、`:212-217`）→ 弹 `Created "x.yaml". The object is now in {layer}.`，而 `layerLabel(event)`（`:121-123`）在 `layer === null` 时硬编码 `'the current scene'`，`command/**` 的 `layer` 正是 `null` ⇒ **每次写命令向玩家弹一条假话**。选方案 B 要么弹假话，要么改 `layerLabel` 的 null 语义 + i18n 消息键——成本远超"改渲染器"。
 2. **命令不是 entity，`kind` 的五个值全是实体的分类。** `entity_created.detail.kind` 的封闭枚举是 `chalk|component|note|letter|other`（`schemas/events.ts:43-48`），语义是"这是什么**东西**"。命令是**规则**（契约 §3.2 的核心分界表）。填 `other` 不是"分类模糊"，是**把规则伪装成一个东西**——这正是 `09 §9` 第 11 条批评的那类"技术指标全绿、语义全错"。
-3. **`resolveLayer` 返回 `null`，而这不是缺陷、是设计。** `local-store.ts:861-864` 的注释逐字：「Layer id a world path belongs to, or null when it is NOT in the layer tree (`player/**`, `characters/<id>/**`, `world.json`)」。命令与 `player/` 同类**不在层树里**——但与 `player/` 有一个关键差别：背包里的东西**是**实体（有卡、可拿、可看），命令不是。给一个不在层里的非实体落 `entity_created`，等于让 `layer: null` + `kind: 'other'` 这两个"我不知道它是什么"合起来冒充一次分类。
+3. **`resolveLayer` 返回 `null`，而这不是缺陷、是设计。** `local-store.ts:945-950`（旧标 `:853-858`）的注释逐字：「Layer id a world path belongs to, or null when it is NOT in the layer tree (`player/**`, `characters/<id>/**`, `world.json`)」。命令与 `player/` 同类**不在层树里**——但与 `player/` 有一个关键差别：背包里的东西**是**实体（有卡、可拿、可看），命令不是。给一个不在层里的非实体落 `entity_created`，等于让 `layer: null` + `kind: 'other'` 这两个"我不知道它是什么"合起来冒充一次分类。
 4. **落账的收益今天为零。** 没有任何现存消费者做审计（`entity_created` 的消费者只有 §5.1 的四条：toast / chrome 重载 / 历史面板 / 座位排序，**无一是审计**）；命令的溯源已由 git 提供（契约 §6.3：命令随世界分发、可 `read`）。且 `01 §5` 逐字「本文的解析路径不落任何事件」、`01 §4` 把"创建/编辑/删除命令文件"的归属写成 `07`——即由本文决定，`01` 不预设。
 
 **残留代价（如实登记）**：
@@ -514,7 +518,7 @@ function proposedFileText(previous: string, toolName: 'write' | 'edit', input: R
 - **它其实是"方案 B + 改 toast + 改渲染器"三件事**：不改 toast，玩家每次写命令都收到假话（§5.1 第 1 行）；要改 toast 就得动 `layerLabel` 的 null 语义与 i18n 消息键。工作量比"只用 `detail.command`"大得多。
 - **`[C-3]` 判 A 之后它连"补归因"的残余价值也没了**：角色不可写，就没有"谁写的规则"需要靠命名空间或 `detail.command` 补回。
 
-**注意：`detail.by` MUST NOT 被使用。** 主 agent 的裁定 1 已定：`detail.by` 被 `layer_initialized` 占用且是闭枚举 `z.enum(['writer','player','engine'])`（`schemas/events.ts:99`），dev 模式 `appendEvent` 对 detail 跑 `safeParse`（`local-store.ts:668-679`）→ 写 `'command'` 会炸。**只留 `detail.command`**（且按方案 A，命令的**创建**根本不用它）。
+**注意：`detail.by` MUST NOT 被使用。** 主 agent 的裁定 1 已定：`detail.by` 被 `layer_initialized` 占用且是闭枚举 `z.enum(['writer','player','engine'])`（`schemas/events.ts:99`），dev 模式 `appendEvent` 对 detail 跑 `safeParse`（`local-store.ts:758-771`，旧标 `:668-679`）→ 写 `'command'` 会炸。**只留 `detail.command`**（且按方案 A，命令的**创建**根本不用它）。
 
 #### 判定的共同点（记录）
 
@@ -563,7 +567,7 @@ function proposedFileText(previous: string, toolName: 'write' | 'edit', input: R
 | 项 | 值 |
 |---|---|
 | 落点 | `skills/world-commands/SKILL.md`（平台级，`docs/prompts/04 §2.1` 的目录约定） |
-| 常驻成本（**实测**） | 现有 6 份平台 skill 的 `description` 合计 **1 442 字符**（≈ 360 tokens）。新增一份按 `tool-craft` 的 348 字符量级估 ≈ **90 tokens**。正文（≤120 行，`tools/check-skills.mjs:57` 的 `SKILL_BODY_MAX_LINES`）**只在被读时进上下文** |
+| 常驻成本（**实测**） | 现有 6 份平台 skill 的 `description` 合计 **1 442 字符**（≈ 360 tokens）。新增一份按 `tool-craft` 的 348 字符量级估 ≈ **90 tokens**。正文（≤120 行，`tools/check-skills.mjs:58`，旧标 `:57` 的 `SKILL_BODY_MAX_LINES`）**只在被读时进上下文** |
 | 谁付 | 全部作家/角色进程，每轮付 **90 tokens**；正文按需 |
 | 结论 | **采用（本文主张）** |
 
@@ -694,7 +698,7 @@ carries the effect list and the syntax.
 | `WRITER_INSTRUCTION` | 9 337 字符 / 145 行（≈ 2 334 tok） | +340 字符（§6.4 一行） | **+85 tok / 轮** |
 | 平台 skill `description` 合计 | 1 442 字符（6 份，≈ 360 tok） | +≈ 348 字符（第 7 份） | **+90 tok / 轮** |
 | 作家状态块（`docs/hooks/02 §7.1` 黄金块） | 1 451 字符（≈ 363 tok） | **不变**（B1 不做） | **0** |
-| 工具面 | 17 个 AIRP 工具（`extensions/tools.ts:51-69`） | +1（`get_command`，若选 B2），且**不写 `promptSnippet` 则不进 Available tools** | **+≈ 60–90 tok / 轮**（description + schema） |
+| 工具面 | 17 个 AIRP 工具（`extensions/tools.ts:52-71`，旧标 `:51-69`；HEAD 已 18 个，新增 `screenshot_canvas`） | +1（`get_command`，若选 B2），且**不写 `promptSnippet` 则不进 Available tools** | **+≈ 60–90 tok / 轮**（description + schema） |
 | **每轮合计** | — | — | **+175 ~ +265 tok / 轮**（若选"一行指路 + skill"，则 **+175**） |
 
 **这些数字的用途**：它们是"Agent 的知识成本"的可核对上界。三条设计选择决定了它最终落在 175 还是 265：
@@ -949,7 +953,7 @@ graph LR
 +
 +- `extensions/world-context.ts` —— 文件内自用，无外部调用者；
 +- `packages/shared/src/commands/paths.ts`（NEW）—— 无旧调用点；
-+- `extensions/tools.ts:51-69`（仅当采纳 B2）—— `AIRP_TOOLS` 是 `ReadonlyArray`，加一行不影响任何现有消费者；`:87-89` 的一致性守卫会自动核验 name/definition 匹配；
++- `extensions/tools.ts:52-71`（旧标 `:51-69`；仅当采纳 B2）—— `AIRP_TOOLS` 是 `ReadonlyArray`，加一行不影响任何现有消费者；`:89-95`（旧标 `:87-89`）的一致性守卫会自动核验 name/definition 匹配；
 +- `extensions/instructions.ts`（仅当采纳"一行指路"）—— `WRITER_INSTRUCTION` 是 `export const`，被 `presets/writer.json:34` 的 slot 引用；**改它不需要改 preset**（`docs/prompts/04 §3.1` 逐字：「平台口径改一处，全世界全角色跟着变」）。
 +
 +**一处必须说清的"不是差异"**：`docs/hooks/00` 的注入分节**没有变化**（§6.3 候选 B1 不做）。**本模块的写入路径不产生任何每轮注入的新内容**——这是刻意的（§6.5 的成本表）。
@@ -1099,7 +1103,7 @@ Main 的裁定（2026-09-14）把 `WorldCommandReceipt` 归 **`04`** 独占（`p
 **现状事实（本文核实，三条）**：
 
 1. **角色有自己的身份与 scope**：`apps/server/src/engine/launch.ts:208-211` 给角色进程注入 `AIRP_AGENT_ROLE=character:<id>` 与 `AIRP_AGENT_SCOPE=character`；`extensions/world-context.ts:9-14` 的 `scopeFromEnvironment` 据此把它解析成 `AgentScope = 'character'`。
-2. **现有的 nook 权限门对 `command/` 是**无操作**：`assertNookMutationAllowed`（`packages/shared/src/actions/actor.ts:128-156`）第一件事是 `characterIdOfPath(path)`（`packages/shared/src/rules/characters.ts:46-48`），它只认 `characters/` 前缀，其余一律 `return null`，于是 `actor.ts:136` 立刻 `return`。**所以"能不能写 `command/`"今天没有任何现成门禁**——`[C-3]` 不是"收窄一条已有的规则"，是"新写一条"。
+2. **现有的 nook 权限门对 `command/` 是**无操作**：`assertNookMutationAllowed`（`packages/shared/src/actions/actor.ts:150-178`，旧标 `:128-156`）第一件事是 `characterIdOfPath(path)`（`packages/shared/src/rules/characters.ts:46-48`），它只认 `characters/` 前缀，其余一律 `return null`，于是 `actor.ts:157-158`（旧标 `:135-136`）立刻 `return`。**所以"能不能写 `command/`"今天没有任何现成门禁**——`[C-3]` 不是"收窄一条已有的规则"，是"新写一条"。
 3. **角色看得到 skill**（§11.2）：`launch.ts:206` + `presets/character.json:42`。因此**实现不需要额外常驻提示词成本**——这一条纠正了"教角色写命令更贵"的直觉。
 
 #### 判定：**方案 A** —— 只有 writer / initializer scope 能写 `command/`，角色 MUST NOT 创建世界命令
@@ -1297,7 +1301,7 @@ this page — this page is the judgment, those are the contract.
 |---|---|---|
 | 开篇"你叙述意义，命令执行后果" | 契约 §1.2 的分工原则，逐字对齐 | 模型把命令当"另一套叙事系统"，要么不用，要么用来写一次性后果 |
 | 三条判据（按顺序） | `doc-23 §2.3` + `§2.6`：给判据 + 给默认 + 例外 | 靠"重要不重要"选 → 命令满天飞，规则面爆炸 |
-| 判据 1 的 "never runs" | `doc-23 §2.1`：机制性理由（`world.ts:1100-1138` 的架构事实） | 模型以为"agent 只是慢一点触发"，于是不写命令 |
+| 判据 1 的 "never runs" | `doc-23 §2.1`：机制性理由（`world.ts:1243-1257`，旧标 `:1100-1138` 的架构事实） | 模型以为"agent 只是慢一点触发"，于是不写命令 |
 | 反向判据那一整段 | `doc-23 §2.7`：把"不做"写成合法输出 | 模型为交差硬写命令——这是本模块最可能的浪费形态 |
 | "Two files, two edits" 的编号步骤 | `doc-23 §2.4` | 只写命令不写绑定 → 孤儿命令（§3.8 第三行的盲区） |
 | "the one people forget" 点名 | `doc-23 §2.5` | 绑定是第二次编辑，最容易被当成"顺手"而漏 |
@@ -1316,7 +1320,7 @@ this page — this page is the judgment, those are the contract.
 | 长度 ≤1024（硬限），实际一到三句 | ✅（约 370 字符） |
 | 无 `helps with` 类填充（A6 的 `GENERIC_DESC_RE`） | ✅ |
 | 无非法工具名（A8 的 `ILLEGAL_TOOL_RE` = `get_state\|set_state\|state_update\|watch_state`） | ✅ |
-| 正文 ≤120 行（A5 的 `SKILL_BODY_MAX_LINES`，`tools/check-skills.mjs:57`） | ✅（约 55 行） |
+| 正文 ≤120 行（A5 的 `SKILL_BODY_MAX_LINES`，`tools/check-skills.mjs:58`，旧标 `:57`） | ✅（约 55 行） |
 
 ### 13.2 常驻层的一行（逐字，插入位置见 §8.2）
 

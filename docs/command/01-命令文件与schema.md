@@ -36,10 +36,10 @@
 **为什么 id 来自文件名。**
 
 1. `AGENTS.md:62` 逐字：「稳定的世界、层、地点、人物、物品和 Chalk ID 使用 ASCII 小写 kebab-case 英文」——文件名已是全仓的稳定 id 载体（`world/london-map/04-investigation-dice.md` 的层与卡 id 就是这么来的）。
-2. `apps/server/src/engine/declared-actions.ts:92` 已有同级正则 `^[a-z0-9-]+$`（用于 slot id）。本模块对齐它，只多两条：**不许以 `-` 开头**（避免 `command/-foo.yaml` 与 glob/路径处理纠缠）与**长度上限 48**。
+2. `apps/server/src/engine/declared-actions.ts:94（旧标 `:92`，**快照已漂移**）` 已有同级正则 `^[a-z0-9-]+$`（用于 slot id）。本模块对齐它，只多两条：**不许以 `-` 开头**（避免 `command/-foo.yaml` 与 glob/路径处理纠缠）与**长度上限 48**。
 3. 文件名与内容同时能声明身份 = 第二真相源。`on.run: investigation-clue` 指向路径 `command/investigation-clue.yaml`；若文件内还能写 `id: other`，两条真相立刻可分叉。
 
-> 正则核心集的依据：`declared-actions.ts:128` 的 target 是 `^world/[a-z0-9/-]+$`，`:135` 的 character 是 `^[a-z0-9-]+$`——两处既有先例都**不含大写、不含下划线**。本模块保持同一核心集。
+> 正则核心集的依据：`declared-actions.ts:136`（旧标 `:128`，**快照已漂移**） 的 target 是 `^world/[a-z0-9/-]+$`，`:135` 的 character 是 `^[a-z0-9-]+$`——两处既有先例都**不含大写、不含下划线**。本模块保持同一核心集。
 
 ### 2.2 顶层：只有四个 key，strict
 
@@ -68,7 +68,7 @@ do:                                              # 必填，非空
 
 **strict 有两条理由，缺一条都会在评审压力下被降级**（`09` 要求两条都写）：
 
-1. **可用性侧（passthrough 陷阱）**：`dice_outcomes` 能在 36 份既有声明（全仓 grep 44 / 世界包内 42 / 声明规模 36）里"写了、没人执行、也从不报错"，根因是实体侧的 `EntityFrontmatterSchema` 用两个 `.passthrough()` 做 intersection（`packages/shared/src/schemas/frontmatter.ts:137-146`），`:150-166` 的注释逐字写着「NO schema filtering」。命令文件走**独立校验器**，不继承这条路。这是契约 §3.2 存在的理由，不是可调项。
+1. **可用性侧（passthrough 陷阱）**：`dice_outcomes` 能在既有声明里"写了、没人执行、也从不报错"（**定稿快照 `9af9c9b`**：声明规模 36 / 世界包内 42 / 排除 `docs/command/` 自引用 44；**HEAD `50dd228` 已 48 / 56 / 75**——数字随世界包与代码提交漂移，**MUST 现测**，见契约 §R.25），根因是实体侧的 `EntityFrontmatterSchema` 用两个 `.passthrough()` 做 intersection（`packages/shared/src/schemas/frontmatter.ts:137-146`），`:150-166` 的注释逐字写着「NO schema filtering」。命令文件走**独立校验器**，不继承这条路。这是契约 §3.2 存在的理由，不是可调项。
 2. **安全侧（上界核算必须是全函数）**：`09` 的资源上限核算函数要为 R1–R7 给出**真上界**，前提是它能**枚举所有产生成本的东西**。命令文件 strict ⇒ 未被理解的东西**不可能存在于解析成功的命令里** ⇒ 核算函数是**全函数**，上界是真上界。若命令文件是 passthrough，未知 key 会被保留、并由未来某个引擎版本赋予语义 —— 核算函数看不见它们 ⇒ 今天算出的"上界"**对未来的文件不成立**。
 
 > **两条都要写进文档的理由**：只看第 1 条，"对 LLM 友好 / 兼容未来"这两个理由会在评审压力下把 strict 降回 `.passthrough()`。第 2 条是**降不动的**——它不是风格问题，是"上界论证成不成立"的问题。
@@ -117,7 +117,7 @@ params:
 - 允许 object 参数会立刻要求一套**路径表达式子语言**（`{{ texts.great }}` 还是 `{{ texts['great'] }}`？缺键怎么办？），这是一次真实的语法面扩张，换来的却只是"把同一坨数据从一个 key 挪到另一个 key"。主 agent 的判断是对的：**那不叫迁移，叫改名。**
 - 标量参数让 `{{ name }}` 的每次替换都只有一个确定结果，写入时可做全量校验（§3.4）。
 
-**上限：12 个参数。** 依据：london-map 四档命令实测需要 8 个（`text` / `reward_path` / `reward_title` / `reward_body` / `next_label` / `next_prompt` / `back_label` / `back_target`），留 50% 余量 → 12。数量级对齐既有常量风格（`declared-actions.ts:34-38` 的 `MAX_ACTION_PATHS = 12`、`MAX_STAGE_SLOTS = 8`）。
+**上限：12 个参数。** 依据：london-map 四档命令实测需要 8 个（`text` / `reward_path` / `reward_title` / `reward_body` / `next_label` / `next_prompt` / `back_label` / `back_target`），留 50% 余量 → 12。数量级对齐既有常量风格（`declared-actions.ts:36-40`（旧标 `:34-38`，**快照已漂移**） 的 `MAX_ACTION_PATHS = 12`、`MAX_STAGE_SLOTS = 8`）。
 
 #### 参数值的三条硬约束（`09` R5 的前提，安全侧）
 
@@ -229,7 +229,7 @@ rewards: z.array(RewardSchema).max(3),
 options: z.array(OptionSchema).max(2),
 ```
 
-依据：`origin/niko:apps/server/src/engine/declared-actions.ts:147` 逐字 `if (!Array.isArray(rewards) || rewards.length > 3)` ——**这是既有实现的真实上限，可直接沿用**。
+依据：`origin/niko:apps/server/src/engine/declared-actions.ts:410`（旧标 `:147`，**快照已漂移**） 逐字 `if (!Array.isArray(rewards) || rewards.length > 3)` ——**这是既有实现的真实上限，可直接沿用**。
 `options` 的**旧上限是 12**（同一函数 `:140` 逐字 `x.options.length > 12`），**本文把它收紧到 2**，依据是 `08` 实测"144/144 档位恰好 2 项"。**这是一次主动收紧，不是照抄既有值**——`09` 若认为 12 是可接受的资源上界，本文可以改回 12（代价：`fold-args` 的折叠次数上界从 2 变 12）。
 
 > **为什么这条必须由本文写下来**：`01` 的 strict schema 是这条论据的**守卫**——但它守的是**命令文件**这一侧；数组长度活在**实体**那一侧。若上限只写在 `04` 的文档里而没进 Zod，一个手写实体 frontmatter 就能带 500 项 `rewards`，**R10 当场失效**，`09` 的上界论证变成空话。
@@ -359,18 +359,18 @@ on:
 
 ### 2.8 上限表
 
-风格对齐 `apps/server/src/engine/declared-actions.ts:34-38`（`MAX_ACTION_PATHS` / `MAX_STAGE_SLOTS` / `MAX_SLOT_PATHS` / `MAX_REVIEW_SELECTIONS` / `MAX_SNAPSHOT_LENGTH`——**一组 `const MAX_*`，不是散落的魔法数字**）。
+风格对齐 `apps/server/src/engine/declared-actions.ts:36-40`（旧标 `:34-38`，**快照已漂移**）（`MAX_ACTION_PATHS` / `MAX_STAGE_SLOTS` / `MAX_SLOT_PATHS` / `MAX_REVIEW_SELECTIONS` / `MAX_SNAPSHOT_LENGTH`——**一组 `const MAX_*`，不是散落的魔法数字**）。
 
 | 常量 | 值 | 依据 |
 |---|---|---|
 | `MAX_COMMAND_ID_LENGTH` | 48 | kebab-case 名可读性；与层/卡 id 同量级 |
-| `MAX_COMMAND_NAME_LENGTH` | 80 | 命令名是列表项，比 `declared-actions.ts:95` 的 `slot.title` 上限 200 更严 |
+| `MAX_COMMAND_NAME_LENGTH` | 80 | 命令名是列表项，比 `declared-actions.ts:97`（旧标 `:95`，**快照已漂移**） 的 `slot.title` 上限 200 更严 |
 | `MAX_COMMAND_DESC_LENGTH` | 200 | 一句话。同一处 `:95` 的上限 |
-| `MAX_COMMAND_FILE_BYTES` | 32 000 | 对齐 `declared-actions.ts:38` 的 `MAX_SNAPSHOT_LENGTH = 32000` |
+| `MAX_COMMAND_FILE_BYTES` | 32 000 | 对齐 `declared-actions.ts:40`（旧标 `:38`，**快照已漂移**） 的 `MAX_SNAPSHOT_LENGTH = 32000` |
 | `MAX_COMMAND_PARAMS` | 12 | london-map 四档命令实测需 8，留 50% 余量 |
 | `MAX_COMMAND_STEPS` | 16 | 四档 × 2 效果 = 8 是实测最大需求；2× |
 | `MAX_COMMAND_EFFECTS` | 32 | 步数 × list-args 展开，见 §3.1 的 S11 |
-| `MAX_COMMAND_STRING` | 2 000 | `declared-actions.ts:138` 的 `input.text.length <= 8000` 是整段 agent 回复；命令内单值是片段 |
+| `MAX_COMMAND_STRING` | 2 000 | `declared-actions.ts:146`（旧标 `:138`，**快照已漂移**） 的 `input.text.length <= 8000` 是整段 agent 回复；命令内单值是片段 |
 | `MAX_COMMAND_ARG_DEPTH` | 6 | 实测 `edit` 写 `choice_actions` 是 4 层（`frontmatter`→`choice_actions`→`play-result`→`kind`/`prompt`），留 2 层余量 |
 | `MAX_COMMAND_ARG_KEYS` | 16 | 与 `MAX_COMMAND_PARAMS` 同量级 |
 | `MAX_COMMAND_REFS` | 24 | 引用数上限，防"引用爆炸" |
@@ -378,8 +378,8 @@ on:
 | `MAX_ENUM_VALUES` | 16 | enum 成员数 |
 | `MAX_RUN_DEPTH` | 1 | `run` 链深度；见 §2.4.4 |
 | `MAX_COMMAND_TOTAL_CHARS` | 64 000 | 替换后该命令所有实参字符串总长；见 §2.3 硬约束 2 |
-| `MAX_ARRAY_REWARDS` | 3 | **实体侧** schema 上限；**沿用既有实现的值**（`origin/niko:declared-actions.ts:147` 逐字 `rewards.length > 3`）。`09` R10 的锚点 |
-| `MAX_ARRAY_OPTIONS` | 2 | **实体侧** schema 上限，取「迁移实测 144/144 档位恰好 2 项」为值。**注意 niko 的旧上限是 12**（`declared-actions.ts:140` 逐字 `x.options.length > 12`）——收紧到 2 是本文的主动决定，论证见 §2.4.3 的专节 |
+| `MAX_ARRAY_REWARDS` | 3 | **实体侧** schema 上限；**沿用既有实现的值**（`origin/niko:declared-actions.ts:410`（旧标 `:147`，**快照已漂移**） 逐字 `rewards.length > 3`）。`09` R10 的锚点 |
+| `MAX_ARRAY_OPTIONS` | 2 | **实体侧** schema 上限，取「迁移实测 144/144 档位恰好 2 项」为值。**注意 niko 的旧上限是 12**（`declared-actions.ts:403`（旧标 `:140`，**快照已漂移**） 逐字 `x.options.length > 12`）——收紧到 2 是本文的主动决定，论证见 §2.4.3 的专节 |
 
 ---
 
@@ -502,7 +502,7 @@ const pos = node?.range ? lc.linePos(node.range[0]) : undefined;  // → { line,
 
 **选 Zod 管形状。** 三个依据：
 
-1. **本模块落在 `packages/shared`，那正是 Zod 的地盘。** `packages/shared/src/schemas/` 全部是 Zod（`frontmatter.ts`、`events.ts`、`world.ts`、`components.ts`…），`packages/shared/package.json` 的 dependencies 只有 `yaml` 与 `zod` 两项——**零新增依赖**。`declared-actions.ts:70-145` 的手写白名单写在 `apps/server/src/engine/` 里，那里的惯例不适用于 `packages/shared`，**它不是本文该抄的先例**。
+1. **本模块落在 `packages/shared`，那正是 Zod 的地盘。** `packages/shared/src/schemas/` 全部是 Zod（`frontmatter.ts`、`events.ts`、`world.ts`、`components.ts`…），`packages/shared/package.json` 的 dependencies 只有 `yaml` 与 `zod` 两项——**零新增依赖**。`declared-actions.ts:72-153`（旧标 `:70-145`，**快照已漂移**） 的手写白名单写在 `apps/server/src/engine/` 里，那里的惯例不适用于 `packages/shared`，**它不是本文该抄的先例**。
 2. **`.strict()` 就是"unknown key = reject"的现成实现**（实测）：`z.strictObject({...}).safeParse({a:'x', b:1})` → `[{code:'unrecognized_keys', keys:['b'], path:[], message:"Unrecognized key(s) in object: 'b'"}]`。契约 §3.2 理由 1 要的正是这个，**不需要手写**。嵌套同样生效：`do[0]` 里多一个 key → `path: ['do', 0]`。
 3. **`safeParse` 天然给错误数组**，每条带 `path`——正是 §7.1 要的形状（`07` 硬需求：错误数组而不是 throw-first）。
 
@@ -531,7 +531,7 @@ const pos = node?.range ? lc.linePos(node.range[0]) : undefined;  // → { line,
 | 编辑命令 | `command/<id>.yaml` | 整份文件 | `07` |
 | 删除命令 | 删除 `command/<id>.yaml` | — | `07` |
 
-**命令文件本身不进任何层**：`command/` 不在 `world/` 下，`deriveLayers` 只保留 `world/**`（`packages/shared/src/store/layers.ts:61-63`），`resolveLayer` 只认 `world/**`（`packages/shared/src/store/local-store.ts:859-873`；非层早退在 `:861-864`）。因此 `resolveLayer('command/x.yaml')` 返回 `null`——这条直接影响 `[C-2]`（命令文件创建是否落 `entity_created`；**`[C-2]` 已判 A：不落账**，归 `07`）。
+**命令文件本身不进任何层**：`command/` 不在 `world/` 下，`deriveLayers` 只保留 `world/**`（`packages/shared/src/store/layers.ts:61-63`），`resolveLayer` 只认 `world/**`（`packages/shared/src/store/local-store.ts:951-965`（旧标 `:859-873`，**快照已漂移**）；非层早退在 `:953-956`（旧标 `:861-864`，**快照已漂移**））。因此 `resolveLayer('command/x.yaml')` 返回 `null`——这条直接影响 `[C-2]`（命令文件创建是否落 `entity_created`；**`[C-2]` 已判 A：不落账**，归 `07`）。
 
 **命令文件随世界分发**：`tools/localize-world-editions.mjs:19` 的 `forbidden` 正则已排除 `.airpworld` / `.pi` / `node_modules` / `.env*`，`command/` 不在其中，会被打包复制。契约 §6.3 的口径成立。
 
@@ -544,7 +544,7 @@ const pos = node?.range ? lc.linePos(node.range[0]) : undefined;  // → { line,
 命令**执行**产生的效果事件，其 `actor` / `detail` / `turn` 全归契约 §5 与 `04`：
 
 - `actor` = 触发者（`player` / `writer` / `character`），**不是 `engine`**（契约 §5.1）；
-- `detail.command = '<id>'`（主 agent 裁定 1：**没有 `detail.by`**）。裁定理由：`detail.by` 已被 `layer_initialized` 占用且是**闭枚举** `z.enum(['writer','player','engine'])`（`packages/shared/src/schemas/events.ts:99`），dev 模式 `appendEvent` 对 detail 跑 `safeParse`（`packages/shared/src/store/local-store.ts:668-679`）→ 写 `'command'` 会炸。一个 `detail.command` 携带的信息更多且零碰撞；
+- `detail.command = '<id>'`（主 agent 裁定 1：**没有 `detail.by`**）。裁定理由：`detail.by` 已被 `layer_initialized` 占用且是**闭枚举** `z.enum(['writer','player','engine'])`（`packages/shared/src/schemas/events.ts:99`），dev 模式 `appendEvent` 对 detail 跑 `safeParse`（`packages/shared/src/store/local-store.ts:760-771`（旧标 `:668-679`，**快照已漂移**））→ 写 `'command'` 会炸。一个 `detail.command` 携带的信息更多且零碰撞；
 - `turn` 复用触发者的 turn（契约 §5.3）；
 - **不新增事件类型**（契约 §5.2，十五个封闭类型见 `packages/shared/src/schemas/events.ts:9-25`）。
 
@@ -592,7 +592,7 @@ const pos = node?.range ? lc.linePos(node.range[0]) : undefined;  // → { line,
 | **错误码是 `command_error` 的取值来源之一** | 本文 §7.3 右列就是"玩家侧文案"的初稿，`06` 可直接采用或改写 | `06` |
 | **`details.commands` 回执** | 触发动作的 `details` 里每个效果的 `ok` / `error` 来自执行期；**写入期**的 `parseWorldCommand` 错误**不进** `details` | `04` + `05` |
 
-> **一条边界要说清**：本文的 `errors[].code` 是**写入期**的封闭码集；执行期的错误码集**不是本文的**（`04` 的效果错误来自 `ActionErrorCode`，`packages/shared/src/actions/errors.ts:3-21` 的 19 个）。§7.3 右列的玩家侧文案只用于"一条已通过写入校验的命令在执行期失败"这一情形——例如命令引用了一个**当时不存在但写入时无法验证**的文件（§3.4 的右列）。
+> **一条边界要说清**：本文的 `errors[].code` 是**写入期**的封闭码集；执行期的错误码集**不是本文的**（`04` 的效果错误来自 `ActionErrorCode`，`packages/shared/src/actions/errors.ts:3-22`（旧标 `:3-21`，**快照已漂移**） 的 19 个）。§7.3 右列的玩家侧文案只用于"一条已通过写入校验的命令在执行期失败"这一情形——例如命令引用了一个**当时不存在但写入时无法验证**的文件（§3.4 的右列）。
 >
 > **为什么这条边界值得写下来**：把两个码集混起来会让 `06` 的文案表出现"永远不可能到达的条目"，也会让 `05` 的幂等键设计误以为写入期校验足以保证执行期安全。**它不足以保证**（§3.4 是本文对这个断言的正式否认）。
 
@@ -780,12 +780,12 @@ export type WorldCommandParseResult =
 | `packages/shared/src/commands/condition.ts` | **NEW**：`parseCondition(src, profile)` / `parseCommandWhen(expr)` | `03` |
 | `packages/shared/src/index.ts` | 加 3 行 `export * from './commands/*.js';` | `01` |
 
-> `packages/shared/src/index.ts:64-66` 逐字：「TS `export *` has no glob, so every new module MUST be added here by hand — a missing line is a SILENT unreachable module」。**漏了这 3 行，命令模块在扩展侧（经 `shared/dist/index.js` 导入）就不可达，而且不报错。**
+> `packages/shared/src/index.ts:65-67`（旧标 `:64-66`，**快照已漂移**） 逐字：「TS `export *` has no glob, so every new module MUST be added here by hand — a missing line is a SILENT unreachable module」。**漏了这 3 行，命令模块在扩展侧（经 `shared/dist/index.js` 导入）就不可达，而且不报错。**
 
 ### 8.1 `01` 新增的符号（完整签名）
 
 ```ts
-/* ── 上限常量（风格对齐 declared-actions.ts:34-38） ─────────────────────── */
+/* ── 上限常量（风格对齐 declared-actions.ts:36-40（旧标 `:34-38`，**快照已漂移**）） ─────────────────────── */
 export const MAX_COMMAND_ID_LENGTH = 48;
 export const MAX_COMMAND_NAME_LENGTH = 80;
 export const MAX_COMMAND_DESC_LENGTH = 200;
@@ -910,14 +910,14 @@ export function commandIdOfPath(path: string): string | null;
 |---|---|---|---|
 | 1 | `dice_outcomes` 的 36 份既有声明**写了但引擎零实现**（`grep dice_outcomes` 于 `packages/shared/src`、`apps/server/src`、`apps/web/src`、`extensions` 全无命中） | 36 份声明（全仓 grep 44 / 世界包内 42） | 迁移为「实体 `on` + `command/*.yaml`」；路线归 `[C-5]` |
 | 2 | 区间用 `min`/`max` 双键 | `templates/whitechapel-jp/world/london-map/04-investigation-dice.md:17-18,38-39,57-58,76-77` | 统一为 `"1..12"`（§9.2） |
-| 3 | 分档规则硬编码两遍 | `origin/niko` `declared-actions.ts:154` 与 `:179` | 规则只有一份（`command/*.yaml`），内容住实体（拍板 B2） |
-| 4 | 骰型/档数/效果种类全是白名单 | `origin/niko` `declared-actions.ts:137,167` | 效果名注册表（`04` 的 7 名）+ 任意区间语法 |
-| 5 | 效果原语硬编码在 server engine | `apps/server/src/engine/declared-actions.ts:17-23` 的 `Recipe` | 9 个 ISO 效果名落在 `packages/shared/src/commands/effects.ts`，映射到 `ACTION_METHODS`（`packages/shared/src/actions/service.ts:80-107`） |
+| 3 | 分档规则硬编码两遍 | `origin/niko` `declared-actions.ts:424`（旧标 `:154`，**快照已漂移**） 与 `:179` | 规则只有一份（`command/*.yaml`），内容住实体（拍板 B2） |
+| 4 | 骰型/档数/效果种类全是白名单 | `origin/niko` `declared-actions.ts:400,437`（旧标 `:137,167`，**快照已漂移**）（旧标 `:137,167`，**快照已漂移**） | 效果名注册表（`04` 的 7 名）+ 任意区间语法 |
+| 5 | 效果原语硬编码在 server engine | `apps/server/src/engine/declared-actions.ts:19-25`（旧标 `:17-23`，**快照已漂移**） 的 `Recipe` | 9 个 ISO 效果名落在 `packages/shared/src/commands/effects.ts`，映射到 `ACTION_METHODS`（`packages/shared/src/actions/service.ts:81-109`（旧标 `:80-107`，**快照已漂移**）） |
 | 6 | 未知 key 静默保留（passthrough） | `packages/shared/src/schemas/frontmatter.ts:137-146` | 命令文件 strict（本文）；**实体侧 `on` 仍无保护 → §11.3** |
-| 7 | 骰子结果只能被 HTTP 路径触发 | `origin/niko:apps/server/src/routes/world.ts:950` vs `extensions/toolkit/roll-dice.ts:49` | 触发点在动作层（契约 §4.1），两条入口同一行为 |
-| 8 | 幂等靠正文 marker | `origin/niko` `declared-actions.ts:198` 的 `<!-- resolved-dice:62 -->` | 归 `05`（`command_log`）；本文的 `do` MUST NOT 承担幂等状态 |
+| 7 | 骰子结果只能被 HTTP 路径触发 | `origin/niko:apps/server/src/routes/world.ts:1190`（旧标 `:950`，**快照已漂移**） vs `extensions/toolkit/roll-dice.ts:49` | 触发点在动作层（契约 §4.1），两条入口同一行为 |
+| 8 | 幂等靠正文 marker | `origin/niko` `declared-actions.ts:468`（旧标 `:198`，**快照已漂移**） 的 `<!-- resolved-dice:62 -->` | 归 `05`（`command_log`）；本文的 `do` MUST NOT 承担幂等状态 |
 | 9 | `detail.by` 会撞闭枚举 | `packages/shared/src/schemas/events.ts:99` 的 `z.enum(['writer','player','engine'])` | **只留 `detail.command`**（主 agent 裁定 1）；命令文件的 schema 里没有任何 `by` |
-| 10 | 命令文件的所有权在 server engine | `apps/server/src/engine/declared-actions.ts:70-145` 的 `parseRecipe` 手写白名单 | `packages/shared/src/commands/world-command.ts` 的 Zod + 手写混合（§3.6） |
+| 10 | 命令文件的所有权在 server engine | `apps/server/src/engine/declared-actions.ts:72-153`（旧标 `:70-145`，**快照已漂移**） 的 `parseRecipe` 手写白名单 | `packages/shared/src/commands/world-command.ts` 的 Zod + 手写混合（§3.6） |
 
 ### 9.1 为什么区间语法统一到 `a..b`，`min`/`max` 不进新 schema
 
@@ -1034,7 +1034,7 @@ on:
 | `rewards[0].path/title/body` | `give` 的 `path` / `title` / `body` |
 | 四个档位共享一份规则 | **一份** `command/investigation-clue.yaml`，四档只在实参上不同（拍板 B2 / 反模式 3） |
 
-> **为什么 `options` 走 `edit` 写回而不是效果**：主 agent 的架构澄清——「命令执行的效果」与「命令写下的下一步选项」是两回事。`kind: writer` 不需要成为效果；命令只需把 `choice_actions` 这两个 **key 的数据**写回实体，那是一次 `edit`，完全在动作层内。`origin/niko` 的 `declared-actions.ts:204-205` 正是这么做的（`editEntity` 把 `choice` 与 `choice_actions` 一起写回 source）。**这不是我编的捷径。**
+> **为什么 `options` 走 `edit` 写回而不是效果**：主 agent 的架构澄清——「命令执行的效果」与「命令写下的下一步选项」是两回事。`kind: writer` 不需要成为效果；命令只需把 `choice_actions` 这两个 **key 的数据**写回实体，那是一次 `edit`，完全在动作层内。`origin/niko` 的 `declared-actions.ts:474-475`（旧标 `:204-205`，**快照已漂移**） 正是这么做的（`editEntity` 把 `choice` 与 `choice_actions` 一起写回 source）。**这不是我编的捷径。**
 >
 > **两处标记为待 `04` 定稿**：`give` 的实参名（`path`/`title`/`body`/`frontmatter` 取自 `CreateEntityInput`，`packages/shared/src/actions/create.ts:25-38`，其中 `title` 目前是 `frontmatter.title` 的简写，`04` 可能压平）；`append_body` 的子形态（Main 已拍板要加，形态归 `04`）。
 
@@ -1227,7 +1227,7 @@ do:
 
 ### 11.2 `detail.by` 与 `schemas/events.ts:99` 的闭枚举冲突（**已由主 agent 裁定 1 解决**）
 
-- **冲突的双方**：契约 §5.1 原文要求 `detail.by = 'command'`；`packages/shared/src/schemas/events.ts:99` 把 `by` 定为 `z.enum(['writer','player','engine'])`（`layer_initialized` 使用），而 dev 模式 `appendEvent` 对 detail 跑 `safeParse`（`packages/shared/src/store/local-store.ts:668-679`）。
+- **冲突的双方**：契约 §5.1 原文要求 `detail.by = 'command'`；`packages/shared/src/schemas/events.ts:99` 把 `by` 定为 `z.enum(['writer','player','engine'])`（`layer_initialized` 使用），而 dev 模式 `appendEvent` 对 detail 跑 `safeParse`（`packages/shared/src/store/local-store.ts:760-771`（旧标 `:668-679`，**快照已漂移**））。
 - **为什么矛盾**：写 `by: 'command'` 会**炸**（dev 模式），而生产模式**不会炸但会落下一个越界值**。今天不炸只因为 `recordLayerInitialized` 不在 `04` 的七个效果里——这是一个"埋着没炸的雷"。
 - **建议的改法（已采纳）**：契约 §5.1 删掉 `detail.by`，只留 `detail.command`。命令文件侧没有 `by` 字段，本文不需要改。
 
