@@ -13,9 +13,10 @@
 - **视频：** 每个世界的开场视频（`world.json` 的 `coverVideo`，没有则取 `assets/motion/seedance/backgrounds` 或 `assets/scenes` 里的 `intro.webm` / `intro*`）在砖上播放，有了第一帧后淡入盖住静态封面。为了不卡，同时播放的只有离视野中心最近的 5 块和悬停的那块，其余显示封面；`prefers-reduced-motion` 时不播放。魔法学院、月下の誓い目前没有开场视频，只显示封面。
 - **滚动手感：** 滚轮与方向键缓动到目标位置（每帧补上剩余距离的 16%），连续滚动逐渐加速（最多 2.2 倍）；拖动跟手，松手后按速度惯性滑行（速度有上限）。
 - **性能：** 鼠标只驱动整面墙的合成层变换，砖内部不读倾斜变量，所以鼠标移动时砖不重绘；砖没有 3D 上下文、混合模式和动画滤镜；砖组件做了缓存，平移只挂载、卸载边缘的砖，悬停只重绘两块。
-- **音乐：** Launcher 有自己的音乐（`LAUNCHER_THEME`）：魔王魂「ヒーリング17」（竖琴，约 3 分钟），响度按世界主题曲的平均值标准化后存为 `assets/audio/licensed/launcher.mp3`。打开时世界的环境音与 BGM 静音，关闭后恢复。
-  - 魔王魂条款：免费商用，**必须署名**（Launcher 左下角显示「音楽：魔王魂」），**禁止单曲再分发**。所以 `assets/audio/licensed/` 在 `.gitignore` 里，只放本机；没有这个文件的环境（新克隆、线上部署）Launcher 静音。
-  - 同目录还有两首候选原曲：`maou_bgm_fantasy06.mp3`（宏大开场）、`maou_bgm_piano41.mp3`（安静神秘的钢琴）。换曲时用 ffmpeg `loudnorm` 生成新的 `launcher.mp3` 即可，代码不用改。
+- **音乐：** Launcher 有自己的音乐（`LAUNCHER_THEME` → `assets/audio/licensed/launcher.mp3`）：niko 用 Suno 做的「弹幕翻页夜」，用 3 秒交叉淡化做成无缝循环，响度压到约 −20 LUFS 退到背景里。打开时世界的环境音与 BGM 静音，关闭后恢复。
+  - `assets/audio/licensed/` 在 `.gitignore` 里，只放本机；没有这个文件的环境（新克隆、线上部署）Launcher 静音。
+  - 需要署名的曲子（如魔王魂，条款要求「音楽：魔王魂」且禁止单曲再分发）把 `LAUNCHER_CREDIT` 设成署名文字，Launcher 左下角会显示；当前曲目不需要。
+  - 候选与试听：`licensed/choices/`、`licensed/choices2/`（魔王魂，已统一到 −16 LUFS）；之前的「ヒーリング17」版本保留为 `licensed/launcher-healing17.mp3`。换曲时生成新的 `launcher.mp3` 即可，代码不用改。
 - **存档管理：** 从 Launcher 打开的「Saved games」弹窗换成同样的深色玻璃风格（圆角 28px、磨砂、等宽大写小标题、胶囊按钮），在世界里打开时仍是原来的纸质风格。
 - 点一块砖展开操作：「続きから遊ぶ / 继续最近的存档」（有存档时，打开最近更新的一个）与「＋ Start a new game」（从模板新开）。
 

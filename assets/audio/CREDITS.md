@@ -124,7 +124,9 @@ effect cannot overlap. The older Freesound files below are retained.
 
 | File | Use | Title | Artist | Source | Dur | License |
 |---|---|---|---|---|---|---|
-| `licensed/launcher.mp3` | World launcher theme (`LAUNCHER_THEME`) | ヒーリング17 (loudness-matched, −23.9 LUFS) | 魔王魂 (森田交一) | https://maou.audio/bgm_healing17/ | 178s | 魔王魂 terms |
+| `licensed/launcher.mp3` | World launcher theme (`LAUNCHER_THEME`) | 弹幕翻页夜 (seamless 3s-crossfade loop, −20 LUFS) | niko (made with Suno) | `licensed/suno-danmaku-night.mp3` | 57s | Suno terms (owner's plan) |
+| `licensed/suno-danmaku-night.mp3` | original of the above | 弹幕翻页夜 | niko (made with Suno) | local file | 60s | Suno terms (owner's plan) |
+| `licensed/launcher-healing17.mp3` | previous launcher theme | ヒーリング17 (loudness-matched, −23.9 LUFS) | 魔王魂 (森田交一) | https://maou.audio/bgm_healing17/ | 178s | 魔王魂 terms |
 | `licensed/maou_bgm_healing17.mp3` | original of the above | ヒーリング17 | 魔王魂 | https://maou.audio/bgm_healing17/ | 178s | 魔王魂 terms |
 | `licensed/maou_bgm_fantasy06.mp3` | alternative (grand opening) | ファンタジー06 | 魔王魂 | https://maou.audio/bgm_fantasy06/ | 100s | 魔王魂 terms |
 | `licensed/maou_bgm_piano41.mp3` | alternative (quiet, mysterious piano) | ピアノ41 Last daily sound 2 | 魔王魂 | https://maou.audio/bgm_piano41/ | 85s | 魔王魂 terms |
