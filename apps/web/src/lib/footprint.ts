@@ -104,9 +104,12 @@ export function createFootprintScheduler(opts: FootprintSchedulerOptions): Footp
   const now = opts.now ?? (() => performance.now());
   const setTimer = opts.setTimeout ?? setTimeout;
   const clearTimer = opts.clearTimeout ?? clearTimeout;
-  // Same predicate as `measureHeights`: inflated shells must not be frozen into
-  // `cards.height` (contract §3.5).
-  const isHovering = opts.isHovering ?? (() => false);
+  // Hover expands a card's presentation layer. Treating that transient box as
+  // a stable footprint makes the next fetch/reseat move cards under the
+  // pointer; the next quiet window after pointerleave measures it instead.
+  const isHovering = opts.isHovering ?? (() => (
+    typeof document !== 'undefined' && document.querySelector('.object:hover') !== null
+  ));
   const isHidden = opts.isHidden ?? (() => document.hidden);
 
   let timer: ReturnType<typeof setTimeout> | null = null;

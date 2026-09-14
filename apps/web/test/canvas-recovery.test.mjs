@@ -75,3 +75,33 @@ test('an omitted hovered card does not starve a new chalk; retry it after hover 
   assert.equal(sent[1].length, 2);
   scheduler.dispose();
 });
+
+test('the default footprint gate waits until every hovered card leaves', async () => {
+  const sent = [];
+  let tick;
+  const priorDocument = globalThis.document;
+  globalThis.document = { querySelector: () => ({}) };
+  const scheduler = createFootprintScheduler({
+    layer: () => 'world/test',
+    widths: () => new Map([['card', 200]]),
+    measure: () => new Map([['card', 210]]),
+    post: async (_layer, boxes) => { sent.push(boxes); return { updated: 1, unchanged: 0 }; },
+    isBusy: () => false,
+    isDragging: () => false,
+    setTimeout: callback => { tick = callback; return 1; },
+    clearTimeout: () => {},
+  });
+  try {
+    scheduler.notify();
+    tick();
+    await Promise.resolve();
+    assert.equal(sent.length, 0);
+    globalThis.document = { querySelector: () => null };
+    tick();
+    await Promise.resolve();
+    assert.equal(sent.length, 1);
+  } finally {
+    scheduler.dispose();
+    globalThis.document = priorDocument;
+  }
+});
