@@ -36,6 +36,8 @@
 | `prototype.css` 暮色可读性 | main 的 token 化删掉了 niko 全部 `is-dusk` 规则，板书、右上角标题、悬停浮层在暗色照片上看不清；`prototype-vignette` 没有样式 | 用 main token 补回 niko 的板书、标题、悬停浮层、暗角规则；纸色卡片保持 main 设计 | niko 裁定「之前没有这个问题」 |
 | `apps/web/src/main.tsx` | `unlockOnFirstInteraction()` 三边都没人调用，只有画布按下或打开对话框才解锁 AudioContext，BGM 一直静音 | 入口调用一次 | 浏览器实测：点击后 AudioContext 变为 running，主题曲播放 |
 | `narrative/EntityInteractions.tsx` | 浮层参照容器找 `[aria-label="Infinite canvas"]`，三边都已不存在，退回到随相机移动的世界层，`max-height` 被算小、浮层截断 | 改用 `.depth-surface--world`（画布根） | 三边都有的潜在缺陷 |
+| `apps/web/src/App.tsx` `readme` | main 的覆盖层放行用 `manifest && state && readme` 判世界就绪，但 `readme` 只在 `state.items` 里找，而 `/api/layer` 把本层 README 放在 `scene`；所有子场景都判为未就绪，角色对话与掷骰被拒（"The world is unavailable"） | `readme` 先取 `state.scene`，再退回 `items` | main 侧已有缺陷；浏览器实测进入角色对话、TTS 连通 |
+| `apps/web/src/lib/audio.ts` 语音起音 | 混合时保留了 niko 的 `attack` 参数与 `VOICE_ATTACK`，但语音 `playClip` 调用丢了第五个参数，退回 1.5s 音乐淡入，台词开头被吞；niko 的对应测试随 `audio-volume.test.mjs` 取 main 一并丢失 | 补回 `VOICE_ATTACK` 参数，并从 niko 移植回测试 | niko 反馈 TTS 开头被吞、有渐入 |
 | `TtsSettings.tsx` | 取 main 版，`NanamiTtsSettings` 不再挂载；`refresh` 残留 niko 的 `setHasError` | 挂回七海面板；`refresh` 用 main 的 `setError` | 组件还在、消费端没了，是合丢了一半 |
 | `lib/messages.json` | 冲突解决丢了 niko 独有的 68 个键 | 补回现有代码仍在用的 37 键，加上 stash 里七海角色音色在途的 8 键；其余 31 键所属 UI 已被 main 替换，不补 | `check:i18n` 两个父提交都绿、合并后变红 |
 | App、WriterBar、ChalkCard、NookView、phantom-seat、DiceCeremony、Canvas、BagItemDialog、`dice-preview.tsx` | 混合时丢了声明或 import，web 有 31 个 TS 错误 | 逐个补回来源侧的声明；Canvas 补回 niko 的悬停聚焦肖像 | 机械 |

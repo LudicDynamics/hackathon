@@ -579,8 +579,12 @@ export function App() {
   );
   const readme = useMemo(() => {
     const expected = layer === 'map' ? 'world/README.md' : `${layer}/README.md`;
+    // `/api/layer` returns the layer's own README as `scene`, not among `items`;
+    // reading only `items` left every sub-layer "not ready", so the overlay gate
+    // refused dialogue and dice there ("The world is unavailable").
+    if (state?.scene?.path === expected) return state.scene;
     return state?.items.find((item) => item.path === expected);
-  }, [layer, state?.items]);
+  }, [layer, state?.items, state?.scene]);
   const worldReady = Boolean(manifest && state && readme);
   useEffect(() => {
     overlayAdmission.setWorldAvailable(worldReady);

@@ -1033,7 +1033,7 @@ export function playVoice(url: string): void {
     ) return; // superseded by a newer call / stop / hidden transition
     if (!buf || !master || !ctx) return; // load failed → silence (no fallback)
     if (ctx.state !== 'running') return; // suspended again during decode → drop
-    const nodes = playClip(voiceBus!, buf, /* loop */ false, VOICE_SAMPLE_LEVEL);
+    const nodes = playClip(voiceBus!, buf, /* loop */ false, VOICE_SAMPLE_LEVEL, VOICE_ATTACK);
     if (!nodes) return;
     nodes.src.onended = (): void => {
       // Past playClip's own disconnect; add the slot clear so isVoicing()
