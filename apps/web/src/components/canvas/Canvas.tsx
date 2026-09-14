@@ -23,6 +23,7 @@ import type { CharacterPresenceView } from '../../lib/presence.js';
 import type { LayerItem, LayerLink } from '../../state/useWorld.js';
 import type { AssetMediaKind } from '../../lib/airp-gateway.js';
 import { movedBeyondCardThreshold } from '../../lib/card-interaction.js';
+import type { FocusCoordinator } from '../../lib/focus-coordinator.js';
 /** Stable identity for the no-presence path (nook never passes one) so the memo
  *  deps in PresenceLayer do not churn on every Canvas render. */
 const NO_PRESENCE: CharacterPresenceView[] = [];
@@ -45,6 +46,7 @@ interface CanvasProps {
   hidden?: boolean;
   /** Optional host reduced-motion seam; defaults to the live media preference. */
   reducedMotion?: boolean;
+  focus?: FocusCoordinator;
   allowChalkDrag?: boolean;
   currentLayer: string;
   items: LayerItem[];
@@ -67,7 +69,7 @@ interface CanvasProps {
   /** Copy for the ghost card face (i18n). */
   ghostLabel?: string;
   ghostCopy: GhostCopy;
-  onMoveCard?: (path: string, x: number, y: number) => Promise<void> | void;
+  onMoveCard?: (path: string, x: number, y: number, signal?: AbortSignal) => Promise<unknown> | void;
   onSelectChoice?: (path: string, choice: string) => void;
   onEntityAction?: (prompt: string) => void;
   onDiceRolled?: (result: number, passed: boolean) => void;
@@ -127,6 +129,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   effectsEnabled = false,
   hidden = false,
   reducedMotion,
+  focus,
   assetUrl,
   currentLayer,
   ghost = null,
@@ -641,6 +644,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             <CanvasObject
               key={item.path}
               item={item}
+              focus={focus}
               index={gateOrdinal.get(item.path)}
               onSelectChoice={onSelectChoice}
               onEntityAction={onEntityAction}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { airpGateway, openAirpSocket, sendSocket } from '../lib/airp-gateway.js';
+import { airpGateway, openAirpSocket, sendSocket, AirpRequestError } from '../lib/airp-gateway.js';
 import { gateFeedback } from '../lib/gate-feedback.js';
 import { invalidateMeasures } from '../lib/measure.js';
 import { whenFontsSettled } from '../lib/fonts.js';
@@ -190,19 +190,22 @@ export interface PresenceEntry {
   following: boolean;
 }
 
-/**
- * What `enterLayer` resolves with (docs/presence/00 §3.3 / P-10): the follower
- * outcome the caller needs in order to make a left-behind character visible.
- */
+/** What enterLayer resolves with after the HTTP action and target fetch. */
 export interface EnterLayerResult {
   layer: string;
   name: string;
   first: boolean;
+  event?: Record<string, unknown>;
   followers: {
     moved: PresenceEntry[];
     failures: Array<{ character: string; reason: string }>;
   };
 }
+
+export type EnterLayerOutcome =
+  | { kind: 'same-layer'; layer: string; reconciled: boolean }
+  | { kind: 'accepted'; layer: string; details: EnterLayerResult; reconciled: boolean }
+  | { kind: 'conflict' | 'failed'; layer: string; code?: string; message: string };
 
 export interface LayerState {
   layer: string;
@@ -227,14 +230,10 @@ export interface UseWorldApi {
   loading: boolean;
   /** The layer currently being shown (reactive; src of truth for layer). */
   layer: string;
-  /** Layer whose I1 initialiser is in flight; drives the "taking shape" ghost
-   *  (docs/init/03 §3.6). null = no ghost. */
+  /** Layer whose scene initializer is in flight; null when no ghost is needed. */
   initializingLayer: string | null;
-  /** Switch layer + fetch it. When auto-write is on and the target is a stub,
-   *  fires the I1 initialiser (`airp_init`) after the server confirms `first`.
-   *  The followers that travelled along come back in the result
-   *  (docs/presence/00 P-10); `null` = the same layer or a failed request. */
-  enterLayer(next: string): Promise<EnterLayerResult | null>;
+  /** Switch layer + fetch it; outcome distinguishes same-layer, accepted, conflict and failed. */
+  enterLayer(next: string): Promise<EnterLayerOutcome>;
   /** Sync read of the live layer payload, without triggering a render
    *  (docs/presence/00 §3.4 — cross-layer navigation needs the NEW layer's
    *  coordinates right after `enterLayer` resolves, before React flushes). */
@@ -250,10 +249,9 @@ export interface UseWorldApi {
    * Optimistic position update for a card path → POST /api/card/position.
    * On failure the previous items snapshot is restored and a warning logged.
    */
-  moveCard(path: string, x: number, y: number): Promise<void>;
   requestArrange(input: CanvasArrangeRequest): Promise<CanvasArrangeAccepted>;
   cancelArrange(operationId: string, input: Pick<CanvasArrangeRequest, 'worldId' | 'layer' | 'requestId'>): Promise<CanvasArrangeCancelAccepted>;
-  /** Send a writer_prompt; optional override targets an active projection layer. */
+  moveCard(path: string, x: number, y: number, signal?: AbortSignal): Promise<Record<string, unknown>>;
   sendToWriter(text: string, layerOverride?: string): WriterPromptAcceptance;
   /** Raw WS send (character_prompt etc.). false = socket not OPEN. */
   sendMessage(payload: Record<string, unknown>): boolean;
@@ -347,12 +345,12 @@ export function useWorld(): UseWorldApi {
   const [settings, setSettings] = useState<WorldSettings>(DEFAULT_WORLD_SETTINGS);
   const settingsRef = useRef<WorldSettings>(DEFAULT_WORLD_SETTINGS);
 
-  const fetchLayer = useCallback(async (target: string) => {
+  const fetchLayer = useCallback(async (target: string): Promise<boolean> => {
     const seq = ++reqSeqRef.current;
     setLoading(true);
     try {
       const data = await airpGateway.layer<any>(target);
-      if (seq !== reqSeqRef.current) return; // stale response (layer switched meanwhile)
+      if (seq !== reqSeqRef.current) return false; // stale response (layer switched meanwhile)
       const identity = data.identity && typeof data.identity === 'object'
         ? data.identity as Record<string, unknown>
         : null;
@@ -378,9 +376,10 @@ export function useWorld(): UseWorldApi {
       setState(next);
       // 幻影排座镜像 + 真实卡一到就把对应幻影撤掉（docs/perform/00 §6b-5）。
       publishSeatItems(next.layer, next.items);
-      reconcileLanded(new Set(next.items.map((it) => it.path)));
+      return true;
     } catch (err) {
       console.warn('Could not fetch layer:', err);
+      return false;
     } finally {
       if (seq === reqSeqRef.current) setLoading(false);
     }
@@ -391,23 +390,37 @@ export function useWorld(): UseWorldApi {
   }, [fetchLayer]);
 
   const enterLayer = useCallback(
-    async (next: string): Promise<EnterLayerResult | null> => {
+    async (next: string): Promise<EnterLayerOutcome> => {
       window.dispatchEvent(new CustomEvent('airp:gate-feedback', { detail: null }));
       if (next === layerRef.current) {
-        // Same layer: still re-sync (may be an explicit gate re-entry).
-        await fetchLayer(next);
-        // Nothing entered ⇒ no follower result to report (docs/presence/00 P-16).
-        return null;
+        // Same-layer navigation is a read/reconcile, not a second
+        // layer_entered fact and not a transition presentation.
+        const reconciled = await fetchLayer(next);
+        return reconciled && readLayerState()?.layer === next
+          ? { kind: 'same-layer', layer: next, reconciled: true }
+          : { kind: 'failed', layer: next, code: 'reconcile_failed', message: 'The current scene could not be synchronized.' };
       }
-      const entered = await airpGateway.enterLayer(next).then(async (result) => {
+      try {
+        const response = await airpGateway.enterLayer(next);
+        const details = response as unknown as EnterLayerResult & { ok?: boolean };
+        if (
+          response.ok !== true
+          || typeof details.layer !== 'string'
+          || typeof details.name !== 'string'
+          || typeof details.first !== 'boolean'
+          || !details.event
+          || !details.followers
+        ) {
+          window.dispatchEvent(new CustomEvent('airp:notice', { detail: 'The scene entry result was invalid. Refresh and try again.' }));
+          return { kind: 'failed', layer: next, code: 'invalid_response', message: 'The scene entry result was invalid. Refresh and try again.' };
+        }
         layerRef.current = next;
         setLayer(next);
         fpRef.current?.reset(next);
         // `first` ⟺ the target had no README ⟺ it is a stub (docs/init/03 §3.2).
-        // When auto-write allows it, ask the engine to materialise the scene:
-        // fire-and-forget, since the I1 initialiser runs 45–60s and its outcome
-        // returns as a `layer_initialized` world event, not this reply.
-        if (result.first === true && startsSceneInit(settingsRef.current.autoWrite)) {
+        // When auto-write allows it, ask the engine to materialise the scene;
+        // its eventual outcome remains a world event owned by this hook.
+        if (details.first === true && startsSceneInit(settingsRef.current.autoWrite)) {
           let sent = false;
           try {
             sent = sendSocket(wsRef.current, { type: 'airp_init', kind: 'scene', target: next, by: 'player' });
@@ -417,20 +430,25 @@ export function useWorld(): UseWorldApi {
           if (sent) {
             setInitializingLayer(next);
           } else {
-            window.dispatchEvent(new CustomEvent('airp:notice', {
-              detail: 'Connection lost. The scene could not start yet.',
-            }));
+            window.dispatchEvent(new CustomEvent('airp:notice', { detail: 'Connection lost. The scene could not start yet.' }));
           }
         }
-        await fetchLayer(next);
-        return result;
-      }).catch(error => {
+        const reconciled = await fetchLayer(next);
+        if (!reconciled || readLayerState()?.layer !== next) {
+          return { kind: 'failed', layer: next, code: 'reconcile_failed', message: 'The scene entry was accepted, but the scene could not be synchronized.' };
+        }
+        return { kind: 'accepted', layer: next, details, reconciled: true };
+      } catch (error) {
+        const code = error instanceof AirpRequestError && typeof error.payload?.code === 'string'
+          ? error.payload.code
+          : undefined;
+        const conflict = code === 'requirements_not_met' || code === 'invalid_gate' || code === 'stale' || code === 'conflict';
+        const message = error instanceof Error ? error.message : 'The scene could not be entered.';
         const feedback = gateFeedback(error, next, stateRef.current?.items ?? []);
         if (feedback) window.dispatchEvent(new CustomEvent('airp:gate-feedback', { detail: feedback }));
-        else window.dispatchEvent(new CustomEvent('airp:notice', { detail: String(error) }));
-        return null;
-      });
-      return entered;
+        else window.dispatchEvent(new CustomEvent('airp:notice', { detail: message }));
+        return { kind: conflict ? 'conflict' : 'failed', layer: next, code, message };
+      }
     },
     [fetchLayer]
   );
@@ -443,11 +461,11 @@ export function useWorld(): UseWorldApi {
    */
   const readLayerState = useCallback((): LayerState | null => stateRef.current, []);
 
-  const moveCard = useCallback(async (path: string, x: number, y: number) => {
+  const moveCard = useCallback(async (path: string, x: number, y: number, signal?: AbortSignal): Promise<Record<string, unknown>> => {
     const previous = stateRef.current;
-    if (!previous) return;
+    if (!previous) return { ok: false, code: 'not_ready', error: 'The canvas is not ready.' };
     const previousItem = previous.items.find((it) => it.path === path);
-    if (!previousItem) return;
+    if (!previousItem) return { ok: false, code: 'not_found', error: 'The card is no longer on this canvas.' };
     const token = (moveAttemptRef.current.get(path) ?? 0) + 1;
     moveAttemptRef.current.set(path, token);
     // Keep the synchronous mirror in lockstep with the optimistic React state.
@@ -460,22 +478,25 @@ export function useWorld(): UseWorldApi {
     stateRef.current = optimistic;
     setState(optimistic);
     try {
-      await airpGateway.moveCard(path, x, y);
+      const result = await airpGateway.moveCard(path, x, y, signal);
       if (moveAttemptRef.current.get(path) === token) moveAttemptRef.current.delete(path);
+      return result;
     } catch (err) {
       console.warn('moveCard failed, rolling back:', err);
       // Only the latest attempt for this path may roll itself back, and only
       // while its optimistic coordinates are still the visible coordinates.
       const current = stateRef.current;
       const currentItem = current?.items.find((it) => it.path === path);
-      if (moveAttemptRef.current.get(path) !== token || !current || !currentItem
-        || currentItem.x !== x || currentItem.y !== y) return;
-      const rollback = {
-        ...current,
-        items: current.items.map((it) => (it.path === path ? previousItem : it)),
-      };
-      stateRef.current = rollback;
-      setState(rollback);
+      if (moveAttemptRef.current.get(path) === token && current && currentItem
+        && currentItem.x === x && currentItem.y === y) {
+        const rollback = {
+          ...current,
+          items: current.items.map((it) => (it.path === path ? previousItem : it)),
+        };
+        stateRef.current = rollback;
+        setState(rollback);
+      }
+      throw err;
     }
   }, []);
 
