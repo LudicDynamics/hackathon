@@ -41,8 +41,8 @@ for (const pack of experiences) {
           assert.match(parsed.body, /[\p{Script=Hiragana}\p{Script=Katakana}]/u, file);
         } else assert.doesNotMatch(parsed.body, /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u);
         if (parsed.frontmatter?.roll_dice) {
-          assert.ok(file.endsWith('/04-investigation-dice.md'), 'Only authored investigation alternatives offer a prepared roll');
-          assert.equal(parsed.frontmatter.roll_dice.type, '2d10');
+          const shipped = parseFrontmatter(await read(repo, `templates/${pack.base}/${file}`)).frontmatter.roll_dice.type;
+          assert.equal(parsed.frontmatter.roll_dice.type, shipped, 'The compiler preserves the authored dice type');
           assert.equal(parsed.frontmatter.roll_dice.result, undefined, 'Consent is the player choosing to roll, never a pre-rolled result');
           assert.equal(parsed.frontmatter.dice_outcomes.length, 4, 'Costs and rewards must be declared before consent');
         }
@@ -121,8 +121,8 @@ await test('six specific payoff and repair contracts are shipped, not pre-genera
   assert.match(body('whitechapel'), /player\/operation-plan.md/);
   assert.match(body('whitechapel'), /提出だけで実行しない/);
   assert.match(body('divergence'), /before-transmission.md/);
-  assert.match(body('first-snow-jp'), /最後に player\/tonight-letter.md/);
-  assert.match(body('first-snow-jp'), /既訪問場面/);
+  assert.match(body('first-snow-jp'), /player\/tonight-letter\.md「今夜の記録」は任意の摘要であり鍵ではない/);
+  assert.match(body('first-snow-jp'), /既訪問の履歴を読む/);
   assert.match(body('magic-academy'), /天文台へは入れない/);
   assert.match(body('unwritten-door'), /even when README already exists/);
   const store = new LocalWorldStore(installed.get('unwritten-door'));
