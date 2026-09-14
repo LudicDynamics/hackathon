@@ -1,6 +1,6 @@
 # 08 整理 Agent 运行时与动作工具设计
 
-> 状态：设计稿（2026-09-14），只定义 B「独立 functional canvas-arranger Agent 的 spawn、lifecycle、preset、scope、工具白名单、动作事务、版本、取消与结果」；不改实现，不改 `docs/layout/06-画布重叠治理与整理Agent共同上下文.md`。本文服从 06 的最新 1D3A/BB6A 契约；若实现证据推翻本文，先在本文登记冲突并由评审同回合回写上位文档。
+> 状态：契约已冻结，允许进入实现（2026-09-15）；只定义 B「独立 functional canvas-arranger Agent 的 spawn、lifecycle、preset、scope、工具白名单、动作事务、版本、取消与结果」；不改实现，不改 `docs/layout/06-画布重叠治理与整理Agent共同上下文.md`。本文严格引用 06 §4.5 canonical contract；若实现证据推翻本文，先登记并同回合回写。
 >
 > 关联设计篇：A `docs/layout/07-自动生成与坐标写入治理.md`（全层障碍、真实 AABB、`canvas_meta` 版本与原子落位）；F `docs/layout/12-整理Agent提示词设计.md`（唯一 system/task prompt、读—截图—整理—复核顺序）；C `docs/layout/09-画布感知与Playwright截图设计.md`（`CanvasSnapshotV1` 与同画布截图）；D `docs/layout/10-整理入口与过程反馈设计.md`（HTTP 入口、取消与本地请求态）；E `docs/layout/11-整理验收与回写设计.md`（验收与回写）。这些篇章不得互相复制归属。
 
@@ -100,61 +100,54 @@ export interface ActivityTurnContext {
 ### 5.1 D 使用的 HTTP 输入/响应边界
 
 B 不拥有按钮视觉，但为 D 冻结运行时所需的操作身份字段：
-
 ```ts
-export interface CanvasArrangeRequest { // NEW
-  world: string;                    // active store.worldRoot，必须精确相等
+
+export interface CanvasArrangeRequest { // NEW; exact shape from 06 §4.5
+  worldId: string;                 // opaque active-world manifest id
   layer: string;
   mode: 'grid' | 'circle' | 'row';
-  requestId?: string;               // 客户端重试幂等键；缺省由 server 生成
+  requestId: string;
   expectedRevision: number;         // world history high-water mark
-  expectedCanvasVersion: number;    // A 的 canvas_meta(layer) position_version
-  snapshotId: string;               // C CanvasSnapshotV1.snapshotId
-  screenshot?: boolean;             // 仅请求 C 的同画布证据，不是写入开关
+  expectedCanvasVersion: number;    // canvas.db per-layer position version
+  snapshotId: string;               // CanvasSnapshotV1 identity
+  screenshotPolicy: 'none' | 'before' | 'after' | 'before_and_after';
 }
 
-export interface CanvasArrangeAccepted { // NEW
+export interface CanvasArrangeAccepted { // NEW; HTTP 202
   ok: true;
   operationId: string;
   requestId: string;
-  world: string;
+  worldId: string;
   layer: string;
   agentId: 'canvas-arranger';
   turnId: `functional:canvas-arranger:${string}`;
-  stage: 'accepted';               // D 的 HTTP 初始本地态，不是 Activity phase
+  stage: 'accepted';
 }
 ```
 
-建议路由是 `POST /api/canvas/arrange`，成功返回 HTTP 202 与 `CanvasArrangeAccepted`。请求必须经过 active-world middleware；`world` 不相等、无 active world、层不存在、版本字段不是非负整数、snapshotId 为空都在 spawn 前返回可见 400/409/422，不能先启动 Agent 再报错。
+POST /api/canvas/arrange with the exact request above returns HTTP 202 and the exact ack above. `worldId` is opaque; server resolves it to the active world internally. Missing/unknown world, layer, version, snapshot or screenshot policy fails before spawn.
 
-取消路由由 D 接线：`POST /api/canvas/arrange/:operationId/cancel`，只接受当前 active world 的 operation，返回 `{ ok: true, operationId, accepted: true }` 或可见 404/409；它不创建 Writer prompt。
+Cancellation is `POST /api/canvas/arrange/:operationId/cancel` with `{ worldId:string, layer:string, requestId:string }`, HTTP 202, and `{ ok:true, operationId, requestId, worldId, layer, stage:'cancel_requested'|'already_completed'|'already_cancelled' }`. It only requests cancellation; it does not claim rollback.
+### 5.2 专用动作：统一 ActionService/store 命名
 
-### 5.2 专用动作：不扩旧 arrange 的隐含语义
-
-裁决为新增 `arrangeCanvas` ActionService 方法及 `arrange_canvas` 工具。现有 `arrangeCards` 保持 Writer/Character/玩家旧调用兼容，不被强行改成“点击整理”语义；A 的全层障碍/真实 AABB 逻辑通过新动作接缝落地。
+整理专用模型工具名为 `arrange_canvas`；其唯一 ActionService 入口为 `arrangeCanvas(ctx,input)`，其唯一 store 内核为 `arrangeCanvasLayer(store,input)`。现有 `arrangeCards` 仍是旧调用，不是整理 Agent 安全入口。
 
 ```ts
-export interface ArrangeCanvasInput { // NEW; packages/shared/src/actions/canvas-arranger.ts
+export interface ArrangeCanvasInput { // NEW
   operationId: string;
   layer: string;
   mode: 'grid' | 'circle' | 'row';
   expectedRevision: number;
   expectedCanvasVersion: number;
-  expectedSnapshotId: string;
-}
-
-export interface ArrangeCanvasCard { // NEW
-  path: string;
-  x: number;
-  y: number;
-  z: number;
-  w: number;
-  h: number;
+  snapshotId: string;
+  policy: 'deoverlap';
+  allowMoveStableCards: true;
+  preserveLinks: true;
 }
 
 export interface ArrangeCanvasDetails { // NEW
   kind: 'cards';
-  action: 'arranged';
+  action: 'arrangeCanvas';
   operationId: string;
   layer: string;
   mode: 'grid' | 'circle' | 'row';
@@ -162,9 +155,10 @@ export interface ArrangeCanvasDetails { // NEW
   revision: number;
   expectedCanvasVersion: number;
   canvasVersion: number;
+  canvasRevision: string;
   snapshotIdBefore: string;
   snapshotIdAfter: string;
-  cards: ArrangeCanvasCard[];
+  cards: Array<{ path: string; x: number; y: number; z: number; w: number; h: number }>;
   movedCount: number;
   overlapCount: number;
   committed: boolean;
@@ -176,54 +170,22 @@ export async function arrangeCanvas(
 ): Promise<ActionResult<ArrangeCanvasDetails>>; // NEW
 ```
 
-底层专用安全接缝的完整形状：
-
-```ts
-export interface ArrangeLayerSafelyInput { // NEW
-  operationId: string;
-  layer: string;
-  mode: 'grid' | 'circle' | 'row';
-  expectedRevision: number;
-  expectedCanvasVersion: number;
-  expectedSnapshotId: string;
-}
-
-export interface ArrangeLayerSafelyResult { // NEW
-  layer: string;
-  mode: 'grid' | 'circle' | 'row';
-  snapshotIdBefore: string;
-  snapshotIdAfter: string;
-  expectedRevision: number;
-  revision: number;
-  expectedCanvasVersion: number;
-  canvasVersion: number;
-  cards: ArrangeCanvasCard[];
-  overlapCount: number;
-  committed: boolean;
-}
-
-export async function arrangeLayerSafely(
-  store: WorldStore,
-  input: ArrangeLayerSafelyInput,
-): Promise<ArrangeLayerSafelyResult>; // NEW; A/LocalWorldStore 原子内核接缝
-```
-
-`arrangeCanvas` 只负责 ActionContext 身份、输入校验与结果包装；`arrangeLayerSafely` 必须把 A 的全层 planner、`canvas_meta` expected version、真实尺寸 AABB 校验和单事务提交收在一个安全接缝内。B 不在这里重写 `flowColumns`/grid/circle/row。
-
-A 提供的 planner 接缝由 A 篇（`docs/layout/07-自动生成与坐标写入治理.md`）冻结；本篇只冻结其最小契约：planner 读取给定 layer 的全量 rows（未选卡也是障碍），返回可供安全动作校验的 rows；planner 不能接受模型给的 x/y 作为事实。若 A 使用内部名称，A 必须在自身篇章给出完整签名并由评审将其作为唯一实现。
+The store kernel is owned by A/LocalWorldStore and has the exact shape in 07 §4.2:
+`arrangeCanvasLayer(store: WorldStore, input: ArrangeCanvasLayerInput): Promise<ArrangeCanvasLayerResult>`.
+It owns the full-layer planner, snapshot/version fence, AABB guard and atomic commit. B does not define a second Agent-facing action or helper.
 
 ### 5.3 结果与版本语义
 
 - `expectedRevision` 是历史数据库 `getMaxSeq()` 的世界高水位，只用来证明请求观察到的世界版本；不能代替画布位置版本，因为 arrange/drag 不落 history event。
-- `expectedCanvasVersion` 是 A 设计的 `canvas_meta(layer PRIMARY KEY, position_version)` 当前值；每次 cards 坐标/尺寸或相关画布状态写事务都递增。它不是第二坐标真相，只有并发护栏；不能让 Agent 直接改。
-- `expectedSnapshotId` 是 C 的 `CanvasSnapshotV1.snapshotId`，其摘要包含当前 layer 的真实 rows、links、presence、viewpoint 及内容摘要。B 只消费 C 的 identity，不复制 hash 算法。
-- 安全动作在事务前再次获得最新 snapshot identity；不匹配则返回 `canvas_conflict`（HTTP 409，带 expected/current snapshot/version），无任何写入。事务内 `BEGIN IMMEDIATE` 再检查 `expectedCanvasVersion`，防止两个整理或整理/拖拽同时通过同一版本。
-- 事务提交后立即全层回读；若 `overlapCount !== 0`、最新 `canvasVersion` 不等于本次递增值、或 `revision`/snapshot 在提交窗口变化，结果是 `committed: true` 但 `completed` 不成立，报告 conflict/未完成，坐标事实保留并要求重新读取。
-- 正常 completed 只由 runtime 在 `committed: true`、最新全层 rows 零重叠、浏览器（若 requested）同一 `snapshotId` 的真实绘制高度复核成功时判定。Agent 的自然语言总结仅作日志，不作事实源。
+- `expectedCanvasVersion` 是 A 设计的 `canvas_meta(layer PRIMARY KEY, position_version)` 当前值；它不是第二坐标真相，只有并发护栏；不能让 Agent 直接改。
+- `snapshotId` 是 C 的 `CanvasSnapshotV1.snapshotId`；`canvasRevision` 是该 snapshot 对当前 canvas.db 值的 digest。B 只消费 C 的 identity，不复制 hash 算法，三者不能互换。
+- 安全动作在事务前再次获得最新 snapshot identity；不匹配则返回 `conflict`（HTTP 409，带 expected/current snapshot/version），无任何写入。事务内 `BEGIN IMMEDIATE` 再检查 `expectedCanvasVersion`，防止两个整理或整理/拖拽同时通过同一版本。
+- 事务提交后立即全层回读；若 `overlapCount !== 0`、最新 `canvasVersion` 不等于本次递增值、或 `canvasRevision`/snapshot 在提交窗口变化，结果是 `committed: true` 但 `completed` 不成立，报告 `partial` 或 `conflict`，坐标事实保留并要求重新读取。
+- 正常 completed 只由 runtime 在 `committed: true`、最新全层 rows 零重叠且版本/identity 可证明时判定；screenshot/DOM 只提供证据，不能自授视觉完成。截图失败按 screenshotPolicy 在提交前为 failed/no-write、提交后为 partial/conflict。
 
 ### 5.4 ActionService 与工具壳
 
-在 `packages/shared/src/actions/service.ts:32-77,80-107` 增加 `arrangeCanvas(input: ActionInput): Promise<ActionResult>` 及注册名 `arrangeCanvas`；在 `packages/shared/src/actions/canvas-arranger.ts` 注册 handler。旧 `arrangeCards` 仍存在。
+在 `packages/shared/src/actions/service.ts:32-77,80-107` 增加唯一 `arrangeCanvas(input: ActionInput): Promise<ActionResult>` 及注册名 `arrangeCanvas`；`packages/shared/src/actions/canvas-arranger.ts` 仅承载该 handler。旧 `arrangeCards` 仍存在但不属于整理 Agent。
 
 新增独立工具壳（建议 `extensions/toolkit/arrange-canvas.ts`）只折叠 `mode/layer/operationId/expected*` 并调用专用 service：
 
@@ -232,7 +194,7 @@ export const arrangeCanvasTool: ToolDefinition = defineTool({
   name: 'arrange_canvas',
   label: 'Arrange Canvas Safely',
   description: 'Arrange the complete current layer using server-side collision safety.',
-  parameters: /* exact TypeBox object for CanvasArrangeInput, additionalProperties:false */,
+  parameters: /* exact TypeBox object for ArrangeCanvasInput, additionalProperties:false */,
   async execute(
     toolCallId: string,
     params: CanvasArrangeInput,
@@ -270,7 +232,7 @@ export function canvasArrangerLaunch(
 
 - 安装 `presets/canvas-arranger.json`，session 目录使用 `sessionsDirOf(worldRoot)`；每个 operation 使用唯一 `.airpworld/sessions/canvas-arranger-${operationId}-attempt-${n}.jsonl`，不与 Writer/Character session 重用。
 - `cwd = worldRoot`，`PI_PROJECT_CONFIG_DIR = .airpworld`，`PI_CODING_AGENT_DIR` 仍由 `agentDirEnv(repoRoot)` 固定；传 `AIRP_AGENT_ROLE=functional:canvas-arranger`、`AIRP_AGENT_SCOPE=functional-canvas-arranger`、`AIRP_ARRANGER_OPERATION_ID=operationId`、`AIRP_ARRANGER_TURN_ID=turnId`。
-- args 至少包含 `--approve --preset canvas-arranger --session-dir <sessions> --session <per-operation-file> --no-extensions --no-skills --no-context-files --no-prompt-templates --no-themes --tools view_canvas,arrange_canvas --extension <repoRoot>/extensions/canvas-arranger.ts`。显式 extension 是唯一允许的 extension；不得传 `extensionArgs(repoRoot, worldRoot)`，否则会加载 `tools.ts` 与世界扩展。
+- args 至少包含 `--approve --preset canvas-arranger --session-dir <sessions> --session <per-operation-file> --no-extensions --no-skills --no-context-files --no-prompt-templates --no-themes --tools view_canvas,screenshot_canvas,arrange_canvas --extension <repoRoot>/extensions/canvas-arranger.ts`。显式 extension 是唯一允许的 extension；不得传 `extensionArgs(repoRoot, worldRoot)`，否则会加载 `tools.ts` 与世界扩展。
 - 任意 preset 安装失败、显式扩展不存在、scope/role 不精确时拒绝 spawn；不能把 `--tools` 无法生效降级成全工具。
 - `--tools` 是 pi-rp 官方 allowlist：CLI `vendor/pi-rp/packages/coding-agent/src/cli/args.ts:123-136,325-330`，SDK 的 options 也确认它覆盖 built-in/extension/custom tools（`vendor/pi-rp/packages/coding-agent/src/core/sdk.ts:84-105,293-309`）。
 
@@ -284,7 +246,7 @@ export function canvasArrangerLaunch(
   "id": "canvas-arranger",
   "name": "Canvas Arranger",
   "description": "AIRP functional canvas arrangement agent",
-  "tools": { "allow": ["view_canvas", "arrange_canvas"] },
+  "tools": { "allow": ["view_canvas", "screenshot_canvas", "arrange_canvas"] },
   "items": [
     { "kind": "slot", "id": "tools", "slot": "tools", "options": { "onlyWithSnippets": true } },
     { "kind": "slot", "id": "tool-guidelines", "slot": "tool-guidelines", "options": { "includePiDefaultGuidelines": false, "heading": "Guidelines:" } }
@@ -296,12 +258,12 @@ F 篇（`docs/layout/12-整理Agent提示词设计.md`）拥有 system/task prom
 
 ### 6.3 专用顶层扩展与白名单矩阵
 
-新文件 `extensions/canvas-arranger.ts`（NEW）只注册 `view_canvas` 与 `arrangeCanvasTool`。它不得 import `extensions/tools.ts`；只可 import C 的只读 view shell、B 的专用 arrange shell、`worldStore` 与 `resolveFunctionalArrangerActor`。
+新文件 `extensions/canvas-arranger.ts`（NEW）只注册 `view_canvas`、`screenshot_canvas` 与 `arrangeCanvasTool`。它不得 import `extensions/tools.ts`；只可 import C 的只读 view/screenshot shell、B 的专用 arrange shell、`worldStore` 与 `resolveFunctionalArrangerActor`。
 
 | 能力 | functional Agent | 原因/失败 |
 |---|---:|---|
 | `view_canvas`（结构化；C 的 canonical `CanvasSnapshotV1`） | 允许 | 首次读取与提交后复核；只读，不替代版本校验 |
-| `view_canvas` `mode:image`（C 的真实同画布截图） | 可选 | requested 且截图失败必须失败；不能摘要降级为“已看图” |
+| `screenshot_canvas`（C 的同画布只读截图） | 允许 | 按 screenshotPolicy/提示词按需调用；失败显式 |
 | `arrange_canvas` | 允许 | 唯一写入入口；ActionService + 全层安全动作 |
 | 旧 `arrange` / `link` | 禁止 | 避免 subset overlap、关系线副作用与旧语义 |
 | `read`、原生 `write`/`edit`、`bash`、`grep`、`find`、`ls`、`move`/`delete` | 禁止 | 防止世界正文/文件系统写入与路径探测 |
@@ -341,32 +303,31 @@ export interface CanvasArrangerRuntimeSignal { // NEW; not a WS frame
   type: 'spawned' | 'tool_started' | 'tool_completed' | 'committed' | 'verified' | 'failed' | 'cancelled' | 'conflict';
   operationId: string;
   requestId: string;
-  world: string;
+  worldId: string;
   layer: string;
   agentId: 'canvas-arranger';
   turnId: `functional:canvas-arranger:${string}`;
-  toolName?: 'view_canvas' | 'arrange_canvas';
-  error?: 'invalid_request' | 'tool_error' | 'timeout' | 'cancelled' | 'agent_stopped' | 'canvas_conflict' | 'verification_failed' | 'unproven_latest';
-  /** Runtime terminal outcome; conflict is distinct from failed/cancelled. */
-  outcome?: 'completed' | 'failed' | 'cancelled' | 'conflict';
+  toolName?: 'view_canvas' | 'screenshot_canvas' | 'arrange_canvas';
+  error?: 'invalid_request' | 'tool_error' | 'timeout' | 'cancelled' | 'agent_stopped' | 'conflict' | 'verification_failed' | 'unproven_latest';
+  outcome?: 'completed' | 'partial' | 'failed' | 'cancelled' | 'conflict';
   result?: ArrangeCanvasDetails;
 }
 
 export interface CanvasArrangerOperation { // NEW
   operationId: string;
   requestId: string;
-  world: string;
+  worldId: string;
   layer: string;
   agentId: 'canvas-arranger';
   turnId: `functional:canvas-arranger:${string}`;
   expectedRevision: number;
   expectedCanvasVersion: number;
   snapshotId: string;
+  screenshotPolicy: 'none' | 'before' | 'after' | 'before_and_after';
   cancelRequested: boolean;
   committed: boolean;
   terminal: boolean;
-  /** Local terminal outcome, not AgentActivityFrame.phase. */
-  outcome?: 'completed' | 'failed' | 'cancelled' | 'conflict';
+  outcome?: 'completed' | 'partial' | 'failed' | 'cancelled' | 'conflict';
   result?: ArrangeCanvasDetails;
 }
 
@@ -394,17 +355,17 @@ sequenceDiagram
   participant DB as canvas.db
   participant W as Writer RpcClient
 
-  UI->>S: POST /api/canvas/arrange (world, layer, versions, snapshotId)
+  UI->>S: POST /api/canvas/arrange (worldId, layer, mode, versions, snapshotId, screenshotPolicy)
   S->>S: active-world + one-flight + requestId check
   S-->>UI: 202 accepted(operationId, functional turnId)
   S->>A: spawn isolated session/preset/extension
   S-->>UI: runtime signal spawned (D maps local state)
   A->>C: view_canvas structured snapshot
   opt screenshot requested by task
-    A->>C: view_canvas image(snapshotId)
+    A->>C: screenshot_canvas(snapshotId)
   end
   A->>A: F task decides one arrange_canvas call
-  A->>DB: arrangeLayerSafely (version check + one transaction)
+  A->>DB: arrangeCanvasLayer(store,input) (version check + one transaction)
   DB-->>A: cards + canvasVersion + snapshotIdAfter
   A->>C: view_canvas structured re-read
   A-->>S: agent_settled + tool events
@@ -416,14 +377,14 @@ sequenceDiagram
 
 编号行为与漏项后果：
 
-1. **捕获 active world 与请求身份**：检查 `world === getActiveStore().worldRoot`、layer 存在、版本/快照字段完整。漏掉会把旧页面请求写进新 world，或让模型在无层状态下自行猜层。
+1. **捕获 active world 与请求身份**：校验 opaque `worldId` 能解析到 `getActiveStore()`、layer 存在、版本/快照字段完整；内部只用 active store.worldRoot。漏掉会把旧页面请求写进新 world，或让模型在无层状态下自行猜层。
 2. **按 world（至少按 layer）单飞登记**：先登记 `requestId → operationId`，再返回 202。漏掉会让双击 spawn 两个 client，两个模型基于同一 snapshot 覆盖坐标。
 3. **先注册 event listener 再 `client.start()`**：监听须把 `source='functional'`、固定 `agentId/turnId` 传给 EventBridge。漏掉会丢掉首个 `agent_start`/tool start，Activity rail 永久悬挂或无法证明独立 Agent。
 4. **spawn 只加载专用 preset/extension**：参数必须由 `canvasArrangerLaunch` 生成。漏掉 `--no-extensions` 或 `--tools` 会暴露原生 write/edit/bash 或全套 AIRP 工具，等同取消文件写保护。
-5. **runtime 传 F 的 task payload，不传 Writer 上下文**：任务带 layer、operationId、expectedRevision、expectedCanvasVersion、snapshotId 与 screenshot 要求。漏掉 snapshot 身份会让 Agent 看完旧层仍能写新层；注入 Writer chat 会把整理伪装成叙事 turn。
+5. **runtime 传 F 的 task payload，不传 Writer 上下文**：任务带 worldId、layer、operationId、expectedRevision、expectedCanvasVersion、snapshotId 与 screenshotPolicy。漏掉 snapshot 身份会让 Agent 看完旧层仍能写新层；注入 Writer chat 会把整理伪装成叙事 turn。
 6. **Agent 先 `view_canvas`，按 F 要求可选截图，再一次 `arrange_canvas`，再 `view_canvas`**。漏掉首次结构化读取/复读会把工具成功当作事实；漏掉复读会掩盖并发写或残余 overlap。
-7. **动作只收服务器求解结果**：`arrange_canvas` 不接受模型 x/y；`arrangeLayerSafely` 在事务内全层 AABB 校验。漏掉服务端求解会让“模型说不重叠”成为伪证明。
-8. **Agent settled 后 server 再验证 active Store**：检查同一 world、全层最新 rows、canvasVersion、snapshotId、overlapCount，才能发 landed/completed 的终态信号。漏掉 server 后读会把异常 client 的自然语言/工具 result 冒充最终值。
+7. **动作只收服务器求解结果**：`arrange_canvas` 不接受模型 x/y；`arrangeCanvasLayer(store,input)` 在事务内全层 AABB 校验。漏掉服务端求解会让“模型说不重叠”成为伪证明。
+8. **Agent settled 后 server 再验证 active Store**：检查同一 worldId、全层最新 rows、canvasVersion、canvasRevision、snapshotId、overlapCount，才能发 landed/completed/partial/conflict 的终态信号。漏掉 server 后读会把异常 client 的自然语言/工具 result 冒充最终值。
 9. **最后清理 client 与 operation registry**：`stop`、取消 timer、删除临时监听；保留 operation 的 terminal result 供幂等查询。漏掉会泄漏 child process，或重复终态覆盖下一次操作。
 
 ### 7.3 Agent run 与 provider turn 的边界
@@ -455,8 +416,8 @@ pi-rp 同时暴露 `agent_start`、`agent_end`、`agent_settled` 与 `turn_start
 ### 8.3 取消边界
 
 1. `cancel(operationId)` 先把 `cancelRequested=true`，阻止尚未 spawn/尚未开始动作的工作，再调用 client.abort()。漏掉先置位会出现 abort 与 tool start 竞态，取消后仍可能提交。
-2. 事务开始前收到取消：不调用 `arrangeLayerSafely`，activity 未完成的 tool 由 `failActivity('functional', undefined, turnId, 'cancelled')` 收尾，结果 `committed=false`。
-3. `arrangeLayerSafely` 已提交后收到取消：只能停止模型/复核，不能回滚 canvas.db；若复核证明提交且没有并发/版本不确定，终态才是 `cancelled`；只要版本变化或无法证明最新事实，终态必须是独立 `conflict`，不能压成 cancelled。D 必须显示“已完成部分/坐标已保留”。漏掉会让取消按钮制造第二次坐标写入或伪造回滚。
+2. 事务开始前收到取消：不调用 `arrangeCanvasLayer`，activity 未完成的 tool 由 `failActivity('functional', undefined, turnId, 'cancelled')` 收尾，结果 `committed=false`。
+3. `arrangeCanvasLayer` 已提交后收到取消：只能停止模型/复核，不能回滚 canvas.db；若复核证明提交且没有并发/版本不确定，终态才是 `cancelled` 或 `partial`；只要版本变化或无法证明最新事实，终态必须是独立 `conflict`，不能压成 cancelled。D 必须显示“已完成部分/坐标已保留”。漏掉会让取消按钮制造第二次坐标写入或伪造回滚。
 4. world switch / server shutdown 等价于 cancellation：先 stop functional clients，再 close old Store；不把取消帧送给新 world 的 Agent。
 
 ### 8.4 超时、进程死亡、失败与有限重试
@@ -464,8 +425,8 @@ pi-rp 同时暴露 `agent_start`、`agent_end`、`agent_settled` 与 `turn_start
 - 建议常量（数值需 E/评审拍板）为单次 idle 60s、operation total 120s；`RpcClient` 自身 command response 30s 仍是更短的底层上限。超时调用 `abort`，发 functional activity failed（`error='timeout'`），不发完成。
 - `agent_start` 前 spawn/初始化失败可最多重新 spawn 1 次，使用同一 `requestId` 但新的 operation attempt/session 文件；重试前检查 active world、snapshot/version 未变。若 tool 已开始或提交状态不明，禁止自动重复 action。
 - `agent_settled` 缺失、`getSessionStats`/wait 失败、child exit、invalid role/scope、preset/extension 缺失均是显式 `agent_stopped`/`tool_error`；不能以空结果或旧 snapshot 降级成功。若 action 已开始但提交归属/最新 rows 无法证明，必须另发 `outcome:'conflict'` 与 `error:'unproven_latest'`，不能改报 failed/cancelled。
-- screenshot requested 时 C 返回 timeout、无 origin、未 ready、权限、浏览器缺失：若尚未提交则 outcome=`failed`；若已提交但 screenshot/snapshot 版本无法证明则 outcome=`conflict`。snapshot mismatch 一律是 conflict；不得把结构化摘要说成“已截图”。
-- action `canvas_conflict`：重读最新 rows/version 并终止本 operation，不在 Agent 内循环重排；用户下一次点击以新 snapshot 重试。`no_free_seat` / AABB residual overlap：事务回滚，返回失败，不能提交“最后候选重叠”。
+- screenshot requested 时 C 返回 timeout、无 origin、未 ready、权限、浏览器缺失：若尚未提交则 outcome=`failed`；若已提交但 screenshot/snapshot 版本无法证明则 outcome=`partial` 或 `conflict`。snapshot mismatch 一律是 conflict；不得把结构化摘要说成“已截图”。
+- action `conflict`：重读最新 rows/version 并终止本 operation，不在 Agent 内循环重排；用户下一次点击以新 snapshot 重试。`no_free_seat` / AABB residual overlap：事务回滚，返回失败，不能提交“最后候选重叠”。
 
 ## 9. EventBridge、canvas.db 与可见闭环
 
@@ -496,7 +457,7 @@ pi-rp 同时暴露 `agent_start`、`agent_end`、`agent_settled` 与 `turn_start
 
 | 目标 | 允许 | 事务/来源 |
 |---|---|---|
-| `cards.x/y/z_index` | 允许 | `arrangeLayerSafely` + A 全层 planner；单次 SQLite `BEGIN IMMEDIATE` |
+| `cards.x/y/z_index` | 允许 | `arrangeCanvasLayer(store,input)` + A 全层 planner；单次 SQLite `BEGIN IMMEDIATE` |
 | `cards.width/height` | 仅 footprint 既有 owner；整理动作不得写 | 真实浏览器测量路径；整理读取真实值 |
 | `canvas_meta(layer, position_version)` | 允许 A 的并发护栏递增，Agent 不可直接写 | 与 cards 坐标事务同一 SQLite 事务 |
 | `.airpworld/sessions/canvas-arranger-*.jsonl` | 允许运行时 session 记录 | 不是世界正文/坐标真相；watcher 可忽略 sessions |
@@ -519,7 +480,7 @@ pi-rp 同时暴露 `agent_start`、`agent_end`、`agent_settled` 与 `turn_start
 1. `packages/shared/src/actions/actor.ts`：增 functional ActorType/Scope、`resolveFunctionalArrangerActor`、reader/label/ref 与 nook deny；未知 functional role fail-closed。
 2. `packages/shared/src/schemas/events.ts`：`ActorTypeSchema` 增 functional；同步事件协议/数据库 actor_type 说明。整理不新增 event type。
 3. `packages/shared/src/actions/service.ts`：ActionService/ACTION_METHODS 增 `arrangeCanvas`；`packages/shared/src/actions/canvas-arranger.ts` 新动作注册与签名校验。
-4. `packages/shared/src/store/world-store.ts` / `packages/shared/src/store/local-store.ts`：采纳 A（`docs/layout/07-自动生成与坐标写入治理.md`）的 `canvas_meta`、`canvasVersion` 与 `arrangeLayerSafely` 原子接缝；不可让 ActionService 直接拼 SQL；精确存储签名由 A 篇冻结。
+4. `packages/shared/src/store/world-store.ts` / `packages/shared/src/store/local-store.ts`：采纳 A（`docs/layout/07-自动生成与坐标写入治理设计.md`）的 `canvas_meta`、`canvasVersion` 与 `arrangeCanvasLayer` 原子接缝；不可让 ActionService 直接拼 SQL；精确存储签名由 A 篇冻结。
 5. `extensions/toolkit/arrange-canvas.ts` + `extensions/canvas-arranger.ts`：仅注册 `view_canvas`/`arrange_canvas`；显式 actor/scope；不 import 通用 `tools.ts`。
 6. `presets/canvas-arranger.json`：allowlist 与 F（`docs/layout/12-整理Agent提示词设计.md`）prompt 插槽；`apps/server/src/engine/launch.ts` 的 `canvasArrangerLaunch`：隔离 args/env/session。
 7. `apps/server/src/engine/canvas-arranger-lifecycle.ts`：实现 `CanvasArrangerRuntime` 的 map、timeout、abort、stop、retry、postverify、signals；`apps/server/src/engine/lifecycle.ts` 不把它并进 Writer queue。
@@ -552,7 +513,7 @@ Fixture：当前 active world 的同一 layer 有 `a.md` 与 `b.md` 两个真实
 
 ### 12.3 版本冲突与事务
 
-两个请求使用同一 `snapshotId`/`expectedCanvasVersion` 并发；只有一个获得 `canvas_meta` 写锁并提交，另一个得到 HTTP 409 `canvas_conflict`，details 含 expected/current version，未产生半批 rows。一个 action 中途抛错时，所有 cards 坐标保持事务前快照；不能出现一半新一半旧。
+两个请求使用同一 `snapshotId`/`expectedCanvasVersion` 并发；只有一个获得 `canvas_meta` 写锁并提交，另一个得到 HTTP 409 `conflict`，details 含 expected/current version, revision and snapshot identity，未产生半批 rows。一个 action 中途抛错时，所有 cards 坐标保持事务前快照；不能出现一半新一半旧。
 
 ### 12.4 取消/超时/重试
 
@@ -564,7 +525,7 @@ Fixture：当前 active world 的同一 layer 有 `a.md` 与 `b.md` 两个真实
 
 ### 12.5 截图失败与真实完成
 
-`screenshot=true` 且 C gate 无浏览器、无 origin、未 ready、权限失败或浏览器缺失：若尚未提交则 outcome=`failed`；若已提交但 screenshot/snapshot 版本无法证明则 outcome=`conflict`。snapshot mismatch 一律是 conflict。截图成功仍需结构化全层 zero-overlap 与版本复核才能 completed，不能把 `view_canvas(auto)` 摘要当图片。
+`screenshotPolicy` requesting browser evidence and C gate failure (no browser/origin/ready/permission): before commit, outcome=`failed` with no write; after commit, outcome=`partial` unless identity/currentness is also unproven, then `conflict`. Snapshot mismatch is always conflict. Screenshot success still needs structured full-layer zero-overlap and version proof for completed; never call a screenshot summary a structured image.
 
 ## 13. 发现的冲突 / 需要回写的上位文档
 
@@ -574,15 +535,10 @@ Fixture：当前 active world 的同一 layer 有 `a.md` 与 `b.md` 两个真实
 4. `docs/tools/09-link与arrange.md:214-223,287-305` 仍把旧 `arrange` subset 不避让写作已知边界；实现后该边界只能保留给旧 arrange，点击整理必须走 `arrangeCanvas`，并把“模型坐标不算安全”写进上位工具门禁。
 5. `event-bridge.ts:309-321` 与前端 `useWorld.ts:708-740` 尚无 `arrange_canvas`/functional/version 分支；必须同批回写 server 发射与唯一前端消费，不能只登记一个新 tool 名。
 6. 06 要求功能过程复用 `agent_activity`/现有 `canvas_patched`；本篇明确不创建 `canvas_arrange_status` WS，D 的本地阶段只能从 runtime/既有帧映射，需在 D/E 文档保持一致。
-7. `canvas_meta`、`canvasVersion`、`canvas_conflict` 是 A 提议的新并发接缝/错误码；若评审不扩错误码，A/D 必须给出等价 409 形状，不能把冲突改写为 `invalid_argument` 或 `no_free_seat`。上位错误码表需同批回写。
+6. 06 canonical contract 已冻结 `canvas_meta`/`canvasVersion`、`canvasRevision`、`snapshotId` 与 machine outcome `conflict`；B 不得恢复任何旧的 canvas-specific conflict/stale 别名。
 
 ## 14. 仍未知、明确交评审拍板
 
-1. `canvas_meta` 是否纳入现有 `canvas.db` schema、其 position_version 是否由每次 footprint/drag/seat/link 相关变更递增；A 需给出完整 SQL、迁移策略和 WorldStore 方法签名。
-2. `canvasVersion` 是否进入 C `CanvasSnapshotV1`（C 当前至少冻结 `version:'canvas-snapshot-v1'` 与 `snapshotId`）；B 暂时把它作为 action/layer 输出的独立并发字段，禁止自行把字段塞入 C snapshot。
-3. `canvas_conflict` 是否加入封闭 ActionErrorCode/HTTP 表；若不加入，必须冻结 409 `stale` 的 expected/current version 字段，且仍区分工具错误、无空位和冲突。
-4. D 的单飞粒度是整个 active world 还是 layer；本文选择 world 级最保守实现，放宽为 layer 级需 A 证明跨层 DB/version/Writer 并发安全。
-5. `screenshot` 是否默认 false、F task 是否在某类 overlap/不确定视觉时强制 true；B 只传递要求，不规定 F prompt。
-6. functional Actor 的 `id` 是否固定字面 `'canvas-arranger'`（本文建议固定），或采用 branded id 类型；若可变，必须同步所有 agent_activity 校验与权限白名单，禁止任意 functional id。
-7. idle/total timeout 的具体毫秒值、spawn retry 次数、session JSONL 保留/清理策略；不能在实现中悄悄选择并当作已冻结契约。
-8. 旧 `arrange` 是否最终仅供 Writer/Character，还是允许玩家路由继续复用；无论裁决为何，`arrangeCanvas` 的全层安全门禁不能被旧 action 绕过。
+1. D 的单飞粒度是整个 active world 还是 layer；本文选择 world 级最保守实现，放宽为 layer 级需 A 证明跨层 DB/version/Writer 并发安全。
+2. `safeFallback` 是否进入自然语言 receipt；机器字段和安全行为已由 06/07 冻结，不得改变。
+3. `canvasArrangerLaunch` 的具体 process timeout 数值与 browser budget 仍由实现验证；不改变 canonical fields/status。

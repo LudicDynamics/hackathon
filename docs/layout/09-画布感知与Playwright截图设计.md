@@ -1,9 +1,8 @@
 # 09｜画布感知与 Playwright 截图设计
-
-> 状态：整理 Agent 设计批次 C 篇，只写设计，不改实现。
+> 状态：契约已冻结，允许进入实现（2026-09-15）。本篇只负责结构化画布读取、同画布真实浏览器截图、快照身份/一致性、浏览器 gate、auth/origin/资源/错误；跨篇字段和状态严格引用 06 §4.5，不拥有坐标写入、整理动作、Agent spawn、按钮或提示词。
 > 共享契约唯一真源是 `docs/layout/06-画布重叠治理与整理Agent共同上下文.md`（下称 06）。本文只负责结构化画布读取、同画布真实浏览器截图、快照身份/一致性、浏览器 gate、auth/origin/资源/错误；不负责坐标写入、整理动作、Agent spawn、按钮或提示词。
 >
-> 本篇按最新 06：整理写入由受控 functional Actor/Scope 通过服务端统一碰撞求解或全层 AABB 校验；模型坐标不构成安全证明。截图是视觉 evidence，不是自动完成闸。`agent_activity.phase` 仍只有 `started | completed | failed`；本篇不扩展它。D 的 `accepted → processing → arranging → verifying → landed/completed` 仍是本地请求状态，C 不代替 D 产生这些状态。并发/版本/无法证明最新时必须向 D/B/E 提供独立 `conflict`，不能压成 failed/cancelled。
+> 本篇按最新 06：整理写入由受控 functional Actor/Scope 通过服务端统一碰撞求解或全层 AABB 校验；模型坐标不构成安全证明。截图是视觉 evidence，不是自动完成闸。`agent_activity.phase` 仍只有 `started | completed | failed`；本篇不扩展它。D 的 `accepted → processing → arranging → verifying → landed → completed/partial/failed/conflict/cancelled` 仍是本地请求状态，C 不代替 D 产生这些状态。并发/版本/无法证明最新时必须向 D/B/E 提供独立 `conflict`，不能压成 failed/cancelled。
 
 ## 1. 一句话定位
 
@@ -80,14 +79,15 @@ export const CANVAS_SNAPSHOT_VERSION = 'canvas-snapshot-v1'; // NEW
 
 export interface CanvasSnapshotIdentity { // NEW
   version: typeof CANVAS_SNAPSHOT_VERSION;
-  snapshotId: string;       // opaque sha256
-  canvasRevision: string;   // canvas.db current-value digest, opaque sha256
+  snapshotId: string;       // opaque sha256 binding rows + source digests
+  canvasRevision: string;   // digest of current canvas.db values, opaque sha256
+  canvasVersion: number;    // monotonic per-layer canvas.db position version
   capturedAt: string;       // ISO; not part of either hash
 }
 ```
 
 - `canvasRevision` 是 canonical JSON 的 SHA-256：当前页面 rows 的 `id/layer/x/y/w/h/z` 与 footprint source、当前 layer 完整 links 的所有公开字段、presence 的 `characterId/layer/x/y/following`、`readViewpoint()` 完整公开值或 null。rows 按 id ASCII，links 按 z/id，presence 按 characterId；不能使用 SQLite 返回顺序、mtime、Promise 完成顺序、COUNT/SUM 代替。
-- `snapshotId` 是 `{version, worldId, layer, page-membership, canvasRevision, sourceDigests}` 的 SHA-256。sourceDigests 至少包含每个页面 path、kind、README/stub 门牌身份和 Markdown 内容 digest；否则正文/frontmatter 改变而 DB 不变时，不能证明同一个渲染输入。[推断] 可 hash 原始 file bytes，不把正文放进返回值。
+- `snapshotId` 是 `{version, worldId, layer, canvasVersion, page-membership, canvasRevision, sourceDigests}` 的 SHA-256。sourceDigests 至少包含每个页面 path、kind、README/stub 门牌身份和 Markdown 内容 digest；否则正文/frontmatter 改变而 DB 不变时，不能证明同一个渲染输入。[推断] 可 hash 原始 file bytes，不把正文放进返回值。
 - hash 不是单调序号；`capturedAt` 不进入 hash。同一状态不同时间可有相同 snapshotId。worldRoot、绝对路径、cookie、token、数据库文件名不进入可解码 identity。
 - hash 仅识别读窗口；它不宣布 layout 完成。完成必须重新读最新 snapshot 并全层断言。
 
@@ -196,10 +196,11 @@ shared `ActionContext` 是 transport-free 且没有 AbortSignal（`packages/shar
 2. `extensions/toolkit/look-at.ts` image 分支先取 summary snapshot，再向 server 内部 HTTP perception route 请求 Playwright；工具层校验返回的 final snapshot identity。
 
 ```ts
-export interface CanvasScreenshotRequest { // NEW
-  worldId: string; // manifest id; never absolute root
+export interface CanvasScreenshotRequest { // NEW; exact shape from 06 §4.5
+  worldId: string; // opaque manifest id; never absolute root
   layer: string;
   snapshotId: string;
+  captureCapability: string; // short-lived server-issued opaque capability
   viewport: { width: number; height: number };
   region?: CanvasWorldRect;
 }
@@ -216,13 +217,13 @@ export interface CanvasScreenshotResponse { // NEW success branch
 export interface CanvasScreenshotConflict { // NEW conflict branch
   ok: false;
   code: 'conflict';
-  error: 'view_canvas image mode conflicted: the canvas changed while the screenshot was being captured.';
+  error: 'canvas screenshot conflicted: the canvas changed while the screenshot was being captured.';
   requested: CanvasSnapshotIdentity;
   observed: CanvasSnapshotIdentity;
 }
 ```
 
-建议 `POST /api/canvas/screenshot`，注册于 `apps/server/src/routes/world.ts` 或 NEW `apps/server/src/routes/canvas-perception.ts`，在 `apps/server/src/index.ts:135-160` 挂载；不得新增 WS。请求只允许 active store 的 manifest id/layer，不收 worldRoot、SQLite path、浏览器 URL。PNG base64 默认内存返回，不落 `.airpworld/eye/`，避免第二状态源/陈旧文件。
+`POST /api/canvas/screenshot` is the sole screenshot transport. The request accepts only active opaque `worldId`, `layer`, `snapshotId`, `captureCapability`, `viewport` and optional `region`; the capability is issued by the server for the current operation and bound to world/layer/turn with a short expiry. The route enforces same-origin/loopback, current principal or capability, ready signal, serial browser gate, and bounded timeout/rate/size. It never accepts worldRoot, SQLite path, browser URL, executablePath or proxy, and never lets a child guess the active world. PNG base64 is in-memory only and does not create a second state source.
 
 工具结果需要：
 
@@ -233,17 +234,17 @@ export function okWithImage<TDetails>( // NEW
 ): AgentToolResult<TDetails>;
 ```
 
-模型无 image input 时 fail-closed：`view_canvas image mode is unavailable: the active model does not accept image content.` capability 读取方式待评审，不能静默返回“已看图”。
+模型无 image input 时 fail-closed：`screenshot_canvas is unavailable: the active model does not accept image content.` capability 由 server 为本次 operation 签发，不能由 child 或模型猜测/伪造，不能静默返回“已看图”。
 
 ### 5.2 origin、auth、world 与 exposure
 
 当前 AIRP 没 auth middleware，静态前端由同一 Express 服务（`index.ts:49-54,162-170`），但不得把这一事实伪装成用户身份验证：
 
-1. **origin gate**：NEW `AIRP_WEB_ORIGIN` 为完整 http/https origin，不含 path/query/userinfo；本地且由 server 自托管 dist 时回退 `http://127.0.0.1:<PORT>`。缺失/非法返回 `view_canvas image mode is unavailable: the canvas web origin is not configured.`，禁止 file://、任意 Host、localhost 猜测。
-2. **same-origin**：仅导航到 `${origin}/?airpPerception=1&layer=...`，参数 encode；HTTP >=400 不截错误页，文案 `view_canvas image mode failed: the canvas page returned HTTP <status>.`。
-3. **auth**：无 auth 不注 cookie；有 auth 必须用当前请求用户有效 session 或 server 内部签名、world/layer/turn 限制的短时 capture credential。禁止按 owner id 自行 mint、读日志 cookie、把 owner 当当前 user。缺身份/禁用/拒绝：`view_canvas image mode unavailable: the current user's canvas identity is unavailable.`。
-4. **exposure**：当前监听 0.0.0.0/CORS 宽松，route 仍需 loopback 或既有 principal，限 viewport/region/请求体/并发/频率；CORS 不等于 auth。
-5. **world**：校验 active store manifest id；world 切换或 store close 立即使 capture 失效，不允许通过 worldRoot 跨存档。
+1. **origin gate**: NEW `AIRP_WEB_ORIGIN` is a complete http/https origin without path/query/userinfo. Local self-hosted dist may use `http://127.0.0.1:<PORT>`. Missing/invalid returns `screenshot_canvas unavailable: the canvas web origin is not configured.`; reject file://, arbitrary Host and guessed localhost.
+2. **same-origin**: navigate only to `${origin}/?airpPerception=1&layer=...` with encoded parameters. HTTP >=400 is an explicit failure, never an error-page screenshot.
+3. **auth/capability**: if auth exists, use the current request user's valid session or server-issued short-lived `captureCapability` bound to operation/world/layer/turn. Never mint by owner id, read log cookies, or treat owner as current user. Missing/expired capability or identity returns `screenshot_canvas unavailable: the current user's canvas identity is unavailable.`。
+4. **exposure**: current listener/CORS defaults are not authentication; route still requires loopback or same-origin plus valid principal/capability, and limits viewport/region/body/concurrency/frequency。
+5. **world**: validate active store manifest id; world switch or store close immediately invalidates capability/capture; never cross stores by worldRoot.
 
 ### 5.3 gate、lifecycle、ready
 
@@ -259,11 +260,11 @@ export async function withCanvasBrowserGate<T>( // NEW
 ): Promise<T>;
 ```
 
-1. image 首次请求 dynamic import Playwright/lazy launch Chromium；缺 browser/dependency 直接：`view_canvas image mode unavailable: Playwright/Chromium is not available.`，不回退摘要。固定 headless 参数/deviceScaleFactor=1，不接受用户 launch args/proxy/executablePath。
-2. server 进程级串行 gate，一次一个 context/page，借鉴 Nodesign gate（`look-at-board.js:31-36`）；排队 deadline，未开始即 abort：`view_canvas image mode cancelled before capture started.`。
+1. screenshot_canvas 首次请求 dynamic import Playwright/lazy launch Chromium；缺 browser/dependency 直接：`screenshot_canvas unavailable: Playwright/Chromium is not available.`，不回退摘要。固定 headless 参数/deviceScaleFactor=1，不接受用户 launch args/proxy/executablePath。
+2. server 进程级串行 gate，一次一个 context/page，借鉴 Nodesign gate（`look-at-board.js:31-36`）；排队 deadline，未开始即 abort：`screenshot_canvas cancelled before capture started.`。
 3. 每次新 BrowserContext/Page，不复用 cookie/localStorage/IndexedDB；finally close page/context，browser 空闲 TTL/world switch close。异常不可令 gate 永久卡住。
 4. URL 带 `airpPerception=1`、layer、snapshotId、region；仍渲染同一 Canvas，不写第二 renderer。
-5. 等 `html[data-airp-canvas-ready="1"]`，默认 25s；超时：`view_canvas image mode failed: the canvas did not become ready within 25s.`。ready 不是 React mount：必须 layer 相同、snapshot 落 state、对象集合完成、字体 settled、region camera settled、至少一帧 rAF。
+5. 等 `html[data-airp-canvas-ready="1"]`，默认 25s；超时：`screenshot_canvas failed: the canvas did not become ready within 25s.`。ready 不是 React mount：必须 layer 相同、snapshot 落 state、对象集合完成、字体 settled、region camera settled、至少一帧 rAF。
 6. ready evaluate 检查 layer/snapshot dataset、无 canvas error、path 集合与 snapshot rows 对齐，读取 DOM geometry。缺 ready/identity 返回失败，不能截 loading/error 页。
 7. `page.locator('[data-airp-canvas-surface]').screenshot({type:'png'})` 截真实 Canvas surface；不截 API JSON。PNG 目标尺寸等于请求 viewport、deviceScaleFactor=1。
 8. capture 后 server 再读 snapshot；identity 变化最多重拍一次。仍变化返回 HTTP 409 / `code:'conflict'` / `CanvasScreenshotConflict`，把 `conflict` 交给 B/D/E；不得转换成 failed/cancelled。此检查只证明图与某个稳定读窗口对应，不判断整理完成。
@@ -328,8 +329,7 @@ export function useWorld(options?: UseWorldOptions): UseWorldApi; // NEW
 
 ### 8.1 并发与 conflict
 
-- 浏览器 gate 串行，但不替代 canvas write lock；整理/拖拽/footprint/生成并发靠 `snapshotId/canvasRevision` before/ready/after 复读。
-- snapshot 是瞬时读，不锁 DB。after identity 变化至多重拍一次；仍变化的 response 是 HTTP 409、`code:'conflict'`、`details.outcome:'conflict'`，向 B/D/E 明确 local conflict。不能把它映射成 ActionError 的普通 failed 或 cancelled；若 transport 只能 `isError:true`，details 仍必须保留 machine-readable `outcome:'conflict'`。
+- snapshot 读取不是无界拼接：reader 在 DB `canvasVersion` 与 content/source digest 前后各取一次 fence；任一变化返回 HTTP 409/details `conflict`，不得用 hash 掩盖 torn snapshot。浏览器 gate 串行不替代这一 fence。
 - conflict 不发 Activity frame、不扩 `phase`，D 才把它显示为独立本地 conflict 终态。C 不决定 landed/completed。
 
 ### 8.2 幂等与取消
@@ -345,18 +345,18 @@ export function useWorld(options?: UseWorldOptions): UseWorldApi; // NEW
 | layer 不存在 | not_found/404 | `No layer "<layer>" in this world` |
 | 参数非法 | invalid_argument/400 | `region must contain finite x, y, w, h with w/h >= 50.` / `Provide either region or around, not both.` |
 | around 无 row | not_found/404 | `Cannot frame "<path>": the item has no canvas row in the current snapshot.` |
-| origin 缺失 | unsupported/501 | `view_canvas image mode is unavailable: the canvas web origin is not configured.` |
-| browser 缺失 | unsupported/501 | `view_canvas image mode unavailable: Playwright/Chromium is not available.` |
-| auth 缺失 | unsupported/501 | `view_canvas image mode unavailable: the current user's canvas identity is unavailable.` |
-| model 不收 image | unsupported/501 | `view_canvas image mode is unavailable: the active model does not accept image content.` |
-| page HTTP error | internal/500 | `view_canvas image mode failed: the canvas page returned HTTP <status>.` |
-| ready timeout | internal/500 | `view_canvas image mode failed: the canvas did not become ready within 25s.` |
-| unplaced | internal/500 | `view_canvas image mode failed: the current layer has unplaced items; seat them before requesting a screenshot.` |
-| unexpected browser | internal/500 | `view_canvas image mode failed: <safe error summary>.` |
-| snapshot changed | **conflict/409** | `view_canvas image mode conflicted: the canvas changed while the screenshot was being captured.` |
-| queue cancellation | cancelled/transport-specific | `view_canvas image mode cancelled before capture started.` |
+| origin 缺失 | unsupported/501 | `screenshot_canvas unavailable: the canvas web origin is not configured.` |
+| browser 缺失 | unsupported/501 | `screenshot_canvas unavailable: Playwright/Chromium is not available.` |
+| auth 缺失 | unsupported/501 | `screenshot_canvas unavailable: the current user's canvas identity is unavailable.` |
+| model 不收 image | unsupported/501 | `screenshot_canvas unavailable: the active model does not accept image content.` |
+| page HTTP error | internal/500 | `screenshot_canvas failed: the canvas page returned HTTP <status>.` |
+| ready timeout | internal/500 | `screenshot_canvas failed: the canvas did not become ready within 25s.` |
+| unplaced | internal/500 | `screenshot_canvas failed: the current layer has unplaced items; seat them before requesting a screenshot.` |
+| unexpected browser | internal/500 | `screenshot_canvas failed: <safe error summary>.` |
+| snapshot changed | **conflict/409** | `screenshot_canvas conflicted: the canvas changed while the screenshot was being captured.` |
+| queue cancellation | cancelled/transport-specific | `screenshot_canvas cancelled before capture started.` |
 
-当前 `ActionErrorCode` 没有 conflict（`packages/shared/src/actions/errors.ts:3-43`）。本设计先在 HTTP response/details 定义 conflict，避免单边扩 shared enum；若评审要 canonical ActionError code，必须同步 error code 双向集合、HTTP、tool result、D 文案和 E 门禁，不能把 conflict 映射为 failed/cancelled。image mode 任何失败都不可静默返回 summary。
+`conflict` is the canonical machine outcome from 06 §4.5. Screenshot failures never return a summary fallback and never claim layout completion.
 
 ### 8.4 安全
 
@@ -443,4 +443,4 @@ fixture 同层放置：`a.md` row `(0,0,280,200,z=1)`、`b.md` row `(100,100,280
 
 ## 12. 交付边界
 
-本文交付结构化读口、身份/版本、真实 Playwright 读取、ready/gate/auth/origin/资源/错误/清理、独立 conflict 语义与非空验收；不创建坐标写入 API，不实现整理动作，不 spawn Agent，不扩 Activity phase，不增加第二 WS，不改 06。截图是视觉 evidence；服务端/复核器以最新结构化 rows 的全层 AABB 断言整理完成。
+本文交付结构化读口、身份/版本、真实 Playwright 读取、ready/gate/auth/origin/资源/错误/清理、独立 conflict 语义与非空验收；不创建坐标写入 API，不实现整理动作，不 spawn Agent，不扩 Activity phase，不增加第二 WS。截图是视觉 evidence；服务端以最新结构化 rows 的全层 AABB 断言整理完成，截图不自授完成。
