@@ -1,6 +1,7 @@
 ---
 type: readme
 name: Exp · Elias
+voice: cool-composed
 title: Exp · Elias
 avatar: assets/motion/seedance/characters/elias-transparent.webp
 avatarVideo: assets/motion/seedance/characters/elias-transparent.webm
