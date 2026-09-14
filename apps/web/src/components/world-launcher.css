@@ -1,0 +1,308 @@
+/* World launcher (docs/ui/世界Launcher.md): thick glass tiles on one wall that
+   leans with the pointer; the gaps glow with a blur of the neighbouring covers. */
+.world-launcher {
+  --tilt-x: 0; /* -1…1 from the pointer, set by WorldLauncher */
+  --tilt-y: 0;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --tile-radius: clamp(28px, 3.2vw, 54px);
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--depth-modal) + 20);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding-block: 18px 0;
+  padding-inline: clamp(16px, 2.4vw, 36px);
+  overflow: hidden;
+  background: #04050c;
+  color: #f5f3ee;
+  font-family: "Helvetica Neue", Inter, var(--ux-font-ui, system-ui), sans-serif;
+}
+
+/* Every cover, blurred into one dim field: the seams between tiles take the
+   colour of the worlds on either side. */
+.world-launcher__ambient {
+  position: absolute;
+  inset: -15%;
+  display: grid;
+  grid-template-columns: repeat(var(--count, 7), 1fr);
+  filter: blur(70px) saturate(1.25) brightness(.34);
+  pointer-events: none;
+}
+.world-launcher__ambient > span { background: center / cover no-repeat; }
+
+.world-launcher button { font: inherit; color: inherit; cursor: pointer; }
+
+.world-launcher__top {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.world-launcher__brand { font: 600 20px/1 var(--ux-font-human, Georgia, serif); letter-spacing: .04em; }
+.world-launcher__brand span { opacity: .55; font-weight: 400; }
+.world-launcher__top nav { display: flex; flex-wrap: wrap; gap: 8px; }
+.world-launcher__pill {
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .24);
+  background: rgba(20, 22, 32, .55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font: 500 12px/1 ui-monospace, "SFMono-Regular", monospace;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.world-launcher__pill:hover { background: rgba(255, 255, 255, .14); }
+
+/* The wall is wider than the screen; it leans and drifts toward the pointer,
+   so the cropped tiles at either end come into view. */
+.world-launcher__stage {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  perspective: 1600px;
+  perspective-origin: 50% 45%;
+}
+.world-launcher__wall {
+  position: absolute;
+  top: 1%;
+  bottom: 3%;
+  left: 50%;
+  width: max(118vw, 1180px);
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: clamp(14px, 1.6vw, 26px);
+  transform:
+    translateX(calc(-50% - var(--tilt-x) * 8vw))
+    rotateY(calc(var(--tilt-x) * 7deg))
+    rotateX(calc(var(--tilt-y) * -5deg));
+  transform-style: preserve-3d;
+  transition: transform .6s var(--ease);
+}
+.world-launcher__row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: inherit;
+  min-height: 0;
+  transform-style: preserve-3d;
+}
+/* Second row sits half a tile in, like bricks. */
+.world-launcher__row--1 { margin-inline: 12.5%; }
+
+.world-launcher__tile {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: var(--tile-radius);
+  box-shadow: 0 50px 90px -40px rgba(0, 0, 0, .9), 0 0 0 1px rgba(255, 255, 255, .16);
+  transform: translateZ(0);
+  transition: transform .5s var(--ease), box-shadow .5s;
+}
+.world-launcher__tile.is-active {
+  transform: translateZ(42px);
+  box-shadow: 0 60px 110px -40px rgba(0, 0, 0, .95), 0 0 0 1px rgba(255, 255, 255, .3);
+}
+
+.world-launcher__image {
+  position: absolute;
+  inset: 0;
+  background: center / cover no-repeat;
+  filter: saturate(.92) brightness(.86);
+  transform: scale(1.02);
+  transition: filter .5s, transform .9s var(--ease);
+}
+.world-launcher__image::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(4, 5, 12, .78), rgba(4, 5, 12, .12) 48%, transparent 70%);
+}
+.is-active .world-launcher__image { filter: none; transform: scale(1.06); }
+
+/* Thick edge: a band around the tile shows the picture magnified and
+   over-saturated, as if bent through the glass. */
+.world-launcher__rim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  padding: clamp(12px, 1.4vw, 20px);
+  border-radius: inherit;
+  overflow: hidden;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+.world-launcher__rim > span {
+  position: absolute;
+  inset: 0;
+  background: center / cover no-repeat;
+  filter: blur(1.2px) saturate(1.8) contrast(1.12) brightness(1.12);
+  transform: scale(1.16) translate(calc(var(--tilt-x) * -1.5%), calc(var(--tilt-y) * -1.5%));
+  transition: transform .6s var(--ease);
+}
+/* Colour fringe on the outermost edge. */
+.world-launcher__fringe {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  box-sizing: border-box;
+  padding: 6px;
+  border-radius: inherit;
+  background: conic-gradient(from calc(200deg + var(--tilt-x) * 40deg),
+    rgba(255, 60, 120, .5), rgba(255, 210, 60, .35), rgba(60, 255, 190, .4),
+    rgba(60, 140, 255, .5), rgba(200, 80, 255, .4), rgba(255, 60, 120, .5));
+  mix-blend-mode: overlay;
+  opacity: .7;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+/* Bevel light, a soft reflection that moves with the lean, and two glints. */
+.world-launcher__sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  background: radial-gradient(55% 38% at calc(28% + var(--tilt-x) * 22%) calc(8% + var(--tilt-y) * 14%), rgba(255, 255, 255, .2), transparent 70%);
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, .8),
+    inset 0 -3px 6px rgba(255, 255, 255, .2),
+    inset 12px 0 18px -10px rgba(255, 255, 255, .4),
+    inset -14px 0 22px -12px rgba(0, 0, 0, .5),
+    inset 0 -50px 70px -40px rgba(0, 0, 0, .45);
+  pointer-events: none;
+}
+.world-launcher__sheen::before {
+  content: '';
+  position: absolute;
+  top: 6%;
+  right: 7%;
+  width: 3%;
+  height: 1.4%;
+  min-width: 10px;
+  min-height: 4px;
+  border-radius: 50%;
+  background: #fff;
+  filter: blur(.6px);
+  transform: translate(calc(var(--tilt-x) * -10px), 0) rotate(38deg);
+  opacity: .9;
+}
+.world-launcher__sheen::after {
+  content: '';
+  position: absolute;
+  left: 2.6%;
+  top: 16%;
+  width: 4px;
+  height: 46%;
+  border-radius: 99px;
+  background: linear-gradient(transparent, rgba(255, 255, 255, .8), transparent);
+  filter: blur(.8px);
+  transform: translateY(calc(var(--tilt-y) * -12px));
+}
+
+.world-launcher__hit {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+}
+.world-launcher__hit:focus-visible { outline: 2px solid rgba(255, 255, 255, .85); outline-offset: -6px; }
+
+.world-launcher__meta {
+  position: absolute;
+  top: 7%;
+  left: 7%;
+  right: 7%;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font: 500 11px/1 ui-monospace, "SFMono-Regular", monospace;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  opacity: .82;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.world-launcher__meta i { font-style: normal; color: #c9f27a; margin-right: 1.4em; }
+
+.world-launcher__caption {
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  bottom: 9%;
+  z-index: 5;
+  display: grid;
+  gap: 10px;
+  pointer-events: none;
+}
+.world-launcher__caption::before {
+  content: '';
+  height: 1px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, .35);
+}
+.world-launcher__caption b {
+  font: 700 clamp(26px, 3.4vw, 60px)/1 "Helvetica Neue", Inter, var(--ux-font-ui, system-ui), sans-serif;
+  letter-spacing: -.03em;
+  overflow-wrap: anywhere;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, .35);
+}
+.world-launcher__caption small {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: .85;
+}
+.world-launcher__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; pointer-events: auto; }
+.world-launcher__actions button {
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .34);
+  background: rgba(20, 22, 32, .55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font: 500 12px/1.2 ui-monospace, "SFMono-Regular", monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.world-launcher__actions button:hover { background: rgba(255, 255, 255, .18); }
+.world-launcher__actions button:disabled { opacity: .5; cursor: wait; }
+
+/* Opened from the launcher, the save manager sits above it. */
+body:has(.world-launcher) .prototype-world-picker { z-index: calc(var(--depth-modal) + 30); }
+
+/* Phones: one flat column that scrolls; no lean. */
+@media (max-width: 760px) {
+  .world-launcher__stage { overflow-y: auto; perspective: none; }
+  .world-launcher__wall { position: static; width: auto; display: flex; flex-direction: column; transform: none; padding-bottom: 24px; }
+  .world-launcher__row { display: flex; flex-direction: column; }
+  .world-launcher__row--1 { margin-inline: 0; }
+  .world-launcher__tile { flex: 0 0 240px; }
+  .world-launcher__tile.is-active { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-launcher__wall { transform: translateX(-50%); }
+  .world-launcher *, .world-launcher *::before, .world-launcher *::after { transition: none !important; }
+}

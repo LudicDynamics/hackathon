@@ -1054,6 +1054,14 @@
     "zh-CN": "跟随",
     "ja": "同行"
   },
+  "World launcher": {
+    "zh-CN": "世界大厅",
+    "ja": "ワールド一覧"
+  },
+  "Continue latest save": {
+    "zh-CN": "继续最近的存档",
+    "ja": "続きから遊ぶ"
+  },
   "Dismiss": {
     "zh-CN": "解散",
     "ja": "解散する"

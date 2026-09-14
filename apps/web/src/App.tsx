@@ -49,6 +49,7 @@ import { usePresence } from './state/usePresence.js';
 import { airpGateway, onWorldUnavailable, AirpRequestError, type AssetMediaKind, type WorldShelf } from './lib/airp-gateway.js';
 import { WorldShelf as WorldShelfDialog } from './components/WorldShelf.js';
 import { BagItemDialog } from './components/BagItemDialog.js';
+import { WorldLauncher } from './components/WorldLauncher.js';
 import { guardImeKey } from './lib/ime.js';
 import { initialShell, transitionShell } from './lib/ui-shell.mjs';
 import { MarkdownText } from './lib/md.js';
@@ -183,6 +184,11 @@ export function App() {
   const toggleShell = (action: 'header' | 'journal' | 'immersion') => setShell(current => transitionShell(current, action));
   const [worldPickerOpen, setWorldPickerOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  // Every session opens on the launcher, and every world returns to it.
+  const [launcherOpen, setLauncherOpen] = useState(true);
+  useEffect(() => {
+    if (launcherOpen) void airpGateway.worlds().then(setShelf).catch(() => {});
+  }, [launcherOpen]);
   const [activeCharacter, setActiveCharacter] = useState<CharacterView | null>(null);
   const [nookChar, setNookChar] = useState<string | null>(null);
   const [preparedAction, setPreparedAction] = useState('');
@@ -663,6 +669,7 @@ export function App() {
       setAttention('ambient');
       setIsGodHandOpen(false);
       setShell(initialShell);
+      setLauncherOpen(false);
       setProfileOpen(false);
       setBagOpen(false);
       notify(`Entered ${result.manifest.name}`);
@@ -975,6 +982,7 @@ export function App() {
             <AgentSettings settings={world.settings} onSaveSettings={world.saveSettings} focus={focusCoordinator} />
             <TtsSettings focus={focusCoordinator} />
             <MuteButton />
+            <button className="prototype-pill" onClick={() => setLauncherOpen(true)}>{t('World launcher')}</button>
             <button className="prototype-effects-toggle" role="switch" aria-label={t("Visual effects")} aria-checked={effectsEnabled} onClick={() => setEffectsEnabled(value => !value)} title={t("Particles, parallax and animated backgrounds")}><span aria-hidden="true" />{t(effectsEnabled ? 'Effects on' : 'Effects off')}</button>
             <button className="prototype-quiet" onClick={() => toggleShell('header')} aria-label={t("Close header")}><ChevronUp size={16} /></button>
           </header>
@@ -1137,6 +1145,15 @@ export function App() {
       )}
 
       {selectedBagItem && (
+      {launcherOpen && (
+        <WorldLauncher
+          shelf={shelf}
+          loading={loadingWorld}
+          onLoad={path => void loadWorld(path)}
+          onClose={manifest ? () => setLauncherOpen(false) : undefined}
+          onManageSaves={() => setWorldPickerOpen(true)}
+        />
+      )}
         <BagItemDialog
           item={selectedBagItem}
           onClose={() => setSelectedBagPath(null)}

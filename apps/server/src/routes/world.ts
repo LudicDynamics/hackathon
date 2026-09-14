@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { readWorldShelf, trashWorldSave, ShelfError } from '../world-shelf.js';
+import { readWorldShelf, templateCover, trashWorldSave, ShelfError } from '../world-shelf.js';
 import type { Response } from 'express';
 import fs from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
@@ -497,6 +497,17 @@ export function createWorldRouter(
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
+  });
+
+  // Launcher covers (docs/ui/世界Launcher.md): a template's cover image,
+  // read-only and independent of the active world (`/asset` serves only that).
+  router.get('/worlds/cover', async (req, res) => {
+    const file = await templateCover(repoRoot, req.query.id).catch(() => null);
+    if (!file) return res.status(404).json({ ok: false, code: 'not_found', error: 'No cover for this world.' });
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.sendFile(file, (err) => {
+      if (err && !res.headersSent) res.status(404).json({ ok: false, code: 'not_found', error: err.message });
+    });
   });
 
   // Load a world
