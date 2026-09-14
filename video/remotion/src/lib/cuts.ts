@@ -62,9 +62,11 @@ const worldSlots = (): Record<string, Slot> => {
 export const SLOTS: Record<string, Slot> = {
   c2: { note: "C2 · 点角色头像 → 特写遮罩 → 表情切换", candidates: [{ match: ["c2"] }] },
   r0: { note: "R0 · 按麦克风说一句 → 实时转写 → Nanami 用 TTS 回话（你录）", candidates: [{ match: "footage/r0" }] },
-  r5: { note: "R5 · 进 Vera 的小天地，在画布上 RP，物件一张张长出来（你录）", candidates: [{ match: "footage/r5" }, { match: ["c7"] }, { match: ["stills", "nook"] }] },
+  r5a: { note: "R5a · 月下之誓：接受契约 → 作家光标边读边写，生成月下庭院（你录）", candidates: [{ match: "footage/r5a" }] },
+  r5: { note: "R5b · 进角色的小天地，在画布上 RP，物件一张张长出来（你录）", candidates: [{ match: "footage/r5b" }, { match: ["c7"] }, { match: ["stills", "nook"] }] },
   c6: { note: "C6 · 角色头像在画布上自由走动 / 跟随切场景", candidates: [{ match: "footage/c6-" }, { match: "footage/c6a-workshop-follow", from: 13, rate: 2.2 }] },
   c3: { note: "C3 · 3D 骰子掷出", candidates: [{ match: ["c3"] }] },
+  gate: { note: "Gate · 门打开、光涌出来（可用 Seedance 生成，约 2 秒）", candidates: [{ match: "footage/gate" }] },
   c5: { note: "C5 · 画布拖动 / 缩放 B-roll", candidates: [{ match: ["c5"] }] },
   ...worldSlots(),
 };

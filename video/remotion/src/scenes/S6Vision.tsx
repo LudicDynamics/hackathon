@@ -6,6 +6,7 @@ import { ChalkWrite, Chip, CursorAvatar, Flash, PlayerCursor } from "../componen
 import { Door } from "../components/Icons";
 import { CAST, cast } from "../lib/assets";
 import { SNIPPETS } from "../lib/snippets";
+import { DiceSlot } from "./parts/DiceSlot";
 import { DISPLAY, INK, INK_2, MONO, ORANGE, PAPER, PLAYERS } from "../lib/theme";
 import { H, W } from "../lib/timing";
 
@@ -82,11 +83,12 @@ const BrowserWindow: React.FC<{ r: Rect; viewer: number; cards: CardSpec[]; chro
   );
 };
 
-const Multiplayer: React.FC = () => {
+export const Multiplayer: React.FC = () => {
   const f = useCurrentFrame();
+  const { durationInFrames: d } = useVideoConfig();
   const cards = useMemo(() => layoutCards({ radius: 6, seed: "mp", density: 0.55 }), []);
-  const n = f < 75 ? 1 : f < 150 ? 2 : 4;
-  const merge = interpolate(f, [MULTI - 45, MULTI - 10], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const n = f < d * 0.25 ? 1 : f < d * 0.5 ? 2 : 4;
+  const merge = interpolate(f, [d - 45, d - 10], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const rects = layout(n).map((r) => mix(r, FULL, merge));
   return (
     <AbsoluteFill style={{ background: "#050505" }}>
@@ -176,7 +178,7 @@ const CodePanel: React.FC<{ code: string; file: string; len: number }> = ({ code
   );
 };
 
-const DiceMock: React.FC<{ go: number }> = ({ go }) => {
+export const DiceMock: React.FC<{ go: number }> = ({ go }) => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const t = spring({ frame: f - go, fps, config: { damping: 12, stiffness: 90 } });
@@ -218,31 +220,66 @@ const Beam: React.FC<{ go: number }> = ({ go }) => {
   );
 };
 
+/** Door leaf inside templates/unwritten-door/assets/tokens/door.png, as fractions of the image. */
+const LEAF = { l: 0.226, t: 0.055, w: 0.558, h: 0.825 };
+const DOOR_IMG = "scenes/unwritten-door.png";
+const BEYOND = "scenes/wuwu-beyond-the-fog.webp";
+
+/**
+ * The Unwritten Door's real door: the leaf (cut from the same image) swings open on its hinge and warm light
+ * pours out. A Seedance clip at footage/gate-* replaces it automatically.
+ */
 const Gate: React.FC<{ go: number }> = ({ go }) => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const open = spring({ frame: f - go, fps, config: { damping: 14, stiffness: 120 } });
+  const open = spring({ frame: f - go, fps, config: { damping: 18, stiffness: 70 } });
+  const leaf: React.CSSProperties = { position: "absolute", left: `${LEAF.l * 100}%`, top: `${LEAF.t * 100}%`, width: `${LEAF.w * 100}%`, height: `${LEAF.h * 100}%` };
   return (
-    <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", perspective: 1400 }}>
-      <div style={{ position: "relative", width: 420, height: 620, borderRadius: "210px 210px 12px 12px", background: `radial-gradient(circle at 50% 60%, ${ORANGE}, #7a2a00 70%)`, boxShadow: `0 0 ${140 * open}px ${ORANGE}` }}>
-        <div style={{ position: "absolute", inset: 0, borderRadius: "210px 210px 12px 12px", background: "#2b2622", transformOrigin: "0% 50%", transform: `rotateY(${-100 * open}deg)`, display: "flex", alignItems: "center", justifyContent: "center", border: `4px solid ${ORANGE}` }}>
-          <Door size={200} color={ORANGE} />
-        </div>
-      </div>
-    </AbsoluteFill>
+    <Footage
+      slot="gate"
+      fallback={
+        <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", transform: `scale(${1 + open * 0.08})` }}>
+          <div style={{ position: "relative", height: 1000, perspective: 1800 }}>
+            <Img src={staticFile(DOOR_IMG)} style={{ height: "100%", display: "block" }} />
+            {/* Behind the door: another place (the new road beyond the fog), softly lit. */}
+            <div style={{ ...leaf, overflow: "hidden", opacity: Math.min(1, open * 3) }}>
+              <Img src={staticFile(BEYOND)} style={{ width: "100%", height: "100%", objectFit: "cover", transform: `scale(${1.25 - open * 0.15})`, filter: `brightness(${0.9 + open * 0.3})` }} />
+              <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 50%, transparent 45%, rgba(255,250,240,.35) 100%)" }} />
+            </div>
+            <div
+              style={{
+                ...leaf,
+                backgroundImage: `url(${staticFile(DOOR_IMG)})`,
+                backgroundSize: `${100 / LEAF.w}% ${100 / LEAF.h}%`,
+                backgroundPosition: `${(LEAF.l / (1 - LEAF.w)) * 100}% ${(LEAF.t / (1 - LEAF.h)) * 100}%`,
+                transformOrigin: "0% 50%",
+                transform: `rotateY(${-102 * open}deg)`,
+                filter: `brightness(${1 - open * 0.55})`,
+                boxShadow: `${-30 * open}px 0 60px rgba(0,0,0,${0.6 * open})`,
+              }}
+            />
+            <div style={{ position: "absolute", left: "-60%", right: "-60%", top: "-20%", bottom: "-40%", mixBlendMode: "screen", opacity: open * 0.5, background: "radial-gradient(ellipse at 50% 52%, rgba(225,235,255,.5) 0%, rgba(200,215,240,.15) 24%, transparent 45%)" }} />
+            <div style={{ position: "absolute", left: `${LEAF.l * 100 - 12}%`, width: `${LEAF.w * 100 + 24}%`, top: "86%", height: "30%", mixBlendMode: "screen", opacity: open * 0.45, background: "linear-gradient(to bottom, rgba(220,230,250,.55), transparent)", clipPath: "polygon(20% 0, 80% 0, 100% 100%, 0 100%)" }} />
+          </div>
+        </AbsoluteFill>
+      }
+    />
   );
 };
 
 const EFFECTS = [
-  { bg: "bg/whitechapel/fourth.webm", Fx: ({ go }: { go: number }) => <Footage slot="c3" fallback={<DiceMock go={go} />} /> },
+  {
+    bg: "bg/whitechapel/fourth.webm",
+    Fx: ({ go }: { go: number }) => <Footage slot="c3" fallback={<DiceSlot dice="2d10" results={[7, 6]} throwAt={go} showResult expect=">=11" desc="Deciphering the scrapes" />} />,
+  },
   { bg: "bg/first-snow/rooftop.webm", Fx: Snow },
   { bg: "bg/wuwu/lighthouse.webm", Fx: Beam },
-  { bg: "bg/wuwu/beyond.webm", Fx: Gate },
+  { bg: "bg/unwritten-door/intro.webm", Fx: Gate },
 ];
 
-const Round: React.FC<{ i: number }> = ({ i }) => {
+export const Round: React.FC<{ i: number; len?: number }> = ({ i, len: lenProp }) => {
   const f = useCurrentFrame();
-  const len = ROUNDS[i];
+  const len = lenProp ?? ROUNDS[i];
   const go = Math.round(len * TYPE_SHARE);
   const { bg, Fx } = EFFECTS[i];
   const lit = f >= go;

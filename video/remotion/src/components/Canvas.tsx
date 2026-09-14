@@ -16,6 +16,8 @@ export type CardSpec = {
   rot: number;
   kind: CardKind;
   src?: string;
+  /** object-position for avatar crops. */
+  pos?: string;
   /** Distance from the origin in cell widths — drives staggered reveals. */
   ring: number;
   tone: string;
@@ -54,6 +56,7 @@ export function layoutCards({ radius, seed, density = 0.62, center }: { radius: 
         rot: isCenter ? 0 : (random(k + "r") - 0.5) * 8,
         kind,
         src,
+        pos: kind === "avatar" ? who.face : undefined,
         ring: dist / CELL_W,
         tone: kind === "avatar" ? who.tint : TONES[kind],
       });
@@ -84,7 +87,7 @@ export const Card: React.FC<{ c: CardSpec; lod?: boolean }> = ({ c, lod }) => {
     case "avatar":
       return (
         <div style={{ width: "100%", height: "100%", borderRadius: "50%", border: `10px solid ${c.tone}`, overflow: "hidden", boxShadow: shadow, background: INK }}>
-          <Img src={staticFile(c.src!)} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "50% 14%" }} />
+          <Img src={staticFile(c.src!)} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: c.pos ?? "50% 14%" }} />
         </div>
       );
     case "chalk":

@@ -1,4 +1,5 @@
 import React from "react";
+import { Img, staticFile } from "remotion";
 import type { Axis } from "../lib/assets";
 
 type P = { size?: number; color?: string; stroke?: number };
@@ -64,6 +65,41 @@ export const Mic: React.FC<P> = ({ color = "#fff", stroke = 4, ...p }) => (
     <rect x="17" y="5" width="14" height="24" rx="7" fill={color} />
     <path d="M10 22a14 14 0 0 0 28 0M24 36v7" stroke={color} strokeWidth={stroke} strokeLinecap="round" />
   </Svg>
+);
+
+export const Chat: React.FC<P> = ({ color = "#fff", stroke = 4, ...p }) => (
+  <Svg {...p}>
+    <path d="M8 9h32a3 3 0 0 1 3 3v17a3 3 0 0 1-3 3H22l-9 8v-8H8a3 3 0 0 1-3-3V12a3 3 0 0 1 3-3z" stroke={color} strokeWidth={stroke} strokeLinejoin="round" />
+    <circle cx="17" cy="20.5" r="2.4" fill={color} />
+    <circle cx="24" cy="20.5" r="2.4" fill={color} />
+    <circle cx="31" cy="20.5" r="2.4" fill={color} />
+  </Svg>
+);
+
+/** Black-and-white anime character bust silhouette (bangs, ahoge, big eyes cut out of the face) — "AI roleplay". */
+export const AnimeBust: React.FC<P & { face?: string }> = ({ color = "#fff", face = "#0A0A0A", ...p }) => (
+  <Svg {...p}>
+    {/* long hair falling past the shoulders */}
+    <path d="M9 42C6 28 8 8 24 6c16 2 18 22 15 36-3-2-5-6-6-10H15c-1 4-3 8-6 10z" fill={color} />
+    <path d="M7 48c2-8 8-11 17-11s15 3 17 11z" fill={color} />
+    {/* face cut out under jagged bangs */}
+    <path d="M14.5 19l2.5-5.5 2.5 4.5 2.5-5.5 2 5 2-5 2.5 5.5 2.5-4.5 2.5 5.5c0 8.5-4 14-9.5 14s-9.5-5.5-9.5-14z" fill={face} />
+    {/* big anime eyes with highlights, small mouth */}
+    <ellipse cx="20" cy="24.2" rx="2.3" ry="3.2" fill={color} />
+    <ellipse cx="28" cy="24.2" rx="2.3" ry="3.2" fill={color} />
+    <circle cx="20.8" cy="22.9" r="0.8" fill={face} />
+    <circle cx="28.8" cy="22.9" r="0.8" fill={face} />
+    <path d="M22.6 29.6q1.4 1 2.8 0" stroke={color} strokeWidth="1" strokeLinecap="round" fill="none" />
+    {/* ahoge */}
+    <path d="M23 6.5c.5-4.5 4-5.7 7.5-4.5-3 .4-4.7 2-5.5 4.8z" fill={color} />
+  </Svg>
+);
+
+/** "AI roleplay": Nanami as a black-and-white manga cut-out in a ring (public/icons, made by sync-assets.sh). */
+export const RoleplayIcon: React.FC<P> = ({ size = 96, color = "#fff" }) => (
+  <div style={{ width: size, height: size, borderRadius: "50%", overflow: "hidden", border: `${Math.max(3, Math.round(size * 0.04))}px solid ${color}`, background: "#0A0A0A" }}>
+    <Img src={staticFile("icons/roleplay-nanami.png")} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+  </div>
 );
 
 export const AxisIcon: React.FC<P & { axis: Axis }> = ({ axis, ...p }) =>

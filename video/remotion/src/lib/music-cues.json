@@ -10,120 +10,140 @@
   "gridNote": "Beats fall on multiples of 0.5 s from t=0. Chord bars restart at each section start.",
   "sections": [
     {
-      "id": "S0",
-      "name": "cold-open-riser",
+      "id": "ACT1",
+      "name": "reflective-opening",
       "start": 0,
-      "end": 3
+      "end": 18,
+      "swell": 14
     },
     {
-      "id": "S1",
-      "name": "cast-drop",
-      "start": 3,
-      "end": 15
+      "id": "ACT2",
+      "name": "first-drop-canvas",
+      "start": 18,
+      "end": 27,
+      "change": 20
     },
     {
-      "id": "S2",
-      "name": "one-canvas-halftime",
-      "start": 15,
-      "end": 27
-    },
-    {
-      "id": "S3",
-      "name": "voice-ducked",
+      "id": "ACT2-cast",
+      "name": "cast-hits-every-beat",
       "start": 27,
-      "end": 39
+      "end": 33
     },
     {
-      "id": "S4",
+      "id": "ACT3",
+      "name": "voice-demo-quiet",
+      "start": 33,
+      "end": 47
+    },
+    {
+      "id": "ACT4-launcher",
+      "name": "launcher-glassy",
+      "start": 47,
+      "end": 52
+    },
+    {
+      "id": "ACT4-worlds",
       "name": "four-worlds-build",
-      "start": 39,
-      "end": 87,
+      "start": 52,
+      "end": 90,
       "blocks": [
-        39,
-        51,
-        63,
-        75
+        52,
+        62,
+        72,
+        82
       ]
     },
     {
-      "id": "S5",
-      "name": "infinite-exploration-melodic",
-      "start": 87,
-      "end": 112
+      "id": "ACT5",
+      "name": "infinite-exploration-moonlit",
+      "start": 90,
+      "end": 118
     },
     {
-      "id": "S6",
-      "name": "vision-second-drop",
-      "start": 112,
-      "end": 137
+      "id": "ACT6",
+      "name": "second-drop",
+      "start": 118,
+      "end": 136
     },
     {
-      "id": "S7",
-      "name": "formula-hits",
-      "start": 137,
+      "id": "ACT7",
+      "name": "formula-and-logo",
+      "start": 136,
       "end": 150
     }
   ],
   "impacts": [
-    3,
-    112,
+    18,
+    118,
+    137,
     138,
     139,
     140,
-    141,
-    143,
-    148
+    142,
+    144
   ],
   "crashes": [
-    39,
-    51,
-    63,
-    75,
-    87,
-    122
+    27,
+    52,
+    62,
+    72,
+    82,
+    90,
+    126
   ],
   "fills": [
     {
-      "start": 50.5,
-      "end": 51
+      "start": 61.5,
+      "end": 62
     },
     {
-      "start": 62.5,
-      "end": 63
+      "start": 71.5,
+      "end": 72
     },
     {
-      "start": 74.5,
-      "end": 75
+      "start": 81.5,
+      "end": 82
     },
     {
-      "start": 86.5,
-      "end": 87,
+      "start": 89.5,
+      "end": 90,
       "kind": "roll"
     }
   ],
   "risers": [
     {
-      "start": 0,
-      "end": 3
+      "start": 15,
+      "end": 18
     },
     {
-      "start": 110,
-      "end": 112
+      "start": 49,
+      "end": 52
     },
     {
-      "start": 141,
-      "end": 143
+      "start": 116,
+      "end": 118
+    },
+    {
+      "start": 140,
+      "end": 142
     }
   ],
   "silence": {
-    "start": 137,
-    "end": 137.5
+    "start": 136,
+    "end": 136.5
   },
   "formulaHits": [
+    137,
     138,
-    139,
-    140,
-    141
+    139
   ],
-  "finalHit": 148
+  "swell": {
+    "start": 140,
+    "end": 142
+  },
+  "finalHit": 144,
+  "outro": {
+    "start": 144,
+    "end": 150
+  }
 }

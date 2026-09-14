@@ -5,15 +5,20 @@
 #
 #   sh scripts/render-chunks.sh                  # 960x540 preview
 #   SCALE=1 OUT=out/worldlines-launch.mp4 sh scripts/render-chunks.sh   # final 1080p
+#   MUSIC=music/candidate-b.wav OUT=out/try-b.mp4 sh scripts/render-chunks.sh   # same picture, another song
+#
+# After changing a scene, delete the chunk(s) covering it (and audio-*.aac if sound changed) before re-running.
 set -u
 cd "$(dirname "$0")/.."
 
 SCALE=${SCALE:-0.5}
 OUT=${OUT:-out/worldlines-launch-preview.mp4}
+MUSIC=${MUSIC:-music/track-a.wav}
 DIR=out/chunks-$SCALE
-FLAGS="--scale=$SCALE --concurrency=2 --offthreadvideo-cache-size-in-bytes=268435456 --log=error"
-# Section boundaries (frames at 30fps); S4 is split in two to keep each chunk short.
-CHUNKS="0-449 450-1169 1170-1889 1890-2609 2610-3359 3360-4109 4110-4499"
+# --gl=angle: the 3D dice (parts/Dice3D.tsx, three.js) need a real GL context.
+FLAGS="--scale=$SCALE --concurrency=2 --offthreadvideo-cache-size-in-bytes=268435456 --gl=angle --log=error"
+# Act boundaries (frames at 30fps, v6 = 156s); A4 is split after the second world to keep each chunk short.
+CHUNKS="0-509 510-989 990-1589 1590-2339 2340-2879 2880-3719 3720-4259 4260-4679"
 
 mkdir -p "$DIR"
 for r in $CHUNKS; do
@@ -24,12 +29,14 @@ for r in $CHUNKS; do
   mv "$DIR/tmp-$r.mp4" "$f"
 done
 
-if [ ! -s "$DIR/audio.aac" ]; then
-  echo "audio  $(date +%T)"
-  npx remotion render src/index.ts Launch "$DIR/audio.aac" --codec=aac --log=error || { echo "FAILED audio"; exit 1; }
+# One audio track per song (music + voices + foley), cached by song name.
+AUDIO="$DIR/audio-$(basename "$MUSIC" .wav).aac"
+if [ ! -s "$AUDIO" ]; then
+  echo "audio  $MUSIC  $(date +%T)"
+  npx remotion render src/index.ts Launch "$AUDIO" --codec=aac --gl=angle --concurrency=2 --props="{\"music\":\"$MUSIC\"}" --log=error || { echo "FAILED audio"; exit 1; }
 fi
 
 : > "$DIR/list.txt"
 for r in $CHUNKS; do echo "file '$PWD/$DIR/$r.mp4'" >> "$DIR/list.txt"; done
-ffmpeg -loglevel error -y -f concat -safe 0 -i "$DIR/list.txt" -i "$DIR/audio.aac" -map 0:v -map 1:a -c:v copy -c:a copy -shortest "$OUT" || { echo "FAILED mux"; exit 1; }
+ffmpeg -loglevel error -y -f concat -safe 0 -i "$DIR/list.txt" -i "$AUDIO" -map 0:v -map 1:a -c:v copy -c:a copy -shortest "$OUT" || { echo "FAILED mux"; exit 1; }
 echo "done   $OUT  $(date +%T)"

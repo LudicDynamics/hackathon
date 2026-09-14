@@ -6,9 +6,10 @@ import { Flash, PlayerCursor } from "../components/Kit";
 import { INK, ORANGE, PAPER } from "../lib/theme";
 import { W } from "../lib/timing";
 
-const PRESS = 14; // cursor clicks, key bottoms out
-const BURST = 24; // the canvas starts unfolding
-const SETTLE = 80;
+// v2: the press opens act 2 at 0:17; the burst lands on the first drop at 0:18.0.
+const PRESS = 20; // cursor clicks, key bottoms out
+const BURST = 30; // the canvas starts unfolding
+const SETTLE = 86;
 const S_START = 3.4; // the centre card fills the frame
 const S_END = 0.06; // the whole canvas is a field of specks
 

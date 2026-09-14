@@ -1,0 +1,77 @@
+[
+ {
+  "id": "vera-1",
+  "speaker": "Vera",
+  "language": "en",
+  "text": "Twelve minutes of darkness. Someone wanted the harbour blind.",
+  "file": "voice/vera-1.wav",
+  "duration": 3.741
+ },
+ {
+  "id": "nanami-1",
+  "speaker": "Nanami",
+  "language": "en",
+  "text": "It just started! Come up to the roof, quick!",
+  "file": "voice/nanami-1.wav",
+  "duration": 2.977
+ },
+ {
+  "id": "lyra-1",
+  "speaker": "Lyra",
+  "language": "ja",
+  "text": "私はライラ。あなたを守るために、ここへ来ました。",
+  "subtitle": "I am Lyra. I have come to protect you.",
+  "file": "voice/lyra-1.wav",
+  "duration": 3.487
+ },
+ {
+  "id": "lyra-2",
+  "speaker": "Lyra",
+  "language": "ja",
+  "text": "私と契約を結び、この夜を共に歩んでくれますか。",
+  "subtitle": "Will you bind a contract with me, and walk this night together?",
+  "file": "voice/lyra-2.wav",
+  "duration": 3.778
+ },
+ {
+  "id": "vera-2",
+  "speaker": "Vera",
+  "language": "ja",
+  "text": "ここはね、直せなかったものを置いておく場所なの。",
+  "subtitle": "This is where I keep the things I couldn't fix.",
+  "file": "voice/vera-2.wav",
+  "duration": 2.967
+ },
+ {
+  "id": "player-1",
+  "speaker": "Player",
+  "language": "en",
+  "text": "Vera, what did you find at the lighthouse?",
+  "file": "voice/player-1.wav",
+  "duration": 2.287
+ },
+ {
+  "id": "player-2",
+  "speaker": "Player",
+  "language": "en",
+  "text": "Nanami, is it snowing yet?",
+  "file": "voice/player-2.wav",
+  "duration": 1.765
+ },
+ {
+  "id": "player-3",
+  "speaker": "Player",
+  "language": "en",
+  "text": "Wataru, did you wait for me?",
+  "file": "voice/player-3.wav",
+  "duration": 1.824
+ },
+ {
+  "id": "wataru-1",
+  "speaker": "Wataru",
+  "language": "en",
+  "text": "Of course I did. I saved you the seat by the window.",
+  "file": "voice/wataru-1.wav",
+  "duration": 3.033
+ }
+]

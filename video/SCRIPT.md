@@ -87,7 +87,39 @@
 | R6 | 作家光标特写：随便一个世界，作家处理你的行动时，光标在卡片之间移动 | 相机别动，让光标自己跑 |
 | R7 | 世界 Launcher | 慢慢移动鼠标让砖墙倾斜 → 悬停 → 点开一块 |
 
-## 5. 请你评价
+## 5. v2 实现状态（2026-09-14）
+
+已拍板：主线通过；**全程英文字幕、先不配旁白**（你之后想念再补）；公式改为 **SANDBOX + AGENTS + AI ROLEPLAY = WORLDLINES · INFINITE CANVAS**；角色展示不用透明抠像。
+
+| 段 | 现在是什么 | 等你的录屏替换 |
+|---|---|---|
+| ACT 1 读 / 玩 / 聊天框 / live. | 自有素材风格化：羊皮纸墨字、翻页书（世界图做书页）、**App 真实 3D 骰子**、通用聊天框、白底大字 | — |
+| ACT 2 按键 + 画布 | 画布上**小作家光标**按 AgentCursorLayer 的样子读卡、写卡、挪角色；角色展示改为全身插画卡（Seraphina 换成 Lyra） | R6（可选） |
+| ACT 3 语音 | mock，但声音是真的：玩家句用 macOS Samantha 占位，**Vera / Nanami 回话是 setsuna 生成**，字随语音逐字出现 | R0（你的真实 STT → TTS） |
+| ACT 4 Launcher | **在 Remotion 里复刻了真实玻璃砖 Launcher**（同一套 CSS），拖动 → 甩出 → 悬停 Fogwharf → 点开 → 放大进世界 | 不需要录 |
+| ACT 4 四世界 | Fogwharf 用了真实录屏，其余是占位框 | R1–R4 |
+| ACT 5 月下之誓 | 开场图 + Lyra 两句 setsuna 台词；契约卡是模板里的真实选项；选"Make a contract"后小作家写出 README / opening / item / 背景图 / 新门 | R5a |
+| ACT 5 小天地 | mock + Vera 的 setsuna 台词 | R5b |
+| ACT 6 | 多人 mock（角落 `next`）；作家敲真实 frontmatter → 3D 骰子 / 雪 / 灯塔 / 门 | — |
+| ACT 7 | 新公式 + logo + 结尾字幕 "Worldlines lets you live in one." | — |
+
+声音文件：`remotion/public/voice/`（`node video/music/make-voices.mjs` 重新生成）；音乐按 v2 时间轴重排（0:18 第一个 drop，2:16 静音一拍，2:24 最后一击）。
+
+### v4–v5 拍板（2026-09-14）
+
+- **配乐选 A**（`placeholder-120.wav`，D 为备选）。候选 B/C/D 在 `public/music/candidate-*.wav`，同一套时间轴，换曲只需重渲音轨：`MUSIC=music/candidate-d.wav sh scripts/render-chunks.sh`。
+- 《Sunshine》只做私下试听版（`scripts/try-song.sh`，节拍进入点 0:14 对齐画布炸开 0:18），**不进成片、不外发**。
+- 语音：Vera / Nanami 第一轮英文；之后的 Lyra 两句与 Vera 小天地一句为**日文**（setsuna），画面与字幕全英文。
+- 2:15 的门：「未写之门」真实木门沿合页打开，门后是 **Beyond the Fog**（雾港新路），冷白色柔光。
+- AI ROLEPLAY 图标：Nanami 立绘做的黑白漫画风圆形头像。Logo：WORLD 白 / LINES 橙。
+
+### v6 拍板（2026-09-15）
+
+- 配乐确定 **A**。全片 **2:36**：语音对话段 0:33–0:53（加长 6 秒），之后各段整体 +6 秒；音乐 A 在安静段按小节拼入 3 小节（`video/music/make-track-a-156.sh`），所有 drop 仍卡在剪辑点上。
+- 语音对话加第三位：**Wataru**（女性向男主，素材 `video/assets/wataru-loop.scene.mp4`）。本机 TTS 只有 setsuna（女声），所以他走 App 的线上音色 **Ethan**（备选 Kai）。
+- 结尾 logo 下加署名：**BUILT BY LUDICDYNAMICS / From Tokyo, to the world.**（比产品名小一级、偏灰）。
+
+## 6. 请你评价（v1 大纲时的问题，已答复）
 
 1. 这条"读世界 → 玩世界 → 跟一个角色说话 → **住进一个世界**"的主线，能不能代表你想讲的故事？
 2. 旁白你亲自讲，还是先用 setsuna 出一版临时旁白来对节奏？

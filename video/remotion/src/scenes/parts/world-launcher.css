@@ -1,0 +1,318 @@
+/* Copied from apps/web/src/components/world-launcher.css (commit bb00fd8) for the launch video.
+   Adapted only where Remotion needs it:
+   - every transition / :hover rule removed — tilt, pan, hover lift, video fade are driven per frame
+     from Launcher.tsx (inline styles + the --tilt-x / --tilt-y variables);
+   - app tokens resolved to concrete values (--depth-modal, --ux-font-human, --ux-font-ui);
+   - the root is absolute (fills the Remotion frame) and the header has a fixed height, so the stage
+     geometry is known without measuring the DOM;
+   - the save-manager (body:has(...)) and reduced-motion rules dropped (not on screen). */
+.world-launcher {
+  --tilt-x: 0;
+  --tilt-y: 0;
+  --edge: clamp(16px, 2.4vw, 36px);
+  --glass-line: rgba(255, 255, 255, .22);
+  --glass-fill: rgba(16, 17, 27, .62);
+  --accent: #c9f27a;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding-block: 18px 0;
+  padding-inline: var(--edge);
+  overflow: hidden;
+  background: #04050c;
+  color: #f5f3ee;
+  font-family: "Helvetica Neue", Inter, 'Manrope', system-ui, sans-serif;
+}
+
+.world-launcher__ambient {
+  position: absolute;
+  inset: -15%;
+  display: grid;
+  grid-template-columns: repeat(var(--count, 7), 1fr);
+  filter: blur(70px) saturate(1.25) brightness(.34);
+  pointer-events: none;
+}
+.world-launcher__ambient > span { background: center / cover no-repeat; }
+
+.world-launcher button { font: inherit; color: inherit; }
+
+.world-launcher__top {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 48px;
+  margin-bottom: 12px;
+}
+.world-launcher__brand { font: 600 20px/1 'LXGW WenKai', 'Kaiti SC', 'KaiTi', Georgia, serif; letter-spacing: .04em; }
+.world-launcher__brand span { opacity: .55; font-weight: 400; }
+.world-launcher__top nav { display: flex; flex-wrap: wrap; gap: 8px; }
+.world-launcher__pill,
+.world-launcher__langs {
+  border: 1px solid var(--glass-line);
+  background: var(--glass-fill);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 999px;
+}
+.world-launcher__pill {
+  padding: 9px 16px;
+  font: 500 12px/1 ui-monospace, "SFMono-Regular", monospace;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.world-launcher__langs { display: flex; padding: 3px; gap: 2px; }
+.world-launcher__langs button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 12.5px;
+  opacity: .7;
+}
+.world-launcher__langs button[aria-pressed="true"] { background: rgba(255, 255, 255, .9); color: #07080f; opacity: 1; }
+
+.world-launcher__stage {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  margin-inline: calc(-1 * var(--edge));
+  overflow: hidden;
+  perspective: 1600px;
+  perspective-origin: 50% 45%;
+  user-select: none;
+}
+.world-launcher__tilt {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(calc(var(--tilt-x) * 6deg)) rotateX(calc(var(--tilt-y) * -4deg)) scale(1.04);
+}
+.world-launcher__layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+/* Hover lift (scale 1.035) is applied inline with a spring; the class keeps the shadow and filter swap. */
+.world-launcher__tile {
+  --tile-radius: clamp(26px, 9cqw, 52px);
+  position: absolute;
+  container-type: size;
+  contain: layout paint;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: var(--tile-radius);
+  box-shadow: 0 26px 44px -22px rgba(0, 0, 0, .8), 0 0 0 1px rgba(255, 255, 255, .16);
+}
+.world-launcher__tile.is-active {
+  box-shadow: 0 34px 60px -24px rgba(0, 0, 0, .9), 0 0 0 1px rgba(255, 255, 255, .32);
+}
+
+.world-launcher__image,
+.world-launcher__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.world-launcher__image { background: center / cover no-repeat; filter: saturate(.92) brightness(.86); }
+.is-active .world-launcher__image { filter: none; }
+.world-launcher__video { overflow: hidden; }
+.world-launcher__sheen::after,
+.world-launcher__tile::after {
+  content: '';
+}
+.world-launcher__tile::after {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(to top, rgba(4, 5, 12, .8), rgba(4, 5, 12, .12) 50%, transparent 72%);
+  pointer-events: none;
+}
+
+.world-launcher__rim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  padding: clamp(12px, 4cqw, 20px);
+  border-radius: inherit;
+  overflow: hidden;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.world-launcher__rim > span {
+  position: absolute;
+  inset: 0;
+  background: center / cover no-repeat;
+  filter: saturate(1.7) contrast(1.1) brightness(1.12);
+  transform: scale(1.16);
+}
+.world-launcher__fringe {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  box-sizing: border-box;
+  padding: 5px;
+  border-radius: inherit;
+  background: conic-gradient(from 200deg,
+    rgba(255, 60, 120, .9), rgba(255, 210, 60, .7), rgba(60, 255, 190, .8),
+    rgba(60, 140, 255, .9), rgba(200, 80, 255, .8), rgba(255, 60, 120, .9));
+  opacity: .32;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.world-launcher__sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  background: radial-gradient(55% 38% at 28% 8%, rgba(255, 255, 255, .2), transparent 70%);
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, .8),
+    inset 0 -3px 6px rgba(255, 255, 255, .2),
+    inset 12px 0 18px -10px rgba(255, 255, 255, .4),
+    inset -14px 0 22px -12px rgba(0, 0, 0, .5),
+    inset 0 -50px 70px -40px rgba(0, 0, 0, .45);
+  pointer-events: none;
+}
+.world-launcher__sheen::before {
+  content: '';
+  position: absolute;
+  top: 6%;
+  right: 7%;
+  width: 3%;
+  height: 1.4%;
+  min-width: 10px;
+  min-height: 4px;
+  border-radius: 50%;
+  background: #fff;
+  transform: rotate(38deg);
+  opacity: .9;
+}
+.world-launcher__sheen::after {
+  position: absolute;
+  left: 2.6%;
+  top: 16%;
+  width: 3px;
+  height: 46%;
+  border-radius: 99px;
+  background: linear-gradient(transparent, rgba(255, 255, 255, .75), transparent);
+}
+
+.world-launcher__hit {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+}
+
+.world-launcher__meta {
+  position: absolute;
+  top: 8%;
+  left: 7%;
+  right: 7%;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font: 500 clamp(9px, 2.3cqw, 12px)/1 ui-monospace, "SFMono-Regular", monospace;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  opacity: .82;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.world-launcher__meta i { font-style: normal; color: var(--accent); margin-right: 1.4em; }
+
+.world-launcher__caption {
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  bottom: 9%;
+  z-index: 5;
+  display: grid;
+  gap: 8px;
+  pointer-events: none;
+}
+.world-launcher__caption::before {
+  content: '';
+  height: 1px;
+  margin-bottom: 6px;
+  background: rgba(255, 255, 255, .35);
+}
+.world-launcher__caption b {
+  font: 700 clamp(22px, 10cqw, 58px)/1 "Helvetica Neue", Inter, 'Manrope', system-ui, sans-serif;
+  letter-spacing: -.03em;
+  overflow-wrap: anywhere;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, .35);
+}
+.world-launcher__caption small {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: clamp(11px, 3cqw, 14px);
+  line-height: 1.5;
+  opacity: .85;
+}
+.world-launcher__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.world-launcher__actions button {
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .3);
+  background: var(--glass-fill, rgba(16, 17, 27, .62));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28);
+  color: #f5f3ee;
+  font: 500 12px/1.2 ui-monospace, "SFMono-Regular", monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.world-launcher__hint {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  z-index: 2;
+  margin: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(10, 11, 18, .55);
+  font: 500 11px/1 ui-monospace, "SFMono-Regular", monospace;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  opacity: .7;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.world-launcher__credit {
+  position: absolute;
+  left: var(--edge);
+  bottom: 18px;
+  z-index: 2;
+  margin: 0;
+  font: 500 11px/1 ui-monospace, "SFMono-Regular", monospace;
+  letter-spacing: .12em;
+  opacity: .55;
+  pointer-events: none;
+}

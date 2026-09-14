@@ -1,6 +1,6 @@
 import React from "react";
 import { AbsoluteFill, Img, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
-import { DISPLAY, HAND, INK, PAPER } from "../lib/theme";
+import { DISPLAY, HAND, INK, ORANGE, PAPER } from "../lib/theme";
 
 /** Full-frame white flash for `len` frames starting at `at`. */
 export const Flash: React.FC<{ at: number; len?: number; color?: string }> = ({ at, len = 2, color = "#fff" }) => {
@@ -9,13 +9,14 @@ export const Flash: React.FC<{ at: number; len?: number; color?: string }> = ({ 
   return <AbsoluteFill style={{ background: color }} />;
 };
 
-/** Heavy display type that slams in (scale 1.35 → 1) at `delay`. */
-export const Slam: React.FC<{ text: string; size: number; color?: string; delay?: number; style?: React.CSSProperties }> = ({
+/** Heavy display type that slams in (scale 1.35 → 1) at `delay`. `children` (e.g. coloured spans) replace `text`. */
+export const Slam: React.FC<{ text: string; size: number; color?: string; delay?: number; style?: React.CSSProperties; children?: React.ReactNode }> = ({
   text,
   size,
   color = PAPER,
   delay = 0,
   style,
+  children,
 }) => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -36,10 +37,18 @@ export const Slam: React.FC<{ text: string; size: number; color?: string; delay?
         ...style,
       }}
     >
-      {text}
+      {children ?? text}
     </div>
   );
 };
+
+/** The wordmark: WORLD in white, LINES in orange. */
+export const WorldlinesMark: React.FC<{ size: number; delay?: number }> = ({ size, delay }) => (
+  <Slam text="WORLDLINES" size={size} delay={delay}>
+    <span style={{ color: PAPER }}>WORLD</span>
+    <span style={{ color: ORANGE }}>LINES</span>
+  </Slam>
+);
 
 /** Handwritten chalk ink that writes itself, `cps` characters per second from `start`. */
 export const ChalkWrite: React.FC<{ text: string; start?: number; cps?: number; size?: number; color?: string; style?: React.CSSProperties }> = ({
@@ -74,7 +83,7 @@ export const TypingDots: React.FC<{ color: string; style?: React.CSSProperties; 
 };
 
 /** Circular avatar with a multiplayer-style pointer. Positioned by its centre. */
-export const CursorAvatar: React.FC<{ portrait: string; color: string; x: number; y: number; size?: number; bounce?: number; dots?: boolean }> = ({
+export const CursorAvatar: React.FC<{ portrait: string; color: string; x: number; y: number; size?: number; bounce?: number; dots?: boolean; position?: string }> = ({
   portrait,
   color,
   x,
@@ -82,13 +91,14 @@ export const CursorAvatar: React.FC<{ portrait: string; color: string; x: number
   size = 96,
   bounce = 0,
   dots,
+  position = "50% 14%",
 }) => (
   <div style={{ position: "absolute", left: x, top: y, transform: `translate(-50%,-50%) scale(${1 + bounce * 0.35})` }}>
     <svg width={size * 0.34} height={size * 0.34} viewBox="0 0 24 24" style={{ position: "absolute", left: -size * 0.16, top: -size * 0.16 }}>
       <path d="M2 2 L22 10 L12 12 L10 22 Z" fill={color} stroke={INK} strokeWidth={1.5} />
     </svg>
     <div style={{ width: size, height: size, borderRadius: "50%", border: `${Math.max(3, size * 0.06)}px solid ${color}`, overflow: "hidden", boxShadow: "0 10px 30px rgba(0,0,0,.5)", background: INK }}>
-      <Img src={staticFile(portrait)} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "50% 14%" }} />
+      <Img src={staticFile(portrait)} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: position }} />
     </div>
     {dots && <TypingDots color={color} scale={size / 110} style={{ position: "absolute", left: size * 0.6, top: -size * 0.45 }} />}
   </div>

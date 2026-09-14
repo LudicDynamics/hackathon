@@ -3,16 +3,29 @@ import durations from "./durations.json";
 /** Seconds of a looping clip in public/ (all character and background loops are 6s unless measured otherwise). */
 export const dur = (p: string) => (durations as Record<string, number>)[p] ?? 6;
 
-export type CastId = "vera" | "sumi" | "nanami" | "watson" | "seraphina" | "ryo";
-export type Cast = { id: CastId; name: string; clip: string; bg: string; portrait: string; tint: string };
+export type CastId = "vera" | "sumi" | "nanami" | "watson" | "ryo" | "lyra";
+export type Cast = {
+  id: CastId;
+  name: string;
+  /** Full illustration (with its own background) — the cast is never shown as a cut-out in the showcase. */
+  portrait: string;
+  /** object-position for round avatars (face). */
+  face: string;
+  /** object-position for 3:4 portrait cards. */
+  frame: string;
+  tint: string;
+  /** Transparent standing art — only where the app itself shows it (dialogue close-up). */
+  clip?: string;
+  bg?: string;
+};
 
 export const CAST: Cast[] = [
-  { id: "vera", name: "VERA", clip: "cast/vera.webm", bg: "bg/wuwu/lighthouse.webm", portrait: "portraits/vera.webp", tint: "#8B6CFF" },
-  { id: "sumi", name: "SUMI", clip: "cast/sumi.webm", bg: "bg/first-snow/snowfall.webm", portrait: "portraits/sumi-yukimura.webp", tint: "#C9A2C8" },
-  { id: "nanami", name: "NANAMI", clip: "cast/nanami.webm", bg: "bg/first-snow/studio.webm", portrait: "portraits/nanami.webp", tint: "#E0503C" },
-  { id: "watson", name: "WATSON", clip: "cast/watson.webm", bg: "bg/whitechapel/intro.webm", portrait: "portraits/watson.webp", tint: "#C79A55" },
-  { id: "seraphina", name: "SERAPHINA", clip: "cast/seraphina.webm", bg: "scenes/magic-academy-academy-library.webp", portrait: "portraits/seraphina.webp", tint: "#E0662A" },
-  { id: "ryo", name: "RYO", clip: "cast/ryo.webm", bg: "bg/divergence/y1994.webm", portrait: "portraits/ryo-child.webp", tint: "#4FB38A" },
+  { id: "vera", name: "VERA", portrait: "portraits/vera.webp", face: "50% 14%", frame: "50% 30%", tint: "#8B6CFF", clip: "cast/vera.webm", bg: "bg/wuwu/lighthouse.webm" },
+  { id: "sumi", name: "SUMI", portrait: "portraits/sumi-yukimura.webp", face: "50% 14%", frame: "50% 30%", tint: "#C9A2C8", clip: "cast/sumi.webm", bg: "bg/first-snow/snowfall.webm" },
+  { id: "nanami", name: "NANAMI", portrait: "portraits/nanami.webp", face: "50% 14%", frame: "50% 30%", tint: "#E0503C", clip: "cast/nanami.webm", bg: "bg/first-snow/studio.webm" },
+  { id: "watson", name: "WATSON", portrait: "portraits/watson.webp", face: "50% 12%", frame: "50% 30%", tint: "#C79A55", clip: "cast/watson.webm", bg: "bg/whitechapel/intro.webm" },
+  { id: "ryo", name: "RYO", portrait: "portraits/ryo-child.webp", face: "50% 14%", frame: "50% 30%", tint: "#4FB38A", clip: "cast/ryo.webm", bg: "bg/divergence/y1994.webm" },
+  { id: "lyra", name: "LYRA", portrait: "scenes/moonlit-opening.png", face: "71% 20%", frame: "73% 35%", tint: "#B9B2E8" },
 ];
 
 export const cast = (id: CastId) => CAST.find((c) => c.id === id)!;

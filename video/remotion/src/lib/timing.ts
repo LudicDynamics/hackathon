@@ -8,19 +8,21 @@ export const H = 1080;
 export const sec = (s: number) => Math.round(s * FPS);
 export const beats = (n: number) => Math.round(n * BEAT);
 
-/** Section boundaries in seconds — must match video/README.md and music-cues.json. */
+/**
+ * Act boundaries in seconds — must match video/SCRIPT.md and the music (track A, spliced to 156s).
+ * v6: the voice demo grew by 6s for a third character (Wataru), so every later act moved +6s.
+ */
 export const SECTIONS = {
-  S0: [0, 3],
-  S1: [3, 15],
-  S2: [15, 27],
-  S3: [27, 39],
-  S4: [39, 87],
-  S5: [87, 112],
-  S6: [112, 137],
-  S7: [137, 150],
+  A1: [0, 17], // stories were always worlds: read / play / talk → "live"
+  A2: [17, 33], // key press → one canvas (writer cursor) → cast
+  A3: [33, 53], // they talk back (STT → TTS): Vera, Nanami, Wataru
+  A4: [53, 96], // launcher + four worlds
+  A5: [96, 124], // infinite exploration: Moonlit Pact, nook, pull-back
+  A6: [124, 142], // next: multiplayer, writer writes code
+  A7: [142, 156], // formula + logo + credit
 } as const;
 
 export type SectionId = keyof typeof SECTIONS;
 export const sectionFrom = (id: SectionId) => sec(SECTIONS[id][0]);
 export const sectionLength = (id: SectionId) => sec(SECTIONS[id][1] - SECTIONS[id][0]);
-export const TOTAL = sec(150);
+export const TOTAL = sec(156);

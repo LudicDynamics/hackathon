@@ -15,15 +15,16 @@ const vera = cast("vera");
 const VERA_CARD: CardSpec = { id: "vera", x: 0, y: 0, w: 230, h: 230, rot: 0, kind: "avatar", src: vera.portrait, ring: 0, tone: vera.tint };
 
 /** Camera dives into Vera's avatar — entering her nook. */
-const DiveIn: React.FC = () => {
+export const DiveIn: React.FC = () => {
   const f = useCurrentFrame();
+  const { durationInFrames: d } = useVideoConfig();
   const cards = useMemo(() => [VERA_CARD, ...layoutCards({ radius: 5, seed: "dive", density: 0.5 }).filter((c) => c.ring > 1)], []);
-  const t = interpolate(f, [20, DIVE], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.in(Easing.exp) });
+  const t = interpolate(f, [d * 0.2, d], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.in(Easing.exp) });
   return <CanvasWorld cam={{ x: 0, y: 0, scale: 0.7 * Math.pow(18 / 0.7, t) }} cards={cards} />;
 };
 
 /** Stand-in for R5: RP with Vera while her canvas grows one card at a time. */
-const NookMock: React.FC = () => {
+export const NookMock: React.FC = () => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const grown = useMemo(() => layoutCards({ radius: 3.6, seed: "nook", density: 0.95 }).filter((c) => c.ring > 0.9), []);
@@ -81,11 +82,11 @@ const PresenceMock: React.FC = () => {
 };
 
 /** Pull back: the RP patch shrinks while the canvas keeps growing outwards — no edge. */
-const PullBack: React.FC = () => {
+export const PullBack: React.FC = () => {
   const f = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames: d } = useVideoConfig();
   const cards = useMemo(() => [VERA_CARD, ...layoutCards({ radius: 20, seed: "grow", density: 0.6 }).filter((c) => c.ring > 0.9)], []);
-  const t = interpolate(f, [0, PULL], [0, 1], { easing: Easing.inOut(Easing.cubic) });
+  const t = interpolate(f, [0, d], [0, 1], { extrapolateRight: "clamp", easing: Easing.inOut(Easing.cubic) });
   const scale = 0.9 * Math.pow(0.05 / 0.9, t);
   return (
     <CanvasWorld
