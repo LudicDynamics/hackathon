@@ -37,7 +37,7 @@ try {
 // startup warn is a convenience, not the only signal (docs/tts/00 §4.5).
 if (!process.env.DASHSCOPE_API_KEY) {
   console.warn(
-    '[AIRP TTS] DASHSCOPE_API_KEY not set; /api/tts returns 503 (character voice disabled).'
+    '[AIRP TTS] DASHSCOPE_API_KEY not set; online TTS and local voice fallback are unavailable.'
   );
 }
 
