@@ -1,0 +1,28 @@
+{
+  "id": "moonlit-contract-zh",
+  "name": "月下之誓 · 中文",
+  "version": "1.2.0",
+  "schema": 1,
+  "description": "月下召唤。面对伸来的手，你将如何回应？从一个誓约出发，走向尚未讲述的夜晚。",
+  "author": "AIRP",
+  "genre": "生成式视觉小说",
+  "tags": [
+    "短篇故事",
+    "生成世界"
+  ],
+  "locale": "zh-CN",
+  "material": "parchment",
+  "entry": "map",
+  "cover": "assets/backgrounds/opening.png",
+  "player": {
+    "id": "you",
+    "name": "你"
+  },
+  "characters": [],
+  "extensions": [],
+  "audio": {
+    "theme": "emberglass"
+  },
+  "createdAt": "2026-09-14T00:00:00Z",
+  "updatedAt": "2026-09-14T00:00:00Z"
+}

@@ -1,0 +1,57 @@
+{
+  "id": "magic-academy-zh",
+  "name": "魔法学院 · 中文",
+  "version": "1.2.0",
+  "schema": 1,
+  "description": "把言语、物品和代价组合起来。你亲自命名的小小魔法，将会改变封闭的空间。",
+  "author": "Mingyue",
+  "genre": "故事体验",
+  "tags": [
+    "短篇故事",
+    "生成世界"
+  ],
+  "material": "parchment",
+  "audio": {
+    "theme": "emberglass"
+  },
+  "extensions": [
+    {
+      "id": "airp:letter",
+      "version": ">=1.0.0",
+      "optional": false
+    },
+    {
+      "id": "airp:note",
+      "version": ">=1.0.0",
+      "optional": false
+    }
+  ],
+  "characters": [
+    {
+      "id": "seraphina",
+      "home": "world/spell-atlas",
+      "role": "companion",
+      "avatarVideo": "assets/motion/seedance/characters/seraphina-transparent.webm",
+      "avatar": "assets/motion/seedance/characters/seraphina-transparent.webp",
+      "name": "塞拉菲娜",
+      "description": "学院的学姐。会反问言语与物品之间的关系。不替别人决定答案，也不隐瞒代价。"
+    },
+    {
+      "id": "librarian",
+      "home": "world/spell-atlas",
+      "role": "npc",
+      "name": "图书管理员",
+      "description": "记得图书馆每一笔借出与归还的图书管理员。不对未知的心情或未来的结果妄下断言。",
+      "avatar": "assets/motion/seedance/characters/librarian-transparent.webp",
+      "avatarVideo": "assets/motion/seedance/characters/librarian-transparent.webm"
+    }
+  ],
+  "createdAt": "2026-09-11T00:00:00Z",
+  "updatedAt": "2026-09-11T00:00:00Z",
+  "locale": "zh-CN",
+  "entry": "map",
+  "player": {
+    "id": "player",
+    "name": "学院新生"
+  }
+}

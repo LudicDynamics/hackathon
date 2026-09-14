@@ -1,0 +1,24 @@
+{
+  "id": "unwritten-door-zh",
+  "name": "未写之门 · 中文",
+  "version": "1.2.0",
+  "schema": 1,
+  "description": "一封未拆的信和一部手机，塑造着门外等待你的地方。一扇门，一个鲜活的新场景。",
+  "author": "AIRP",
+  "genre": "叙事体验",
+  "tags": [
+    "短篇故事",
+    "生成世界"
+  ],
+  "material": "parchment",
+  "player": {
+    "id": "you",
+    "name": "你"
+  },
+  "characters": [],
+  "extensions": [],
+  "createdAt": "2026-09-12T00:00:00Z",
+  "updatedAt": "2026-09-12T00:00:00Z",
+  "locale": "zh-CN",
+  "entry": "map"
+}

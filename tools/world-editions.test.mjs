@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createRequire } from 'node:module';
-import { editionFamilies, editionId } from './world-editions.mjs';
+import { editionFamilies, editionId, editionLocales } from './world-editions.mjs';
 import { checkEditions } from './check-world-editions.mjs';
 import { filesUnder, protect, restore } from './localize-world-editions.mjs';
 import { LocalWorldStore, parseFrontmatter } from '../packages/shared/dist/index.js';
@@ -14,39 +14,41 @@ const repo = process.cwd();
 const staged = process.env.AIRP_TEST_STAGED_EDITIONS === '1';
 const templates = path.join(repo, staged ? '.artifacts/bilingual-worlds/editions' : 'templates');
 
-test('first snow keeps the stable English firstsnow ID while Japanese stays first-snow-jp', () => {
+test('first snow ships as first-snow, with -jp and -zh editions', () => {
   const family = editionFamilies.find(f => f.base === 'firstsnow');
   assert.ok(family);
-  assert.equal(editionId(family, 'en'), 'firstsnow');
+  assert.equal(editionId(family, 'en'), 'first-snow');
   assert.equal(editionId(family, 'ja'), 'first-snow-jp');
+  assert.equal(editionId(family, 'zh-CN'), 'first-snow-zh');
 });
 
-test('registry contains the seven paired canonical worlds', () => {
+test('registry contains the seven canonical worlds in English, Japanese and Chinese', () => {
+  assert.deepEqual(editionLocales, ['en', 'ja', 'zh-CN']);
   assert.deepEqual(
-    editionFamilies.flatMap(f => ['en', 'ja'].map(locale => editionId(f, locale))).sort(),
-    ['divergence', 'divergence-jp', 'first-snow-jp', 'firstsnow', 'magic-academy', 'magic-academy-jp', 'moonlit-contract', 'moonlit-contract-jp', 'unwritten-door', 'unwritten-door-jp', 'whitechapel', 'whitechapel-jp', 'wuwu', 'wuwu-jp'],
+    editionFamilies.flatMap(f => editionLocales.map(locale => editionId(f, locale))).sort(),
+    ['divergence', 'divergence-jp', 'divergence-zh', 'first-snow', 'first-snow-jp', 'first-snow-zh', 'magic-academy', 'magic-academy-jp', 'magic-academy-zh', 'moonlit-contract', 'moonlit-contract-jp', 'moonlit-contract-zh', 'unwritten-door', 'unwritten-door-jp', 'unwritten-door-zh', 'whitechapel', 'whitechapel-jp', 'whitechapel-zh', 'wuwu', 'wuwu-jp', 'wuwu-zh'],
   );
 });
 
-test('fourteen editions preserve every file, executable field, character profile and asset', async () => { await checkEditions({ staged }); });
+test('every edition preserves every file, executable field, character profile and asset', async () => { await checkEditions({ staged }); });
 test('translation guards reject changed or missing paths and dice numbers', () => {
   const text = 'Read world/test/README.md and roll 2d10, >=11.';
   const p = protect(text); assert.equal(restore(p.masked, p.literals), text);
   assert.throws(() => restore(p.masked.replace('⟪0⟫', ''), p.literals), /protected/);
   assert.throws(() => restore(p.masked + '⟪0⟫', p.literals), /protected/);
 });
-test('the world shelf exposes only paired canonical templates', async () => {
+test('the world shelf exposes only the canonical editions', async () => {
   if (staged) return;
   const shelf = await readWorldShelf(repo);
-  assert.deepEqual(shelf.templates.sort(), editionFamilies.flatMap(f => ['en', 'ja'].map(l => editionId(f, l))).sort());
+  assert.deepEqual(shelf.templates.sort(), editionFamilies.flatMap(f => editionLocales.map(l => editionId(f, l))).sort());
 });
 
-test('fresh English and Japanese saves resolve the same layers and direct choices without calling an Agent', async () => {
+test('fresh saves of every edition resolve the same layers and direct choices without calling an Agent', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'airp-edition-test-'));
   const require = createRequire(new URL('../apps/server/package.json', import.meta.url));
   for (const family of editionFamilies) {
     let englishLayers;
-    for (const locale of ['en', 'ja']) {
+    for (const locale of staged ? ['en', 'ja'] : editionLocales) {
       const id = editionId(family, locale), root = path.join(tmp, id);
       await fs.cp(path.join(templates, id), root, { recursive: true, filter: f => !['assets', '.airpworld', '.pi'].includes(path.basename(f)) });
       const store = new LocalWorldStore(root);

@@ -139,7 +139,7 @@ export function App() {
   const { locale, setLocale, t } = useLocale();
   const [manifest, setManifest] = useState<WorldManifest | null>(null);
   useEffect(() => {
-    if (manifest?.locale === 'ja') setLocale('ja');
+    if (manifest?.locale === 'ja' || manifest?.locale === 'zh-CN') setLocale(manifest.locale);
   }, [manifest?.id, manifest?.locale, setLocale]);
   const [backpack, setBackpack] = useState<BackpackItem[]>([]);
   const [characters, setCharacters] = useState<CharacterView[]>([]);
@@ -1199,7 +1199,7 @@ export function App() {
           worldId={manifest?.id}
           voice={activeCharacter.voice}
           onClose={closeCharacter}
-          language={manifest?.locale === 'ja' || manifest?.locale === 'en' ? manifest.locale : 'en'}
+          language={manifest?.locale === 'ja' || manifest?.locale === 'en' || manifest?.locale === 'zh-CN' ? manifest.locale : 'en'}
           onOpenNook={() => { const id = activeCharacter.id; closeCharacter(); openNook(id); }}
           onSendMessage={(message) => sendMessage({ type: 'character_prompt', characterId: activeCharacter.id, message })}
         />
