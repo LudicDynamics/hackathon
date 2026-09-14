@@ -44,5 +44,6 @@
 ## 4. 代码与验证
 
 - 服务端：`apps/server/src/engine/stt-stream.ts`（实时中继，挂在 `index.ts` 的 WebSocket 连接上，按路径 `/ws/stt` 分流）、`apps/server/src/routes/stt.ts`（整段转写）。
-- 前端：`apps/web/src/lib/voice-input.ts`（AudioWorklet 采集、PCM16、逐句拼接）、`apps/web/src/components/chrome/VoiceInputButton.tsx`。
+- 前端：`apps/web/src/lib/voice-input.ts`（AudioWorklet 以浏览器原生采样率采集，前端线性重采样到 24kHz 再转 PCM16，逐句拼接）、`apps/web/src/components/chrome/VoiceInputButton.tsx`。
+- 不要把 `AudioContext` 直接设成 24kHz：2026-09-14 实测 Chrome 在 48kHz 麦克风下给 24kHz 上下文的输入全是静音，模型会凭空转写出无关短词。
 - 测试：`apps/server/test/stt-stream.test.mjs`、`apps/server/test/stt-route.test.mjs`，均用本地桩替代上游，不产生费用。
