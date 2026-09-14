@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const nook = await readFile(new URL('../src/components/nook/NookView.tsx', import.meta.url), 'utf8');
 const composer = await readFile(new URL('../src/components/nook/NookNoteComposer.tsx', import.meta.url), 'utf8');
+const media = await readFile(new URL('../src/components/media/CharacterMedia.tsx', import.meta.url), 'utf8');
 const camera = await readFile(new URL('../src/lib/camera.ts', import.meta.url), 'utf8');
 
 test('Nook forwards the layer action surface and observes every current card', () => {
@@ -55,6 +56,14 @@ test('Nook projects the character metadata media outside the card canvas', () =>
   assert.match(nook, /stillPortraits/);
   assert.match(nook, /className="nook-character-media__asset"/);
   assert.doesNotMatch(nook, /sceneFrontmatter\?\.avatar/);
+});
+
+test('character media failure falls through once to static, then name fallback', () => {
+  assert.match(media, /const \[failedVideo, setFailedVideo\]/);
+  assert.match(media, /const \[failedPoster, setFailedPoster\]/);
+  assert.match(media, /onError=\{\(\) => markVideoFailed\(video!\)\}/);
+  assert.match(media, /if \(poster && !failedPoster\)/);
+  assert.match(media, /return <>\{fallback\}<\/>/);
 });
 
 

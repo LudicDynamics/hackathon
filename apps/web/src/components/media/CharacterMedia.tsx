@@ -28,16 +28,18 @@ export function CharacterMedia({
   const still = useStill();
   const ref = useRef<HTMLVideoElement>(null);
   const sourceRef = useRef<string | undefined>(video);
-  const [failed, setFailed] = useState<string | null>(null);
+  const [failedVideo, setFailedVideo] = useState(false);
+  const [failedPoster, setFailedPoster] = useState(false);
   const [ready, setReady] = useState<string | null>(null);
   sourceRef.current = video;
 
   useEffect(() => {
-    setFailed(null);
+    setFailedVideo(false);
+    setFailedPoster(false);
     setReady(null);
   }, [video, poster]);
 
-  const playing = enabled && !still && !!video && failed !== video;
+  const playing = enabled && !still && !!video && !failedVideo;
 
   useEffect(() => {
     const element = ref.current;
@@ -70,8 +72,8 @@ export function CharacterMedia({
   const markReady = (asset: string) => {
     if (sourceRef.current === asset) setReady(asset);
   };
-  const markFailed = (asset: string) => {
-    if (sourceRef.current === asset) setFailed(asset);
+  const markVideoFailed = (asset: string) => {
+    if (sourceRef.current === asset) setFailedVideo(true);
   };
 
   if (playing) {
@@ -90,20 +92,20 @@ export function CharacterMedia({
         preload="metadata"
         onLoadedMetadata={() => markReady(video!)}
         onCanPlay={() => markReady(video!)}
-        onError={() => markFailed(video!)}
+        onError={() => markVideoFailed(video!)}
       />
     );
   }
 
-  if (poster && failed !== poster) {
+  if (poster && !failedPoster) {
     return (
       <img
         className={className}
         src={poster}
         alt={name}
-        data-media-state={failed === video ? 'failed' : 'static'}
+        data-media-state={failedVideo ? 'failed' : 'static'}
         onError={() => {
-          markFailed(poster);
+          setFailedPoster(true);
           onPosterError?.();
         }}
       />
