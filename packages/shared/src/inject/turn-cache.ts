@@ -31,3 +31,20 @@ export function readTurnBlock(sessionId: string): string | null {
 export function resetTurnCacheForTests(): void {
   slot = null;
 }
+
+/**
+ * 00 §2 约束 4 / 01 §3.3 — the injection gate: is this the FIRST provider
+ * request of the current trace?
+ *
+ * The engine resets its own `turnIndex` to 0 at `agent_start`
+ * (`agent-session.ts:1032-1033`) and increments it after each `turn_end`
+ * (`:1064-1074`); every tool-loop continuation therefore carries >= 1
+ * (`:1055-1061`). So a pure equality check needs no consumption latch —
+ * `previewPrompt()` (`agent-session.ts:1850-1857`), which fires neither
+ * `agent_start` nor `turn_start`, can never consume the block.
+ */
+export const FIRST_PROVIDER_TURN_INDEX = 0;
+
+export function isFirstProviderRequest(turnIndex: number): boolean {
+  return turnIndex === FIRST_PROVIDER_TURN_INDEX;
+}

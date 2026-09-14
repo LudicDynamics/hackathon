@@ -1,8 +1,9 @@
 /**
  * AIRP per-turn world-state injection — the ONE top-level extension that
- * registers the `airp_world_state` custom type and the two hooks behind it.
+ * registers the `airp_world_state` custom type and the hooks behind it.
  *
- * Registered (docs/hooks/06 §2.2, exact and closed):
+ * Registered (docs/hooks/06 §2.2 as revised by 07 §2.5 table D — five, exact
+ * and closed):
  *   1. `registerCustomType(WORLD_STATE_CUSTOM_TYPE, ...)` — declares the dynamic
  *      injection layer (context:'include', llmRole:'user', compaction:'exclude').
  *   2. `pi.on('agent_start', ...)` — the TURN BOUNDARY. All the heavy work
@@ -10,6 +11,11 @@
  *      is cached (01 §3.2 / 06 §4.1).
  *   3. `pi.on('context', ...)` — the injection seam. PURE, O(1): read the cached
  *      string and append one message. Never renders, never does I/O.
+ *   4. `pi.on('turn_start', ...)` — records `event.turnIndex`: the injection
+ *      gate's input (01 §3.3). `toolkit/turn.ts` has its own independent module
+ *      instance; the loader's `moduleCache:false` means they share no state.
+ *   5. `pi.on('turn_end', ...)` — resets the mirror to -1 so a trace is fully
+ *      forgotten the moment it ends (07 §4.1 hardening 2).
  *
  * NOT registered, on purpose (06 §2.2 / §2.4):
  *   - `renderContent`: the inject block never touches the session transcript, so
@@ -24,12 +30,12 @@
  *     fingerprint — there is nothing to reset (00 §9.2 / AUDIT §3.3).
  *   - `session_start` / `leaf_changed`: not needed by the minimal version
  *     (§4.3 below).
- *   - `tool_result` (the event-table write side) / `turn_start` (already owned by
- *     `extensions/tools.ts`): outside this batch.
+ *   - `tool_result` (the event-table write side): outside this batch.
  *   - any `state_*` / state file / state namespace: 00 §12 item 5.
  *
- * Module state is per-EXTENSION-FILE, not per-process (00 §9 / 06 §3.1): the
- * loader builds one `createJiti(..., { moduleCache: false })` per extension file
+ * Module state (`currentTurnIndex`, the store getters) is per-EXTENSION-FILE,
+ * not per-process (00 §9 / 06 §3.1): the loader builds one
+ * `createJiti(..., { moduleCache: false })` per extension file
  * (`loader.ts:503-509`, call site :556), so this file CANNOT reuse
  * `extensions/toolkit/actor.ts`'s actor cache or `deps.ts`'s store cache — those
  * are different module instances. Hence the local identity resolution below (a
@@ -84,6 +90,7 @@ import {
   renderState,
   writeTurnBlock,
   readTurnBlock,
+  isFirstProviderRequest,
   warnOnce,
   settleTurnCursor,
 } from '../packages/shared/dist/index.js';
@@ -122,10 +129,29 @@ export default function registerAirpContext(pi: ExtensionAPI): void {
     compaction: 'exclude', // dropped from summary input only
   });
 
+  // (1b) The injection gate's input (01 §3.3 / 07 §4.1). The engine resets its
+  // own `turnIndex` to 0 at `agent_start` and increments it after each
+  // `turn_end`, so a tool-loop continuation carries >= 1 and a first provider
+  // request carries exactly 0. This recorder is a SECOND, independent module
+  // instance from `toolkit/turn.ts`'s (see the file header) — neither can read
+  // the other's state.
+  pi.on('turn_start', (event) => {
+    currentTurnIndex = event.turnIndex;
+  });
+  // (1c) Trace end → forget immediately (07 §4.1 hardening 2). Without this, the
+  // mirror would sit at the LAST turnIndex of the finished trace; for the common
+  // single-request trace that is `0`, and a `previewPrompt()` landing between
+  // two traces would then inject a stale block. Safe here: this handler is
+  // awaited before `_turnIndex++` and after the turn's last provider response.
+  pi.on('turn_end', () => {
+    currentTurnIndex = -1;
+  });
+
   // (2) Turn boundary: compute once, cache, settle the writer's cursor.
   // `agent_start` is emitted (and awaited) before this run's first provider
   // request (`agent-loop.ts:109` → `:116`), so the cache is never a turn late.
   pi.on('agent_start', async (_event, ctx) => {
+    currentTurnIndex = -1; // fail-closed, FIRST line: the gate stays shut until this trace's `turn_start{0}` (07 §4.1 hardening 1)
     const sessionId = ctx.sessionManager.getSessionId(); // the cache key (01 §3.2)
     // The store open sits INSIDE the try: a locked / unreadable / deleted world
     // must degrade to "no injection", never fail a turn (06 §8, 00 §11).
@@ -165,15 +191,22 @@ export default function registerAirpContext(pi: ExtensionAPI): void {
   // (3) Injection seam: pure, cheap, no I/O (01 §2.1 — THE single version; do
   // not write a second one). Returning `undefined` leaves `messages` untouched.
   pi.on('context', (event, ctx) => {
+    // (0) Injection gate — 00 §2 constraint 4 / 01 §3.3: inject ONLY on the first
+    //     provider request of this trace (engine `turnIndex === 0`). The engine
+    //     still calls this handler on every tool-loop continuation (and on
+    //     `previewPrompt()`), but those carry `>= 1` / `-1` and must return
+    //     `undefined`. Gate first = continuations cost nothing: no cache read, no
+    //     string concat.
+    if (!isFirstProviderRequest(currentTurnIndex)) return;
     // (1) Filter out any existing block of this customType. Mechanically
     //     unreachable (the context path never persists, S2), but asserted here:
-    //     "exactly one per request" stays a LOCAL invariant, not an assumption
-    //     about engine behaviour.
+    //     "exactly one per trace (first provider request)" stays a LOCAL
+    //     invariant, not an assumption about engine behaviour.
     const kept = event.messages.filter(
       (m) => !(m.role === 'custom' && m.customType === WORLD_STATE_CUSTOM_TYPE)
     );
 
-    // (2) Read this turn's cached block (sync, pure memory; sessionId from ctx).
+    // (2) Read this trace's cached block (sync, pure memory; sessionId from ctx).
     const text = readTurnBlock(ctx.sessionManager.getSessionId());
     if (text === null) return; // assembly failed / no slot → do not inject (00 §11)
 
@@ -195,6 +228,8 @@ export default function registerAirpContext(pi: ExtensionAPI): void {
 }
 
 // ——— local helpers (06 §2.4 note: these are NOT exports to import) ———
+
+let currentTurnIndex = -1; // module state: per-EXTENSION-FILE (00 §9 / 06 §3.1), NOT per-process; readable only here
 
 let own: LocalWorldStore | null = null;
 let ownRoot: string | null = null;

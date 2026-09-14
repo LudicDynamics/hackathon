@@ -85,13 +85,33 @@ function streamScript(stream: any, message: any): void {
   stream.end(message);
 }
 
+/**
+ * The final wire message count our OWN `context` handler saw, i.e. BEFORE any
+ * later extension appended to the array. Paired with the post-all-handlers count
+ * in `record()`, it is A11's decoupled structural judge (06 §6.3): a request that
+ * carries a world-state block adds exactly ONE message
+ * (`messageCountOut === messageCountIn + 1`); a tool-loop continuation adds none
+ * (`messageCountOut === messageCountIn`). This judge never looks at the block's
+ * text, so it stays valid for payload variants that drop `[World state]`.
+ *
+ * It works only because this extension's handler runs FIRST — the probe lists
+ * this file's `--extension` before the writer's own extensions on argv (`loader`
+ * preserves that order). If it ran last it would see the already-injected array.
+ */
+let messageCountInHook = 0;
+
 /** Record this request's wire view for the probe, then scripted-reply. */
-function record(context: any, index: number): void {
+function record(context: { messages?: { content: unknown }[] } | undefined, index: number): void {
   const out = process.env.AIRP_INJECT_PROBE_OUT;
   if (!out) return;
+  const messages = context?.messages ?? [];
   const line = JSON.stringify({
     requestIndex: index,
-    texts: (context?.messages ?? []).map((m: any) => textOf(m.content)),
+    texts: messages.map((m) => textOf(m.content)),
+    // A11: the pair, NOT the text. `Out` is what the model saw; `In` is what the
+    // array held before our later siblings appended the block.
+    messageCountIn: messageCountInHook,
+    messageCountOut: messages.length,
   });
   try {
     fs.appendFileSync(out, line + '\n');
@@ -101,6 +121,10 @@ function record(context: any, index: number): void {
 }
 
 export default function injectProbeProvider(pi: any): void {
+  // Runs before `extensions/context.ts` (probe argv order) — see the note above.
+  pi.on('context', (event: { messages?: unknown[] } | undefined) => {
+    messageCountInHook = (event?.messages ?? []).length;
+  });
   pi.registerProvider(PROVIDER_ID, {
     name: 'AIRP Inject Probe (deterministic)',
     baseUrl: 'http://127.0.0.1:0',
