@@ -225,9 +225,10 @@ export class CanvasArrangerRuntime {
     let spawnTimer: NodeJS.Timeout | undefined;
     let idleTimer: NodeJS.Timeout | undefined;
     let totalTimer: NodeJS.Timeout | undefined;
+    let timeoutRequested = false;
     const resetIdle = () => {
       clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => { void client.abort().catch(() => {}); }, timeoutFromEnv('AIRP_ARRANGER_IDLE_TIMEOUT_MS', DEFAULT_IDLE_TIMEOUT_MS));
+      idleTimer = setTimeout(() => { timeoutRequested = true; void client.abort().catch(() => {}); }, timeoutFromEnv('AIRP_ARRANGER_IDLE_TIMEOUT_MS', DEFAULT_IDLE_TIMEOUT_MS));
       idleTimer.unref?.();
     };
     const eventOff = client.onEvent((event) => {
@@ -235,7 +236,7 @@ export class CanvasArrangerRuntime {
       if (event.type === 'agent_start') {
         sawAgentStart = true;
         clearTimeout(totalTimer);
-        totalTimer = setTimeout(() => { void client.abort().catch(() => {}); }, timeoutFromEnv('AIRP_ARRANGER_TOTAL_TIMEOUT_MS', DEFAULT_TOTAL_TIMEOUT_MS));
+        totalTimer = setTimeout(() => { timeoutRequested = true; void client.abort().catch(() => {}); }, timeoutFromEnv('AIRP_ARRANGER_TOTAL_TIMEOUT_MS', DEFAULT_TOTAL_TIMEOUT_MS));
         totalTimer.unref?.();
         resetIdle();
       } else if (event.type === 'tool_execution_start') {
@@ -271,7 +272,7 @@ export class CanvasArrangerRuntime {
       }
     });
     try {
-      spawnTimer = setTimeout(() => { void client.abort().catch(() => {}); }, timeoutFromEnv('AIRP_ARRANGER_SPAWN_TIMEOUT_MS', DEFAULT_SPAWN_TIMEOUT_MS));
+      spawnTimer = setTimeout(() => { timeoutRequested = true; void client.abort().catch(() => {}); }, timeoutFromEnv('AIRP_ARRANGER_SPAWN_TIMEOUT_MS', DEFAULT_SPAWN_TIMEOUT_MS));
       spawnTimer.unref?.();
       idleTimer = setTimeout(() => {}, DEFAULT_IDLE_TIMEOUT_MS);
       totalTimer = setTimeout(() => { void client.abort().catch(() => {}); }, timeoutFromEnv('AIRP_ARRANGER_TOTAL_TIMEOUT_MS', DEFAULT_TOTAL_TIMEOUT_MS));
@@ -288,7 +289,7 @@ export class CanvasArrangerRuntime {
         }, 25);
         check.unref?.();
       });
-      if (protocolError) throw protocolError;
+      if (timeoutRequested) throw new RuntimeTimeout('timeout');
       if (!sawAgentStart || !sawView) throw new RuntimeTimeout('agent_stopped');
       if (operation.committed && !sawPostView) throw new RuntimeTimeout('agent_stopped');
       await this.verify(operation);
