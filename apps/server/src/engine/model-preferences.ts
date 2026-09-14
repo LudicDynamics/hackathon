@@ -46,8 +46,8 @@ export function readModelPreferences(worldRoot: string): ModelPreferences {
   }
 }
 export function modelPreferenceArgs(worldRoot: string, role: 'writer' | 'character'): string[] {
-  const preference = readModelPreferences(worldRoot)[role];
-  return preference ? ['--provider', preference.provider, '--model', preference.model, '--thinking', preference.thinking] : [];
+  const preference = readModelPreferences(worldRoot)[role] ?? { provider: 'deepseek', model: 'deepseek-v4-flash', thinking: 'low' };
+  return ['--provider', preference.provider, '--model', preference.model, '--thinking', preference.thinking];
 }
 export function writeModelPreferences(worldRoot: string, preferences: ModelPreferences): void {
   const dir = path.join(worldRoot, '.airpworld');
