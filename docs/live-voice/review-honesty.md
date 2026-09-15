@@ -55,13 +55,15 @@
 
 | # | 断言/结论 | 声明了什么 | 实际证据 |
 |---|---|---|---|
-| **E1** | `13:176` / `13:298`：「**L5 必红**」「实测今天这条断言**立刻变红**」 | 断言今天必红，故满足 `00 §9.3` 非空性教训 | **今天实测是绿的**。① `elias` 已在 `templates/exp/characters/elias/README.md:4` 补 `voice: cool-composed`（`10 §6.1.3`），不再走回落值；② 门禁语料枚举**有意排除 exp**（`tools/world-editions.mjs:21-44`），我实跑语料函数：未声明 `voice:` 的只剩 `divergence{,-jp,-zh}/young-ryo`，全部 → `marin`，而 young-ryo 是**女性**（README *a seven-year-old girl*）→ 与回落值同性别 → L5 第二析取项成立；③ `DEFAULT_LIVE_VOICE` 落回不适用。结论：**L5 今天无法变红**，而 `13` 把它当「本批最重要、红即证据」排期。 |
+| **E1** | `13:176` / `13:298`：「**L5 必红**」「实测今天这条断言**立刻变红**」 | 断言今天必红，故满足 `00 §9.3` 非空性教训 | **今天实测是绿的**。① `elias` 已在 `templates/fpal/characters/elias/README.md:4` 补 `voice: cool-composed`（`10 §6.1.3`），不再走回落值；② 门禁语料枚举**有意排除 fpal**（`tools/world-editions.mjs:21-44`），我实跑语料函数：未声明 `voice:` 的只剩 `divergence{,-jp,-zh}/young-ryo`，全部 → `marin`，而 young-ryo 是**女性**（README *a seven-year-old girl*）→ 与回落值同性别 → L5 第二析取项成立；③ `DEFAULT_LIVE_VOICE` 落回不适用。结论：**L5 今天无法变红**，而 `13` 把它当「本批最重要、红即证据」排期。 |
 | **E2** | `10:417` + `13:169` 的 L5 析取项「要么性别中立」 | 提供一个今天可判的支 | 代码里无「中立」取值：`VoiceGender = 'female' \| 'male'`（`voices.ts:22`），`LIVE_VOICE_GENDER` 尚不存在 → 该支**今天不可求值**。 |
 | **E3** | `10:334-338` 第一层「结构性、**这才是最可能的直接原因**」「任何没写 `voice:` 的男角色都会得到女声」 | 以「结构性」把结论提到最高可信度 | 该因果链依赖的正是同一份外部网页性别来源，而 `10:365` 的免责边界**只覆盖第二层**；且实测语料里「未声明 `voice:` 的男角色」今天**一个都没有** → 这是**条件句而非现状**。措辞强度高于证据等级。 |
 | **E4** | `12:441` A9：「行号比较」→ 证明 `stop` 早于 `onClose` | 视作「先挂断、先于 `character_stop`」的证明 | 行号只证明**同一函数体内的书写次序**；两者都是异步（`character_stop` 在 220ms 后经 `onClose()` → `App.tsx:1117`）。同 tick 书写次序**不构成服务端到达次序**。应断实际调用序列（spy）。 |
 | **E5** | `10:493`：「共提出 **11 项**待拍板」 | 计数 | `10 §9` 的表**有 13 行**（`10:497-509`）。计数与其自身表不符（其中「12 §12 前置」在 `12` 里本就标「已定」）。 |
 | **E6** | `10:490`（§9-U3）：「**登记为已知缺口**交给 `13`…**MUST NOT 在本批悄悄留着不记**」 | 裁定已兑现 | `13` 全文 `errorText` 出现 **0 次**；W1–W23（`13:240-263`）无此行；`13 §12` 也无。`10 §9.1(f)` 只说「评审 F2」，**没有替代登记落点**。裁定要求的登记**未发生**——正是裁定自己禁止的形态。 |
-| **E7** | `10:422-424` §6.1.3「`exp/elias` 已补 `voice:`」 | 修复已生效 | 模板侧准确（实跑 `resolveLiveVoice('cool-composed') === 'alloy'`，第 4 行确为 `voice: cool-composed`，与模板 37 处位置一致）。**未覆盖**排除范围：`worlds/exp-{27e0d860,35bbc20f,927cfb26,cc58c435}/characters/elias/README.md` **仍无 `voice:`**（`[推断]`：从旧存档续玩仍得 `marin`）。建议补范围限定。 |
+| **E7** | `10:422-424` §6.1.3「`fpal/elias` 已补 `voice:`」 | 修复已生效 | 模板侧准确（实跑 `resolveLiveVoice('cool-composed') === 'alloy'`，第 4 行确为 `voice: cool-composed`，与模板 37 处位置一致）。**未覆盖**排除范围：`worlds/exp-{27e0d860,35bbc20f,927cfb26,cc58c435}/characters/elias/README.md` **仍无 `voice:`**（`[推断]`：从旧存档续玩仍得 `marin`）。建议补范围限定。 |
+
+> **⚠️ 更名 + 存档注（2026-09-15）**：上表路径已改为 `templates/fpal`（世界当日由 `templates/exp` 更名）。E7 行引用的 `worlds/exp-{…}` 是 **gitignored 的开发期运行时存档，已于 2026-09-15 清理**，故「旧存档续玩仍得 `marin`」的 `[推断]` 已不可复现——保留为当日范围限定的建议。
 
 ---
 

@@ -50,7 +50,7 @@ export async function checkEditions({ staged = false, only = null } = {}) {
   const expectedIds = families.flatMap(f => locales.map(l => editionId(f, l))).sort();
   const actualIds = [];
   // Experimental sandboxes carry `exp: true` and are deliberately outside the
-  // edition set: the whole point of templates/exp is that it is NOT a shipped
+  // edition set: the whole point of templates/fpal is that it is NOT a shipped
   // edition, so asserting `templates == 21` would only force its deletion.
   for (const d of await fs.readdir(base)) {
     if (!(await fs.access(path.join(base, d, 'world.json')).then(() => true).catch(() => false))) continue;

@@ -1,8 +1,8 @@
 ---
 type: readme
-name: Exp · Elias
+name: 埃利亚斯
 voice: cool-composed
-title: Exp · Elias
+title: 埃利亚斯 · 索恩
 avatar: assets/motion/seedance/characters/elias-transparent.webp
 avatarVideo: assets/motion/seedance/characters/elias-transparent.webm
 ---

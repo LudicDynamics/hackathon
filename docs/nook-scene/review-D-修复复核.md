@@ -29,7 +29,7 @@
 | 6 | **A-B1**（`nookSceneCards` 落点 + 伪造契约出处） | **已修** | `06:814` 落点 = **`packages/shared/src/store/nook-layers.ts`**（含 `MUST NOT 放 rules/characters.ts` 的理由）；`06:815` `deriveNookLayers` 同行。`06:1043` 把初稿条目**划掉**并写明「本文初稿在此处**误引契约 §5.2 指定了 `rules/`** —— 契约 §5.2 正文**无文件路径**，该引用已删」。**我核**契约 §5.2（`00:396` 标题）确实**未指定文件**，§5.1/§5.3 有 ⇒ 伪造出处已清除。 |
 | 7 | **A-B2**（`directChildDirsOf` 返回值口径） | **已修** | `06:463` 期望值现为 **`['a']`**，并附注释「唯一实现 `05:48-57` 逐字 `out.add(rest)` ⇒ 返回裸段名」。**我按 `05:48-57` 的实现逐字复算** `directChildDirsOf(['characters/ryo','characters/ryo/a','characters/ryo/a/b','characters/other'],'characters/ryo')` → **`["a"]`**。`06` 其余 `directChildDirsOf` 断言（`06:446` 签名、`06:475` H 行、`06:479` 引用 `05 §10.2`）**全部对齐裸段名口径**。 |
 | 8 | **A-B3**（`04` 单参 `nookScenePathOf`） | **已修**（防回退断言已加，但**正则本身有误报面** → 见 §3-N2） | `04:374` 现为 `nookScenePathOf(state.layer, nookIdOf(characterId)!)`。**全文 grep**：`04` 无第二处单参调用。新增回归锁 `04:680` `assert.match(nook, /nookScenePathOf\(\s*[^)]*,\s*[^)]*\)/)` + `04:681` `assert.doesNotMatch(nook, /nookScenePathOf\([^),]*\)/)`。**我实测这两条正则**：对 `nookScenePathOf(target, nookId)`、`nookScenePathOf(state.layer, nookIdOf(characterId)!)` 判定正确（`doesNotMatch` 通过）；**但对 `nookScenePathOf(dirOf(p), nookId)`（合法两参、首参含括号）会误报**（见 §3-N2）。 |
-| 9 | **B-B1**（夹具事实 `writing/`→`meta/`） | **已修（`00`/`06`）/ 未同步（`02`/`01`）→ 见 §3-N2′（列 §3-N5）** | `00:38` 现为 `meta/ ← **无 README**，内含 1 个 md`；`00:40-41` 挂**夹具漂移警示 + 影响面清单**。`06:45-58` 给「当时快照 / 当日复核实测」两版；`06:60-64` 显式登记 `meta/` **会是一扇门（MUST NOT 以为被排除）**；`N2-A8`（`06:128`）与 `N2-A11`（`06:131`）**已改指 `meta`**。**`git status --short templates/exp/characters/elias/`**：`D writing/*.md`（3 个）、`?? meta/` ⇒ **无人恢复 `writing/`**，与约束一致。**未同步**：`02` 全文 36 处 `writing`、0 处 `meta`（含 `02:591-593` 响应示例、`02:655-662` A0 期望、`02:673-682` A3/A4/A8/A11/A13 判据、`02:686`「用 `templates/exp/…` 即满足 A1-A13」）；`01:471` 夹具段同样滞留 `writing/`。 |
+| 9 | **B-B1**（夹具事实 `writing/`→`meta/`） | **已修（`00`/`06`）/ 未同步（`02`/`01`）→ 见 §3-N2′（列 §3-N5）** | `00:38` 现为 `meta/ ← **无 README**，内含 1 个 md`；`00:40-41` 挂**夹具漂移警示 + 影响面清单**。`06:45-58` 给「当时快照 / 当日复核实测」两版；`06:60-64` 显式登记 `meta/` **会是一扇门（MUST NOT 以为被排除）**；`N2-A8`（`06:128`）与 `N2-A11`（`06:131`）**已改指 `meta`**。**`git status --short templates/fpal/characters/elias/`**：`D writing/*.md`（3 个）、`?? meta/` ⇒ **无人恢复 `writing/`**，与约束一致。**未同步**：`02` 全文 36 处 `writing`、0 处 `meta`（含 `02:591-593` 响应示例、`02:655-662` A0 期望、`02:673-682` A3/A4/A8/A11/A13 判据、`02:686`「用 `templates/fpal/…` 即满足 A1-A13」）；`01:471` 夹具段同样滞留 `writing/`。 |
 | 10 | **B-B2**（契约 §4.3「真正空目录」括注） | **已修** | `00:262` 现写「**`stub` MUST NOT 被读作「真正空目录」**……精确语义是「**本目录层没有可读内容**」，**MUST NOT 据此判定「可以安全重新初始化」**」，并给出「只含孙目录」反例。`06:300`、`06:128` 同口径。 |
 | 11 | **B-B3**（`UNWRITTEN · walk in, …` 承诺） | **已修** | `04:416-447`（步骤 14）**登记并选①**；新文案 `04:437` = `'UNWRITTEN · you can still look at the door from outside'` / `'まだ白紙 · 外から扉を確かめられる'`；`04:442` 明写 **MUST NOT** 用「空房间 / empty room」（只含孙目录的情形）。**防回退断言** `04:679` `assert.doesNotMatch(cardRenderer, /walk in, and it will be written/)`。**我核** `CardRenderer.tsx:160` 仍是旧串 —— 正确（设计文档未落地实现）。 |
 | 12 | **B-B4**（`scene.body` 无消费点 ⇒ 空画布） | **已修，技术方案我逐符号验证可行** | `04:382-414`（步骤 13）决定**本批做**，落点 `04:561`（`NookView` state 态 `<Canvas>` 之上，`data-nook-zone="scene-intro"`）。**逐项核实**：① `MarkdownText` 存在 `apps/web/src/lib/md.ts:87`，签名 `React.FC<{ text: string; className?: string }>` —— 与用法 `<MarkdownText text={…} />` **匹配**；② `stripLeadingTitle` 存在 `lib/md.ts:116`，`(body: string) => string`，语义＝剥首行标题 ⇒ **合用**；③ `App.tsx:1149` 确以 `MarkdownText` 渲染日记正文（同款用法属实）；④ 「不能加 `data-path`」的依据成立：`NookView.tsx:436` 确有 `rootRef.current?.querySelectorAll<HTMLElement>('.object[data-path]')` 的 ResizeObserver 登记，且 `lib/footprint.ts:84` 也按 `.object[data-path]` 量高 ⇒ 加了会被当卡；⑤ `UI_COPY.collapseScene/expandScene` 齐备（`lib/legacy-ui-copy.ts:6-7`），且 `messages.json` 有对应键 `Fold/Read scene introduction` → `zh-CN: 收起场景开场 / 阅读场景开场`、`ja` 齐 ⇒ **可复用、无需新增键**。 |
@@ -119,10 +119,10 @@ SyntaxError: Unexpected string
 - `02:591-593` 的**响应示例 1**仍把 `characters/elias/writing/README.md` 作为根场景的第 6 张门牌；
 - `02:655-662` 的 **A0「修复前失败」断言**期望 `root.items` 含 `characters/elias/writing/README.md`；
 - `02:673-682` 的 **A3/A4/A8/A11/A13** 全部以 `?scene=writing` / `writing` 门牌为判据（A8 逐字「`writing` 门牌 `stub===false`（它有 3 张卡）」）；
-- `02:686` 逐字「本批的 fixture **真实存在**，用 `templates/exp/characters/elias/` 即满足 A1-A13 的绝大多数」；
+- `02:686` 逐字「本批的 fixture **真实存在**，用 `templates/fpal/characters/elias/` 即满足 A1-A13 的绝大多数」；
 - `01:471` 的 `nookSceneCards` 夹具段同样滞留 `./writing/note-a.md`。
 
-**实测**：`templates/exp/characters/elias/` 现无 `writing/`、有 `meta/`（`ls` + `git status`）；`02` 全文 `writing` 36 处、`meta` **0 处**。⇒ 这些判据**在当前夹具上不可达**（与 RB3 同类：断言在任何实现下取不到期望）。因为 `02 §10.2` 声明「本片只给判据、`06` 复制」，污染会**传导到 `06`**。
+**实测**：`templates/fpal/characters/elias/` 现无 `writing/`、有 `meta/`（`ls` + `git status`）；`02` 全文 `writing` 36 处、`meta` **0 处**。⇒ 这些判据**在当前夹具上不可达**（与 RB3 同类：断言在任何实现下取不到期望）。因为 `02 §10.2` 声明「本片只给判据、`06` 复制」，污染会**传导到 `06`**。
 
 **建议**：`02` 按 `06` 的做法加漂移段并把 A0/A3/A4/A8/A11/A13 的 `writing`→`meta`（同步改「3 张卡」→「1 张卡」等**数目**）；`01:471` 的合成夹具段明确标注「合成夹具，非真实树」。
 
@@ -157,7 +157,7 @@ node --input-type=module -e '…读 NookView.tsx；再给两处 /^\s*<Canvas\b/ 
 #   旧式 → 3 match [18964,729,897]（match0 无 onEnterGate）；新式 → 2 match [741,907]
 
 # 2) RB2 §6.1 INV-1（复刻 listDirs walk + 祖先扫描）
-node --input-type=module -e '…fs.readdirSync(templates/exp/characters/elias)…'
+node --input-type=module -e '…fs.readdirSync(templates/fpal/characters/elias)…'
 #   listDirs → 6 项（含 meta）；keys === dirs set: true
 
 # 3) RB2 §6.2 INV-2（真调 dist/store/layers.js）
@@ -185,8 +185,8 @@ grep -rn "object\[data-path\]" apps/web/src/
 node -e 'const m=require("./apps/web/src/lib/messages.json"); …["Fold scene introduction"]…'
 
 # 9) B-B1：夹具现状与「无人恢复 writing/」
-ls -a templates/exp/characters/elias/
-git status --short templates/exp/characters/elias/
+ls -a templates/fpal/characters/elias/
+git status --short templates/fpal/characters/elias/
 ```
 
 ---
@@ -203,7 +203,7 @@ git status --short templates/exp/characters/elias/
 | **N2** | `04` 两参回归锁对含括号首参误报 | ✅ **已修** | 反锁改为 `/nookScenePathOf\(\s*[A-Za-z_$][\w.$]*\s*\)/`。**我重跑 5 例**：单参 `nookScenePathOf(state.layer)` → **FLAG**；`(target, nookId)` / `(state.layer, nookIdOf(characterId)!)` / **`(dirOf(p), nookId)`** / `(nookId, scene)` → **全 pass** ⇒ 误报面已消除。 |
 | **N3** | `06 §6.2` 的 `const L={"characters/elias",…}` 非法行 | ✅ **已修** | `grep 'const L={"characters/elias",' 06` → **零命中**。**我对 `06` 全部 4 个 `--input-type=module` 块做 `node --check`**：全部 **OK**。 |
 | **N4** | 步骤 13/14 的断言在 `06` 无落点 | ✅ **已修** | `06` 新增 `N2-A30`（`06:150`）/`N2-A31`（`06:151`）及其测试体（`06:549-583`，`N2-A30/A31/A32/A33`）。`06:590-592` 还逐字记录了「两种邻近性正则都会误报/漏报，正解是先切标签再判」——**这个推理是对的，我复核同意**。 |
-| **N5** | `02`/`01` 未随 `writing/`→`meta/` 同步 | ✅ **已修** | `02:238` 改指 `characters/elias/meta/`；`02:240-242` 补**漂移段 + 显式说明「现场构造的对照，不是 `templates/exp/` 的真实世界目录」**；`02:263-265` 补 `meta/` 实测细节 **+ `writing/` 历史快照**；`02:702-716` 的 A1–A13 全部改指 `meta` 且**数目同步**（A3 「3 项」→「1 项」、A8「3 张卡」→「1 张卡」、A11「3 行」→「1 行」）；`01:471` 已改指 `meta/agent_selfframework.md` 并注明「当日实测：`writing/` 已不存在，改名为 `meta/`（1 md）」。 |
+| **N5** | `02`/`01` 未随 `writing/`→`meta/` 同步 | ✅ **已修** | `02:238` 改指 `characters/elias/meta/`；`02:240-242` 补**漂移段 + 显式说明「现场构造的对照，不是 `templates/fpal/` 的真实世界目录」**；`02:263-265` 补 `meta/` 实测细节 **+ `writing/` 历史快照**；`02:702-716` 的 A1–A13 全部改指 `meta` 且**数目同步**（A3 「3 项」→「1 项」、A8「3 张卡」→「1 张卡」、A11「3 行」→「1 行」）；`01:471` 已改指 `meta/agent_selfframework.md` 并注明「当日实测：`writing/` 已不存在，改名为 `meta/`（1 md）」。 |
 
 ### 4.2 ⚠️ 新出现的 **N6（blocker）**：`02 §10.1` 的 A0 代码块被改坏了
 
@@ -239,7 +239,7 @@ $ git log --oneline -3
 21e46ae 2026-09-15 11:26:38 fix(shared): 落地 04 §9.2 的 append_body …
 0424fe8 2026-09-15 11:25:16 update elias          ← 正是这次把 writing/→meta/ 并新增卡片
 
-$ git status --short templates/exp/characters/elias/     # → 空（0 行）
+$ git status --short templates/fpal/characters/elias/     # → 空（0 行）
 ```
 
 **现在与 `00`/`06` 的记载不符之处**（均为我 `node`/`ls`/`git` 实测）：
@@ -258,7 +258,7 @@ $ git status --short templates/exp/characters/elias/     # → 空（0 行）
 
 **已自我修正的部分（值得记功，也说明这套文档的自我纠错是有效的）**：`02` 已在复核期内跟上到 4 卡 + 1 卡/场景（`02:565`「根场景有 4 张卡…」、`02 §10.0` 请求 1 含 3 张 `kind: 'photo'`、请求 2 `items` 有 `workday-portrait.md`、`:702` A1「**4 个**卡（3 张 `kind='photo'` + `unspoken.md`）」、`:721` 明写「夹具数量会漂」）—— **而且我逐字验算过其 `rot` 值：`02 §10.0` 的 11 个 `rot` 与 `rotOf()` 实测**全部一致（含 `meta/README.md` 的 `-2`、`workday-portrait.md` 的 `-2`）⇒ **`02` 的当前样例数据是真的跑过的**。所以缺口只剩 `00`/`06` 未跟到这一轮。
 
-**另核**（`02` 的相对 `world/meta/…` 对照）：`02:258` 已显式写明「**现场构造的对照，不是 `templates/exp/` 的真实世界目录**」⇒ 我原报的「需甄别」一条**已按要求处理**。
+**另核**（`02` 的相对 `world/meta/…` 对照）：`02:258` 已显式写明「**现场构造的对照，不是 `templates/fpal/` 的真实世界目录**」⇒ 我原报的「需甄别」一条**已按要求处理**。
 
 ### 4.4 更新后的放行条件
 

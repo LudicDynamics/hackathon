@@ -1,7 +1,7 @@
 /**
  * Nook sub-scenes (docs/nook-scene/00 §5.1–§5.3) — the shared derivation layer.
  *
- * The fixtures are HAND-BUILT, not read off `templates/exp`: that directory was
+ * The fixtures are HAND-BUILT, not read off `templates/fpal`: that directory was
  * rewritten three times in one afternoon (N2 00 §1 / RB6), so any assertion
  * pinned to its shape would drift. The tree here is a frozen world we construct.
  */

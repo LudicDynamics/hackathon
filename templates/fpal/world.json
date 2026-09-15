@@ -1,9 +1,9 @@
 {
-  "id": "exp",
-  "name": "Exp · Elias",
-  "description": "Experimental sandbox: one independent character (Elias) carrying his own pi-memory database onto the infinite canvas. The city of Yangdu, September 2020.",
+  "id": "fpal",
+  "name": "FPAL · 前沿隐私架构实验室",
+  "description": "阳都，2020 年 9 月。前沿隐私架构实验室的日常：一个带着自己记忆库的负责人，和一个把所有人都记在心里的行政。玩家是刚入职的 T5 工程师。",
   "author": "AIRP",
-  "genre": "Sandbox",
+  "genre": "Story experience",
   "locale": "zh-CN",
   "cover": "assets/cover.jpg",
   "exp": true,

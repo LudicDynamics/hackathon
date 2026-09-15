@@ -7,7 +7,7 @@
 // door) was dropped.
 //
 // Fixture is built here from scratch (docs/nook-scene/00 §1 RB6): an assertion
-// pinned to the number of directories in `templates/exp` would drift with
+// pinned to the number of directories in `templates/fpal` would drift with
 // someone else's commits. Counts below are properties of THIS temp world.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';

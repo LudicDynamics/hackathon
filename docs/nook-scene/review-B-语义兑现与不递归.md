@@ -23,17 +23,17 @@
 
 ## 1. 需求证据兑现：逐个 fixtake 走一遍
 
-**⚠️ 前提修正（实测）**：任务书说「`templates/exp/characters/elias/` 下真的存在 5 个作者手写的子场景」。**当前工作树上不是 5 个**：
+**⚠️ 前提修正（实测）**：任务书说「`templates/fpal/characters/elias/` 下真的存在 5 个作者手写的子场景」。**当前工作树上不是 5 个**：
 
 ```text
-$ find templates/exp/characters/elias -maxdepth 1 -type d | sort
+$ find templates/fpal/characters/elias -maxdepth 1 -type d | sort
 .../elias  .../elias/.pi  .../elias/balcony  .../elias/living-room
 .../elias/meta            ← 契约从未提及
 .../elias/office  .../elias/parallel-timeline
 （writing/ 不存在）
-$ find templates/exp/characters/elias/meta -type f
-templates/exp/characters/elias/meta/agent_selfframework.md   （唯一文件，mtime 02:47）
-$ git status --short templates/exp/characters/elias/
+$ find templates/fpal/characters/elias/meta -type f
+templates/fpal/characters/elias/meta/agent_selfframework.md   （唯一文件，mtime 02:47）
+$ git status --short templates/fpal/characters/elias/
  D .../writing/agent_selfframework.md
  D .../writing/clarify.md
  D .../writing/prd_portrait_engine.md
@@ -58,7 +58,7 @@ $ git status --short templates/exp/characters/elias/
 实测复核（真 `dist` 函数 + 真 fixture）：
 
 ```text
-$ node -e '…nookCardPaths / cardsOfLayer against templates/exp/characters/elias…'
+$ node -e '…nookCardPaths / cardsOfLayer against templates/fpal/characters/elias…'
 root cards: ["characters/elias/unspoken.md"]
 balcony  cards= []  has README= true
 living-room cards= []  has README= true
@@ -187,7 +187,9 @@ nookCardPaths(<elias 全 md>, 'characters/elias') → ['characters/elias/unspoke
 ### 假绿检查
 
 - `06 §⑦` / `04 §10.4` 的「`arrangeCards` MUST NOT 把修复前写成 404/400」告诫**已被遵守**（A12/A14 断 `details.layer` 的**值**，A13/A15 断 `not_found` + 逐字文案）。✅
-- **唯一剩下的假绿面是 A8/A11**：它们指定的夹具 `templates/exp/characters/elias/writing/` **今天不存在**，而 `06 §2.2` 又明令 MUST NOT 用 `worlds/exp-default`（含 `chat-history/`）⇒ **这两条断言在当前被指定的夹具上无法成立**（要么红，要么逼实现者现场造目录，从而绕开「用作者真写的素材」这一验收初衷）。**blocker，修法**：重建 `writing/`（把 `meta/agent_selfframework.md` 等搬回并补另两个），或把断言改指到 `worlds/*` 里**仍存在 `writing/`** 的存档（实测 `worlds/exp-*` 多数有 `writing/`）并显式处理 `chat-history/`。
+- **唯一剩下的假绿面是 A8/A11**：它们指定的夹具 `templates/fpal/characters/elias/writing/` **今天不存在**，而 `06 §2.2` 又明令 MUST NOT 用 `worlds/exp-default`（含 `chat-history/`）⇒ **这两条断言在当前被指定的夹具上无法成立**（要么红，要么逼实现者现场造目录，从而绕开「用作者真写的素材」这一验收初衷）。**blocker，修法**：重建 `writing/`（把 `meta/agent_selfframework.md` 等搬回并补另两个），或把断言改指到 `worlds/*` 里**仍存在 `writing/`** 的存档（实测 `worlds/exp-*` 多数有 `writing/`）并显式处理 `chat-history/`。
+
+> **⚠️ 更名 + 存档注（2026-09-15）**：本文路径已改为 `templates/fpal`（世界当日由 `exp` 更名）。上文 `worlds/exp-*` 是 **gitignored 的开发期运行时存档，已于 2026-09-15 清理**，其「仍有 `writing/`」的实测**不可复现**；修法只剩我们已采纳的那条——**A8/A11 改用现场构造的冻结世界**（该改名 `writing/→meta/` 已随 `0424fe8` 提交）。原文的 blocker 判定保留为当日记录。
 
 ---
 

@@ -21,7 +21,7 @@ export const templateArchive = 'archive/templates/pre-bilingual-2026-09-14';
 /**
  * Experimental sandboxes (`world.json` `exp: true`) are not shipped editions.
  *
- * `templates/exp` is a deliberate, permanent exception: it exists so a
+ * `templates/fpal` is a deliberate, permanent exception: it exists so a
  * character can be carried onto the canvas with their own pi-memory DB, and it
  * is NOT one of the 21 canonical bilingual editions. Every gate that enumerates
  * `templates/*` as "the edition set" must skip it — otherwise the sandbox can

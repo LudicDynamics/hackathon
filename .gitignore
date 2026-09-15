@@ -87,12 +87,12 @@ assets/audio/licensed/
 .pi/memory.db*
 **/.pi/memory.db*
 
-# EXPERIMENT (templates/exp): the whole point of that sandbox is a character who
+# EXPERIMENT (templates/fpal): the whole point of that world is a character who
 # carries his own memory DB onto the canvas, so his DB IS release content —
 # unlike the per-machine scratch above. Scoped to the one character path; every
 # other `.pi/memory.db*` in the repo stays ignored.
-!templates/exp/characters/*/.pi/
-!templates/exp/characters/*/.pi/memory.db
+!templates/fpal/characters/*/.pi/
+!templates/fpal/characters/*/.pi/memory.db
 
 # Local package cache is not release content.
 .pnpm-store/

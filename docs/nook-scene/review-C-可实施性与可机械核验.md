@@ -370,11 +370,13 @@ cards(writing)= characters/elias/writing/note-a.md,note-b.md   （无 README 的
 
 **`06 §2.2` 的夹具判据基本正确，但有两处需要修正。**
 
-**（a）`templates/exp` 是否干净：确认干净 ✅**
+**（a）`templates/fpal` 是否干净：确认干净 ✅**
 
-- 实测 `ls -a templates/exp` **无 `.airpworld/`**（`06:66` 逐字断言成立）；
-- 实测 `templates/exp/characters/elias/` 只有 `.pi` / `.shot_cloud.png` / `.shot_still.png` 三个点开头项，**无 `chat-history/`**；
+- 实测 `ls -a templates/fpal` **无 `.airpworld/`**（`06:66` 逐字断言成立）；
+- 实测 `templates/fpal/characters/elias/` 只有 `.pi` / `.shot_cloud.png` / `.shot_still.png` 三个点开头项，**无 `chat-history/`**；
 - 实测 `find templates -name 'chat-history'` **零命中**；`find worlds -maxdepth 4 -name 'chat-history'` 命中 **`worlds/exp-default/characters/elias/chat-history`** ⇒ `06:98` 与契约 §8 P6 的断言**成立**（它只在 gitignored 的 `worlds/`）。
+
+> **⚠️ 注（2026-09-15 更名 + 存档清理）**：本文所有 `templates/exp` 路径已改为 **`templates/fpal`**（2026-09-15 由 `exp` 更名）。下文引用的 `worlds/exp-*`（含 `exp-default`）是 **gitignored 的开发期运行时存档，已于 2026-09-15 清理**（现 `worlds/` 下无任何 `exp*` 目录）；那些实测**保留为当日证据**，但存档本身已不可复现 —— 不影响本节结论（`06` 已声明用 `templates/fpal` 建临时世界，不依赖 `worlds/`）。
 
 **（b）`06:59` 的「干净首选存档」结论，与我的实测不符 ❌**
 
@@ -386,7 +388,9 @@ cards(writing)= characters/elias/writing/note-a.md,note-b.md   （无 README 的
 
 我用 `sqlite3` 复跑全部 `worlds/*/.airpworld/canvas.db`，`worlds/exp-35bbc20f` 的 `cards` 表确实是 4 行 `world/*/README.md`（layer=`map`），**无 elias 行** ⇒ **该断言属实**。
 
-但 `06 §2.2` 的表**漏了一整个存档**：实测 `worlds/` 下有 **34 个世界**，其中 `exp-011eec73` / `exp-27e82a64` / `exp-656f1c7d` / `exp-675a13dd` / `divergence-3b71382f` 等**同样无 elias 行**。**这只是「表不全」，不影响结论**（`06` 已声明用 `templates/exp` 建临时世界，不依赖 `worlds/`）。
+但 `06 §2.2` 的表**漏了一整个存档**：实测 `worlds/` 下有 **34 个世界**，其中 `exp-011eec73` / `exp-27e82a64` / `exp-656f1c7d` / `exp-675a13dd` / `divergence-3b71382f` 等**同样无 elias 行**。**这只是「表不全」，不影响结论**（`06` 已声明用 `templates/fpal` 建临时世界，不依赖 `worlds/`）。
+
+> **⚠️ 计数回溯注**：本段的「`worlds/` 下有 34 个世界」是 2026-09-15 的实测，**数字保留**；`worlds/` 已被清理到 18 个（且无任何 `exp*`），按今天的目录去数会数不到。
 
 **真正的风险点（`06` 未覆盖）**：`06 §2.2` 的单子里，**`exp-default` 与 `exp-27e0d860` 被标为「脏」（各 1 行）**，但**它们的 `cards.layer` 是 `characters/elias`**——若实现者图省事直接用 `worlds/exp-default` 当夹具（`02:676` 已明确禁止：「**MUST NOT 用 `worlds/exp-default`**，它有 `chat-history/`」），两件事会同时发生：
 
@@ -399,7 +403,7 @@ cards(writing)= characters/elias/writing/note-a.md,note-b.md   （无 README 的
 
 `06:69` 逐字「MUST NOT 用 `watson`（N1 §3.7.1：`templates/holmes-world` 的那行是子代理探针写的）」。我核对 `docs/nook/04-占位与回写.md:371` 的证据撤回记录 —— **一致**。
 
-**额外夹具污染源（我发现的，`06` 未点名）**：`tools/probe-init.mjs:34` 逐字 `const TEST_WORLD = path.join(REPO, 'archive/templates/pre-bilingual-2026-09-14/holmes-world')`，`:186 const characterId = 'watson'`；它 `emptyNook` 时 `fs.rmSync(..., { recursive: true })` 删除 watson 目录下**所有非 json**（`:59-64`）。⇒ **`probe:init` 会破坏 `archive/templates/.../holmes-world/characters/watson/` 的目录结构**。本批若跑 `pnpm probe:init`（`06:736` 说「不用跑」，但实现者可能跑），watson 会更脏。**这加固了「必须用 `templates/exp` + 临时世界」的纪律**，`06` 的结论正确。
+**额外夹具污染源（我发现的，`06` 未点名）**：`tools/probe-init.mjs:34` 逐字 `const TEST_WORLD = path.join(REPO, 'archive/templates/pre-bilingual-2026-09-14/holmes-world')`，`:186 const characterId = 'watson'`；它 `emptyNook` 时 `fs.rmSync(..., { recursive: true })` 删除 watson 目录下**所有非 json**（`:59-64`）。⇒ **`probe:init` 会破坏 `archive/templates/.../holmes-world/characters/watson/` 的目录结构**。本批若跑 `pnpm probe:init`（`06:736` 说「不用跑」，但实现者可能跑），watson 会更脏。**这加固了「必须用 `templates/fpal` + 临时世界」的纪律**，`06` 的结论正确。
 
 **结论**：夹具判据方向正确，`06 §2.2` 的表需补全，但**没有会产出假绿的夹具缺口**。
 

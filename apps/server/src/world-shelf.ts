@@ -80,7 +80,7 @@ const text = (value: unknown) => (typeof value === 'string' ? value : '');
 
 export async function readWorldShelf(repoRoot: string, activeRoot?: string) {
   const [allTemplates, worlds] = await Promise.all([entries(path.join(repoRoot, 'templates')), entries(path.join(repoRoot, 'worlds'))]);
-  // `world.json` `exp: true` marks an experimental sandbox (templates/exp). It
+  // `world.json` `exp: true` marks an experimental sandbox (templates/fpal). It
   // is deliberately NOT an edition, so it is kept out of the `templates`
   // edition-id list the edition gates compare against — but it stays in
   // `groups`, because the whole point is that a human can open it from the

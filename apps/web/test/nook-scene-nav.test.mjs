@@ -44,7 +44,7 @@ test('nook-scene §N2-A26b: the empty-state init prompt is gated to the ROOT sce
 test('nook-scene §N2-A30: the sub-scene README body is actually rendered (B-B4)', () => {
   // Before the fix `state.scene` had three consumers (unpack / frontmatter /
   // isEmpty) and `body` had none => walking into a written room showed a blank
-  // canvas (measured 4/4 in templates/exp/characters/elias).
+  // canvas (measured 4/4 in templates/fpal/characters/elias).
   assert.match(nook, /data-nook-zone="scene-intro"/, 'a scene-intro band MUST exist');
   assert.match(nook, /MarkdownText/, 'MUST reuse the existing markdown primitive (lib/md.ts:87)');
   assert.doesNotMatch(nook, /dangerouslySetInnerHTML/, 'MUST NOT introduce raw HTML');
