@@ -107,6 +107,7 @@ export * from './commands/run.js';
 export * from './commands/trigger.js';
 export * from './commands/idempotency.js';
 export * from './commands/serial.js';
+export * from './commands/paths.js';
 export {
   COMMAND_PROFILE,
   ConditionAst,
