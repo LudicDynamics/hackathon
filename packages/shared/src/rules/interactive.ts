@@ -10,6 +10,8 @@
  * these functions, so the numbering can never drift between them (06 §3.5).
  */
 
+import { evalWhen, parseCondition, WHEN_PROFILE } from '../commands/condition.js';
+
 /** Parse cap on the visible option list (06 §7.2). Parsing and display share it. */
 export const CHOICE_LIMIT = 12;
 
@@ -45,57 +47,24 @@ function isPlainObject(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * One scalar, normalized the same way on BOTH sides of a `when` comparison
- * (§3.5): quotes stripped, `true`/`false`/`null`/`~` folded, numeric literals
- * folded to number. `when: k == 1` and `when: k == "1"` are therefore the same
- * test, and so is a status value written as `"1"`.
- */
-function normalizeScalar(value: unknown): string | number | boolean | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'boolean' || typeof value === 'number') return value;
-  let s = String(value).trim();
-  if (s.length >= 2 && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))) {
-    s = s.slice(1, -1);
-  }
-  if (s === 'true') return true;
-  if (s === 'false') return false;
-  if (s === 'null' || s === '~') return null;
-  if (s !== '' && !Number.isNaN(Number(s))) return Number(s);
-  return s;
-}
+/* `evalWhen` now comes from `commands/condition.ts` (03 §9.1): one parser and
+ * one evaluator for every `when` in the repo, so the choice-visibility grammar
+ * and the command-condition grammar cannot drift apart. `commands/condition.ts`
+ * is zero-dependency, which is what lets this module keep its ZERO-dependency
+ * contract (it imports nothing but pure functions). Behaviour is unchanged:
+ * a missing `status.data` key is `undefined`, a malformed expression is false. */
+export { evalWhen };
 
 /**
- * Parsed shape of a `when` expression, or null when malformed.
- * Grammar is deliberately tiny: `<flatKey> ("==" | "!=") <scalar>`.
- * Anything else (`===`, `>`, parens, `and`, empty) is malformed → fail-closed.
+ * Is this `when` well formed? Display and resolution MUST agree on the answer
+ * (§3.5), so this asks the SAME parser `evalWhen` uses rather than a local
+ * regex — a second grammar here is exactly how the two would drift.
+ *
+ * Used only to decide whether the author gets a warning; a malformed `when`
+ * still evaluates to `false` (fail-closed).
  */
-function parseWhen(when: string): { key: string; op: '==' | '!='; value: string } | null {
-  if (typeof when !== 'string') return null;
-  const trimmed = when.trim();
-  if (trimmed === '') return null;
-  const m = trimmed.match(/^([^\s=!<>()]+)\s*(==|!=)\s*(.+)$/);
-  if (!m) return null;
-  const [, rawKey, op, value] = m;
-  // `k === 1` matches op `==` and leaves `= 1` as the value; reject it explicitly
-  // so the author gets the error rather than a comparison against the literal "= 1".
-  if (value.trim().startsWith('=')) return null;
-  // Both sides may be quoted (`when: "lid" == "open"`), so strip the key's quotes
-  // too; the two spellings must be equivalent (06 §3.5).
-  const key = rawKey.replace(/^["']|["']$/g, '');
-  return { key, op: op as '==' | '!=', value: value.trim() };
-}
-
-/**
- * Single-condition predicate (§3.5). Reads only this entity's own `status.data`.
- * A missing key is `undefined`; a malformed expression is always false.
- */
-export function evalWhen(when: string, statusData: Record<string, unknown> | null): boolean {
-  const parsed = parseWhen(when);
-  if (!parsed) return false;
-  const left = normalizeScalar(statusData ? statusData[parsed.key] : undefined);
-  const right = normalizeScalar(parsed.value);
-  return parsed.op === '==' ? left === right : left !== right;
+function isWellFormedWhen(when: string): boolean {
+  return parseCondition(when, WHEN_PROFILE).ok;
 }
 
 /**
@@ -255,7 +224,7 @@ function buildChoice(
       return null;
     }
 
-    if (when !== undefined && parseWhen(when) === null) {
+    if (when !== undefined && !isWellFormedWhen(when)) {
       note(`choice option "${label}" has a malformed when "${when}"; the option stays hidden (fail-closed)`);
     }
 
@@ -418,7 +387,7 @@ export function formatInteractiveText(raw: Record<string, any> | null | undefine
       // door's label to the player (03 §5.3 / §13.9). A broken one must be
       // visible, or the author never learns to fix it.
       for (const o of fields.choice.options) {
-        if (!o.visible && o.when !== undefined && parseWhen(o.when) === null) {
+        if (!o.visible && o.when !== undefined && !isWellFormedWhen(o.when)) {
           lines.push(`(hidden: "${o.label}" — malformed when "${o.when}")`);
         }
       }

@@ -87,3 +87,49 @@ export * from './inject/turn-cache.js';   // readTurnBlock / writeTurnBlock (01)
 export * from './inject/collect.js';      // collectSections / makeSectionDeps / buildNextStepFacts (01)
 export * from './store/cursor.js';        // settleTurnCursor (03; shared by writer extension and character server side)
 export * from './actions/backpack.js';    // listBackpack (02; server route imports it by package name)
+
+// C1 world commands (docs/command/01 §8). TS `export *` has no glob, so a
+// missing line is a SILENT unreachable module for the extension side — which
+// imports this barrel by relative path (`extensions/*.ts`).
+//
+// `condition.js` is listed explicitly rather than through `export *`: it is
+// deliberately dependency-free, so `rules/dice.js` (whose own contract is
+// "zero dependencies") independently declares an identical `ParseResult<T>`.
+// Re-exporting both would be an ambiguity error; `dice.js`'s copy wins because
+// it is the older public name, and `condition.js`'s is re-listed below by name
+// so every one of its symbols stays reachable.
+export * from './commands/world-command.js';
+export * from './commands/effects.js';
+export * from './commands/limits.js';
+export * from './commands/bindings.js';
+export * from './commands/execute.js';
+export * from './commands/run.js';
+export * from './commands/trigger.js';
+export * from './commands/idempotency.js';
+export * from './commands/serial.js';
+export {
+  COMMAND_PROFILE,
+  ConditionAst,
+  ConditionAtom,
+  ConditionEvalError,
+  ConditionEvalErrorCode,
+  ConditionOperator,
+  ConditionProfile,
+  ConditionProfileName,
+  ConditionResult,
+  ConditionScope,
+  EXPECT_PROFILE,
+  Operand,
+  RangeOperand,
+  Scalar,
+  WHEN_PROFILE,
+  collectHasPaths,
+  collectRefPaths,
+  collectRefs,
+  conditionScopeOf,
+  evalWhen,
+  evaluateCondition,
+  normalizeScalar,
+  parseCommandWhen,
+  parseCondition,
+} from './commands/condition.js';

@@ -62,7 +62,7 @@ do:                                              # 必填，非空
 | `name` | string | **是** | — | 80 字符 | `01` |
 | `desc` | string | 否 | 无 | 200 字符 | `01` |
 | `params` | map<string, ParamSpec> | 否 | `{}` | 12 项 | `01` |
-| `do` | list<Step> | **是** | — | 16 步 | `01` |
+| `do` | list<Step> | **是** | — | 12 步（= `MAX_COMMAND_STEPS`，引 `03 §6.2`） | `01` |
 
 **strict 的准确含义**：除上表四项以外的**任何顶层 key** → `unknown_key`，写入时拒绝。
 
@@ -122,7 +122,7 @@ params:
 #### 参数值的三条硬约束（`09` R5 的前提，安全侧）
 
 1. **单次替换上限**：任何一个 `{{ }}` 替换进来的字符串 ≤ `MAX_COMMAND_STRING`（2 000 字符）。超限 → `field_too_long`，**拒绝，MUST NOT 截断**（截断是静默数据损失，违反硬门 4）。
-2. **每命令总上限**：一次替换后，该命令所有实参字符串的**总字符数** ≤ `MAX_COMMAND_STEPS` × `MAX_COMMAND_STRING`（**24 000** = 12 × 2 000）。理由：单值守法挡不住"12 条 `with.text` 每条 2 000 字符"。
+2. **每命令总上限**：一次替换后，该命令所有实参字符串的**总字符数** ≤ `MAX_COMMAND_EFFECTS` × `MAX_COMMAND_STRING`（**48 000** = 24 × 2 000）。理由：单值守法挡不住"24 条 `with.text` 每条 2 000 字符"。
 3. **单次非递归替换**：被替换进来的值里若**含 `{{ }}`，MUST NOT 二次展开**。否则 `params` 会变成一条**任意深度的模板注入通道**——实体的 frontmatter 里塞一个 `{{ ... }}` 就能让命令执行期读到不该读的东西。
 
 > 第 3 条的正确实现是**一次遍历、一次替换**：先把模板串切成"字面量段 + 引用段"，逐段求值，**求值结果一律当字面量**。不做"替换后再扫一遍"。
@@ -369,7 +369,7 @@ on:
 | `MAX_COMMAND_FILE_BYTES` | 32 000 | 对齐 `declared-actions.ts:40`（旧标 `:38`，**快照已漂移**） 的 `MAX_SNAPSHOT_LENGTH = 32000` |
 | `MAX_COMMAND_PARAMS` | 12 | london-map 四档命令实测需 8，留 50% 余量 |
 | `MAX_COMMAND_STEPS` | **12** | **不是本文的数字**——引 `03 §6.2` 的 `WORLD_COMMAND_STEP_LIMIT = 12`（契约 §R.17/§R.13：阈值只存在一处；`03` 的 T11 断言 13 步在**写入时**被拒，用 16 会让那条断言静默失效）。存量四档 × 2 效果 = 8，仍在其下 |
-| `MAX_COMMAND_EFFECTS` | = `MAX_COMMAND_STEPS` | 命令 `do[]` 的**声明**效果数，与步数同量（`01` §3.1 的 S11）。**MUST NOT 与 `03` 的 `WORLD_COMMAND_EFFECT_BUDGET = 24`（**每次触发**跨命令展开后的总效果数）混同** |
+| `MAX_COMMAND_EFFECTS` | **24**（= `WORLD_COMMAND_EFFECT_BUDGET`） | 命令 `do[]` 经 `list-args` 展开后的**声明**效果数上界（`01` §3.1 的 S11）。**按 §R.17 引 `03` 的 `WORLD_COMMAND_EFFECT_BUDGET`**——一条命令的声明不可能合法地超过整次触发的预算。**与 `MAX_COMMAND_STEPS`（12，声明步数）是两个量，MUST NOT 混同** |
 | `MAX_COMMAND_STRING` | 2 000 | `declared-actions.ts:146`（旧标 `:138`，**快照已漂移**） 的 `input.text.length <= 8000` 是整段 agent 回复；命令内单值是片段 |
 | `MAX_COMMAND_ARG_DEPTH` | 6 | 实测 `edit` 写 `choice_actions` 是 4 层（`frontmatter`→`choice_actions`→`play-result`→`kind`/`prompt`），留 2 层余量 |
 | `MAX_COMMAND_ARG_KEYS` | 16 | 与 `MAX_COMMAND_PARAMS` 同量级 |
@@ -377,7 +377,7 @@ on:
 | `MAX_COMMAND_WHEN_LENGTH` | 200 | 一条区间/比较表达式 |
 | `MAX_ENUM_VALUES` | 16 | enum 成员数 |
 | `MAX_RUN_DEPTH` | 1 | `run` 链深度；见 §2.4.4 |
-| `MAX_COMMAND_TOTAL_CHARS` | **24 000** | 替换后该命令所有实参字符串总长；见 §2.3 硬约束 2。**由 `MAX_COMMAND_STEPS × MAX_COMMAND_STRING` 推导**（契约 §R.17 重算），不是独立数字 |
+| `MAX_COMMAND_TOTAL_CHARS` | **48 000** | 替换后该命令所有实参字符串总长；见 §2.3 硬约束 2。**由 `MAX_COMMAND_EFFECTS × MAX_COMMAND_STRING` 推导**（契约 §R.17 重算），不是独立数字 |
 | `MAX_ARRAY_REWARDS` | 3 | **实体侧** schema 上限；**沿用既有实现的值**（`origin/niko:declared-actions.ts:410`（旧标 `:147`，**快照已漂移**） 逐字 `rewards.length > 3`）。`09` R10 的锚点 |
 | `MAX_ARRAY_OPTIONS` | 2 | **实体侧** schema 上限，取「迁移实测 144/144 档位恰好 2 项」为值。**注意 niko 的旧上限是 12**（`declared-actions.ts:403`（旧标 `:140`，**快照已漂移**） 逐字 `x.options.length > 12`）——收紧到 2 是本文的主动决定，论证见 §2.4.3 的专节 |
 
@@ -417,8 +417,8 @@ on:
 **S10. `run` 链校验。** 目标 id 合法性 + 自递归 + `with` 键名（尽力跨文件）。
 > 漏了：`run: <自己>` 造成无限递归。
 
-**S11. 静态展开。** 计算效果数量上界（每步 1；`list-args` 项按被引用数组的 schema 上限计）。上界 ≤ 32。
-> 漏了：一份 16 步 × list-args 的命令宣称"32 个效果"而实际可能是 48，静态上界论证失效。
+**S11. 静态展开。** 计算效果数量上界（每步 1；`list-args` 项按被引用数组的 schema 上限计）。上界 ≤ `MAX_COMMAND_EFFECTS`（= `MAX_COMMAND_STEPS` = 12，引 `03 §6.2`；**不是独立数字**）。
+> 漏了：一份 12 步 × list-args 的命令宣称"12 个效果"而实际可能是 12 × 3 = 36，静态上界论证失效。
 
 **S11b. 数组实参的长度上界必须可查。** 对每个 `list-args` / `fold-args` 实参，MUST 能指出它引用的数组在**实体侧 schema** 里的上限（`MAX_ARRAY_REWARDS = 3` / `MAX_ARRAY_OPTIONS = 2`）。若引用的是 `trigger.fm.*` 里的**任意 key**（`04` 的某效果把整个数组交给引擎），则上限 MUST 由 `07` 的实体侧 schema 提供；查不到上限 = `unknown_array_bound`。
 > 漏了会怎样：`09` 的 R10（迭代次数由不受信一侧无法改写的量决定）**失去唯一锚点**。命令文件侧完全合法，但实体的 frontmatter 可以带 500 项 `rewards` → 一次触发产生 500 次写入。**这是本文与 `09` 的接缝**，见 §2.4.3 的专节。
@@ -704,12 +704,12 @@ export type WorldCommandParseResult =
 |---|---|---|
 | `do_not_list` | `line {l}: "do" must be a list of steps. Each step starts with "- ".` | 同上 |
 | `do_empty` | `"do" must contain at least one step.` | 同上 |
-| `too_many_steps` | `has {n} steps; the limit is 16.` | — |
+| `too_many_steps` | `has {n} steps; the limit is 12 (= MAX_COMMAND_STEPS, 引 03 §6.2).` | — |
 | `step_not_mapping` | `line {l}: do[{i}] must be a mapping starting with "action", e.g.` + `- action: give` | — |
 | `step_missing_action` | `line {l}: do[{i}] has no "action". Allowed effects: {effects}. Add one, e.g.` + `- action: give` | 同上 |
 | `unknown_action` | `line {l}, column {c}: unknown effect "{action}". Allowed effects: {effects}. Did you mean "{near}"? Effects are verbs (give, take, edit, enter), never action-method names (createEntity, moveEntity).` | 这个世界命令用了引擎不认识的效果，暂时无法执行。 |
 | `nested_do` | `line {l}: do[{i}] has "do" inside a step. Steps are flat - put the inner steps at the top level, or hand the whole array to an effect that iterates it.` | — |
-| `too_many_effects` | `expands to {n} effects; the limit is 32.` | — |
+| `too_many_effects` | `expands to {n} effects; the limit is 24 (= WORLD_COMMAND_EFFECT_BUDGET, 引 03 §6.2).` | — |
 
 #### F. 实参
 
@@ -1111,7 +1111,7 @@ do:
     when: 'roll.fumble == true'
     with:
       path: '{{ trigger.path }}'
-      data:
+      values:
         fumbled: true
 ```
 
@@ -1288,7 +1288,7 @@ do:
 ### 12.2 本文自己仍未定的事
 
 1. **`{{ }}` 语法是主 agent 拍板 B2 与两次广播定下的，本文如实记录了它唯一实打实输掉的对比项**：实测 `path: ${grade}` 在 YAML 里**任何位置都合法**，而 `path: {{ p }}` 在标量开头会被静默解析成 flow map。本文**不翻案**（`{{ }}` 换来的是 LLM 写对率），但把这条登记在这里，供后续评审在"写对率 vs 静默失败面"之间重新权衡。
-2. ~~**`MAX_COMMAND_EFFECTS = 32` 是推导值**~~ —— **已由契约 §R.17 关闭**：`32` 与 `16` 都被删除，`MAX_COMMAND_EFFECTS` 现在恒等于 `MAX_COMMAND_STEPS`（= `03 §6.2` 的 12），`MAX_COMMAND_TOTAL_CHARS` 由它推导（24 000）。**"单文件声明上限"是一个量，只有一处数字**；每次触发跨命令展开后的总效果数（24）是另一个量，归 `03` 的 `WORLD_COMMAND_EFFECT_BUDGET`，两者 MUST NOT 混同（§2.8）。
+2. ~~**`MAX_COMMAND_EFFECTS = 32` 是推导值**~~ —— **已由契约 §R.17 关闭**：`32` 与 `16` 都被删除，`MAX_COMMAND_EFFECTS` 现在引 `03 §6.2` 的 `WORLD_COMMAND_EFFECT_BUDGET = 24`，`MAX_COMMAND_TOTAL_CHARS` 由它推导（48 000）。**阈值只在 `03` 一处**：`MAX_COMMAND_STEPS`（12，声明步数）与 `MAX_COMMAND_EFFECTS`（24，展开后的声明效果数 = 也是整次触发的预算）是两个量，MUST NOT 混同（§2.8）。
 3. **`give` / `edit` 等的实参名尚未冻结**（例 1 的 `path` / `title` / `body` / `frontmatter` 取自 `CreateEntityInput`，`packages/shared/src/actions/create.ts:25-38`）。**归 `04`**。本文的示例在 `04` 定稿后需要一次机械核对。
 4. **`append_body` 的子形态未定**（Main 已拍板要加：只追加、不删不改、幂等不靠扫正文、有长度上限）。**归 `04`**。本文例 2 用了 `mode: append_body` 作为占位形态。
 5. **`name` / `desc` 的翻译支持**：本文 §2.7 登记了 `tools/localize-world-editions.mjs:33` 的 `isText` 不含 `.yaml` 这一事实，但**是否改工具归 `08` 的 `[C-5]`**。若不改，译文版世界里命令的 `name`/`desc` 保持源语言。
