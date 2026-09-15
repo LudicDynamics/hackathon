@@ -486,6 +486,11 @@ export const NookView: React.FC<NookViewProps> = ({
       // The nook consumes no writer tool_start/tool_end frames this batch.
       isBusy: () => false,
       isDragging: () => rootRef.current?.querySelector('.object.dragging-item') !== null,
+      onResult: ({ layer: measuredLayer, updated }) => {
+        if (updated > 0 && measuredLayer === nookIdRef.current) {
+          void load(characterId, sceneRef.current);
+        }
+      },
     });
     fpRef.current = scheduler;
     return () => {
