@@ -124,31 +124,38 @@ docstring 称「the client already dedupes … by frame content for **presentati
 
 ---
 
-## 6. 待拍板（设计自列的未决项，需 owner 决定）
+## 6. 裁定（已由 owner 拍板，2026-09-15）
 
-1. `replay_done` 是否带 `turns`（与 M3 同源 —— **必须先拍，否则 M3 无法修**）
-2. 回放窗口最终帧集（allowlist 内容 —— 与 B2/B3 同源）
-3. 尾部半轮去留（裁掉 or 保留让实况补完 —— 与 M1 同源）
-4. `replaying` 本地兜底超时是否加
-5. `REPLAY_ID` 去留 / `WS_CLOSE.UNAUTHORIZED` 占位去留
-6. `04 §13` 其余各项
+| # | 未决项 | 裁定 |
+|---|---|---|
+| 1 | `replay_done` 是否带 `turns` | **带**（裁决 H）：`{ type, turns, timestamp }` |
+| 2 | 回放窗口帧集 | **allowlist**（裁决 D）：`REPLAY_FRAME_ALLOWLIST`，只回放内容重建帧；`_delta`/仪式帧/元帧一律不入；附带音效由前端 `replaying` 闸掉 |
+| 3 | 尾部半轮去留 | **裁掉**（裁决 I）：只回放完整轮；`REPLAY_TURNS` =「最多 N 个完整轮」 |
+| 4 | `replaying` 兜底超时 | **不加超时**；`replaying` 布尔同时充当音效闸门 |
+| 5 | `REPLAY_ID` / `4401` 占位 | `REPLAY_ID` **不导出**；`4401` 保留占位并标 `placeholder` |
+| 6 | `04 §13` 其余 | 见 `04 §12`/`§13` 逐条标注 |
 
 ---
 
-## 7. 落地前置条件
+## 7. 修订状态（修订 1，2026-09-15 —— 已完成）
 
-**必须先做**（否则不进实现）：
+按本评审报告，四份设计文档已修订并冻结：
 
-- [ ] **B1**：`03` 三处统一到 `§8` 的 STT upgrade 做法
-- [ ] **B2**：`02 §2.1`/`§3.5` 回写去重前提；按 §6-2 拍板确定窗口帧集
-- [ ] **B3**：`02 §3.2` 过滤实现改为 allowlist
-- [ ] **M1**：`02` docstring 改口径 + 按 §6-3 拍板补尾裁剪
-- [ ] **M2**：`03` 补 `isAlive`/pong 连接级落点（或扩 `startHeartbeat` 签名）
-- [ ] **M3**：`replay_done` 载荷统一（先拍 §6-1）
-- [ ] **M4/M5**：`00 §8-3`/证据 B #3 修正（这两处会让承接方改错文档）
-- [ ] **M6**：`03 §8`/`04 §11.4` 的 STT 验收改成**真能红**的用例（如经 `index.ts` 的 upgrade 钩子跑一次）
-- [ ] **M7**：`00 §1.3` 心跳动机改写为「静默泄漏」
+| 前置条件 | 状态 | 落实位置 |
+|---|---|---|
+| **B1** STT upgrade 三处统一 | ✅ | `03 §2.2`/`§3.1` 第 4 步改为与 `§8` 一致的 `handleUpgrade`+`emit` |
+| **B2** 去重假前提 | ✅ | `02 §2.1`/`§3.5` 换为「同 tick 只保证无乱序；重复帧并非无害，故靠 allowlist 从源头避免」 |
+| **B3** 过滤改 allowlist | ✅ | `02 §3.2` 第 2 步改为 `REPLAY_FRAME_ALLOWLIST` |
+| **M1** docstring + 尾裁剪 | ✅ | `02 §2.1`/`§3.3`/`§12.1` 补尾裁剪（裁决 I） |
+| **M2** `isAlive`/pong 落点 | ✅ | `03 §4`/`§8` 落点表显式加 `wss.on('connection')` 一行 |
+| **M3** `replay_done` 载荷 | ✅ | `00 §3.2`、`02 §3.5`、`04 §2.1` 统一为 `{ type, turns, timestamp }` |
+| **M4/M5** 假转述/幽灵路径 | ✅ | `00 §8-3` 改为「无需回写」；证据 B #3 改引 `db/schema.ts:146` |
+| **M6** STT 验收假非空性 | ✅ | `03 §8`/`04 §11.4` 降级为回归 + 补真能红的端到端验收 |
+| **M7** 心跳动机 | ✅ | `00 §1.3`/`03 §3.2` 改为「静默泄漏」 |
+| m1–m7、n1–n3 | ✅ | 逐处修正（`04 §5.x` 幽灵引用、计数、行锚等） |
 
-**可同批顺带**：m1–m7、n1–n3。
+**根因修复**：`docs/gateway/` 已纳入 `tools/check-hooks-docs.mjs` 的 `CITE_DIRS`（`04 §13-5` 登记项已落地）。
+`pnpm check:docs` → `clean (8 docs, 16 owned symbols, 109 cited paths)`；`pnpm check:ws` → `clean`；`pnpm check:merge` → PASSED。
+**M4/M5/m1/m7 这类引用错误从此可被机械拦截**，不再依赖人工评审。
 
-**评审纪律提醒**：评审只读、不改被评审文档；本批修订由文档 owner（或主 agent 指派）执行，修订后 **`docs/gateway/` 应纳入 `tools/check-hooks-docs.mjs` 的 `CITE_DIRS`**（`04 §13-5` 已登记），否则 M4/M5/m1/m7 这类引用错误无法机械拦截。
+**评审门结论**：BLOCK 已解除 —— 三处 BLOCK 与 7 条 MAJOR 已全部落实到文档；**可以进入实现阶段**（`00 §10` 的落地顺序）。

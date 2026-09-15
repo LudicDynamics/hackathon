@@ -51,7 +51,7 @@ const docs = fs
 // exactly where path tables go stale unnoticed. Only the hooks batch docs carry
 // the batch contract, so only they feed checks 1–3/5 — but all of these are
 // scanned for citations.
-const CITE_DIRS = ['docs/hooks', 'docs/audio'];
+const CITE_DIRS = ['docs/hooks', 'docs/audio', 'docs/gateway'];
 const CITE_FILES = ['AGENTS.md', 'assets/README.md'];
 const citeDocs = [];
 for (const dir of CITE_DIRS) {
