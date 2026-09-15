@@ -10,7 +10,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const CAPTIONS = resolve(HERE, '../remotion/src/lib/captions.ts');
+// CAPTIONS_FILE=captions60.ts voices the 1-minute cut instead (with VO_TAG=andrew60).
+const CAPTIONS = resolve(HERE, '../remotion/src/lib', process.env.CAPTIONS_FILE || 'captions.ts');
 // VO_TAG=<name> keeps several narrators side by side (public/vo/<name>/, src/lib/narration-<name>.json) for
 // scripts/mix-vo.sh; without it the narration the film imports (narration.json) is overwritten.
 const TAG = process.env.VO_TAG || '';
@@ -28,10 +29,13 @@ const STYLE =
   'Natural pace, short pauses at commas, land each sentence softly.';
 const MAX_TEMPO = 1.25;
 
+/** The project's name the captions write as {PROJECT} (remotion/src/lib/project.ts): PROJECT=CharaCanvas for that cut. */
+const PROJECT = process.env.PROJECT || 'LivingCanvas';
+
 /** Narration cues = captions.ts entries without a speaker. */
 const cues = [...readFileSync(CAPTIONS, 'utf8').matchAll(/\{\s*from:\s*([\d.]+),\s*to:\s*([\d.]+),\s*(speaker:[^,]+,\s*)?text:\s*"((?:[^"\\]|\\.)*)"\s*\}/g)]
   .filter((m) => !m[3])
-  .map((m) => ({ from: Number(m[1]), to: Number(m[2]), text: m[4].replace(/\\"/g, '"') }));
+  .map((m) => ({ from: Number(m[1]), to: Number(m[2]), text: m[4].replace(/\\"/g, '"').split('{PROJECT}').join(PROJECT) }));
 
 function openaiKey() {
   if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;

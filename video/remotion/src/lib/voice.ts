@@ -26,12 +26,8 @@ export const CUT2 = N1 + vlen("nanami-1") + SCENE_GAP;
 export const P3 = CUT2 + SCENE_GAP;
 export const W1 = P3 + vlen("player-3") + REPLY_GAP;
 export const CUT3 = W1 + vlen("wataru-1") + SCENE_GAP;
-// Elias (the team calls him Ei), from the user's two recordings of his world — not a mock (cuts.ts `el-*`):
-// his voiced reply (4.1s), the GPT Live call (8s), then the ticket he wrote showing up on the canvas (to the act's end).
-export const EL_LIVE = CUT3 + 124;
-export const EL_WORLD = EL_LIVE + 240;
-/** Inside the world beat: "Action confirmed…" on the canvas, then the ticket card. */
-export const EL_ACT_LEN = 60;
+// Elias (the team calls him Ei), from the user's recording of his world — not a mock (cuts.ts `el-text`): his voiced
+// reply closes the act (to its end, 780). His GPT Live call is its own feature beat later (scenes/ALive.tsx).
 
 // ── A5 (infinite exploration): frames relative to the act.
 // Lyra speaks Japanese (3.5s), so her first line starts earlier to clear her second at LYRA2.

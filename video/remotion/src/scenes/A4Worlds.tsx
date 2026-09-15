@@ -7,24 +7,23 @@ import { cast, WORLDS, type World } from "../lib/assets";
 import { DISPLAY, INK, ORANGE, PAPER } from "../lib/theme";
 import { LauncherSlot } from "./parts/LauncherSlot";
 
-// ACT 4 · "Pick a world." — the launcher (0–150), then Fogwharf 64s, First Snow 10s, Divergence 12s.
+// ACT 4 · "Pick a world." — the launcher (0–150), then Fogwharf 68s, First Snow 10s, Divergence 12s.
 // (Holmes was dropped, v12; its time went to Fogwharf.)
 
 export const LAUNCH = 150;
 /** Extra footage beats played between d and e (by slot id). */
 type Extra = { slot: string; len: number };
 type Beats = { t: number; b: number; c: number; d: number; e: number; extras?: Extra[] };
-/** First Snow, 10s from the user's two routes: studio → street → Nanami's call → both endings (the payoff). */
+/** First Snow, 10s from the user's route: studio → street → Nanami's call → the ending CG (the payoff). */
 const FIRST_SNOW: Beats = { t: 30, b: 45, c: 45, d: 60, e: 120 };
-/** Frames of ending 1 inside First Snow's payoff; ending 2 takes the rest. */
-const END1 = 55;
 /**
- * Fogwharf, 64s, everything from the user's 44-minute run in play order, told as a story (narration per beat, captions.ts):
- * the case (office) → search for signs (map) → the dice → you ask why she helps, Vera answers in full → 「一緒に回らない？」,
- * she moves herself and walks with you → the writer agent writes the place you reasoned toward → the new pier → 「また新しい
- * 道がみえた」/ 「二隻目だね…」 (her line starts at frame 1080, on the music's crash) → the lantern dock → 「戻る？」/ she won't,
- * and says what to check instead → the blue-door hall → out of credits.
- * The music is spliced to these numbers (make-track-a-156.sh): keep the ship at 1080 and the block at 1920.
+ * Fogwharf, 68s, everything from the user's 44-minute run in real play order, told as a story (captions.ts). The player
+ * types and never speaks, so the narrator says what they asked; Vera answers in her own voice, in full:
+ * the case (office) → search for signs (map) → the dice → the player asks why she helps / her answer → the writer agent
+ * writes the place the player reasoned toward → the player asks her to come along / 「行くよ、もちろん。」 → the new pier,
+ * together → the player spots a new path / 「二隻目だね…」 (her line starts at frame 1200, on the music's crash) → the lantern
+ * dock, the player asks whether to turn back / she won't, and says what to check instead → the blue-door hall → out of credits.
+ * The music is spliced to these numbers (make-track-a-156.sh): keep the ship at 1200 and the block at 2040.
  */
 const FOGWHARF: Beats = {
   t: 30,
@@ -32,17 +31,16 @@ const FOGWHARF: Beats = {
   c: 60,
   d: 90,
   extras: [
-    { slot: "r1-ttype", len: 45 },
+    { slot: "r1-ttype", len: 75 },
     { slot: "r1-trust", len: 325 },
-    { slot: "follow-1", len: 45 },
-    { slot: "follow-2", len: 55 },
-    { slot: "follow-3", len: 65 },
-    { slot: "r1-writer", len: 75 },
-    { slot: "r1-pier", len: 165 },
-    { slot: "r1-stype", len: 50 },
+    { slot: "r1-writer", len: 160 },
+    { slot: "r1-ask", len: 75 },
+    { slot: "r1-go", len: 60 },
+    { slot: "r1-pier", len: 175 },
+    { slot: "r1-stype", len: 75 },
     { slot: "r1-ship", len: 205 },
-    { slot: "follow-6", len: 90 },
-    { slot: "r1-v1", len: 45 },
+    { slot: "follow-6", len: 60 },
+    { slot: "r1-v1", len: 75 },
     { slot: "r1-v2", len: 66 },
     { slot: "r1-v2b", len: 240 },
     { slot: "follow-7", len: 45 },
@@ -74,7 +72,7 @@ export const slotFrom = (i: number, slot: string) => {
 export const slotLen = (i: number, slot: string) => BLOCKS[i].beats.extras?.find((x) => x.slot === slot)?.len ?? 0;
 
 /** Fogwharf's last beat: the run's out-of-credits screen, with what the week cost. */
-const CreditsStat: React.FC = () => {
+export const CreditsStat: React.FC = () => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const s = spring({ frame: f - 2, fps, config: { damping: 14, stiffness: 260 } });
@@ -90,7 +88,7 @@ const CreditsStat: React.FC = () => {
 };
 
 /** Divergence's payoff: the same street in both timelines — original (the user's 2:13), restored (9:06) wiping in. */
-const BeforeAfter: React.FC = () => {
+export const BeforeAfter: React.FC = () => {
   const f = useCurrentFrame();
   const { durationInFrames: d } = useVideoConfig();
   const x = interpolate(f, [d * 0.25, d * 0.65], [0, 100], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.inOut(Easing.cubic) });
@@ -112,29 +110,7 @@ const BeforeAfter: React.FC = () => {
   );
 };
 
-/** First Snow's payoff: the user's two routes end on two different CGs, one after the other. */
-const TwoEndings: React.FC = () => {
-  const pill = (text: string): React.ReactNode => (
-    <div style={{ position: "absolute", top: 40, left: 50, fontFamily: DISPLAY, fontWeight: 900, fontSize: 30, letterSpacing: 6, color: INK, background: ORANGE, padding: "8px 18px", borderRadius: 999 }}>
-      {text}
-    </div>
-  );
-  return (
-    <AbsoluteFill style={{ background: INK }}>
-      <Sequence durationInFrames={END1}>
-        <Footage slot="r3-end1" push={0.04} />
-        {pill("ENDING 1")}
-      </Sequence>
-      <Sequence from={END1}>
-        <Footage slot="r3-end2" push={0.04} />
-        {pill("ENDING 2")}
-      </Sequence>
-      <Flash at={END1} len={2} />
-    </AbsoluteFill>
-  );
-};
-
-const TitleCard: React.FC<{ w: World }> = ({ w }) => {
+export const TitleCard: React.FC<{ w: World }> = ({ w }) => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const hero = cast(w.hero);
@@ -166,7 +142,8 @@ const Payoff: React.FC<{ w: World }> = ({ w }) => {
   const hero = cast(w.hero);
   const pop = spring({ frame: f - 6, fps, config: { damping: 11, stiffness: 240 } });
   if (w.n === 4) return <BeforeAfter />;
-  if (w.n === 3) return <TwoEndings />;
+  // First Snow ends on the route's ending CG (the other route's CG is covered in text — dropped).
+  if (w.n === 3) return <Footage slot="r3-end2" push={0.04} />;
   if (w.n === 1)
     return (
       <AbsoluteFill>

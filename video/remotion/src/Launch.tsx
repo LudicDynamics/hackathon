@@ -13,6 +13,7 @@ import { A3Voice } from "./scenes/A3Voice";
 import { A4Worlds, BLOCKS, blockFrom, blockIndex, payoffFrom, slotFrom, slotLen } from "./scenes/A4Worlds";
 import { A5Infinite } from "./scenes/A5Infinite";
 import { A6Next, roundFrom, ROUNDS } from "./scenes/A6Next";
+import { ALive, LIVE_VOICE_AT, LIVE_VOICE_LEN } from "./scenes/ALive";
 import { A7Formula } from "./scenes/A7Formula";
 import { TYPE_SHARE } from "./scenes/S6Vision";
 
@@ -22,6 +23,7 @@ export const SCENES: Record<SectionId, React.FC> = {
   A3: A3Voice,
   A4: A4Worlds,
   A5: A5Infinite,
+  AL: ALive,
   A6: A6Next,
   A7: A7Formula,
 };
@@ -47,6 +49,11 @@ const VERA_SHIP_AT = at("A4", slotFrom(I1, "r1-ship"));
 const VERA_SHIP_LEN = slotLen(I1, "r1-ship");
 const VERA_BACK_AT = at("A4", slotFrom(I1, "r1-v2"));
 const VERA_BACK_LEN = slotLen(I1, "r1-v2");
+/** 「行くよ、もちろん。」 — her answer when the player asks her to come along (19:55.9). */
+const VERA_GO_AT = at("A4", slotFrom(I1, "r1-go"));
+const VERA_GO_LEN = slotLen(I1, "r1-go");
+/** Elias on the GPT Live call (the AL feature beat). */
+const ELIAS_LIVE_AT = at("AL", LIVE_VOICE_AT);
 /** …and the rest of that reply, after her pause: what to check instead of turning back. */
 const VERA_BACK2_AT = at("A4", slotFrom(I1, "r1-v2b"));
 const VERA_BACK2_LEN = slotLen(I1, "r1-v2b");
@@ -70,6 +77,8 @@ const musicVolume = (f: number) => {
   if (f >= VERA_BACK_AT - 6 && f < VERA_BACK2_AT + VERA_BACK2_LEN) return 0.3;
   if (f >= VERA_SHIP_AT - 6 && f < VERA_SHIP_AT + VERA_SHIP_LEN) return 0.35;
   if (f >= VERA_TRUST_AT - 6 && f < VERA_TRUST_AT + VERA_TRUST_LEN) return 0.3;
+  if (f >= VERA_GO_AT - 6 && f < VERA_GO_AT + VERA_GO_LEN) return 0.3;
+  if (f >= ELIAS_LIVE_AT - 6 && f < ELIAS_LIVE_AT + LIVE_VOICE_LEN) return 0.3;
   const under = DUCK.some(([id, a]) => f >= a - 8 && f <= a + vlen(id) + 8);
   if (EXTERNAL_SONG && f >= sectionFrom("A3") - 10 && f < sectionFrom("A3") + sectionLength("A3")) return 0.16;
   // Narration only dips the music a little: its melody and hits carry the film (character voices dip it further).
@@ -118,6 +127,9 @@ export const Launch: React.FC = () => (
     </Sequence>
     <Sequence from={VERA_SHIP_AT} durationInFrames={VERA_SHIP_LEN} name="vera: the second ship">
       <VoiceClip id="vera-ship" />
+    </Sequence>
+    <Sequence from={VERA_GO_AT} durationInFrames={VERA_GO_LEN} name="vera: I'm coming, of course">
+      <VoiceClip id="vera-go" />
     </Sequence>
     <Sequence from={VERA_TRUST_AT} durationInFrames={VERA_TRUST_LEN} name="vera: not unconditionally">
       <VoiceClip id="vera-trust" />

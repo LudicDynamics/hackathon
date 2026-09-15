@@ -1,0 +1,119 @@
+[
+ {
+  "from": 1.2,
+  "to": 6.9,
+  "text": "This is Worldlines: CharaCanvas — where you live the story with AI character agents.",
+  "file": "vo/andrew60-chara/n-00.wav",
+  "duration": 5.625,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 7.2,
+  "to": 9.9,
+  "text": "Fogwharf: investigate a harbour where ships vanish.",
+  "file": "vo/andrew60-chara/n-01.wav",
+  "duration": 2.712,
+  "tempo": 1.186,
+  "fits": true
+ },
+ {
+  "from": 10.1,
+  "to": 12.8,
+  "text": "When luck matters, the dice decide.",
+  "file": "vo/andrew60-chara/n-02.wav",
+  "duration": 2.069,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 13.1,
+  "to": 15.9,
+  "text": "Share a theory, and the writer agent writes the next place.",
+  "file": "vo/andrew60-chara/n-03.wav",
+  "duration": 2.817,
+  "tempo": 1.089,
+  "fits": true
+ },
+ {
+  "from": 16.1,
+  "to": 17.9,
+  "text": "The player asks Vera to come along.",
+  "file": "vo/andrew60-chara/n-04.wav",
+  "duration": 1.745,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 22,
+  "to": 25.1,
+  "text": "One game, 44 minutes — until the credits hit zero.",
+  "file": "vo/andrew60-chara/n-05.wav",
+  "duration": 3.111,
+  "tempo": 1.133,
+  "fits": true
+ },
+ {
+  "from": 25.2,
+  "to": 30.8,
+  "text": "First Snow: keep a promise on the night of the first snow — your choices write the ending.",
+  "file": "vo/andrew60-chara/n-06.wav",
+  "duration": 4.998,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 31.2,
+  "to": 34.9,
+  "text": "Divergence: change one day in 1994, and the street changes.",
+  "file": "vo/andrew60-chara/n-07.wav",
+  "duration": 3.704,
+  "tempo": 1.218,
+  "fits": true
+ },
+ {
+  "from": 35.1,
+  "to": 37.4,
+  "text": "With GPT Live, call a character.",
+  "file": "vo/andrew60-chara/n-08.wav",
+  "duration": 2.112,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 41.2,
+  "to": 43.1,
+  "text": "And their promise lands in the world.",
+  "file": "vo/andrew60-chara/n-09.wav",
+  "duration": 1.603,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 45.2,
+  "to": 47.9,
+  "text": "The writer agent writes the rules and the code, too.",
+  "file": "vo/andrew60-chara/n-10.wav",
+  "duration": 2.714,
+  "tempo": 1.093,
+  "fits": true
+ },
+ {
+  "from": 48.1,
+  "to": 50.9,
+  "text": "Next: bring your friends into the same story.",
+  "file": "vo/andrew60-chara/n-11.wav",
+  "duration": 2.586,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 55.3,
+  "to": 59.7,
+  "text": "Worldlines lets you live in the world, with your character agents.",
+  "file": "vo/andrew60-chara/n-12.wav",
+  "duration": 3.402,
+  "tempo": 1,
+  "fits": true
+ }
+]

@@ -116,14 +116,17 @@ export const SLOTS: Record<string, Slot> = {
   // (make-ryo-line.sh) starting where the picture does.
   // 5:12.5 the user types 「おけー、なんでこんなに助けて…」 (fast); 5:26 Vera: 「あんたを無条件に信用してるわけじゃないよ。
   // ただ、見落とした傷が誰かを傷つけるのは嫌だし、部品の持ち主を決めつける前に確かめたい。」 (to 5:36.8)
-  "r1-ttype": { note: "R1 · 你输入「なんでこんなに助けて」", candidates: [{ match: "footage/fogwharf-run-raw", from: 312.5, rate: 4 }] },
+  "r1-ttype": { note: "R1 · 你输入「なんでこんなに助けて」", candidates: [{ match: "footage/fogwharf-run-raw", from: 312.5, rate: 3 }] },
   "r1-trust": { note: "R1 · Vera「あんたを無条件に信用してるわけじゃないよ…」", candidates: [{ match: "footage/fogwharf-run-raw", from: 326.0, rate: 1 }] },
   // 19:00 the writer agent's cursor writes the place the user reasoned toward (old-customs-landing); 20:15 they walk onto it.
   "r1-writer": { note: "R1 · 作家生成新地点（19:00）", candidates: [{ match: "footage/fogwharf-run-raw", from: 1140, rate: 3 }] },
+  // 19:39.5 the user types 「一緒に行く？」; 19:55.9 Vera, aloud: 「行くよ、もちろん。」 (to 19:57.5).
+  "r1-ask": { note: "R1 · 你输入「一緒に行く？」", candidates: [{ match: "footage/fogwharf-run-raw", from: 1179.5, rate: 2 }] },
+  "r1-go": { note: "R1 · Vera「行くよ、もちろん。」", candidates: [{ match: "footage/fogwharf-run-raw", from: 1195.9, rate: 1 }] },
   "r1-pier": { note: "R1 · 迷雾散开，新码头出现（20:16）", candidates: [{ match: "footage/fogwharf-run-raw", from: 1215.8, rate: 1.5 }] },
   // 27:35 the user types 「また新しい道がみえた」; 27:49 Vera: 「二隻目だね。まだ船そのものを確認したわけじゃないよ。
   // でも新しい道は本物だね。」 (to 27:55.8)
-  "r1-stype": { note: "R1 · 你输入「また新しい道がみえた」", candidates: [{ match: "footage/fogwharf-run-raw", from: 1655, rate: 2 }] },
+  "r1-stype": { note: "R1 · 你输入「また新しい道がみえた」", candidates: [{ match: "footage/fogwharf-run-raw", from: 1654.5, rate: 2 }] },
   "r1-ship": { note: "R1 · Vera「二隻目だね…」（27:49）", candidates: [{ match: "footage/fogwharf-run-raw", from: 1669.0, rate: 1 }] },
   // 32:13 the user types 「ここまで来たけど戻る？」; 32:24 Vera: 「私なら、まだ戻らない。」 and, after a pause (cut),
   // 32:28.4 「木箱の擦れか、泥のない車輪跡——どちらか一つを確かめれば、二隻目の手がかりに近づけそうだよ。」 (to 32:36.2)
@@ -140,18 +143,19 @@ export const SLOTS: Record<string, Slot> = {
   // 9:07.00 is the first clean frame of the restored storefront (a note card fades in right after) — hold it.
   "r4-after": { note: "R4 · 复原之后的世界（9:07）", candidates: [{ match: "footage/divergence-run-raw", from: 547.0, rate: 0.15 }] },
   c5: { note: "C5 · 画布拖动 / 缩放 B-roll", candidates: [{ match: ["c5"] }] },
-  // Elias ("Ei"), the AI researcher, from the user's two recordings of his world (video/footage/ei-*-raw.mp4), A3's end.
+  // Elias ("Ei"), the AI researcher, from the user's two recordings of his world (video/footage/ei-*-raw.mp4).
   // Picture only — his voice plays as voice/elias-1.wav and elias-2.wav (levelled to the cast, make-ryo-line.sh).
-  // 13.27 run, 0:50.2: his voiced reply "Take your time. But I'm not going back to my office until I hear it."
+  // A3's end — 13.27 run, 0:50.2: his voiced reply "Take your time. But I'm not going back to my office until I hear it."
   "el-text": { note: "Elias · 语音回复（13.27 录屏 0:50）", candidates: [{ match: "footage/ei-run-raw", from: 50.2, rate: 1 }] },
-  // 15.59 run (GPT Live): the call connects at 3:14; at 3:40.5 your request for a ticket is on screen and he answers
-  // "Okay, let's take it slow and get it right. I'm checking what the ticket should cover."
-  "el-live": { note: "Elias · GPT Live 通话（15.59 录屏 3:40）", candidates: [{ match: "footage/ei-live-run-raw", from: 220.5, rate: 1 }] },
-  // 5:33.3 back on the canvas: Elias's avatar in the corridor, you click the open-office door; 5:35.5 the office with
-  // "Action confirmed and the scene is synchronized." (1.5× ends at 5:36.3, before the Chinese scene toast settles).
+  // The GPT Live feature beat (ALive.tsx) — 15.59 run: the call connects at 3:14; from 3:38.5 your request for a ticket
+  // is on screen (3.5s for the narration to introduce GPT Live), then he answers at 3:42.0 "Okay, let's take it slow and
+  // get it right. I'm checking what the ticket should cover."
+  "el-live": { note: "Elias · GPT Live 通话（15.59 录屏 3:38）", candidates: [{ match: "footage/ei-live-run-raw", from: 218.5, rate: 1 }] },
+  // 5:32.0 back on the canvas: Elias's avatar in the corridor, you click the open-office door (the narration says what
+  // the call can do to the world over it); 5:35.5 the office with "Action confirmed and the scene is synchronized."
   // Then 5:54.3, the ticket he wrote is a card in the open office (the page is Chrome-translated to English there; the
   // popup sits above the crop).
-  "el-act": { note: "Elias · 动作确认、场景同步（5:35）", candidates: [{ match: "footage/ei-live-run-raw", from: 333.3, rate: 1.5 }] },
+  "el-act": { note: "Elias · 动作确认、场景同步（5:35）", candidates: [{ match: "footage/ei-live-run-raw", from: 332.0, rate: 1 }] },
   "el-item": { note: "Elias · 任务单落库（5:54）", candidates: [{ match: "footage/ei-live-run-raw", from: 354.3, rate: 0.5 }] },
   ...worldSlots(),
 };

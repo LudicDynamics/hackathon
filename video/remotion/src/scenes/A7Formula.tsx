@@ -4,10 +4,31 @@ import { CanvasWorld, layoutCards } from "../components/Canvas";
 import { Face, Grid, RoleplayIcon } from "../components/Icons";
 import { CursorAvatar, Flash, PlayerCursor, Slam, WorldlinesMark } from "../components/Kit";
 import { CAST } from "../lib/assets";
+import { PROJECT } from "../lib/project";
 import { DISPLAY, INK, ORANGE, PAPER, PLAYERS } from "../lib/theme";
 import { burstScale } from "./S0ColdOpen";
 
-// ACT 7 · SANDBOX + AGENTS + AI ROLEPLAY = WORLDLINES · INFINITE CANVAS.
+/**
+ * The project's name as the title (lib/project.ts: LivingCanvas / CharaCanvas), coloured like the wordmark — its first
+ * word in white, "Canvas" in orange. WORLDLINES sits under it, small, as the subtitle (user, 2026-09-15).
+ */
+const ProjectMark: React.FC<{ size: number; delay?: number }> = ({ size, delay }) => {
+  const m = PROJECT.match(/^(.*?)(Canvas)$/);
+  return (
+    <Slam text={PROJECT} size={size} delay={delay}>
+      {m ? (
+        <>
+          <span style={{ color: PAPER }}>{m[1]}</span>
+          <span style={{ color: ORANGE }}>{m[2]}</span>
+        </>
+      ) : (
+        PROJECT
+      )}
+    </Slam>
+  );
+};
+
+// ACT 7 · SANDBOX + AGENTS + AI ROLEPLAY = <PROJECT>, subtitled WORLDLINES.
 // Relative to 2:16. Music: silent beat 0–15, hits at 30 / 60 / 90, hit + swell at 120, groove 180, final hit at 240.
 const TERMS = [
   { word: "SANDBOX", Icon: Grid, at: 30 },
@@ -42,8 +63,11 @@ const Equation: React.FC = () => {
       {f >= EQUALS && (
         <div style={{ position: "absolute", top: 520, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
           <div style={{ fontFamily: DISPLAY, fontWeight: 900, fontSize: 110, color: ORANGE, lineHeight: 1 }}>=</div>
-          <WorldlinesMark size={190} delay={EQUALS + 6} />
-          <Slam text="INFINITE CANVAS" size={70} color={ORANGE} delay={EQUALS + 14} style={{ letterSpacing: 10 }} />
+          <ProjectMark size={180} delay={EQUALS + 6} />
+          {/* Room for the name's descenders (the g in "Living"). */}
+          <div style={{ marginTop: 40 }}>
+            <WorldlinesMark size={58} delay={EQUALS + 14} />
+          </div>
         </div>
       )}
     </AbsoluteFill>
@@ -80,8 +104,10 @@ const Logo: React.FC = () => {
   const fade = (a: number) => interpolate(f, [a, a + 20], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   return (
     <AbsoluteFill style={{ background: INK, alignItems: "center", justifyContent: "center", gap: 20 }}>
-      <WorldlinesMark size={230} />
-      <div style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 40, letterSpacing: 14, color: ORANGE, opacity: fade(20) }}>INFINITE CANVAS</div>
+      <ProjectMark size={220} />
+      <div style={{ marginTop: 36, opacity: fade(20) }}>
+        <WorldlinesMark size={66} />
+      </div>
       {/* Studio credit, quieter than the product name. */}
       <div style={{ marginTop: 70, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, opacity: fade(55) }}>
         <div style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 26, letterSpacing: 8, color: PAPER, opacity: 0.85 }}>BUILT BY LUDICDYNAMICS</div>

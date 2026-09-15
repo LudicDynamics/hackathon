@@ -3,8 +3,8 @@
   "from": 0.4,
   "to": 3.8,
   "text": "Stories have always been worlds.",
-  "file": "vo/andrew/n-00.wav",
-  "duration": 1.642,
+  "file": "vo/andrew-chara/n-00.wav",
+  "duration": 1.641,
   "tempo": 1,
   "fits": true
  },
@@ -12,7 +12,7 @@
   "from": 4.2,
   "to": 6.8,
   "text": "Books let us read them.",
-  "file": "vo/andrew/n-01.wav",
+  "file": "vo/andrew-chara/n-01.wav",
   "duration": 0.852,
   "tempo": 1,
   "fits": true
@@ -21,7 +21,7 @@
   "from": 7.2,
   "to": 9.8,
   "text": "Games let us play them.",
-  "file": "vo/andrew/n-02.wav",
+  "file": "vo/andrew-chara/n-02.wav",
   "duration": 0.848,
   "tempo": 1,
   "fits": true
@@ -30,8 +30,8 @@
   "from": 10.2,
   "to": 13.8,
   "text": "Chatbots let us talk to one character, alone, in a box.",
-  "file": "vo/andrew/n-03.wav",
-  "duration": 3.616,
+  "file": "vo/andrew-chara/n-03.wav",
+  "duration": 3.617,
   "tempo": 1.033,
   "fits": true
  },
@@ -39,7 +39,7 @@
   "from": 14.3,
   "to": 16.8,
   "text": "But no one has ever let you live in one.",
-  "file": "vo/andrew/n-04.wav",
+  "file": "vo/andrew-chara/n-04.wav",
   "duration": 1.736,
   "tempo": 1,
   "fits": true
@@ -47,17 +47,17 @@
  {
   "from": 19.3,
   "to": 21.35,
-  "text": "This is Worldlines: LivingCanvas.",
-  "file": "vo/andrew/n-05.wav",
-  "duration": 2.061,
-  "tempo": 1.184,
+  "text": "This is Worldlines: CharaCanvas.",
+  "file": "vo/andrew-chara/n-05.wav",
+  "duration": 2.063,
+  "tempo": 1.204,
   "fits": true
  },
  {
   "from": 21.4,
   "to": 27.4,
   "text": "One infinite canvas, where you, your character agents, and a writer agent share the same world.",
-  "file": "vo/andrew/n-06.wav",
+  "file": "vo/andrew-chara/n-06.wav",
   "duration": 5.88,
   "tempo": 1,
   "fits": true
@@ -66,7 +66,7 @@
   "from": 33.1,
   "to": 34.9,
   "text": "And they talk back.",
-  "file": "vo/andrew/n-07.wav",
+  "file": "vo/andrew-chara/n-07.wav",
   "duration": 0.819,
   "tempo": 1,
   "fits": true
@@ -75,7 +75,7 @@
   "from": 59.3,
   "to": 63.8,
   "text": "Pick a world.",
-  "file": "vo/andrew/n-08.wav",
+  "file": "vo/andrew-chara/n-08.wav",
   "duration": 0.591,
   "tempo": 1,
   "fits": true
@@ -84,7 +84,7 @@
   "from": 64.3,
   "to": 67.4,
   "text": "A harbour where ships vanish. You take the case.",
-  "file": "vo/andrew/n-09.wav",
+  "file": "vo/andrew-chara/n-09.wav",
   "duration": 2.608,
   "tempo": 1,
   "fits": true
@@ -93,7 +93,7 @@
   "from": 67.7,
   "to": 72.3,
   "text": "Search the harbour for signs. When luck matters, the dice decide.",
-  "file": "vo/andrew/n-10.wav",
+  "file": "vo/andrew-chara/n-10.wav",
   "duration": 3.894,
   "tempo": 1,
   "fits": true
@@ -102,7 +102,7 @@
   "from": 72.6,
   "to": 75,
   "text": "The player asks Vera why she's helping.",
-  "file": "vo/andrew/n-11.wav",
+  "file": "vo/andrew-chara/n-11.wav",
   "duration": 1.937,
   "tempo": 1,
   "fits": true
@@ -111,7 +111,7 @@
   "from": 86,
   "to": 91.1,
   "text": "Share your theory, and the writer agent writes the next place into the world.",
-  "file": "vo/andrew/n-12.wav",
+  "file": "vo/andrew-chara/n-12.wav",
   "duration": 4.068,
   "tempo": 1,
   "fits": true
@@ -120,7 +120,7 @@
   "from": 91.3,
   "to": 93.7,
   "text": "The player asks her to come along.",
-  "file": "vo/andrew/n-13.wav",
+  "file": "vo/andrew-chara/n-13.wav",
   "duration": 1.504,
   "tempo": 1,
   "fits": true
@@ -129,7 +129,7 @@
   "from": 95.9,
   "to": 99.6,
   "text": "She comes along — and together, you find the second ship.",
-  "file": "vo/andrew/n-14.wav",
+  "file": "vo/andrew-chara/n-14.wav",
   "duration": 3.292,
   "tempo": 1,
   "fits": true
@@ -138,8 +138,8 @@
   "from": 101.7,
   "to": 103.9,
   "text": "The player spots a new path.",
-  "file": "vo/andrew/n-15.wav",
-  "duration": 1.373,
+  "file": "vo/andrew-chara/n-15.wav",
+  "duration": 1.372,
   "tempo": 1,
   "fits": true
  },
@@ -147,8 +147,8 @@
   "from": 111,
   "to": 115.2,
   "text": "Deep in, the player asks whether to turn back.",
-  "file": "vo/andrew/n-16.wav",
-  "duration": 2.596,
+  "file": "vo/andrew-chara/n-16.wav",
+  "duration": 2.592,
   "tempo": 1,
   "fits": true
  },
@@ -156,7 +156,7 @@
   "from": 125.8,
   "to": 131.8,
   "text": "We got hooked — one game ran 44 minutes, until our $100 in credits hit zero.",
-  "file": "vo/andrew/n-17.wav",
+  "file": "vo/andrew-chara/n-17.wav",
   "duration": 5.712,
   "tempo": 1,
   "fits": true
@@ -165,7 +165,7 @@
   "from": 132.3,
   "to": 135.9,
   "text": "Keep a promise on the night of the first snow.",
-  "file": "vo/andrew/n-18.wav",
+  "file": "vo/andrew-chara/n-18.wav",
   "duration": 2.19,
   "tempo": 1,
   "fits": true
@@ -174,7 +174,7 @@
   "from": 138.3,
   "to": 141.7,
   "text": "Your choices write the ending.",
-  "file": "vo/andrew/n-19.wav",
+  "file": "vo/andrew-chara/n-19.wav",
   "duration": 1.285,
   "tempo": 1,
   "fits": true
@@ -183,7 +183,7 @@
   "from": 142.3,
   "to": 146.8,
   "text": "Change one morning in 1994, and see who's still here tonight.",
-  "file": "vo/andrew/n-20.wav",
+  "file": "vo/andrew-chara/n-20.wav",
   "duration": 3.849,
   "tempo": 1,
   "fits": true
@@ -192,7 +192,7 @@
   "from": 151.1,
   "to": 153.8,
   "text": "Same street, before and after.",
-  "file": "vo/andrew/n-21.wav",
+  "file": "vo/andrew-chara/n-21.wav",
   "duration": 1.695,
   "tempo": 1,
   "fits": true
@@ -201,7 +201,7 @@
   "from": 154.2,
   "to": 156.6,
   "text": "Or start with nothing but a promise.",
-  "file": "vo/andrew/n-22.wav",
+  "file": "vo/andrew-chara/n-22.wav",
   "duration": 1.719,
   "tempo": 1,
   "fits": true
@@ -210,7 +210,7 @@
   "from": 164.6,
   "to": 169.8,
   "text": "Say yes, and the writer agent builds the next place as you walk into it.",
-  "file": "vo/andrew/n-23.wav",
+  "file": "vo/andrew-chara/n-23.wav",
   "duration": 3.965,
   "tempo": 1,
   "fits": true
@@ -219,7 +219,7 @@
   "from": 170.3,
   "to": 174.1,
   "text": "Every character has a place of their own, too.",
-  "file": "vo/andrew/n-24.wav",
+  "file": "vo/andrew-chara/n-24.wav",
   "duration": 2.474,
   "tempo": 1,
   "fits": true
@@ -228,7 +228,7 @@
   "from": 178.2,
   "to": 181.8,
   "text": "And it never runs out.",
-  "file": "vo/andrew/n-25.wav",
+  "file": "vo/andrew-chara/n-25.wav",
   "duration": 0.967,
   "tempo": 1,
   "fits": true
@@ -237,8 +237,8 @@
   "from": 182.2,
   "to": 185.5,
   "text": "With GPT Live, you can call a character and talk in real time.",
-  "file": "vo/andrew/n-26.wav",
-  "duration": 3.318,
+  "file": "vo/andrew-chara/n-26.wav",
+  "duration": 3.319,
   "tempo": 1.108,
   "fits": true
  },
@@ -246,35 +246,35 @@
   "from": 192.1,
   "to": 196.2,
   "text": "And what they promise on the call, they write into the world.",
-  "file": "vo/andrew/n-27.wav",
+  "file": "vo/andrew-chara/n-27.wav",
   "duration": 2.927,
   "tempo": 1,
   "fits": true
  },
  {
   "from": 200.3,
-  "to": 204.8,
+  "to": 207.5,
+  "text": "Next: bring your friends into the same story.",
+  "file": "vo/andrew-chara/n-28.wav",
+  "duration": 2.586,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 208.3,
+  "to": 212.8,
   "text": "The writer agent writes the plot, the rules, and the code.",
-  "file": "vo/andrew/n-28.wav",
+  "file": "vo/andrew-chara/n-29.wav",
   "duration": 3.212,
   "tempo": 1,
   "fits": true
  },
  {
-  "from": 205,
-  "to": 209.5,
-  "text": "Whatever the story needs, it can build.",
-  "file": "vo/andrew/n-29.wav",
-  "duration": 2.038,
-  "tempo": 1,
-  "fits": true
- },
- {
-  "from": 210.3,
+  "from": 213,
   "to": 217.5,
-  "text": "Next: bring your friends into the same story.",
-  "file": "vo/andrew/n-30.wav",
-  "duration": 2.586,
+  "text": "Whatever the story needs, it can build.",
+  "file": "vo/andrew-chara/n-30.wav",
+  "duration": 2.038,
   "tempo": 1,
   "fits": true
  },
@@ -282,7 +282,7 @@
   "from": 222.6,
   "to": 225.8,
   "text": "Books let us read stories. Games let us play them.",
-  "file": "vo/andrew/n-31.wav",
+  "file": "vo/andrew-chara/n-31.wav",
   "duration": 2.388,
   "tempo": 1,
   "fits": true
@@ -291,7 +291,7 @@
   "from": 226.6,
   "to": 231.6,
   "text": "Worldlines lets you live in the world, with your character agents.",
-  "file": "vo/andrew/n-32.wav",
+  "file": "vo/andrew-chara/n-32.wav",
   "duration": 3.402,
   "tempo": 1,
   "fits": true

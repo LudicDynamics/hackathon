@@ -169,6 +169,35 @@
 - 旁白下音乐只轻压（约 -4 dB，原来约 -8 dB 以上），旋律和重拍要听得见；角色说话时照旧压深。
 - 旁白默认 **Andrew**，备选 Christopher。全片 **3:44**。
 
+### v17（2026-09-15）
+
+- **GPT Live 挪到后面，单独成一段功能介绍**（无限探索之后、Next 之前，18 秒）：先旁白介绍 *With GPT Live, you can call a character and talk in real time.*，再放通话 demo；再旁白 *And what they promise on the call, they write into the world.*，再放走廊 → 动作确认 → 任务单卡片。先讲功能、后放 demo。A3 只留 Elias 的语音回复。
+- **雾坞镇里玩家不再用 "You:" 当台词**（玩家是打字，没说话），改成旁白说明：*The player asks Vera why she's helping.* / *The player asks her to come along.* / *The player spots a new path.* / *Deep in, the player asks whether to turn back.*
+- **补上 Vera 对「一起走」的回答**：19:40 你打「一緒に行く？」→ 19:55 Vera 原声「行くよ、もちろん。」；顺序按实际游玩：推理 → writer agent 写出新地点 → 邀请她 → 她答应 → 一起到新码头。
+- **音乐拼接的累积误差修掉了**：每个拼接点的 0.03 秒淡入淡出以前会让后面整首歌提前 0.03 秒，到公式那里差了约 0.3–0.6 秒（SANDBOX / AGENTS / AI ROLEPLAY 没踩在鼓点上）。现在每段多留 0.03 秒给淡入淡出，所有落点都是准的。
+- 全片 **3:52**。
+
+### 改名（2026-09-15）
+
+- 产品名改为 **Worldlines: LivingCanvas**：logo 下的 "INFINITE CANVAS" 换成 "LivingCanvas"（公式结果和结尾 logo 两处）；旁白 "This is Worldlines: LivingCanvas."（1 分钟版开场一句同样）。画面里没有 mock 字样（"MOCK · TTS" 标签已删）。
+
+### 定名 LivingCanvas，完整版对齐 1 分钟版（2026-09-15）
+
+- 项目名定为 **LivingCanvas**（CharaCanvas 版保留在 `-chara` 文件里，不再往下做）。
+- 完整版 Next 一段改顺序：先 writer agent 写剧情、规则和代码（已实现，200–210 秒），最后才是 *Next: bring your friends into the same story.*（多人，唯一还没做的，210–218 秒）。
+- 完整版渲 1080p（Andrew 旁白）用于 YouTube / GitHub。
+
+### 初雪改一张 CG（2026-09-15）
+
+- 被吐槽：第一个结局 CG（16.24 录屏 4:42）满屏日文字，不好看。两版都不再放两张 CG：1 分钟版初雪 = 标题卡 → 直播间 Nanami（16.07 录屏 0:10）→ 结局 CG（14:12）；完整版初雪收在同一张结局 CG。旁白改成 *…your choices write the ending.*（不再说 two routes, two endings）。
+
+### 1 分钟版（2026-09-15，提交用，上限 1 分钟）
+
+`Launch60` 合成（`remotion/src/Launch60.tsx`），从正片的零件剪出来，以雾坞镇为主，其他世界只讲前提 + 核心玩法：
+0–7 按键 → 无限画布动画 · 7–25 雾坞镇（标题卡 → 地图 → 骰子 → writer agent 写出新地点 → 邀请 Vera →「行くよ、もちろん」→「二隻目だね」踩重拍 → 额度用光）· 25–31 初雪（标题卡 + 前提一句 → 两个结局）· 31–35 分歧线（标题卡 + 前提一句 → 前后对比）· 35–45 GPT Live（先说再放：通话 → 回到世界、动作确认 → 任务单卡片）· 45–48 writer agent 写规则和代码（已实现）· 48–51 Next：拉朋友进同一个故事（唯一还没做的）· 51–60 公式 + logo + 署名。
+每一段都从重拍开始（音乐 `video/music/make-track-60.sh`，实测对齐 0 ms），旁白 `captions60.ts`（Andrew）。
+渲染：`COMP=Launch60 CHUNKS="0-599 600-1199 1200-1799" MUSIC=music/track-60.wav SCALE=1 OUT=out/worldlines-60s.mp4 sh scripts/render-chunks.sh`
+
 ## 6. 请你评价（v1 大纲时的问题，已答复）
 
 1. 这条"读世界 → 玩世界 → 跟一个角色说话 → **住进一个世界**"的主线，能不能代表你想讲的故事？

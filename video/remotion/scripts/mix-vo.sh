@@ -9,7 +9,8 @@
 set -eu
 cd "$(dirname "$0")/.."
 TAG=${1:?usage: mix-vo.sh <tag>}
-DIR=out/chunks-0.5
+# DIR=out/chunks-0.5-chara for the CharaCanvas cut (its own chunks + a copy of the narration-free base track).
+DIR=${DIR:-out/chunks-0.5}
 BASE=$DIR/audio-base-novo.aac
 [ -s "$BASE" ] || { echo "missing $BASE"; exit 1; }
 TOTAL=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$BASE")

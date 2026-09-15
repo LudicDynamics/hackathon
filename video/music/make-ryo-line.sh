@@ -28,6 +28,8 @@ clip footage/divergence-run-raw.mp4 501.3 4.0 $V/ryo-1.wav
 #  vera-back2 32:28.3 「木箱の擦れか、泥のない車輪跡——どちらか一つを確かめれば、二隻目の手がかりに近づけそうだよ。」
 F=footage/fogwharf-run-raw.mp4
 clip $F 326.0 10.83 $V/vera-trust.wav
+#  vera-go    19:55.9 「行くよ、もちろん。」 (her answer to 「一緒に行く？」)
+clip $F 1195.9 2.0 $V/vera-go.wav
 clip $F 1669.0 6.83 $V/vera-ship.wav
 clip $F 1943.8 2.2 $V/vera-back.wav
 clip $F 1948.3 8.0 $V/vera-back2.wav

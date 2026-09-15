@@ -1,16 +1,16 @@
 import React from "react";
 import { AbsoluteFill, random, Sequence, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { Footage, Media } from "../components/Media";
-import { Chip, Flash, TypingDots } from "../components/Kit";
+import { Flash, TypingDots } from "../components/Kit";
 import { Mic } from "../components/Icons";
 import { VoiceClip } from "../components/Voice";
 import { cast } from "../lib/assets";
-import { CUT, CUT2, CUT3, EL_ACT_LEN, EL_LIVE, EL_WORLD, N1, P1, P2, P3, shown, V1, vlen, W1 } from "../lib/voice";
+import { CUT, CUT2, CUT3, N1, P1, P2, P3, shown, V1, vlen, W1 } from "../lib/voice";
 import { DISPLAY, INK, ORANGE, PAPER, TEXT } from "../lib/theme";
 
 // ACT 3 · "And they talk back." Speech-to-text in, TTS out — Vera, Nanami (setsuna) and Wataru, an otome-style
-// love interest, as a faithful mock with real voices; then Elias (Ei) for real, from the user's recordings of his world:
-// a voiced reply, a GPT Live call, and the ticket he promised on the call showing up on the canvas.
+// love interest, as a faithful mock with real voices; then Elias (Ei) for real, from the user's recording of his world:
+// his voiced reply. (His GPT Live call is a feature of its own later in the film — ALive.tsx.)
 
 type Speaker = { name: string; tint: string; clip: string; transparent: boolean };
 const VERA: Speaker = { name: "VERA", tint: cast("vera").tint, clip: cast("vera").clip!, transparent: true };
@@ -18,7 +18,7 @@ const NANAMI: Speaker = { name: "NANAMI", tint: cast("nanami").tint, clip: cast(
 /** Wataru (high-school club classmate, quietly intense) is a full scene with its own background, so he is shown as
     a framed portrait card. */
 const WATARU: Speaker = { name: "WATARU", tint: "#7FB3E8", clip: "cast/wataru.mp4", transparent: false };
-const ELIAS_TINT = "#9FD8C8";
+export const ELIAS_TINT = "#9FD8C8";
 
 const Wave: React.FC<{ active: boolean; color: string; bars?: number; seed: string }> = ({ active, color, bars = 22, seed }) => {
   const f = useCurrentFrame();
@@ -33,9 +33,9 @@ const Wave: React.FC<{ active: boolean; color: string; bars?: number; seed: stri
 };
 
 /** Text revealed in step with its audio, the way live transcription / streamed replies appear. */
-const reveal = (text: string, f: number, at: number, len: number) => text.slice(0, Math.max(0, Math.min(text.length, Math.ceil(((f - at) / len) * text.length))));
+export const reveal = (text: string, f: number, at: number, len: number) => text.slice(0, Math.max(0, Math.min(text.length, Math.ceil(((f - at) / len) * text.length))));
 
-const Bubble: React.FC<{ text: string; mine: boolean; tint: string }> = ({ text, mine, tint }) => (
+export const Bubble: React.FC<{ text: string; mine: boolean; tint: string }> = ({ text, mine, tint }) => (
   <div
     style={{
       alignSelf: mine ? "flex-end" : "flex-start",
@@ -115,7 +115,7 @@ const Exchange: React.FC<{ s: Speaker; bg: string; p: { id: string; at: number }
 };
 
 /** Elias's name and what the shot is, top right (clear of the app's close button). */
-const EliasTag: React.FC<{ label: string }> = ({ label }) => (
+export const EliasTag: React.FC<{ label: string }> = ({ label }) => (
   <div style={{ position: "absolute", right: 120, top: 56, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 12 }}>
     <div style={{ fontFamily: DISPLAY, fontWeight: 900, fontSize: 64, color: ELIAS_TINT, letterSpacing: 2, textShadow: "0 4px 18px rgba(0,0,0,.75)" }}>ELIAS</div>
     <div style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 22, letterSpacing: 3, color: INK, background: ORANGE, padding: "8px 18px", borderRadius: 999 }}>{label}</div>
@@ -131,50 +131,6 @@ const EliasText: React.FC = () => (
   </AbsoluteFill>
 );
 
-/** His two lines on the call, frames relative to the beat (the clip starts 1.5s before he speaks). */
-const LIVE_LINES = [
-  { text: "Okay, let's take it slow and get it right.", from: 47, to: 147 },
-  { text: "I'm checking what the ticket should cover.", from: 155, to: 236 },
-];
-
-/** 15.59 run: on a GPT Live call. The box shows your request (English); his replies are voice only, so they are bubbles. */
-const EliasLive: React.FC = () => {
-  const f = useCurrentFrame();
-  return (
-    <AbsoluteFill>
-      <Footage slot="el-live" push={0} />
-      {/* The character card's bio is in Chinese in this take; soften it (the film shows English only). */}
-      <div style={{ position: "absolute", left: 52, top: 282, width: 500, height: 108, backdropFilter: "blur(10px)", background: "rgba(40,38,34,.35)", borderRadius: 10 }} />
-      <EliasTag label="REAL · GPT LIVE CALL" />
-      <div style={{ position: "absolute", right: 70, top: 250, width: 640, display: "flex", flexDirection: "column", gap: 20 }}>
-        {LIVE_LINES.filter((l) => f >= l.from).map((l) => (
-          <Bubble key={l.text} text={reveal(l.text, f, l.from, l.to - l.from)} mine={false} tint={ELIAS_TINT} />
-        ))}
-      </div>
-      <Sequence from={45}>
-        <VoiceClip id="elias-2" />
-      </Sequence>
-    </AbsoluteFill>
-  );
-};
-
-/** Back on the canvas: the action is confirmed, and the ticket he wrote on the call is a card in the office. */
-const EliasWorld: React.FC = () => (
-  <AbsoluteFill>
-    <Sequence durationInFrames={EL_ACT_LEN}>
-      <Footage slot="el-act" push={0.03} />
-    </Sequence>
-    <Sequence from={EL_ACT_LEN}>
-      {/* Zoomed onto the ticket card; the crop keeps the translate popup (top centre) out of frame. */}
-      <AbsoluteFill style={{ transform: "scale(1.6)", transformOrigin: "21% 35%" }}>
-        <Footage slot="el-item" push={0.05} />
-      </AbsoluteFill>
-      <EliasTag label="SAVED TO THE WORLD" />
-    </Sequence>
-    <Flash at={EL_ACT_LEN} len={1} />
-  </AbsoluteFill>
-);
-
 const VoiceMock: React.FC = () => (
   <AbsoluteFill>
     <Sequence durationInFrames={CUT}>
@@ -186,23 +142,12 @@ const VoiceMock: React.FC = () => (
     <Sequence from={CUT2} durationInFrames={CUT3 - CUT2}>
       <Exchange s={WATARU} bg="cast/wataru.mp4" p={{ id: "player-3", at: P3 - CUT2 }} r={{ id: "wataru-1", at: W1 - CUT2 }} />
     </Sequence>
-    <Sequence from={CUT3} durationInFrames={EL_LIVE - CUT3}>
+    <Sequence from={CUT3}>
       <EliasText />
-    </Sequence>
-    <Sequence from={EL_LIVE} durationInFrames={EL_WORLD - EL_LIVE}>
-      <EliasLive />
-    </Sequence>
-    <Sequence from={EL_WORLD}>
-      <EliasWorld />
     </Sequence>
     <Flash at={CUT} len={1} />
     <Flash at={CUT2} len={1} />
     <Flash at={CUT3} len={1} />
-    <Flash at={EL_LIVE} len={1} />
-    <Flash at={EL_WORLD} len={1} />
-    <Sequence durationInFrames={CUT3}>
-      <Chip text="MOCK · TTS" style={{ left: 40, top: 36, background: "#333", color: PAPER, fontSize: 20 }} />
-    </Sequence>
   </AbsoluteFill>
 );
 
