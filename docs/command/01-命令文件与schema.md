@@ -842,10 +842,19 @@ export interface WorldCommandStep {
   action: string;
   /** Condition expression; syntax owned by `03`, position owned here (§2.6). */
   when?: string;
+  /**
+   * `NEW` — `when` 编译后的 AST（`03` 的 `parseCommandWhen`），由本文的校验在写入时挂上，
+   * **可选**（`when` 缺省时它缺省）。`03` 的执行器读它，从而不必在运行期重新解析。
+   * MUST NOT 参与 `canonicalCommandStepText`——它是运行期派生物，不是声明形态；
+   * 进摘要会让 `05` 的 `plan` 把求值器版本卷进去（违反 `plan` 的 provenance 定义）。
+   */
+  whenAst?: ConditionAst;
   args: Readonly<Record<string, WorldCommandArgNode>>;
   /** 1-based line of this step's `action:` node, for error copy (§3.3). */
   line: number;
 }
+
+> **`ConditionAst` 的引入是 type-only**：`import type { ConditionAst } from './condition.js';`（归 `03`）。`01` 是纯声明层，**MUST NOT** value-import 求值器——那会把整个 `condition.ts` 拖进任何 import 本文的模块，且违反 §9.1 的"`01` 零 I/O、纯函数"定位。
 
 export interface WorldCommandSpec {
   /** Derived from the FILENAME, never from the content (§2.1). */
