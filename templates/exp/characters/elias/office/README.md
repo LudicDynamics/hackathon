@@ -1,7 +1,6 @@
 ---
 type: readme
 name: 办公室 · 工作日
-portrait: portrait.png
 ---
 
 上班时间的我。领带收紧，袖口扣好，外套穿上。

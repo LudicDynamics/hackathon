@@ -1,7 +1,6 @@
 ---
 type: readme
 name: 阳台 · 下班后
-portrait: portrait.png
 ---
 
 下班之后的我。领带松着，袖口卷着，水壶在手里。
