@@ -33,6 +33,17 @@ type MaterialReviewDetails = {
   materials: Array<{ slot: string; path: string; revision: string }>;
 };
 
+/** The option's human label for a declared choice id; falls back to the id itself. */
+function choiceLabelOf(fm: Record<string, any> | null | undefined, choice: string | number): string {
+  const options = fm?.choice?.options;
+  if (Array.isArray(options)) {
+    const option = options.find((candidate: unknown) => candidate && typeof candidate === 'object' && (candidate as { id?: unknown }).id === choice);
+    const label = option && typeof option === 'object' ? (option as { label?: unknown }).label : undefined;
+    if (typeof label === 'string' && label.trim()) return label;
+  }
+  return String(choice);
+}
+
 function declaredActionOf(value: unknown): DeclaredResponse | null {
   if (!value || typeof value !== 'object') return null;
   const action = value as Record<string, unknown>;
@@ -183,9 +194,23 @@ export function EntityInteractions({ item, active = false, focus, onChoice, onDi
     } else if (action.kind === 'character' && typeof action.character === 'string') {
       setDirect(null);
       onOpenCharacter?.(action.character);
-    } else if (action.kind === 'writer' && typeof action.prompt === 'string' && action.prompt.trim() && onChoice) {
+    } else if (action.kind === 'writer') {
+      // A `writer` declaration is a request for the writer, never a document:
+      // the server only records `choice_selected` for it (declared-actions.ts)
+      // and does not dispatch, so the client hands the prompt over here. A
+      // declaration without `prompt` (first-snow's "Reply to Nanami…") sends
+      // the option's own label — an empty dialog with a lone Return was the
+      // bug (niko, 2026-09-15).
       setDirect(null);
-      onChoice(action.prompt);
+      const label = choiceLabelOf(fm, action.choice);
+      const prompt = typeof action.prompt === 'string' && action.prompt.trim()
+        ? action.prompt
+        : `Regarding world file ${JSON.stringify(item.path)}, the player selected the choice: ${label}`;
+      if (!onChoice) {
+        setError('The writer input is unavailable. Return to the scene.');
+        return;
+      }
+      onChoice(prompt);
     } else if (action.kind === 'take') {
       // The server already moved the items into player/ (declared-actions.ts);
       // a `take` is done the moment it is clicked, so it gets a one-line
