@@ -19,6 +19,11 @@ import type { AgentScope } from './actor.js';
 import { scanRefs } from './refs.js';
 import { registerAction } from './service.js';
 import { actorLabel } from './actor.js';
+// The ONE body-join rule (04 §3.5). `chalk.js` is the owner; importing it here
+// rather than re-implementing the trim-and-blank-line join keeps a single rule
+// for `append_body` (契约 §8 反模式 3). No cycle: `chalk` does not reach back
+// into `delete`.
+import { renderAppend } from './chalk.js';
 import type { ActionContext, ActionResult } from './types.js';
 
 export interface RemoveEntityInput {
@@ -39,6 +44,16 @@ export interface EditEntityInput {
   frontmatter?: Record<string, unknown>;
   /** Whole-body replacement; omitted = leave the body untouched. */
   body?: string;
+  /**
+   * Appended to the existing body; omitted = leave it untouched. NEW (04 §3.5,
+   * `[C-6]`).
+   *
+   * Mutually exclusive with `body` rather than merged: "replace" and "append"
+   * are different intents, and silently letting one win would make the caller's
+   * other argument a lie. Joining goes through `renderAppend` so there is ONE
+   * join rule in the repo (契约 §8 反模式 3).
+   */
+  append_body?: string;
 }
 export interface EditEntityDetails {
   path: string;
@@ -216,7 +231,20 @@ export async function editEntity(
       });
     }
   }
-  const body = input.body ?? parsed.body;
+  // `body` replaces, `append_body` appends, and passing both is refused rather
+  // than resolved: whichever won, the caller's other argument would have been
+  // silently ignored. Joining uses `renderAppend` — the SAME rule the chalk tool
+  // applies (04 §3.5: one join rule in the repo, 契约 §8 反模式 3).
+  if (input.body !== undefined && input.append_body !== undefined) {
+    throw new ActionError({
+      code: 'invalid_argument',
+      message: `"${path}" was given both "body" (replace) and "append_body" (append); pass exactly one.`,
+    });
+  }
+  const body =
+    input.append_body === undefined
+      ? (input.body ?? parsed.body)
+      : renderAppend(parsed.body ?? '', input.append_body);
   const next = stringifyFrontmatter(Object.keys(merged).length > 0 ? merged : null, body);
   await store.writeFileAtomic(path, next);
 
