@@ -1218,6 +1218,17 @@ body:before {
 .origin-top-left[data-zoom-paint="compact"] .chalk {
   text-shadow: none !important;
 }
+/* The procedural grain is a full-viewport fractal texture. It is valuable at
+   normal scale, but its repaint cost dominates close zooms where the player is
+   inspecting a card. */
+body:has(.origin-top-left[data-zoom-paint="compact"])::before {
+  display: none;
+}
+/* The world grid is another large transformed paint surface. At close zoom it
+   contributes no useful detail, so remove it from the compositor entirely. */
+.origin-top-left[data-zoom-paint="compact"] .canvas-grid {
+  display: none;
+}
 /* ============================================================
    1. chalk — words that LIVE on the canvas (no paper, no card).
    Prototype `.chalk` L112-116 + hearth `.note` family L48-57.
