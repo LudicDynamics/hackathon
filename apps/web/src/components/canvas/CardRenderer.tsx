@@ -156,8 +156,15 @@ export const CardRenderer: React.FC<CardRendererProps> = ({
     const order = /^\d+$/.test(String(orderNum))
       ? String(orderNum).padStart(2, '0')
       : orderNum;
+    // A `stub` door promises nothing about walking in: this batch implements no
+    // sub-scene initialisation (`airp_init` can only target a character root), so
+    // the old copy named an event the code cannot deliver. Statement of fact plus
+    // the one move that IS real (inspect it from outside).
+    // `stub` means "this directory layer has nothing readable" — NOT "empty room"
+    // (a directory holding only grandchild folders is also a stub), so the copy
+    // never claims emptiness.
     const meta = isStub
-      ? (ja ? 'まだ白紙 · 一歩先から物語が生まれる →' : 'UNWRITTEN · walk in, and it will be written →')
+      ? (ja ? 'まだ白紙 · 外から扉を確かめられる' : 'UNWRITTEN · you can still look at the door from outside')
       : (ja ? '場面 · 入口' : 'SCENE · ENTRANCE');
     // The card face shows a clean one-line excerpt; the raw README markdown
     // (# heading, line breaks) stays in the hover sheet. Never spill source.

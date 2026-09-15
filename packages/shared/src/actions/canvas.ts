@@ -22,7 +22,10 @@ import { registerAction } from './service.js';
 import type { CardRecord, SeatFile } from '../store/world-store.js';
 import { SEAT_ANCHOR, SEAT_PAD, SEAT_STEP, arrangeCanvasLayer as arrangeCanvasLayerKernel } from '../store/local-store.js';
 import { readCanvasSnapshot } from '../render/canvas-snapshot.js';
-import { characterIdOfPath, nookCardPaths, nookIdOf } from '../rules/characters.js';
+import { characterIdOfPath, isNookSceneId, nookIdOf } from '../rules/characters.js';
+import { deriveNookLayers, nookSceneCards, nookSceneOfPath } from '../store/nook-layers.js';
+import { dirOf } from '../store/layers.js';
+import type { LayerConfig } from '../schemas/world.js';
 
 const MAX_COORD = 4000;
 const MAX_LABEL = 40;
@@ -544,11 +547,17 @@ export async function arrangeCards(
     // semantics are untouched (docs/nook/00 §3.7). `arrangeCards` is the one
     // entry shared by the player UI (routes/world.ts) and the agent tool
     // (extensions/toolkit/arrange.ts), so the branch lives here once.
-    // `characterIdOfPath` accepts any path under `characters/<id>/`, including
-    // subdirectory cards (docs/nook/01 §2.2) — a bare prefix test would accept
-    // `characters/../evil`, which this rejects by id shape.
-    const nookId = nookIdOf(characterIdOfPath(place.path) ?? '');
-    const layer = nookId ?? (await store.resolveLayer(place.path));
+    // The scene is the path's DIRECT parent directory, and it must itself be a
+    // valid `nookSceneId` — this is what keeps a subdirectory card
+    // (`characters/elias/office/desk.md`) on its OWN page instead of collapsing
+    // to the character root (`characterIdOfPath` only answers "which character",
+    // docs/nook-scene/03 §③ step 3). "Every directory is a scene": a real file
+    // implies its parent directory exists, so `dirOf(place.path)` is equivalent
+    // to `nookSceneOfPath(place.path, nookLayers)` but needs no tree build.
+    // `dirOf` is the existing pure helper (layers.ts:46) — never a second parser.
+    const scene = dirOf(place.path);
+    const nookScene = isNookSceneId(scene) ? scene : null;
+    const layer = nookScene ?? (await store.resolveLayer(place.path));
     if (layer === null) {
       fail(
         'not_found',
@@ -594,41 +603,75 @@ export async function arrangeCards(
   let layer = layout.layer;
   let paths = layout.paths;
 
-  // A nook is not in the derived `manifest.layers` tree (`characters/**` is not
-  // a layer, local-store.ts:550-556), so it is a SIBLING case here too
-  // (docs/nook/01 §6.3.1). `characterIdOfPath` accepts the bare directory
-  // (`characters/ryo`), so the `layer` argument needs no reshaping, and it
-  // nulls anything that is not a legal `characters/<id>` — a real layer never
-  // enters this branch.
-  const nook = layer !== undefined ? nookIdOf(characterIdOfPath(layer) ?? '') : null;
-  if (layer !== undefined && nook === null) {
+  // ── Step 0: build the nook tree ONCE (reused by ③/④). Hard prerequisite:
+  // `listDirs` MUST be on the `WorldStore` interface (contract §8 P7) — this is
+  // why it was added there and not only on `LocalWorldStore`.
+  const nookRoot =
+    layer !== undefined && characterIdOfPath(layer) !== null ? characterIdOfPath(layer)!
+    : paths !== undefined && paths.length > 0 ? characterIdOfPath(paths[0]) ?? null
+    : null;
+  let nookLayers: Record<string, LayerConfig> = {};
+  if (nookRoot !== null) {
+    const nookId = nookIdOf(nookRoot)!;
+    const dirs = await store.listDirs(nookId);
+    const fmByDir = new Map<string, Record<string, any> | null>();
+    for (const d of dirs) {
+      try {
+        fmByDir.set(d, parseFrontmatter(await store.readFile(`${d}/README.md`)).frontmatter);
+      } catch {
+        fmByDir.set(d, null); // no README → stub scene
+      }
+    }
+    nookLayers = deriveNookLayers(nookId, dirs, (d) => fmByDir.get(d) ?? null);
+  }
+
+  // ── ①a Shape gate: a `characters/**` layer that is NOT a valid nookSceneId is
+  // 400, NEVER leaked to the whitelist. Missing this, a trailing-slash
+  // `characters/elias/office/` falls through to ①b and 404s as "Unknown layer"
+  // — a shape error disguised as a missing name (docs/nook-scene/03 §⑪ 3c).
+  if (layer !== undefined && layer.startsWith('characters/') && !isNookSceneId(layer)) {
+    fail('invalid_argument', `Nook scene "${layer}" is not a valid nook scene id.`);
+  }
+  // ── ①b Whitelist: a nook scene id is a SIBLING of layers, not a member of the
+  // derived tree (`characters/**` is not a layer, local-store.ts:550-556).
+  const layerIsNook = layer !== undefined && isNookSceneId(layer);
+  if (layer !== undefined && !layerIsNook) {
     const layers = (await store.getManifest()).layers;
     if (layer !== 'map' && !(layer in layers)) {
       fail('not_found', `Unknown layer "${layer}".`);
     }
   }
+  // Existence, same shape as the footprint gate (contract §5.5): a scene that is
+  // not a directory is 404, not "an empty scene".
+  if (layer !== undefined && layerIsNook && (await store.statKind(layer)) !== 'dir') {
+    fail('not_found', `Nook scene "${layer}" has no directory.`);
+  }
 
+  // ── ② Page members (when `paths` is omitted). A nook goes through the ONE
+  // `nookSceneCards` derivation, same source as `GET /api/nook`; aligned with
+  // `pageOfLayer().cards`, both EXCLUDING door signs (door signs are another
+  // branch — docs/nook-scene/03 §⑨ 9.1 注).
   if (paths === undefined) {
     if (layer === undefined) {
       fail('invalid_argument', 'arrange: a layout without "paths" needs a "layer".');
     }
-    // `pageOfLayer` reads the LAYER tree; a nook's page is its own direct-child
-    // markdown, exactly what `GET /api/nook` assembles (docs/nook/01 §③ step 4).
-    // `nookCardPaths` takes TWO args — a one-arg call compiles but silently
-    // returns [].
-    paths = nook === null
-      ? (await store.pageOfLayer(layer)).cards
-      : nookCardPaths(await store.listFiles(nook), nook);
+    paths = layerIsNook
+      ? nookSceneCards(layer, await store.listFiles(layer))
+      : (await store.pageOfLayer(layer)).cards;
   }
 
   paths = [...paths].sort((a, b) => a.localeCompare(b)); // deterministic order
   for (const p of paths) assertCardPath(p, 'paths[]');
 
+  // ── ③ Infer the layer from `paths[0]` (only when `layer` was omitted). A nook
+  // wins first, and MUST NOT fall back to `layerOfPath` (its `map` fallback
+  // would let a `characters/**` path pass as `'map'` — contract §5.3.1).
   if (layer === undefined) {
     if (paths.length === 0) {
       fail('invalid_argument', 'arrange: cannot infer a layer from an empty "paths".');
     }
-    const inferred = nookIdOf(characterIdOfPath(paths[0]) ?? '') ?? (await store.resolveLayer(paths[0]));
+    const scene = nookSceneOfPath(paths[0], nookLayers);
+    const inferred = scene ?? (await store.resolveLayer(paths[0]));
     if (inferred === null) {
       fail(
         'not_found',
@@ -646,10 +689,12 @@ export async function arrangeCards(
       fail('not_found', `Card not found: "${p}". Use look_at / view_canvas to list the current layer's cards.`);
     }
     // All-or-nothing: a half-reflowed layout is worse than none (doc-09 §3.2).
-    // Judged per path: a nook path belongs to its `characters/<id>`, so a path
-    // from ANOTHER nook still fails here — the check is not relaxed for nooks
-    // (docs/nook/01 §6.3.1 卡点③).
-    const owner = nookIdOf(characterIdOfPath(p) ?? '') ?? (await store.resolveLayer(p));
+    // Judged per path (never via the ①-time `layerIsNook`, which may be stale
+    // after ③): a path belongs to its OWN scene, so a path from another scene or
+    // from another nook still fails here — the check is NOT relaxed for nooks
+    // (docs/nook-scene/03 §③ step 4).
+    const scene = characterIdOfPath(p) === null ? null : nookSceneOfPath(p, nookLayers);
+    const owner = scene ?? (await store.resolveLayer(p));
     if (owner !== layer) {
       fail('not_found', `"${p}" is not on layer "${layer}".`);
     }

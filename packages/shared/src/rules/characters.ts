@@ -96,3 +96,72 @@ export function nookCardPaths(allFiles: readonly string[], nookId: string): stri
     )
     .map((name) => `${nookId}/${name}`);
 }
+
+// === Nook sub-scenes (docs/nook-scene/00 §5.1) — NEW ===
+//
+// A `nookSceneId` is any DIRECTORY in the `characters/<id>/` subtree, as a
+// world-root-relative path with no leading or trailing slash (N2 00 §4.1).
+// The character root itself (`characters/<id>`) is scene 0 and is byte-identical
+// to N1's nookId, so existing `cards` rows need no migration.
+//
+// These five are the ONE implementation of "is this a nook scene / which
+// scene owns this path"; the route, the `arrangeCards` branches and the web app
+// MUST call them instead of splitting on '/' themselves (N2 00 §5.1). They stay
+// inside this file's zero-dependency charter (no zod, no yaml, no builtins).
+
+/** One path segment of a sub-scene: the same kebab-case rule as a character id. */
+export function isValidNookSegment(seg: string): boolean {
+  return CHARACTER_ID_RE.test(seg);
+}
+
+/**
+ * Is `scene` a legal path RELATIVE to a character root?
+ *
+ * `''` / `null` / `undefined` all mean "the character root scene" and are legal
+ * (N2 00 §5.1 C1). Otherwise every `/`-separated segment must pass
+ * `isValidNookSegment` — an empty segment (`'a//b'`, `'office/'`, `'/office'`)
+ * fails, so a leading or trailing slash is rejected and MUST NOT be normalised
+ * away by the caller (N2 00 §4.1).
+ */
+export function isValidNookScenePath(scene: string | null | undefined): boolean {
+  if (scene === null || scene === undefined || scene === '') return true;
+  return scene.split('/').every(isValidNookSegment);
+}
+
+/** Is `id` a full nook scene id, `characters/<id>[/<seg>]*` (no trailing `/`)? */
+export function isNookSceneId(id: string): boolean {
+  const PREFIX = 'characters/';
+  if (!id.startsWith(PREFIX)) return false;
+  const segs = id.slice(PREFIX.length).split('/');
+  if (!isValidCharacterId(segs[0])) return false;
+  return segs.slice(1).every(isValidNookSegment);
+}
+
+/**
+ * The parent scene id of `sceneId`: `null` for a character root (its last
+ * segment is the id itself, whose parent `characters` is not a scene), and
+ * `null` for anything illegal (N2 00 §5.1).
+ */
+export function nookSceneParent(sceneId: string): string | null {
+  if (!isNookSceneId(sceneId)) return null;
+  const slash = sceneId.lastIndexOf('/');
+  if (sceneId.slice(0, slash).indexOf('/') === -1) return null;
+  return sceneId.slice(0, slash);
+}
+
+/**
+ * Full scene id → the `scene` segment relative to `nookId` (N2 00 §5.1).
+ *
+ *   ('characters/elias/office', 'characters/elias') → 'office'
+ *   ('characters/elias',        'characters/elias') → ''   ← legal root
+ *   ('characters/ryo/office',   'characters/elias') → null ← out of subtree
+ *
+ * Three-valued on purpose: `''` is the legal root and `null` is "out of bounds",
+ * so a caller that switched characters cannot silently walk into the wrong
+ * character's room by having both collapse to `null` (N2 00 §5.1 C7).
+ */
+export function nookScenePathOf(sceneId: string, nookId: string): string | null {
+  if (!isNookSceneId(sceneId) || !isNookSceneId(nookId)) return null;
+  if (sceneId !== nookId && !sceneId.startsWith(`${nookId}/`)) return null;
+  return sceneId === nookId ? '' : sceneId.slice(nookId.length + 1);
+}

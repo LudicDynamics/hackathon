@@ -59,7 +59,9 @@ async function harness() {
   await store.writeFile('characters/ryo/README.md', README);
   await store.writeFile('characters/ryo/erased-line.md', CARD('Erased Line'));
   await store.writeFile('characters/ryo/ten-years.md', CARD('Ten Years'));
-  // A non-md sibling and a nested md must NOT appear in `items` (nook 01 §2.4).
+  // A non-md sibling must NOT appear in `items`, and a nested md reaches the
+  // canvas only through its directory's door (docs/nook-scene/00 §4.3), never
+  // on the root page directly.
   await store.writeFile('characters/ryo/preset.json', '{"id":"ryo"}');
   await store.writeFile('characters/ryo/letters/unsent.md', CARD('Unsent'));
 
@@ -110,9 +112,15 @@ test('N1-A1 GET /api/nook?character=ryo -> 200, non-empty items, LayerState shap
     assert.equal(typeof b.bg?.tone, 'string');
     assert.ok(b.audio && 'ambient' in b.audio && 'bgm' in b.audio);
 
-    // Direct children only, minus README, md only (nook 01 §2.4).
+    // Direct children only, minus README, md only — plus one door per direct
+    // child DIRECTORY (the `letters/` door; the nested `unsent.md` itself stays
+    // off this page, docs/nook-scene/00 §3 decision 4).
     const paths = b.items.map((i) => i.path).sort();
-    assert.deepEqual(paths, ['characters/ryo/erased-line.md', 'characters/ryo/ten-years.md']);
+    assert.deepEqual(paths, [
+      'characters/ryo/erased-line.md',
+      'characters/ryo/letters/README.md',
+      'characters/ryo/ten-years.md',
+    ]);
 
     // Every item carries the seat fields the canvas needs.
     for (const it of b.items) {

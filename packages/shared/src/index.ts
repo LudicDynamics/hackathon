@@ -87,6 +87,7 @@ export * from './inject/turn-cache.js';   // readTurnBlock / writeTurnBlock (01)
 export * from './inject/collect.js';      // collectSections / makeSectionDeps / buildNextStepFacts (01)
 export * from './store/cursor.js';        // settleTurnCursor (03; shared by writer extension and character server side)
 export * from './actions/backpack.js';    // listBackpack (02; server route imports it by package name)
+export * from './store/nook-layers.js';  // deriveNookLayers / nookSceneDoors / nookSceneOfPath / nookSceneCards (docs/nook-scene/00 §5.3)
 
 // C1 world commands (docs/command/01 §8). TS `export *` has no glob, so a
 // missing line is a SILENT unreachable module for the extension side — which

@@ -239,14 +239,19 @@ export function registerInitCommand(pi: ExtensionAPI): void {
 
       // (1) Emptiness short-circuit — the sequential idempotency source.
       let files: string[];
+      let dirs: string[];
       try {
         files = await store.listFiles();
+        // Same source as the nook scene tree (N2 00 §5.3): `listDirs` is a
+        // DIRECTORY walk, so empty rooms still show up. A `listFiles` walk would
+        // lose them and re-furnish an already-decorated nook (N2 00 §5.4).
+        dirs = await store.listDirs(dir);
       } catch {
         sendRootTerminal(true, 'tool_error');
         emit(report(args, 'failed (store unavailable)'));
         return;
       }
-      const empty = isScene ? isLayerEmpty(files, dir) : isNookEmpty(files, dir);
+      const empty = isScene ? isLayerEmpty(files, dir) : isNookEmpty(files, dir, dirs);
       if (!empty) {
         sendRootTerminal(false);
         emit(report(args, 'already initialized (no action)'));
@@ -326,7 +331,7 @@ export function registerInitCommand(pi: ExtensionAPI): void {
 
         // (6) Split: success needs BOTH 'completed' AND a product on disk.
         const after = await store.listFiles();
-        if (result.status === 'completed' && hasInitProduct(after, dir, args.kind)) {
+        if (result.status === 'completed' && hasInitProduct(after, dir, args.kind, dirs)) {
           const produced = after.filter((f) => f.startsWith(`${dir}/`));
           const res = await svc.recordLayerInitialized({ layer, by: args.by, files: produced });
           finish(false);

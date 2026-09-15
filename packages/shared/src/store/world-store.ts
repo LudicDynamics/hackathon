@@ -157,6 +157,13 @@ export interface WorldStore {
   writeFile(relPath: string, content: string | Buffer): Promise<void>;
   deleteFile(relPath: string): Promise<void>;
   listFiles(prefix?: string): Promise<string[]>;
+  /**
+   * Every directory under `prefix` (relative) — a DIRECTORY walk, including
+   * directories that hold no files. Defaults to `world/`; pass a
+   * subtree such as `characters/<id>` for the nook scene tree
+   * (docs/nook-scene/00 §2.3 — the door cards of empty sub-scenes depend on it).
+   */
+  listDirs(prefix?: string): Promise<string[]>;
   move(from: string, to: string): Promise<MoveResult>;
   getManifest(): Promise<WorldManifest>;
   updateManifest(updates: Partial<WorldManifest>): Promise<void>;

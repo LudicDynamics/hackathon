@@ -222,6 +222,11 @@ export function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [activeCharacter, setActiveCharacter] = useState<CharacterView | null>(null);
   const [nookChar, setNookChar] = useState<string | null>(null);
+  /** Nook sub-scene addressing (docs/nook-scene/00 §4.6). A path RELATIVE to the
+   *  character root; `null` = the root itself. Kept beside `nookChar` rather than
+   *  merged into it: `nookChar` decides the projection (push/pop a camera frame),
+   *  `nookScene` only picks a page INSIDE that projection (04 §⑪ C1). */
+  const [nookScene, setNookScene] = useState<string | null>(null);
   const [preparedAction, setPreparedAction] = useState('');
   const preparedSource = useRef<string | null>(null);
   const worldLoadGeneration = useRef(0);
@@ -344,6 +349,13 @@ export function App() {
       setWriterSubmitPending(false);
     }
   }, [writerWorking]);
+
+  // The ONLY writer of `nookScene` (docs/nook-scene/00 §4.6). Entering a scene is
+  // a page swap in the SAME projection, so it touches no camera frame — the
+  // canvas slot swap on `currentLayer` already moves the camera (04 §③ step 4).
+  const enterNookScene = useCallback((next: string | null) => {
+    setNookScene(next);
+  }, []);
   const openPrivateSpace = useCallback((characterId: string) => {
     // Dialogue and rail use one App-owned transition. Closing an active
     // dialogue first restores its caller projection, then this transition
@@ -378,6 +390,7 @@ export function App() {
     callerProjectionRef.current = caller;
     frameQueue.clear('switch');
     setNookChar(characterId);
+    setNookScene(null); // #4: switching character never passes through null (00 §4.6)
     setBagOpen(false);
     setSelectedBagPath(null);
     setProfileOpen(false);
@@ -409,6 +422,10 @@ export function App() {
   }, []);
   useEffect(() => { syncFocus('world-shelf', worldPickerOpen); }, [syncFocus, worldPickerOpen]);
   useEffect(() => { syncFocus('nook', nookChar !== null); }, [nookChar, syncFocus]);
+  // Leaving the nook always returns to the character ROOT. This covers the three
+  // `setNookChar(null)` sites; the fourth (`openPrivateSpace` switching to another
+  // character, above) skips `null` and resets the scene explicitly (00 §4.6).
+  useEffect(() => { if (nookChar === null) setNookScene(null); }, [nookChar]);
   useEffect(() => { syncFocus('character-dialogue', activeCharacter !== null); }, [activeCharacter, syncFocus]);
   // The dialogue dims the canvas: the character's pointer records, then replays on close.
   useEffect(() => { agentCursorStore.setDialogue(activeCharacter?.id ?? null); }, [activeCharacter?.id]);
@@ -716,6 +733,11 @@ export function App() {
         return;
       }
       if (isTextEditingTarget(event.target) || activeCharacter) return;
+      // A focused canvas card (a door) owns its own Enter. Doors only became
+      // focusable this batch, so this capture-phase handler used to steal focus
+      // to the writer as a side effect of walking in (docs/nook-scene/00 §4.8).
+      // `closest`, not `matches`: the card is a DESCENDANT of the world surface.
+      if (event.target instanceof Element && event.target.closest('[data-depth-surface="world"]')) return;
       if (event.shiftKey && event.key.toLowerCase() === 'r') {
         if (focusCoordinator.peek() !== null) return;
         event.preventDefault();
@@ -1207,6 +1229,8 @@ export function App() {
                 allowChalkDrag={allowChalkDrag}
                 resolveAssetUrl={assetUrl}
                 locale={locale === 'ja' ? 'ja' : 'en'}
+                scene={nookScene}
+                onEnterScene={enterNookScene}
                 onClose={closeNook}
                 inactive={activeCharacter !== null}
                 onMoveCard={moveCardAction}

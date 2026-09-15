@@ -345,9 +345,18 @@ export class LocalWorldStore implements WorldStore {
     return results.map((abs) => path.relative(this.worldRoot, abs).split(path.sep).join('/'));
   }
 
-  /** Every directory under `world/` (relative paths, sorted) — the layer tree. */
-  async listDirs(): Promise<string[]> {
-    const root = this.resolvePath(WORLD_DIR);
+  /**
+   * Every directory under `prefix` (relative paths) — the layer tree when
+   * called with no argument (defaults to `world/`).
+   *
+   * A DIRECTORY walk: EMPTY directories are included, so a door card exists for
+   * a scene nobody has written yet (nook sub-scenes, docs/nook-scene/00 §2.3).
+   * `prefix` takes a subtree such as `characters/<id>` so the nook derivation
+   * can reuse this instead of deriving directories from `listFiles` (a file
+   * walk, where a completely empty subdirectory disappears).
+   */
+  async listDirs(prefix = WORLD_DIR): Promise<string[]> {
+    const root = this.resolvePath(prefix);
     const out: string[] = [];
     async function walk(current: string) {
       let entries: Dirent[];
@@ -357,7 +366,8 @@ export class LocalWorldStore implements WorldStore {
         return;
       }
       for (const entry of entries) {
-        if (entry.name.startsWith('.')) continue;
+        // Same skip rule as `listFiles` above: one tree, two walks, one rule.
+        if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
         if (entry.isDirectory()) {
           const full = path.join(current, entry.name);
           out.push(full);

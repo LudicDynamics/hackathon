@@ -45,6 +45,9 @@ export const UI_COPY = {
     nookError: 'Could not open this ikigai',
     nookRetry: 'Try again',
     nookCoreStatus: 'Currently here',
+    nookSceneTrail: 'Scene path inside ikigai',
+    nookSceneUp: 'Up one scene',
+    nookSceneMissing: 'This scene is no longer there.',
 
     liveCallStart: 'Speak aloud',
     liveCallStop: 'Hang up',
@@ -108,6 +111,9 @@ export const UI_COPY = {
     nookError: '心象風景を開けませんでした',
     nookRetry: '再試行',
     nookCoreStatus: 'ここに居る',
+    nookSceneTrail: '心象風景の場面経路',
+    nookSceneUp: '前の場面へ',
+    nookSceneMissing: 'この場面はもう無い。',
 
     liveCallStart: '声を出す',
     liveCallStop: '通話を切る',

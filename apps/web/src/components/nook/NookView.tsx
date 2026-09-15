@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Loader2, Mic, PhoneOff } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, Loader2, Mic, PhoneOff } from 'lucide-react';
 import { NookPortrait } from './NookPortrait.js';
 import { Canvas } from '../canvas/Canvas.js';
 import { WriterBar } from '../chrome/WriterBar.js';
@@ -25,6 +25,8 @@ import {
   type FootprintScheduler,
 } from '../../lib/footprint.js';
 import './nook-character-media.css';
+import { MarkdownText, stripLeadingTitle } from '../../lib/md.js';
+import { nookIdOf, nookScenePathOf } from '@airp/shared/characters';
 import { LiveCallTranscript } from '../live/LiveCallTranscript.js';
 
 /**
@@ -84,6 +86,13 @@ export interface NookViewProps {
    * Returns false when the socket is down, so the caller keeps its UI state.
    */
   onRequestInit?: (kind: 'nook', target: string, request?: string) => boolean;
+  /** Sub-scene addressing within this nook (docs/nook-scene/00 §4.6): a path
+   *  RELATIVE to the character root, or `null` for the root scene itself. App
+   *  owns the state — this view only asks to change it via `onEnterScene`. */
+  scene: string | null;
+  /** Ask the host to swap the addressed scene (`null` = character root). Required:
+   *  a default would turn "App forgot to wire it" into a silent dead door. */
+  onEnterScene: (scene: string | null) => void;
 }
 
 interface NookError {
@@ -111,9 +120,12 @@ export function assetUrl(value: unknown, mediaKind: AssetMediaKind = 'image'): s
 }
 
 
-async function fetchNook(characterId: string): Promise<FetchResult> {
+async function fetchNook(characterId: string, scene: string | null): Promise<FetchResult> {
   try {
-    const res = await fetch(`/api/nook?character=${encodeURIComponent(characterId)}`);
+    // `null`/`''` mean the character root: omit the param rather than send an
+    // empty `scene=` (contract §4.2 — a missing `scene` IS the root).
+    const sceneParam = scene === null || scene === '' ? '' : `&scene=${encodeURIComponent(scene)}`;
+    const res = await fetch(`/api/nook?character=${encodeURIComponent(characterId)}${sceneParam}`);
     const body = (await res.json().catch(() => ({}))) as Record<string, any>;
     if (!res.ok) {
       return {
@@ -165,10 +177,15 @@ export const NookView: React.FC<NookViewProps> = ({
   inactive = false,
   writerLocked = false,
   onRequestInit,
+  scene,
+  onEnterScene,
 }) => {
   const [state, setState] = useState<LayerState | null>(null);
   const [error, setError] = useState<NookError | null>(null);
   const [loading, setLoading] = useState(true);
+  /** Fold state for the scene-intro band. Session-only on purpose: persisting it
+   *  would greet a returning player with a folded introduction (04 §③ step 13). */
+  const [introOpen, setIntroOpen] = useState(true);
   const [initializing, setInitializing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -244,10 +261,16 @@ export const NookView: React.FC<NookViewProps> = ({
     };
   }, []);
 
-  const load = useCallback(async (id: string) => {
+  // Every `load` call site reads the CURRENT scene through this ref, so the five
+  // callbacks below keep a stable identity (a `scene` dep would re-register each
+  // listener on every door, firing one extra request per step — 04 §⑥).
+  const sceneRef = useRef(scene);
+  sceneRef.current = scene;
+
+  const load = useCallback(async (id: string, scene_arg: string | null) => {
     const seq = ++reqSeqRef.current;
     if (mountedRef.current) setLoading(true);
-    const result = await fetchNook(id);
+    const result = await fetchNook(id, scene_arg);
     if (!mountedRef.current || seq !== reqSeqRef.current) return; // last request wins (02 §⑦)
     if (result.ok) {
       // The nook id comes FROM the response (00 §5.1); never re-derived here.
@@ -266,8 +289,8 @@ export const NookView: React.FC<NookViewProps> = ({
   }, []);
 
   useEffect(() => {
-    void load(characterId);
-  }, [characterId, load]);
+    void load(characterId, scene);
+  }, [characterId, scene, load]);
 
   // The initialiser's outcome (docs/init/03 §3.6): clear the ghost. A failure
   // must ALSO be visible — never a silent blank room (contract §8 anti-pattern 8).
@@ -279,16 +302,15 @@ export const NookView: React.FC<NookViewProps> = ({
       if (!ev || ev.layer !== nookIdRef.current || !mountedRef.current) return;
       setInitializing(false);
       if (['layer_init_failed'].includes(ev.type ?? '')) setNotice(copy.nookInitFailed);
-      else void load(characterId); // success: the refetched furnishing replaces the ghost
+      else void load(characterId, sceneRef.current); // success: the refetched furnishing replaces the ghost
     };
     window.addEventListener('airp:layer-init', onLayerInit);
     return () => window.removeEventListener('airp:layer-init', onLayerInit);
   }, [characterId, load, copy.nookInitFailed]);
   const reconcileNook = useCallback(async () => {
     if (!mountedRef.current) return;
-    await load(characterId);
+    await load(characterId, sceneRef.current);
   }, [characterId, load]);
-
   const handleMoveCard = useCallback(
     async (path: string, x: number, y: number) => {
       const previous = stateRef.current;
@@ -356,6 +378,33 @@ export const NookView: React.FC<NookViewProps> = ({
   );
 
   /**
+   * A door hands us the FULL world-relative target (`CanvasObject.gateTarget`:
+   * `characters/elias/office`). The state keeps the segment relative to THIS
+   * character, so the conversion goes through the one shared implementation —
+   * never a local `split('/')` (docs/nook-scene/00 §5.1/§4.6).
+   *
+   * `nookScenePathOf` is THREE-valued: `'office'` (a sub-scene), `''` (this
+   * character's root) and `null` (not this character's subtree). `''` and `null`
+   * are both falsy and mean opposite things, so the checks below compare
+   * explicitly — `if (!result) return` would silently swallow a walk back to root.
+   */
+  const handleEnterGate = useCallback((target: string) => {
+    const nook = nookIdOf(characterId);
+    if (nook === null) return;
+    const path = nookScenePathOf(target, nook);
+    if (path === null) return; // a door outside this character's subtree opens nothing
+    onEnterScene(path === '' ? null : path);
+  }, [characterId, onEnterScene]);
+
+  /** Up ONE level, not back to the root: `'a/b'` → `'a'`, `'office'` → root.
+   *  `scene` is a relative segment path, so its parent is its own prefix. */
+  const handleBackScene = useCallback(() => {
+    if (scene === null) return;
+    const slash = scene.lastIndexOf('/');
+    onEnterScene(slash === -1 ? null : scene.slice(0, slash));
+  }, [scene, onEnterScene]);
+
+  /**
    * The one exit of the empty-state prompt (docs/init/03 §3.3/§3.7): Submit and
    * Skip are the same call; `''` means "leave it blank". `onRequestInit` returns
    * false when the socket is down — then keep the prompt up rather than showing a
@@ -389,7 +438,7 @@ export const NookView: React.FC<NookViewProps> = ({
         eventType === 'file_changed' ||
         ['entity_created', 'entity_edited', 'entity_deleted', 'entity_moved'].includes(eventType ?? '')
       ) {
-        void load(characterId);
+        void load(characterId, sceneRef.current);
         return;
       }
       if (
@@ -494,6 +543,24 @@ export const NookView: React.FC<NookViewProps> = ({
   const isEmpty = state !== null && state.items.length === 0 && state.scene === null;
   const canRetry = error !== null && (error.status === 0 || error.status >= 500);
 
+  // "Is the addressed scene the character root?" — a SCENE-identity predicate and
+  // the scope fence around initialisation: `airp_init` can only target the root
+  // (04 §③ step 7.1), so a prompt inside a sub-scene would furnish the wrong room.
+  const isRootScene = scene === null;
+  const showInitPrompt = onRequestInit !== undefined && isRootScene;
+  // The breadcrumb reads the FACT (`state.layer`), never the intent (`nookScene`):
+  // after a 404 the two disagree and showing the intent would be a lie (04 §③ step
+  // 12). Two args are required — a one-arg form cannot tell whether `state.layer`
+  // even belongs to THIS character, so a stale reply would print a foreign name.
+  const sceneTrail = state !== null ? nookScenePathOf(state.layer, nookIdOf(characterId) ?? '') : null;
+  const sceneSegments = sceneTrail ? sceneTrail.split('/') : [];
+  // The current segment's readable label: the author's `name` for the scene we are
+  // IN, else the raw directory name (no humanising — `labelOf` is App-private).
+  const sceneLabel = sceneSegments.length > 0
+    ? (sceneFrontmatter?.name || sceneFrontmatter?.title || sceneSegments[sceneSegments.length - 1])
+    : (sceneFrontmatter?.name || sceneFrontmatter?.title || copy.nook);
+  const sceneBody = state?.scene?.body ?? '';
+
   return (
     <div
       ref={rootRef}
@@ -536,6 +603,43 @@ export const NookView: React.FC<NookViewProps> = ({
             {statusLine && <div className="truncate font-mono text-[10px] text-ink/50">{statusLine}</div>}
           </div>
         </div>
+        {/* The scene trail (docs/nook-scene/04 §③ step 6): `‹` + the path inside
+            this ikigai, ONE focusable control ("up one scene"). The segments are
+            text, not buttons — two controls doing the same thing is reachability
+            noise. Rendered only in a sub-scene, so the ROOT topbar is unchanged.
+            `min-w-0` + `truncate` keep "Leave ikigai" inside a 390px viewport. */}
+        {scene !== null && (
+          <nav
+            data-nook-zone="scene-trail"
+            aria-label={copy.nookSceneTrail}
+            className="pointer-events-auto flex min-w-0 shrink items-center overflow-hidden rounded-xl border border-ink/10 bg-paper-card/80 px-2 py-1.5 shadow-soft backdrop-blur-md"
+          >
+            <button
+              type="button"
+              onClick={handleBackScene}
+              title={copy.nookSceneUp}
+              aria-label={`${copy.nookSceneUp}: ${sceneLabel}`}
+              className="flex shrink-0 items-center gap-1 rounded-lg text-xs text-ink/70 transition-all hover:text-ink"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              <span className="font-mono text-[10px] text-ink/50">{copy.nook}</span>
+            </button>
+            {sceneSegments.map((segment, index) => {
+              const last = index === sceneSegments.length - 1;
+              return (
+                <React.Fragment key={`${segment}-${index}`}>
+                  <span className="shrink-0 px-1 text-ink/30">/</span>
+                  {/* Only the scene we are IN has a README to name it; the
+                      ancestors show their directory names as-is. */}
+                  <span className={`truncate text-xs ${last ? 'text-ink/80' : 'text-ink/50'}`}>
+                    {last ? sceneLabel : segment}
+                  </span>
+                </React.Fragment>
+              );
+            })}
+          </nav>
+        )}
+
 
         {/* Back to the layer the player came from. */}
         <button
@@ -603,6 +707,7 @@ export const NookView: React.FC<NookViewProps> = ({
               }}
               stillPortraits={effectiveReducedMotion}
               assetUrl={resolveAssetUrl}
+              onEnterGate={handleEnterGate}
             />
             {!initializing && (
               <>
@@ -610,7 +715,11 @@ export const NookView: React.FC<NookViewProps> = ({
                   <div className="font-serif text-lg text-ink/70">{copy.nookEmptyTitle}</div>
                   <div className="font-mono text-xs text-ink/50">{copy.nookEmptyBody}</div>
                 </div>
-                {onRequestInit ? (
+                {/* The prompt can only ever furnish the CHARACTER ROOT (04 §③ step
+                    7.1): `airp_init` carries `characterId` alone. Offering it inside
+                    a sub-scene would furnish the wrong room, silently — so the gate
+                    sits on the submittable control only, never on the empty copy. */}
+                {showInitPrompt ? (
                   <StubPrompt
                     kind="nook"
                     copy={{
@@ -620,37 +729,69 @@ export const NookView: React.FC<NookViewProps> = ({
                     }}
                     onResolve={resolveInit}
                   />
-                ) : (
+                ) : isRootScene ? (
+                  /* The host never wired init: say so with a disabled bar rather
+                     than render a control that silently does nothing. Only the
+                     ROOT can be initialised, so a sub-scene gets neither. */
                   <WriterBar disabled onSend={() => {}} placeholder={copy.nookEmptyPrompt} sendLabel="⏎" />
-                )}
+                ) : null}
               </>
             )}
           </div>
         ) : state ? (
-          <Canvas
-            hidden={hidden}
-            effectsEnabled={effectsEnabled}
-            reducedMotion={effectiveReducedMotion}
-            allowChalkDrag={allowChalkDrag}
-            currentLayer={state.layer}
-            items={state.items}
-            stillPortraits={true}
-            links={[]}
-            bg={state.bg}
-            ghostCopy={{
-              reused: copy.ghostReused,
-              failed: copy.ghostFailed,
-              unreachable: copy.ghostUnreachable,
-            }}
-            onMoveCard={handleMoveCard}
-            onSelectChoice={handleSelectChoice}
-            onEntityAction={handleEntityAction}
-            onDiceRolled={onDiceRolled}
-            onOpenCharacterModal={handleOpenCharacterModal}
-            onItemDropOnTarget={handleItemDropOnTarget}
-            onDropItemToScene={handleDropItemToScene}
-            onTakeItem={handleTakeItem}
-          />
+          <>
+            <Canvas
+              hidden={hidden}
+              effectsEnabled={effectsEnabled}
+              reducedMotion={effectiveReducedMotion}
+              allowChalkDrag={allowChalkDrag}
+              currentLayer={state.layer}
+              items={state.items}
+              stillPortraits={true}
+              links={[]}
+              bg={state.bg}
+              ghostCopy={{
+                reused: copy.ghostReused,
+                failed: copy.ghostFailed,
+                unreachable: copy.ghostUnreachable,
+              }}
+              onMoveCard={handleMoveCard}
+              onSelectChoice={handleSelectChoice}
+              onEntityAction={handleEntityAction}
+              onDiceRolled={onDiceRolled}
+              onOpenCharacterModal={handleOpenCharacterModal}
+              onItemDropOnTarget={handleItemDropOnTarget}
+              onDropItemToScene={handleDropItemToScene}
+              onTakeItem={handleTakeItem}
+              onEnterGate={handleEnterGate}
+            />
+            {/* A sub-scene's README is its facade: without this band, walking into a
+                scene the author DID write shows an empty canvas — strictly less than
+                the door's hover sheet already showed (04 §③ step 13). Not a card: it
+                carries no `data-path`, so the footprint scheduler never measures it. */}
+            {scene !== null && sceneBody.trim() !== '' && (
+              <div
+                data-nook-zone="scene-intro"
+                className="pointer-events-auto absolute inset-x-3 top-16 mx-auto max-w-2xl rounded-xl border border-ink/10 bg-paper-card/85 p-2 text-xs text-ink/80 shadow-soft backdrop-blur-md"
+              >
+                <button
+                  type="button"
+                  onClick={() => setIntroOpen(open => !open)}
+                  aria-expanded={introOpen}
+                  title={introOpen ? copy.collapseScene : copy.expandScene}
+                  className="flex w-full items-center gap-1.5 text-left font-mono text-[10px] text-ink/60"
+                >
+                  <ChevronLeft className={`h-3 w-3 shrink-0 transition-transform ${introOpen ? '-rotate-90' : ''}`} />
+                  <span className="truncate">{sceneLabel}</span>
+                </button>
+                {introOpen && (
+                  <div className="mt-1.5 max-h-40 overflow-y-auto">
+                    <MarkdownText text={stripLeadingTitle(sceneBody)} />
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         ) : null}
       </main>
 
@@ -671,7 +812,12 @@ export const NookView: React.FC<NookViewProps> = ({
             role="alert"
             className="pointer-events-auto order-1 max-w-full rounded-xl border border-rust/40 bg-rust/10 p-3 text-xs text-ink shadow-soft"
           >
-            <div className="font-semibold text-rust">{copy.nookError}</div>
+            {/* A 404 while addressing a sub-scene means THAT SCENE is gone, not
+                the ikigai: naming the wrong thing sends the player looking for a
+                problem that is not there (04 §③ step 12). */}
+            <div className="font-semibold text-rust">
+              {scene !== null && error.status === 404 ? copy.nookSceneMissing : copy.nookError}
+            </div>
             <div className="mt-1 font-mono text-[10px] text-ink/60">
               {error.code ? `${error.code} · ` : ''}
               {error.status > 0 ? `${error.status} · ` : ''}
@@ -686,7 +832,7 @@ export const NookView: React.FC<NookViewProps> = ({
             {canRetry && (
               <button
                 type="button"
-                onClick={() => void load(characterId)}
+                onClick={() => void load(characterId, sceneRef.current)}
                 className="mt-2 rounded-lg bg-rust px-3 py-1 text-white transition-all hover:bg-rust-light"
               >
                 {copy.nookRetry}

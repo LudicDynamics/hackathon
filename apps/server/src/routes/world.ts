@@ -23,6 +23,11 @@ import {
   isValidCharacterId,
   listBackpack,
   nookCardPaths,
+  isValidNookScenePath,
+  isNookSceneId,
+  nookSceneCards,
+  deriveNookLayers,
+  nookSceneDoors,
   nookIdOf,
   NookNoteInputSchema,
   NookNoteOutcomeSchema,
@@ -685,14 +690,17 @@ export function createWorldRouter(
   });
 
   /**
-   * Get a character's nook (docs/nook/00 §3.1). Same `LayerState` shape as
-   * `/api/layer`, but a nook is NOT a layer: `resolveLayer` returns null for
-   * `characters/**` by construction, so the layer gate cannot be reused. The
-   * READ side that shares its assembly is only the seat half (nook 00 §3.3).
+   * Get one SCENE of a character's nook (docs/nook-scene/00 §4.2). Same
+   * `LayerState` shape as `/api/layer`, but a nook is NOT a layer: `resolveLayer`
+   * returns null for `characters/**` by construction, so the layer gate cannot be
+   * reused. The READ side that shares its assembly is only the seat half
+   * (nook 00 §3.3).
    *
-   * `?character=<id>` is a BARE id — never a path (nook 00 §3.2). The id shape
-   * gate is the security boundary; the store's own `resolvePath` guards are a
-   * second line, not the first (they throw, which would surface as a 500).
+   * `?character=<id>` is a BARE id — never a path (nook 00 §3.2). The optional
+   * `?scene=<rel path>` names a directory BELOW that character root and is
+   * omitted/empty for the root scene. Both are gated by the ONE id validator of
+   * §5.1; the store's own `resolvePath` guards are a second line, not the first
+   * (they throw, which would surface as a 500).
    */
   router.get('/nook', async (req, res) => {
     const store = getActiveStore();
@@ -707,39 +715,127 @@ export function createWorldRouter(
         });
       }
       const nookId = nookIdOf(id)!;
+      // `scene` addresses a sub-scene directory below the character root
+      // (docs/nook-scene/00 §4.2); omitted / '' means the root scene, which stays
+      // byte-identical to N1. Shape first, existence later: a malformed segment
+      // must 400 and never reach `statKind` (whose `resolvePath` throws ⇒ 500),
+      // and a leading/trailing '/' MUST be rejected rather than normalised away —
+      // `path.normalize` would quietly accept a second spelling of the same scene.
+      const rawScene = req.query.scene;
+      if (!(rawScene === undefined || typeof rawScene === 'string')) {
+        return res.status(400).json({
+          ok: false,
+          code: 'invalid_argument',
+          error: 'scene must be a single string',
+        });
+      }
+      const scenePath = rawScene ?? '';
+      if (!isValidNookScenePath(scenePath)) {
+        return res.status(400).json({
+          ok: false,
+          code: 'invalid_argument',
+          error: 'scene must be a slash-joined path of lower-kebab-case segments',
+        });
+      }
+      const sceneId = scenePath === '' ? nookId : `${nookId}/${scenePath}`;
+      // Cheap mechanical re-assertion of the frozen id shape (no leading or
+      // trailing '/'): the segment gate above is what makes it unreachable.
+      if (!isNookSceneId(sceneId)) {
+        return res.status(400).json({
+          ok: false,
+          code: 'invalid_argument',
+          error: 'scene must be a valid nook scene path',
+        });
+      }
       // `statKind` is the only primitive that separates "missing" from "empty":
       // `listFiles` returns [] for both (local-store.ts:226-228), so using it
       // here would make the 404 unreachable and dress "no such character" up as
-      // "the nook is empty" (docs/nook/01 §③ step 3).
-      if ((await store.statKind(nookId)) !== 'dir') {
+      // "the nook is empty" (docs/nook/01 §③ step 3). One check now covers the
+      // root scene (`scene === ''`) and every sub-scene: "does this scene exist"
+      // is the same question as "does this character exist", one level down.
+      if ((await store.statKind(sceneId)) !== 'dir') {
         return res.status(404).json({
           ok: false,
           code: 'not_found',
-          error: `No such character: "${id}"`,
+          error: scenePath === '' ? `No such character: "${id}"` : `No such scene: "${sceneId}"`,
         });
       }
 
-      // `listFiles(prefix)` walks RECURSIVELY, so the direct-child cut is ours
-      // to make — `nookCardPaths` does it (direct-child .md minus four root configuration files).
-      const mdFiles = nookCardPaths(await store.listFiles(nookId), nookId);
-      const items = await readLayerItems(store, mdFiles);
+      // Two walks, both scoped to THIS character (never the world): the file set
+      // answers "which cards belong to a scene" (for this scene and for each
+      // door's stub test), the directory set answers "which scenes exist at all".
+      // The directory walk is REQUIRED — `listFiles` is a FILE walk, so a
+      // completely empty sub-directory disappears and its door can never exist,
+      // while `world/**` DOES get a stub door for an empty room
+      // (docs/nook-scene/00 §2.3, spike B vs C).
+      const allFiles = await store.listFiles(nookId);
+      const dirs = await store.listDirs(nookId);
+      const fmByDir = new Map<string, Record<string, any> | null>();
+      for (const d of dirs) {
+        try {
+          fmByDir.set(d, parseFrontmatter(await store.readFile(`${d}/README.md`)).frontmatter);
+        } catch {
+          fmByDir.set(d, null);
+        }
+      }
+      // `readFm` is SYNCHRONOUS (same shape as `deriveLayers`), so the frontmatter
+      // MUST be pre-read: awaiting inside the callback would hand back Promises,
+      // every directory would look like a stub and every door would lose its name
+      // (the same reason `scanLayers` pre-reads).
+      const nookTree = deriveNookLayers(nookId, dirs, (d) => fmByDir.get(d) ?? null);
+      const doorIds = nookSceneDoors(sceneId, nookTree);
+
+      // Cards via §5.2's one page-membership function (root ⇒ nookCardPaths,
+      // sub-scene ⇒ cardsOfLayer); then one door per DIRECT child directory,
+      // always `<scene>/README.md`, synthesised only when that README is absent —
+      // the door is how a scene you have not written yet stays enterable.
+      const items = await readLayerItems(store, nookSceneCards(sceneId, allFiles));
+      items.push(
+        ...(await Promise.all(
+          doorIds.map(async (doorId): Promise<LayerItem> => {
+            const doorPath = `${doorId}/README.md`;
+            try {
+              const { frontmatter, body } = parseFrontmatter(await store.readFile(doorPath));
+              return { path: doorPath, filename: 'README.md', frontmatter, body };
+            } catch {
+              // `stub` = "this directory itself holds nothing readable" — no
+              // README AND no direct card. Not "no README found": a sub-scene can
+              // be full of cards and still have no facade, and marking that
+              // UNWRITTEN would be a lie (docs/nook-scene/00 §4.3). `body` stays
+              // empty on purpose — the layer path's "not written yet" English
+              // would be that same lie here.
+              const hasCards = nookSceneCards(doorId, allFiles).length > 0;
+              return {
+                path: doorPath,
+                filename: 'README.md',
+                frontmatter: { type: 'readme', name: doorId.split('/').pop(), door: true, stub: !hasCards },
+                body: '',
+              };
+            }
+          })
+        ))
+      );
 
       const rowByPath = new Map(store.getLayerCards(items.map((it) => it.path)).map((r) => [r.id, r]));
 
       const unseated = items
         .filter((it) => !rowByPath.has(it.path))
         .map((it) => ({ path: it.path, ...storedSizeOf(it, rowByPath.get(it.path)) }));
+      // The seat namespace is the SCENE, not the character (nook-scene 00 §4.5):
+      // `seatUnplaced`/`reseatLayer` key occupancy off `cards.layer`, so passing
+      // `nookId` would make a parent's door cards and a sub-scene's cards shove
+      // each other around although they are never on screen together.
       if (unseated.length > 0) {
-        for (const row of await store.seatUnplaced(nookId, unseated)) rowByPath.set(row.id, row);
+        for (const row of await store.seatUnplaced(sceneId, unseated)) rowByPath.set(row.id, row);
       }
       for (const row of await store.reseatLayer(
-        nookId,
+        sceneId,
         items.map((it) => ({ path: it.path, ...declaredSizeOf(it) }))
       )) {
         rowByPath.set(row.id, row);
       }
 
-      const context = await appearanceContext(store, nookId);
+      const context = await appearanceContext(store, sceneId);
       const enriched = items.map((it) => {
         const row = rowByPath.get(it.path);
         const { kind, w, h } = storedSizeOf(it, row);
@@ -762,15 +858,15 @@ export function createWorldRouter(
         };
       });
 
-      // The nook's README is its facade (`scene`), kept out of `items` so one
-      // path never has two positions (same rule as /api/layer). NO stub is
-      // synthesised: a nook without a README has no door visual to fake, so the
-      // frontend shows its empty state instead (nook 00 §3.1).
+      // The SCENE's own README is its facade (`scene`), kept out of `items` so one
+      // path never has two positions (same rule as /api/layer) — the doors in
+      // `items` are OTHER scenes' READMEs. NO stub is synthesised: a scene without
+      // a README has no facade to fake, so the frontend shows its own state for it.
       let scene: SceneReadme | null = null;
       let bg: { src: string | null; tone: string; grain: string } = { src: null, tone: 'warm', grain: 'parchment' };
       let audio: { ambient: string | null; bgm: string | null } = { ambient: null, bgm: null };
       try {
-        const readmePath = `${nookId}/README.md`;
+        const readmePath = `${sceneId}/README.md`;
         const raw = await store.readFile(readmePath);
         const parsed = parseFrontmatter(raw);
         scene = {
@@ -791,7 +887,7 @@ export function createWorldRouter(
 
       // Literal empty arrays: a nook has no links or presence this batch (nook
       // 00 §3.1). Querying `WHERE layer = ?` would look like support; it is not.
-      res.json({ layer: nookId, scene, bg, audio, items: enriched, links: [], presence: [], worldFrozen });
+      res.json({ layer: sceneId, scene, bg, audio, items: enriched, links: [], presence: [], worldFrozen });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -1212,22 +1308,26 @@ export function createWorldRouter(
     // `characters/**` by construction (local-store.ts:552-555), so routing a nook
     // through it would 404 every nook footprint forever — the C plan this batch
     // rejected (docs/nook/00 §3.1). Same shape as `arrangeCards`' nook branch
-    // (§3.7); both share `isValidCharacterId` (§5.2).
+    // (§3.7): the shape gate is the ONE id validator `isNookSceneId` (§5.1), and
+    // existence is the SCENE directory itself — a subdirectory scene
+    // (`characters/elias/office`) is a page of its own, not the character root.
     if (layer.startsWith('characters/')) {
-      const characterId = layer.slice('characters/'.length);
-      // Shape gate first (NEVER path-normalise: §3.2), then existence.
-      if (!isValidCharacterId(characterId)) {
+      // Shape gate first (NEVER path-normalise: §3.2), then existence. The
+      // prefix branch catches malformed `characters/**` values (`.`, empty
+      // segments, trailing slash) so they 400 here instead of leaking to the
+      // layer gate and getting a misleading 404.
+      if (!isNookSceneId(layer)) {
         return res.status(400).json({
           ok: false,
           code: 'invalid_argument',
-          error: `character "${characterId}" is not a valid nook id`,
+          error: `nook scene "${layer}" is not a valid nook scene id`,
         });
       }
-      if ((await store.statKind(`characters/${characterId}`)) !== 'dir') {
+      if ((await store.statKind(layer)) !== 'dir') {
         return res.status(404).json({
           ok: false,
           code: 'not_found',
-          error: `character "${characterId}" has no nook directory`,
+          error: `nook scene "${layer}" has no directory`,
         });
       }
     } else if ((await store.resolveLayer(dirOfLayer(layer))) !== layer) {
@@ -1321,9 +1421,10 @@ export function createWorldRouter(
         return declared;
       }
       const result = await serviceFor(store, { type: 'player' }).chooseOption({ path: choicePath, choice });
-      // Auto-turn is opt-in per world (docs/settings/00). `off` — the default —
-      // keeps doc-21 §5.5: the event lands, the writer sees it in the injection
-      // of the player's next input, no turn starts here.
+      // Auto-turn is per-world opt-in (docs/settings/00). The shipped default is
+      // `scenes-and-choices` (changed 2026-09-15); the quiet `off` mode keeps
+      // doc-21 §5.5: the event lands, the writer sees it in the injection of the
+      // player's next input, no turn starts here.
       if (startsChoiceTurn(readWorldSettings(store.worldRoot).autoWrite)) {
         dispatch(store, `[Player Event] ${JSON.stringify(result.details.event)}\nRead ${JSON.stringify(choicePath)} and the world skill. Resolve this choice, update the source file, and write a chalk response. Do not record the choice a second time.`);
       }
