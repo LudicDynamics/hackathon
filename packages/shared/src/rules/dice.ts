@@ -7,6 +7,9 @@
  * copy). The private copy of this logic inside routes/world.ts is retired.
  */
 
+import { EXPECT_PROFILE, evaluateCondition, parseCondition } from '../commands/condition.js';
+import type { ConditionAst, ConditionAtom, ConditionOperator, Scalar } from '../commands/condition.js';
+
 /** Parsed `roll_dice.type`: how many dice, how many faces, what modifier. */
 export interface DiceSpec {
   /** 1..20 */
@@ -102,91 +105,51 @@ function expectError(raw: string): { ok: false; error: string } {
   };
 }
 
-/** Recursive-descent scanner over the §2.2.1 grammar (no parentheses, no nesting). */
-class ExpectParser {
-  private i = 0;
-
-  constructor(private readonly src: string) {}
-
-  parse(): ExpectAst | null {
-    const anyOf: DiceAtom[][] = [];
-    for (;;) {
-      const group = this.andExpr();
-      if (group === null) return null;
-      anyOf.push(group);
-      this.ws();
-      if (this.eat('||')) continue;
-      break;
+/*
+ * The `expect` grammar is NOT implemented here any more — it is one of the three
+ * profiles of `commands/condition.ts` (`03` §9.1). Keeping a second
+ * recursive-descent scanner was the third copy of one grammar (`rules/
+ * interactive.ts` held the second; it delegates too now), and three copies drift
+ * silently: each accepts a slightly different set and neither complains.
+ *
+ * This module keeps its OWN contract intact, and that is why the adapter below
+ * exists rather than a plain re-export:
+ *   - `parseExpect`/`evaluateExpect`/`ExpectAst`/`DiceAtom` are the public shapes
+ *     (`roll-dice.ts` and the web layer consume them), and they MUST NOT change;
+ *   - the error copy is asserted VERBATIM by `dice.test.mjs` and is phrased for
+ *     the `roll_dice.expect` field, not for a generic condition.
+ * So we translate at the boundary: `EXPECT_PROFILE` has `roots: []` and no `in`
+ * operator, which makes the AST ⇄ `DiceAtom[][]` projection LOSSLESS (`03` §9.2).
+ */
+function toExpectAst(ast: ConditionAst): ExpectAst {
+  const anyOf: DiceAtom[][] = [];
+  for (const group of ast.anyOf) {
+    const translated: DiceAtom[] = [];
+    for (const atom of group) {
+      // `EXPECT_PROFILE` declares no roots and no `in`, so only these two
+      // shapes are reachable — anything else means the profile changed and this
+      // adapter must be revisited, so it fails closed instead of guessing.
+      if (atom.kind === 'range') {
+        translated.push({ op: 'range', min: atom.min, max: atom.max });
+        continue;
+      }
+      if (atom.kind !== 'compare' || atom.left.kind !== 'implicit') return { anyOf: [] };
+      if (atom.op === 'in') {
+        const r = atom.right;
+        if (r === null || typeof r !== 'object' || !('kind' in r) || r.kind !== 'range') return { anyOf: [] };
+        translated.push({ op: 'range', min: r.min, max: r.max });
+        continue;
+      }
+      const rhs = atom.right;
+      const value = rhs !== null && typeof rhs === 'object' && 'kind' in rhs && rhs.kind === 'literal' ? rhs.value : undefined;
+      if (typeof value !== 'number') return { anyOf: [] };
+      // The shared parser spells equality `==`; `DiceAtom` spells it `=`.
+      translated.push({ op: atom.op === '==' ? '=' : (atom.op as DiceAtom['op']), value });
     }
-    this.ws();
-    if (this.i !== this.src.length) return null; // trailing junk
-    return { anyOf };
+    if (translated.length === 0) return { anyOf: [] };
+    anyOf.push(translated);
   }
-
-  private andExpr(): DiceAtom[] | null {
-    const first = this.atom();
-    if (first === null) return null;
-    const group = [first];
-    for (;;) {
-      this.ws();
-      if (!this.eat('&&')) break;
-      const next = this.atom();
-      if (next === null) return null; // dangling AND
-      group.push(next);
-    }
-    return group;
-  }
-
-  private atom(): DiceAtom | null {
-    this.ws(); // grammar allows ws before every atom (after && / ||)
-    for (const token of ['>=', '<=', '!=', '==', '>', '<', '=']) {
-      if (!this.eat(token)) continue;
-      this.ws();
-      const n = this.integer();
-      if (n === null) return null; // operator with no operand
-      // `==` is an accepted alias of `=`; one semantic, one AST op.
-      return { op: token === '==' ? '=' : (token as DiceAtom['op']), value: n };
-    }
-    const n = this.integer();
-    if (n === null) return null;
-    const save = this.i;
-    this.ws();
-    if (this.eat('..')) {
-      this.ws();
-      const hi = this.integer();
-      if (hi === null) return null; // open-ended range
-      if (n > hi) return null; // inverted range — the regex lets this through
-      return { op: 'range', min: n, max: hi };
-    }
-    this.i = save;
-    return { op: '=', value: n };
-  }
-
-  /** `[ "-" ] digit { digit }`, capped at 15 digits (§2.2.3). */
-  private integer(): number | null {
-    const start = this.i;
-    if (this.src[this.i] === '-') this.i++;
-    const digitsStart = this.i;
-    while (this.i < this.src.length && this.src[this.i] >= '0' && this.src[this.i] <= '9') this.i++;
-    const digits = this.src.slice(digitsStart, this.i);
-    if (digits.length === 0 || digits.length > INT_DIGITS_MAX) {
-      this.i = start;
-      return null;
-    }
-    return Number(this.src.slice(start, this.i));
-  }
-
-  private ws(): void {
-    while (this.src[this.i] === ' ' || this.src[this.i] === '\t') this.i++;
-  }
-
-  private eat(token: string): boolean {
-    if (this.src.startsWith(token, this.i)) {
-      this.i += token.length;
-      return true;
-    }
-    return false;
-  }
+  return { anyOf };
 }
 
 /**
@@ -195,14 +158,46 @@ class ExpectParser {
  */
 export function parseExpect(raw: string): ParseResult<ExpectAst> {
   if (typeof raw !== 'string' || raw.trim() === '') return expectError(String(raw));
-  const ast = new ExpectParser(raw.trim()).parse();
-  if (ast === null || ast.anyOf.length === 0) return expectError(String(raw));
+  const parsed = parseCondition(raw.trim(), EXPECT_PROFILE);
+  if (!parsed.ok || parsed.value.anyOf.length === 0) return expectError(String(raw));
+  const ast = toExpectAst(parsed.value);
+  if (ast.anyOf.length === 0) return expectError(String(raw));
   return { ok: true, value: ast };
 }
 
-/** Pure, deterministic, no randomness (§2.2.3). */
+/**
+ * Pure, deterministic, no randomness (§2.2.3).
+ *
+ * The scope seeds the implicit subject (`result`) rather than a named root:
+ * `EXPECT_PROFILE` declares no roots, so `compare`/`range` atoms carry
+ * `left.kind === 'implicit'` and read exactly this binding. An error is `false`
+ * — the same fail-closed reading the old local evaluator had, because a bad
+ * declaration must not silently mark every roll as passing.
+ */
 export function evaluateExpect(ast: ExpectAst, result: number): boolean {
-  return ast.anyOf.some((group) => group.every((a) => atomPasses(a, result)));
+  const evaluated = evaluateCondition(toConditionAst(ast), {
+    values: new Map<string, Scalar>([['result', result]]),
+    paths: new Map(),
+  });
+  return evaluated.ok ? evaluated.value : false;
+}
+
+/** The inverse projection: `DiceAtom[][]` back into the shared AST. */
+function toConditionAst(ast: ExpectAst): ConditionAst {
+  return {
+    anyOf: ast.anyOf.map((group) =>
+      group.map((a): ConditionAtom =>
+        a.op === 'range'
+          ? { kind: 'range', subject: { kind: 'implicit' }, min: a.min!, max: a.max! }
+          : {
+              kind: 'compare',
+              op: a.op === '=' ? '==' : (a.op as ConditionOperator),
+              left: { kind: 'implicit' },
+              right: { kind: 'literal', value: a.value! },
+            }
+      )
+    ),
+  };
 }
 
 function atomPasses(a: DiceAtom, r: number): boolean {
