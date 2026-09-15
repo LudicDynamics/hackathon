@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { VOICES } from '@airp/shared';
 
 export function parseCharacterVoices(value: string): Record<string, string> {
   if (!value.trim()) return {};
@@ -8,13 +7,18 @@ export function parseCharacterVoices(value: string): Record<string, string> {
   return Object.fromEntries(entries);
 }
 
-/** Character IDs are deployment-wide; declared gender wins over voice category. */
-export function characterLocalVoice(characterId: string, declaredVoice: unknown, gender?: unknown): string | null {
+/**
+ * Character IDs are deployment-wide. Only an explicit `AIRP_TTS_CHARACTER_VOICES`
+ * entry routes a character to the local service: the local voice is ONE
+ * person's voice (setsuna), so handing it to every female character made the
+ * whole cast speak alike. Everyone else keeps their declared online voice.
+ * `_declaredVoice` / `_gender` stay in the signature for the route's call site.
+ */
+export function characterLocalVoice(characterId: string, _declaredVoice?: unknown, _gender?: unknown): string | null {
   let overrides: Record<string, string> = {};
   try { overrides = parseCharacterVoices(process.env.AIRP_TTS_CHARACTER_VOICES ?? ''); } catch { /* Ignore malformed external configuration. */ }
   if (Object.hasOwn(overrides, characterId)) return overrides[characterId] === 'online' ? null : overrides[characterId];
-  const female = gender === 'female' || (gender !== 'male' && typeof declaredVoice === 'string' && VOICES.some(v => (v.id === declaredVoice || v.alias === declaredVoice) && v.gender === 'female'));
-  return female ? readLocalTtsConfig().voice : null;
+  return null;
 }
 
 /** Messages contain only our own diagnostics, never upstream bodies or secrets. */

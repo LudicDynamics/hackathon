@@ -2,14 +2,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { characterLocalVoice, parseCharacterVoices } from '../dist/routes/local-tts.js';
 
-test('female declared voices share default, male and unknown do not', () => {
-  assert.equal(characterLocalVoice('vera', 'playful-teasing'), 'setsuna');
-  assert.equal(characterLocalVoice('nanami', 'shy-sweet'), 'setsuna');
-  assert.equal(characterLocalVoice('new-person', 'gentle-calm'), 'setsuna');
-  assert.equal(characterLocalVoice('man', 'wise-elder'), null);
-  assert.equal(characterLocalVoice('unknown', undefined), null);
-  assert.equal(characterLocalVoice('unknown', 'unknown-voice'), null);
-  assert.equal(characterLocalVoice('man', 'gentle-calm', 'male'), null);
+test('no character shares the local voice by gender or voice category', () => {
+  // The local service speaks with ONE voice; routing every female character to
+  // it made the whole cast sound like setsuna. Only an explicit override routes.
+  const old = process.env.AIRP_TTS_CHARACTER_VOICES;
+  delete process.env.AIRP_TTS_CHARACTER_VOICES;
+  try {
+    assert.equal(characterLocalVoice('vera', 'playful-teasing'), null);
+    assert.equal(characterLocalVoice('nanami', 'shy-sweet'), null);
+    assert.equal(characterLocalVoice('new-person', 'gentle-calm', 'female'), null);
+    assert.equal(characterLocalVoice('man', 'wise-elder'), null);
+    assert.equal(characterLocalVoice('unknown', undefined), null);
+    assert.equal(characterLocalVoice('man', 'gentle-calm', 'male'), null);
+  } finally { if (old !== undefined) process.env.AIRP_TTS_CHARACTER_VOICES = old; }
 });
 test('per-character overrides and opt-out take priority', () => {
   const old = process.env.AIRP_TTS_CHARACTER_VOICES;
