@@ -8,6 +8,7 @@ import {
 import type { JsonAgentSessionEvent } from '../../../../vendor/pi-rp/packages/coding-agent/dist/index.js';
 import { messageText } from './event-bridge.js';
 import type { AgentLifecycleManager } from './lifecycle.js';
+import { createLiveSidebandChannel, receiptLine, receiptOf, type DuplexCharacterChannel } from './character-duplex.js';
 
 /**
  * Live call backend (docs/live-voice/00 §2.3, §15.2).
@@ -115,7 +116,14 @@ interface ActiveCall {
   readonly sessionId: string;
   readonly voice: string;
   readonly worldRoot: string;
+  readonly language: LiveLanguage;
   readonly socket: LiveSidebandSocket;
+  /**
+   * The backend-independent voice link (character-duplex.ts): the registry
+   * says "speak" / "notice", the channel owns the sideband frames. Assigned
+   * right after construction — its event-id salt reads this call's transcript.
+   */
+  channel: DuplexCharacterChannel;
   /** Input transcript not yet consumed by a delegation (docs/live-voice/00 §7.2). */
   pendingInput: string;
   /** Rolling output transcript; also salts append event_ids so each is unique. */
@@ -413,12 +421,19 @@ export class LiveCallRegistry {
       sessionId,
       voice: input.voice,
       worldRoot: input.worldRoot,
+      language: input.language,
       socket,
+      channel: null as unknown as DuplexCharacterChannel,
       pendingInput: '',
       outputTranscript: '',
       turnQueue: Promise.resolve(),
       closing: false,
     };
+    call.channel = createLiveSidebandChannel({
+      socket,
+      salt: () => call.outputTranscript.length,
+      onFailure: (reason) => this.deps.onVisibleFailure(call.characterId, reason),
+    });
     this.wireSideband(call);
     this.calls.set(input.characterId, call);
 
@@ -652,52 +667,30 @@ export class LiveCallRegistry {
       if (fallback) text = fallback;
     }
 
+    // The return channel (docs/live-voice/40): the reply AND a receipt of what
+    // the agent did. A turn that only acted (moved the key, wrote the scene)
+    // used to come back as "I could not put that into words" — the action had
+    // happened, the caller was never told.
     const chunks = toCommentaryChunks(text);
-    if (chunks.length === 0) {
+    const receipt = receiptLine(receiptOf(events), call.language);
+    if (chunks.length === 0 && receipt === null) {
       this.deps.onVisibleFailure(call.characterId, 'character turn produced no speakable text');
       this.appendVisible(call, delegationId, 'I could not put that into words just now.');
       return;
     }
     for (const chunk of chunks) this.appendCommentary(call, delegationId, chunk);
+    if (receipt !== null) this.appendCommentary(call, delegationId, receipt);
   }
 
-  /** `session.commentary.append` — the model is trained to paraphrase it aloud. */
+  /** The character's words — the voice paraphrases them aloud (channel `speak`). */
   private appendCommentary(call: ActiveCall, delegationId: string, content: string): void {
     if (this.calls.get(call.characterId) !== call) return;
-    try {
-      call.socket.send(
-        JSON.stringify({
-          type: 'session.commentary.append',
-          event_id: `commentary_${delegationId}_${call.outputTranscript.length}`,
-          delegation_id: delegationId,
-          content,
-        }),
-      );
-    } catch (err) {
-      this.deps.onVisibleFailure(
-        call.characterId,
-        `commentary append failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
+    call.channel.speak(delegationId, content);
   }
 
-  /** `session.instructions.append` — the visible degradation path. */
+  /** The visible degradation path (channel `notice`). */
   private appendVisible(call: ActiveCall, delegationId: string | null, content: string): void {
     if (this.calls.get(call.characterId) !== call) return;
-    try {
-      call.socket.send(
-        JSON.stringify({
-          type: 'session.instructions.append',
-          event_id: `instructions_${call.outputTranscript.length}`,
-          delegation_id: delegationId,
-          content,
-        }),
-      );
-    } catch (err) {
-      this.deps.onVisibleFailure(
-        call.characterId,
-        `instructions append failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
+    call.channel.notice(delegationId, content);
   }
 }
