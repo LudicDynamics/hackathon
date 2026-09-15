@@ -162,6 +162,97 @@ export const WORLD_COMMAND_EFFECT_ARGS: Readonly<
 });
 
 /**
+ * How many world events ONE effect appends (`04` §6.7). One declaration feeds
+ * two downstream consumers, which is why it lives beside the effect set rather
+ * than in either of them:
+ *
+ *   - `03`'s read budget (`COMMAND_EVENT_BUDGET_GUARD`): how many slots this
+ *     trigger consumes in the writer's injection window;
+ *   - `05`'s `steps[]` granularity: how the flat effect sequence is numbered.
+ *
+ * `'list'` means "one event PER EXPANDED ELEMENT" (`give`'s `rewards`), NOT one
+ * per `do[]` entry. Counting per `do[]` entry under-reserves the budget exactly
+ * when `list-args` expands — and the slack is not reclaimed later: the injection
+ * `limit` and the render cap are the SAME number (`collect.ts`'s
+ * `caps.dynamics`), so a fact pushed out of the window is gone for good once the
+ * cursor advances.
+ *
+ * These are UPPER bounds. A `list-args` entry that fails midway lands fewer
+ * events than its array length, while the budget still reserves for the whole
+ * array: reserving less would reject the command outright in stage A (world
+ * byte-identical) instead of allowing a partial landing (`03` §5.3 / R.1).
+ */
+export const WORLD_COMMAND_EFFECT_EVENTS: Readonly<
+  Record<WorldCommandEffectName, number | 'list'>
+> = Object.freeze({
+  // 1 when `path` is given; one PER ELEMENT when `rewards` is the array form.
+  give: 'list',
+  move: 1,
+  edit: 1,
+  set_status: 1,
+  // `fold-args` still writes ONCE (`04` §2.6 contract B), so this is 1 either way.
+  consume: 1,
+  enter: 1,
+  // `linkCards` writes no event at all (`04` §2.3 E7): the effect occupies a
+  // step but appends nothing. Zero here is what lets `10` reserve nothing for a
+  // link-only command — the case that proved both consumption paths must stay
+  // wired (a link command produces no `world_event` to tail).
+  link: 0,
+});
+
+/** What one trigger will cost, computed BEFORE any effect touches the world. */
+export interface WorldCommandCost {
+  /** Expanded effects (after `list-args`), not declared `do[]` entries. */
+  effects: number;
+  /** World events this trigger will append, summed over expanded effects. */
+  events: number;
+  /** Expanded effects that append NOTHING (`link`) — the budget's blind spot. */
+  eventless: number;
+  /**
+   * True when the expansion already exceeds `WORLD_COMMAND_EFFECT_BUDGET`; the
+   * command is then refused in stage A with the world byte-identical (`03` §5.3).
+   */
+  exceeds: boolean;
+}
+
+/**
+ * Static cost of an EXPANDED effect list (`09` §8.1's estimator, owned here
+ * because only the effect set knows how many events each verb appends).
+ *
+ * PURE and synchronous: no I/O, no clock. It is the UPPER bound that stage A
+ * gates on, and its `exceeds` verdict MUST agree with `execute.ts`'s own
+ * `effect_budget_exceeded` — the drift assertion is `04`'s T-14, because a
+ * mismatch between "what we reserved" and "what actually lands" is how the
+ * writer's injection window silently loses old facts (`10` §2.6).
+ *
+ * `arrayLength` reports how many elements a `list-args` step actually expanded
+ * to, so `events` counts landed events rather than declared ones.
+ */
+export function estimateWorldCommandCost(
+  expanded: ReadonlyArray<{ action: string; arrayLength?: number }>,
+  budget: number
+): WorldCommandCost {
+  let events = 0;
+  let eventless = 0;
+  for (const effect of expanded) {
+    const declared = WORLD_COMMAND_EFFECT_EVENTS[effect.action as WorldCommandEffectName];
+    if (declared === undefined) continue;
+    if (declared === 'list') {
+      events += effect.arrayLength ?? 1;
+    } else {
+      events += declared;
+      if (declared === 0) eventless += 1;
+    }
+  }
+  return {
+    effects: expanded.length,
+    events,
+    eventless,
+    exceeds: expanded.length > budget,
+  };
+}
+
+/**
  * What ONE effect reports back (04 §6.1). `03` uses `ok` to decide
  * `on_error: stop|continue`; `05` reads `reused` + `event`; `06` renders from
  * `path` + `event`; the trigger's tool_result carries it verbatim.
