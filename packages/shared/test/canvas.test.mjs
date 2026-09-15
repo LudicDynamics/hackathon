@@ -326,6 +326,40 @@ test('arrange place writes x/y/z and never touches width/height (doc-09 §10.2)'
   }
 });
 
+test('an agent placement that lands on another card keeps its seat; a player drop is honoured', async () => {
+  const { store, root } = await tempStore();
+  try {
+    await store.seatUnplaced('world/inn', [
+      { path: 'world/inn/a.md', w: 460, h: 190 },
+      { path: 'world/inn/c.md', w: 460, h: 190 },
+    ]);
+    const a = store.getLayerCards(['world/inn/a.md'])[0];
+    const seat = store.getLayerCards(['world/inn/c.md'])[0];
+
+    // The writer asks for c right on top of a: refused, c stays where the seat put it.
+    const kept = await service(store).arrangeCards({ place: { path: 'world/inn/c.md', x: a.x + 10, y: a.y + 10 } });
+    assert.match(kept.text, /Kept .* overlapped another card/);
+    const afterKept = store.getLayerCards(['world/inn/c.md'])[0];
+    assert.equal(afterKept.x, seat.x);
+    assert.equal(afterKept.y, seat.y);
+
+    // A free spot is placed as requested; z-only moves are never judged.
+    const free = await service(store).arrangeCards({ place: { path: 'world/inn/c.md', x: a.x + 2000, y: a.y + 2000 } });
+    assert.match(free.text, /^Placed /);
+    const z = await service(store).arrangeCards({ place: { path: 'world/inn/c.md', z: 9 } });
+    assert.match(z.text, /^Placed /);
+
+    // The player may stack cards on purpose.
+    const player = createActionService(store, { type: 'player' }, { turn: 'req:test' });
+    const dropped = await player.arrangeCards({ place: { path: 'world/inn/c.md', x: a.x + 10, y: a.y + 10 } });
+    assert.match(dropped.text, /^Placed /);
+    assert.equal(store.getLayerCards(['world/inn/c.md'])[0].x, a.x + 10);
+  } finally {
+    store.close();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('arrange place clamps out-of-range coords and rejects NaN', async () => {
   const { store, root } = await tempStore();
   try {

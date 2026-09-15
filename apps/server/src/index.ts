@@ -21,6 +21,8 @@ import { handleSttStream, STT_STREAM_PATH } from './engine/stt-stream.js';
 import { startHeartbeat } from './gateway/heartbeat.js';
 import { closeCanvasBrowser } from './engine/canvas-browser.js';
 import { createCanvasPerceptionRouter } from './routes/canvas-perception.js';
+import { CanvasArrangerRuntime } from './engine/canvas-arranger-lifecycle.js';
+import { createCanvasArrangerRouter } from './routes/canvas-arranger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -206,6 +208,42 @@ app.use('/api', createConnectionSettingsRouter(REPO_ROOT, {
 app.use('/api', createSttRouter());
 // Server-side Canvas DOM screenshots: active-world/read-only only, no WS transport.
 app.use('/api', createCanvasPerceptionRouter(() => activeStore));
+// Canvas arranger (docs/tools/12): the "Arrange this layer" button. The runtime
+// existed since 80853e9 but was never mounted, so the button always answered
+// 404 ("arrangement unavailable"). Its activity rides the same projector as the
+// writer's; the committed layout is pushed as `canvas_patched` (source
+// `functional`, the shape CanvasArrangeControl waits for) and the terminal
+// outcome as one `agent_activity` frame carrying the verification proof.
+const canvasArranger = new CanvasArrangerRuntime({
+  repoRoot: REPO_ROOT,
+  vendorCliPath: VENDOR_CLI,
+  getActiveStore: () => activeStore,
+  eventSink: (_source, event, _characterId, turnId) => eventBridge.emitFunctional('canvas-arranger', event, turnId),
+  activityFailureSink: (_source, _characterId, turnId, reason) => eventBridge.failFunctional('canvas-arranger', turnId, reason),
+  onRuntimeSignal: (signal) => {
+    const identity = {
+      agentId: signal.agentId, operationId: signal.operationId, requestId: signal.requestId,
+      turnId: signal.turnId, layer: signal.layer, timestamp: new Date().toISOString(),
+    };
+    if (signal.type === 'committed' && signal.result) {
+      eventBridge.broadcast({
+        type: 'canvas_patched', source: 'functional', ...identity, kind: 'cards', action: 'arranged',
+        cards: signal.result.cards.map(({ path, x, y, z }) => ({ path, x, y, z })),
+      });
+    }
+    if (signal.type === 'verified' || signal.type === 'failed' || signal.type === 'conflict' || signal.type === 'cancelled') {
+      const outcome = signal.outcome ?? (signal.type === 'verified' ? 'completed' : signal.type);
+      eventBridge.broadcast({
+        type: 'agent_activity', source: 'functional', ...identity, operation: 'edit',
+        phase: outcome === 'completed' ? 'completed' : 'failed', outcome,
+        ...(signal.error ? { error: signal.error } : {}),
+        changedCount: signal.result?.movedCount ?? 0,
+        details: { outcome, verified: outcome === 'completed', overlaps: outcome === 'completed' ? [] : undefined, movedCount: signal.result?.movedCount ?? 0 },
+      });
+    }
+  },
+});
+app.use('/api', createCanvasArrangerRouter(canvasArranger));
 
 // Serve static frontend files from apps/web/dist
 app.use(express.static(WEB_DIST));
@@ -417,7 +455,7 @@ server.listen(PORT, HOST, () => {
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
     heartbeat.stop();
-    void lifecycle.stopAll().finally(async () => {
+    void Promise.all([lifecycle.stopAll(), canvasArranger.stopAll()]).finally(async () => {
       await closeCanvasBrowser();
       process.exit(0);
     });

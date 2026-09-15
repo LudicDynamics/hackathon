@@ -179,7 +179,7 @@ function cardWritingFrame(
  * here is a transient frame driven by an engine result, never an event row.
  */
 export function mapEngineEvent(
-  source: EventSource,
+  source: EventSource | 'functional',
   event: JsonAgentSessionEvent,
   toolArgs: Map<string, unknown>,
   characterId?: string,
@@ -571,6 +571,25 @@ export class EventBridge {
       this.broadcast(message);
     }
 
+  }
+  /**
+   * A functional agent (the canvas arranger, docs/tools/12) runs in its own
+   * RPC session and names itself: its `agentId` is the context, never derived
+   * from `source`. Only the activity frames fan out — the writer/character
+   * presentation frames (`*_idle`, `character_delta`, `chalk_*`) belong to the
+   * narrative lanes and would mislead the reader panel.
+   */
+  emitFunctional(agentId: string, event: JsonAgentSessionEvent, turnId: string): void {
+    const context: ActivityTurnContext = { source: 'functional', agentId, turnId };
+    for (const message of mapEngineEvent(
+      'functional', event, this.toolArgsByCallId, undefined, undefined, context, this.activityProjector,
+    )) {
+      if (message.type === 'agent_activity') this.broadcast(message);
+    }
+  }
+  failFunctional(agentId: string, turnId: string, reason: 'timeout' | 'cancelled' | 'agent_stopped'): void {
+    const context: ActivityTurnContext = { source: 'functional', agentId, turnId };
+    for (const frame of this.activityProjector.failTurn(context, reason)) this.broadcast(frame);
   }
   failActivity(
     source: EventSource,

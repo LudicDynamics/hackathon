@@ -480,6 +480,29 @@ export async function arrangeCanvas(
   };
 }
 
+/** Same breathing room `flowColumns` keeps between seats (local-store.ts SEAT_PAD). */
+const PLACEMENT_PAD = 22;
+
+/**
+ * Would placing `path` at the requested corner overlap any OTHER card on the
+ * layer? Uses the card's current row footprint; a card with no row yet, or a
+ * request that moves only one axis, is never judged (the seat decides).
+ */
+export function agentPlacementCollides(
+  store: WorldStore,
+  layer: string,
+  path: string,
+  box: { x?: number; y?: number },
+): boolean {
+  if (box.x === undefined || box.y === undefined) return false;
+  const self = store.getLayerCards([path])[0];
+  if (!self || self.w <= 0 || self.h <= 0) return false;
+  const others = store.getLayerCards(store.cardsInLayer(layer)).filter((row) => row.id !== path && row.w > 0 && row.h > 0);
+  return others.some((row) =>
+    box.x! < row.x + row.w + PLACEMENT_PAD && box.x! + self.w + PLACEMENT_PAD > row.x &&
+    box.y! < row.y + row.h + PLACEMENT_PAD && box.y! + self.h + PLACEMENT_PAD > row.y);
+}
+
 export async function arrangeCards(
   ctx: ActionContext,
   input: ArrangeInput
@@ -536,9 +559,23 @@ export async function arrangeCards(
     // Preserve legacy explicit placement semantics; versioned writes are owned
     // by LocalWorldStore.placeCard and layout uses the strict kernel below.
     await seatDeclaredRows(store, layer, [place.path]);
-    const card = await store.placeCard(layer, place.path, box);
+    // An AGENT's explicit x/y that lands on another card is dropped, so the
+    // card keeps the collision-free seat `seatUnplaced` gave it (niko,
+    // 2026-09-15: a scene initialiser placing a batch of chalk by guessed
+    // coordinates is how cards ended up stacked). A player's own drop is
+    // always honoured — overlapping on purpose is theirs to do.
+    const kept = ctx.actor.type !== 'player' && agentPlacementCollides(store, layer, place.path, box);
+    if (kept) {
+      delete box.x;
+      delete box.y;
+    }
+    const card = Object.keys(box).length > 0
+      ? await store.placeCard(layer, place.path, box)
+      : store.getLayerCards([place.path])[0]!;
     return {
-      text: `Placed "${card.id}" at (${card.x}, ${card.y}, z ${card.z}) on layer "${layer}".`,
+      text: kept
+        ? `Kept "${card.id}" at its seat (${card.x}, ${card.y}) on layer "${layer}": the requested position overlapped another card.`
+        : `Placed "${card.id}" at (${card.x}, ${card.y}, z ${card.z}) on layer "${layer}".`,
       details: {
         kind: 'cards',
         action: 'placed',
