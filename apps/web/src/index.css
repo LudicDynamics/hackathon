@@ -15,6 +15,14 @@
   --ux-color-blue: #7893a2;
   --ux-surface-stage: radial-gradient(ellipse at 35% 35%, color-mix(in srgb, var(--ux-color-paper) 72%, transparent), transparent 55%), var(--ux-color-wall);
   --ux-surface-transparent-ink: transparent;
+  /* Chalk readability frame (docs/components/04, 2026-09-15): a translucent
+     box behind bare chalk so it survives a photo backdrop; the dark pair is the
+     old "purple chalk" — dusk frame, lavender ink. */
+  --ux-surface-chalk-frame: rgba(251, 248, 241, 0.62);
+  --ux-surface-chalk-frame-dark: rgba(30, 22, 44, 0.62);
+  --ux-color-chalk-ink-dark: #e6dcf2;
+  --ux-shadow-chalk-glow: -1px 1px 0 rgba(255, 252, 240, 0.8);
+  --ux-shadow-chalk-glow-dark: 0 1px 2px rgba(0, 0, 0, 0.55);
   --ux-surface-paper: var(--ux-color-paper);
   --ux-font-human: 'LXGW WenKai', 'Kaiti SC', 'KaiTi', serif;
   --ux-font-hand: 'Caveat', 'LXGW WenKai', 'Kaiti SC', 'KaiTi', serif;
@@ -1219,21 +1227,36 @@ body:before {
    lets it survive the grain overlay.
    ============================================================ */
 .chalk--bare {
-  /* Bare Chalk is a first-class transparent surface; paper belongs to
-     `.chalk--card` or an explicit reading/dialogue surface. */
-  background: var(--ux-surface-transparent-ink);
+  /* Bare Chalk has no paper and no border, but it does get a translucent
+     readability frame (docs/components/04, 2026-09-15) — pure transparency
+     was unreadable on photo backdrops. `--appearance-surface` still wins. */
+  background: var(--appearance-surface, var(--ux-surface-chalk-frame));
   border: none;
   box-shadow: none;
-  border-radius: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-sizing: border-box;
   font-family: var(--appearance-font-family, var(--kai));
   font-size: var(--chalk-size);
   line-height: 1.7;
   color: var(--appearance-ink, var(--ink));
-  text-shadow: -1px 1px 0 rgba(255, 252, 240, 0.8); /* warm paper glow */
+  text-shadow: var(--ux-shadow-chalk-glow); /* warm paper glow */
   white-space: pre-wrap;
   /* Narration hugs its shell: the shell has no fixed height, so long chalk is
      never cropped — but it can never bleed past the declared box either. */
   overflow-wrap: anywhere;
+}
+
+/* Dark scenes (declared `bgStyle.tone: dark`, or a sampled dark backdrop —
+   lib/scene-tone.ts): the frame turns to dusk and the ink to lavender. */
+[data-scene-tone="dark"] .chalk--bare {
+  background: var(--appearance-surface, var(--ux-surface-chalk-frame-dark));
+  color: var(--appearance-ink, var(--ux-color-chalk-ink-dark));
+  text-shadow: var(--ux-shadow-chalk-glow-dark);
+}
+[data-scene-tone="dark"] .chalk {
+  color: var(--appearance-ink, var(--ux-color-chalk-ink-dark));
+  text-shadow: var(--ux-shadow-chalk-glow-dark);
 }
 
 /* Controlled ornament hooks: decoration stays additive and cannot change the

@@ -7,6 +7,8 @@ import { PhantomLayer } from './PhantomLayer.js';
 import type { GhostCopy } from '../narrative/GhostCard.js';
 import { ParticleLayer } from './ParticleLayer.js';
 import { useCamera } from '../../state/useCamera.js';
+import { useSceneTone } from '../../lib/scene-tone.js';
+import { airpGateway } from '../../lib/airp-gateway.js';
 import { clampZ, zoomAt, screenToWorld } from '../../lib/camera.js';
 import { makeBox, pushFrom, relaxAll } from '../../lib/collide.js';
 import { unlock, playFoley } from '../../lib/audio.js';
@@ -152,6 +154,11 @@ export const Canvas: React.FC<CanvasProps> = ({
   onOpenRadialMenu,
 }) => {
   const camera = useCamera();
+  // Declared `bgStyle.tone` wins; otherwise the poster image is sampled once.
+  const sceneTone = useSceneTone(
+    bg.tone,
+    bg.src && !/\.(mp4|webm)$/i.test(bg.src) ? airpGateway.assetUrl(bg.src, undefined, 'image') : null,
+  );
   const prefersReducedMotion = useStill();
   const particleReducedMotion = reducedMotion ?? prefersReducedMotion;
 
@@ -616,6 +623,8 @@ export const Canvas: React.FC<CanvasProps> = ({
       onDrop={handleDrop}
       className={`relative w-full h-full overflow-hidden cursor-grab active:cursor-grabbing select-none touch-none ${DEPTH_MARKER('world')}`}
       data-depth-surface={DEPTH_KIND.world}
+      // Chalk frames and ink flip with the backdrop (docs/components/04, 2026-09-15).
+      data-scene-tone={sceneTone}
       style={{ perspective: '1200px' }}
     >
       {/* 2.5D Background sheet with 0.25x parallax drift & video support. */}
