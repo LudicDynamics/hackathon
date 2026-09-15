@@ -191,16 +191,54 @@
 }
 
 /* Mobile (≤390px): the column is height-capped and scrollable so it never
-   covers the backpack / dock (scene-shell.css:171 dock bottom:163px). */
+   covers the backpack / dock (scene-shell.css:171 dock bottom:163px).
+   `padding-right` is load-bearing, not decoration: `overflow-y: auto` forces the
+   `overflow-x: visible` above to COMPUTE to `auto` (CSS overflow spec — `visible`
+   cannot survive next to a scrolling axis), so this block is a scroll container
+   and clips at its PADDING box. The expander is `right: -28px`, i.e. outside the
+   content box; without the 30px of padding it was clipped away entirely and
+   `elementFromPoint` fell through to the canvas (B10, fixed 2026-09-15). */
 @media (max-width: 390px) {
   .character-rail {
     max-height: calc(100dvh - 340px);
     overflow-y: auto;
-    overflow-x: visible;
+    overflow-x: visible; /* coerced to `auto` — see the comment above */
     overscroll-behavior: contain;
     scrollbar-width: thin;
     padding-left: 8px;
+    padding-right: 30px;
   }
+
+  /* The expander's keys open LEFT, i.e. outside the rail's content box, so the
+     scroll container above clips them exactly as it clipped the expander itself.
+     The frozen rule is 03 §3.6 / `03:255`: the rail MUST NOT expand sideways, so
+     the narrow-screen form is an IN-FLOW accordion inside the column instead —
+     `position: static` + `right: auto` brings the panel into the row's own flow,
+     where nothing clips it and no horizontal scroll is ever needed.
+     `display` (not `visibility`) is what toggles it here: a `visibility: hidden`
+     panel still occupies layout, which would leave an empty gap under every row. */
+  .character-rail__actions {
+    display: none;
+    position: static;
+    right: auto;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  /* The expanded row grows to hold its accordion; collapsed rows keep the orb
+     height so the column stays a scannable list. */
+  .character-rail__item--expanded {
+    flex-basis: auto;
+    block-size: auto;
+  }
+  .character-rail__item--expanded .character-rail__actions {
+    display: flex;
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  /* The hover bridge would stretch the panel sideways out of the column. */
+  .character-rail__actions::after { content: none; }
+  .character-rail__action { white-space: normal; text-align: center; }
 }
 
 /* The rail carrier's call card (docs/live-voice/32 §3.2). It sits in the column
