@@ -5,29 +5,6 @@ bg: assets/scenes/world.jpg
 ambient: rain
 title: 阳都 · 高新南区
 intent: 城市总览层。这里是你生活的城市，四扇门通向园区、公寓、老小区和商场。你要去哪里，自己决定；四扇门都能进，进入后各自是完整空间。
-choice:
-  options:
-    - id: action-1
-      label: 去恒星云园区上班
-    - id: action-2
-      label: 回璟阁行政公寓
-    - id: action-3
-      label: 回中和老街的出租屋
-    - id: action-4
-      label: 去星汇天地逛逛
-choice_actions:
-  action-1:
-    kind: enter
-    target: world/stellar-cloud-campus
-  action-2:
-    kind: enter
-    target: world/jingge-apartment
-  action-3:
-    kind: enter
-    target: world/zhonghe-old-street
-  action-4:
-    kind: enter
-    target: world/xinghui-plaza
 ---
 
 九月的阳都，天灰得像一块没拧干的布。盆地的湿气裹着整座城，早上出门时地面还有昨夜没干透的水痕。

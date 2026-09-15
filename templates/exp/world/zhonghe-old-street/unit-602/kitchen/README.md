@@ -4,39 +4,8 @@ name: 厨房
 bg: assets/scenes/zhonghe-old-street-unit-602-kitchen.jpg
 ambient: city-night
 title: 厨房
-intent: 602 的厨房，在客厅侧面，没有门，直接连通。墙面高处一扇铝合金小窗贴着防油烟贴纸。单开门冰箱和储物柜靠里，老式双头燃气灶、抽油烟机、迷你空气炸锅和二手电饭煲占着烹饪区，大理石台面上是备餐的地方，墙上挂着几口常用的锅。往回到客厅。
-choice:
-  options:
-    - id: action-1
-      label: 拉开冰箱门
-    - id: action-2
-      label: 看调料架
-    - id: action-3
-      label: 拿起墙上的炒锅
-    - id: action-4
-      label: 按下电饭煲
-    - id: action-5
-      label: 回客厅
-choice_actions:
-  action-1:
-    kind: read
-    paths:
-      - world/zhonghe-old-street/unit-602/kitchen/rice-cooker.md
-  action-2:
-    kind: read
-    paths:
-      - world/zhonghe-old-street/unit-602/kitchen/condiment-rack.md
-  action-3:
-    kind: read
-    paths:
-      - world/zhonghe-old-street/unit-602/kitchen/wok.md
-  action-4:
-    kind: read
-    paths:
-      - world/zhonghe-old-street/unit-602/kitchen/air-fryer.md
-  action-5:
-    kind: enter
-    target: world/zhonghe-old-street/unit-602
+intent: 602
+  的厨房，在客厅侧面，没有门，直接连通。墙面高处一扇铝合金小窗贴着防油烟贴纸。单开门冰箱和储物柜靠里，老式双头燃气灶、抽油烟机、迷你空气炸锅和二手电饭煲占着烹饪区，大理石台面上是备餐的地方，墙上挂着几口常用的锅。往回到客厅。
 ---
 
 厨房不大，是贴着客厅侧面隔出来的一间，连门都没有，站在灶台前能听见客厅里主机风扇的声音。高处有一扇铝合金小窗，玻璃上贴着防油烟贴纸，透进来的光有点发黄。

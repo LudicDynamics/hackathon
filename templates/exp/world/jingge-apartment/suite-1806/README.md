@@ -4,45 +4,8 @@ name: 璟阁 1806 · 埃利亚斯的居所
 bg: assets/scenes/jingge-apartment-suite-1806.jpg
 ambient: rain
 title: 璟阁 1806 · 埃利亚斯的居所
-intent: 埃利亚斯的套房层，18 层走廊尽头。全屋中央空调与新风，恒温 22 度。玄关进去是会客厅，西侧连着开放式厨房与水吧台，落地窗外是观景阳台；走廊右侧是独立书房，左侧是客卫，走廊尽头是卧室和主卫。这里是酒店长包房，配置齐全但住的人痕迹很少。
-choice:
-  options:
-    - id: action-1
-      label: 玄关与家政区
-    - id: action-2
-      label: 开放式厨房与水吧台
-    - id: action-3
-      label: 会客厅与观景阳台
-    - id: action-4
-      label: 独立书房
-    - id: action-5
-      label: 客用卫浴间
-    - id: action-6
-      label: 卧室与主卫
-    - id: action-7
-      label: 回公寓楼下
-choice_actions:
-  action-1:
-    kind: enter
-    target: world/jingge-apartment/suite-1806/entry
-  action-2:
-    kind: enter
-    target: world/jingge-apartment/suite-1806/kitchen-bar
-  action-3:
-    kind: enter
-    target: world/jingge-apartment/suite-1806/living-room
-  action-4:
-    kind: enter
-    target: world/jingge-apartment/suite-1806/study
-  action-5:
-    kind: enter
-    target: world/jingge-apartment/suite-1806/guest-bath
-  action-6:
-    kind: enter
-    target: world/jingge-apartment/suite-1806/bedroom
-  action-7:
-    kind: enter
-    target: world/jingge-apartment
+intent: 埃利亚斯的套房层，18 层走廊尽头。全屋中央空调与新风，恒温 22
+  度。玄关进去是会客厅，西侧连着开放式厨房与水吧台，落地窗外是观景阳台；走廊右侧是独立书房，左侧是客卫，走廊尽头是卧室和主卫。这里是酒店长包房，配置齐全但住的人痕迹很少。
 ---
 
 1806 在 18 层的尽头。走廊铺着厚地毯，脚步声被吸掉大半，只有中央新风在头顶很低地响。

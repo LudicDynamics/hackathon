@@ -5,32 +5,6 @@ bg: assets/scenes/stellar-cloud-campus-tower-bc-frontier-lab-pantry.jpg
 ambient: office-night
 title: 茶水间
 intent: 实验室角落、洗手间隔壁的一小间。行政配的饮水区在这头，核心组自费的高端意式咖啡机在另一头，各自占地。两台微波炉、双开门冰箱、零食架和三把高脚凳。你热饭、接水、撕一包速溶，都在这儿。出门口就是洗手间，再往前是走廊。
-choice:
-  options:
-    - id: action-1
-      label: 打开冰箱看看
-    - id: action-2
-      label: 热一份午饭
-    - id: action-3
-      label: 看一眼墙上的留言板和药箱
-    - id: action-4
-      label: 回到走廊
-choice_actions:
-  action-1:
-    kind: read
-    paths:
-      - world/stellar-cloud-campus/tower-bc/frontier-lab/pantry/fridge.md
-  action-2:
-    kind: read
-    paths:
-      - world/stellar-cloud-campus/tower-bc/frontier-lab/pantry/microwave.md
-  action-3:
-    kind: read
-    paths:
-      - world/stellar-cloud-campus/tower-bc/frontier-lab/pantry/corkboard.md
-  action-4:
-    kind: enter
-    target: world/stellar-cloud-campus/tower-bc/frontier-lab
 ---
 
 茶水间在实验室的角落，紧挨着洗手间。进门先是靠墙的一整条大理石吧台：商用直饮水机提供冰水、常温和开水，旁边一个大号亚克力盒，装免费的红茶包、速溶咖啡条和白糖包。再往另一头走，吧台近三分之一的位置被核心组自费的东西占着——一台 Breville 旗舰半自动意式咖啡机、一台 Niche Zero 磨豆机，旁边几罐深烘豆、布粉器、压粉锤，还有一个专门敲粉饼的不锈钢渣桶。核心组很少碰行政配的胶囊机。

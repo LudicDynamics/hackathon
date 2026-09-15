@@ -4,35 +4,8 @@ name: 前沿隐私架构实验室
 bg: assets/scenes/stellar-cloud-campus-tower-bc-frontier-lab.jpg
 ambient: office-night
 title: 前沿隐私架构实验室
-intent: 实验室总览层，也是埃利亚斯的 home。B 栋 12 层西侧独立封闭办公区，磨砂玻璃双开门，白名单刷卡门禁。开门后是开放办公区：你的工位在边缘靠近走廊。走廊尽头是埃利亚斯的独立玻璃办公室，对面是会议室，角落是茶水间和洗手间。核心算法组是另一群人，跟你们底层支持组各干各的。
-choice:
-  options:
-    - id: action-1
-      label: 去开放办公区，回你的工位
-    - id: action-2
-      label: 走到走廊尽头的玻璃办公室
-    - id: action-3
-      label: 去茶水间倒杯水
-    - id: action-4
-      label: 去会议室
-    - id: action-5
-      label: 出实验室，回电梯厅
-choice_actions:
-  action-1:
-    kind: enter
-    target: world/stellar-cloud-campus/tower-bc/frontier-lab/open-office
-  action-2:
-    kind: enter
-    target: world/stellar-cloud-campus/tower-bc/frontier-lab/elias-office
-  action-3:
-    kind: enter
-    target: world/stellar-cloud-campus/tower-bc/frontier-lab/pantry
-  action-4:
-    kind: enter
-    target: world/stellar-cloud-campus/tower-bc/frontier-lab/meeting-room
-  action-5:
-    kind: enter
-    target: world/stellar-cloud-campus/tower-bc
+intent: 实验室总览层，也是埃利亚斯的 home。B 栋 12
+  层西侧独立封闭办公区，磨砂玻璃双开门，白名单刷卡门禁。开门后是开放办公区：你的工位在边缘靠近走廊。走廊尽头是埃利亚斯的独立玻璃办公室，对面是会议室，角落是茶水间和洗手间。核心算法组是另一群人，跟你们底层支持组各干各的。
 ---
 
 B 栋 12 层西侧，磨砂玻璃双开门。玻璃墙下半截贴了防窥膜，你刷卡，绿灯亮，门开。

@@ -4,25 +4,8 @@ name: 下沉广场
 bg: assets/scenes/stellar-cloud-campus-sunken-plaza.jpg
 ambient: cafe-murmur
 title: 下沉广场
-intent: 园区中心的下沉式露天空间，被 A/B/C 三栋楼环绕，阶梯式向下通到 B1。中心是扇形木阶梯看台加圆形空地，还有块户外 LED 巨幕。环廊是半露天的咖啡外摆和无人便利店。南侧有草坪滑板场，北侧是快递柜和干洗柜。午休时有人躺在看台上。
-choice:
-  options:
-    - id: action-1
-      label: 在环廊咖啡店外带杯咖啡坐一会儿
-    - id: action-2
-      label: 去北侧取个快递
-    - id: action-3
-      label: 回园区地面
-choice_actions:
-  action-1:
-    kind: writer
-    prompt: 玩家在下沉广场环廊的咖啡外摆区坐下，工作日下午，周围有带电脑敲键盘的人。写一段午后的日常，不推进线索。
-  action-2:
-    kind: writer
-    prompt: 玩家去下沉广场北侧的智能快递柜取件，下班时间前后排着队。写一段日常，不推进线索。
-  action-3:
-    kind: enter
-    target: world/stellar-cloud-campus
+intent: 园区中心的下沉式露天空间，被 A/B/C 三栋楼环绕，阶梯式向下通到 B1。中心是扇形木阶梯看台加圆形空地，还有块户外 LED
+  巨幕。环廊是半露天的咖啡外摆和无人便利店。南侧有草坪滑板场，北侧是快递柜和干洗柜。午休时有人躺在看台上。
 ---
 
 下沉广场是园区中间的一块凹地，从地面顺着扇形木阶梯往下走，一直通到 B1 层。
