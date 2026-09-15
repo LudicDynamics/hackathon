@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { Agent } from 'undici';
 
 export function parseCharacterVoices(value: string): Record<string, string> {
   if (!value.trim()) return {};
@@ -31,8 +32,26 @@ export function readLocalTtsConfig() {
     baseUrl: (process.env.AIRP_TTS_LOCAL_BASE_URL ?? '').trim().replace(/\/+$/, ''),
     voice: process.env.AIRP_TTS_LOCAL_VOICE?.trim() || 'setsuna',
     apiKey: process.env.AIRP_TTS_LOCAL_API_KEY?.trim() || '',
-    timeoutMs: Number.isFinite(timeout) && timeout > 0 ? timeout : 30000,
+    timeoutMs: Number.isFinite(timeout) && timeout > 0 ? timeout : LOCAL_TTS_TIMEOUT_MS,
   };
+}
+
+/**
+ * One budget for the whole local request (niko, 2026-09-15: 20 s). It also
+ * bounds the TCP connect: Node's fetch (undici) gives up connecting after 10 s
+ * by default and reports a bare "fetch failed", which is what the connection
+ * self-test showed at 10.5 s against a Tailscale host that was still waking —
+ * so the dispatcher's connect timeout is raised to the same 20 s.
+ */
+export const LOCAL_TTS_TIMEOUT_MS = 20_000;
+const dispatchers = new Map<number, Agent>();
+function dispatcherFor(timeoutMs: number): Agent {
+  let agent = dispatchers.get(timeoutMs);
+  if (!agent) {
+    agent = new Agent({ connect: { timeout: timeoutMs }, headersTimeout: timeoutMs, bodyTimeout: timeoutMs });
+    dispatchers.set(timeoutMs, agent);
+  }
+  return agent;
 }
 
 export function isLocalTtsCharacter(worldId: string, characterId: unknown): boolean {
@@ -63,6 +82,8 @@ export async function synthesiseLocal(config: ReturnType<typeof readLocalTtsConf
     },
     body: JSON.stringify({ text, voice: config.voice, language, emotion }),
     signal: AbortSignal.timeout(config.timeoutMs),
+    // `dispatcher` is undici's fetch extension; TS's DOM RequestInit lacks it.
+    ...({ dispatcher: dispatcherFor(config.timeoutMs) } as object),
   });
   if (!response.ok) throw new LocalTtsError(`HTTP ${response.status}`);
   const wav = Buffer.from(await response.arrayBuffer());

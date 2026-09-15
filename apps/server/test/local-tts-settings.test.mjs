@@ -41,7 +41,7 @@ test('Nanami configuration is persisted, immediately applied, and never exposes 
   const initial = await (await h.get()).json();
   assert.equal(initial.AIRP_TTS_LOCAL_BASE_URL, '');
   assert.equal(initial.AIRP_TTS_LOCAL_VOICE, 'setsuna');
-  assert.equal(initial.AIRP_TTS_LOCAL_TIMEOUT_MS, '30000');
+  assert.equal(initial.AIRP_TTS_LOCAL_TIMEOUT_MS, '20000');
   assert.equal(initial.AIRP_TTS_LOCAL_API_KEY, false);
   const update = { AIRP_TTS_LOCAL_BASE_URL: 'http://100.64.0.1:8090', AIRP_TTS_LOCAL_VOICE: 'setsuna_v2',
     AIRP_TTS_LOCAL_TIMEOUT_MS: '45000', AIRP_TTS_LOCAL_API_KEY: 'test-only-secret', AIRP_TTS_CHARACTER_VOICES: 'vera=setsuna,nanami=online' };
