@@ -43,6 +43,7 @@ export type ActivityOperation =
   | 'roll'
   | 'choose'
   | 'initialize'
+  | 'memory'
   | 'other';
 
 /** Wire shape, verbatim from contract §3. Frontend never renames a field. */
@@ -114,7 +115,7 @@ const SOURCES: readonly ActivitySource[] = ['writer', 'character', 'functional']
 const PHASES: readonly ActivityPhase[] = ['started', 'completed', 'failed'];
 const OPERATIONS: readonly ActivityOperation[] = [
   'read', 'create', 'write', 'edit', 'delete', 'move',
-  'use', 'look', 'roll', 'choose', 'initialize', 'other',
+  'use', 'look', 'roll', 'choose', 'initialize', 'memory', 'other',
 ];
 
 function isSource(value: unknown): value is ActivitySource {
@@ -418,6 +419,7 @@ export const RUNNING_KEYS: Readonly<Record<ActivityOperation, LabelPair>> = {
   roll: { with: 'Rolling the dice…', without: 'Rolling the dice…' },
   choose: { with: 'Making a choice…', without: 'Making a choice…' },
   initialize: { with: 'Preparing the scene…', without: 'Preparing the scene…' },
+  memory: { with: 'Remembering…', without: 'Remembering…' },
   other: { with: 'Working…', without: 'Working…' },
 };
 
@@ -433,6 +435,7 @@ export const OK_KEYS: Readonly<Record<ActivityOperation, LabelPair>> = {
   roll: { with: 'Rolled the dice', without: 'Rolled the dice' },
   choose: { with: 'Chose an option', without: 'Chose an option' },
   initialize: { with: 'Scene is ready', without: 'Scene is ready' },
+  memory: { with: 'Remembered', without: 'Remembered' },
   other: { with: 'Done', without: 'Done' },
 };
 
@@ -448,6 +451,7 @@ export const ERROR_KEYS: Readonly<Record<ActivityOperation, LabelPair>> = {
   roll: { with: 'Could not roll the dice', without: 'Could not roll the dice' },
   choose: { with: 'Could not make that choice', without: 'Could not make that choice' },
   initialize: { with: 'Could not prepare the scene', without: 'Could not prepare the scene' },
+  memory: { with: 'Could not remember', without: 'Could not remember' },
   other: { with: 'That action failed', without: 'That action failed' },
 };
 

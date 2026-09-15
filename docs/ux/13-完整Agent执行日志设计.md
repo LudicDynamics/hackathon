@@ -41,7 +41,7 @@ interface AgentActivityFrame {
   phase: 'started' | 'completed' | 'failed';
   operation:
     | 'read' | 'create' | 'write' | 'edit' | 'delete' | 'move'
-    | 'use' | 'look' | 'roll' | 'choose' | 'initialize' | 'other';
+    | 'use' | 'look' | 'roll' | 'choose' | 'initialize' | 'memory' | 'other';
   subject?: string;
   toolName?: string;
   error?: string;

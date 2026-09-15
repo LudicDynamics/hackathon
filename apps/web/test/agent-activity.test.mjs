@@ -283,6 +283,20 @@ test('LC10 subject-less chips use the no-object sentence', { skip }, () => {
   assert.equal(activityLabel(ok, t), 'Read');
 });
 
+// The `memory` operation is a boundary value: the wire carries it, the
+// OPERATIONS guard must keep it (a miss silently degrades to 'other'), and its
+// copy is subject-independent because a memory subject is never emitted.
+test('LC10 the memory operation survives the guard and uses its own copy', { skip }, () => {
+  const running = normalizeAgentActivityFrame(frame({ operation: 'memory', subject: undefined }), 0);
+  assert.equal(running.operation, 'memory');
+  assert.equal(activityLabel(running, t), 'Remembering…');
+  const ok = normalizeAgentActivityFrame(frame({ operation: 'memory', phase: 'completed', subject: undefined }), 0);
+  assert.equal(activityLabel(ok, t), 'Remembered');
+  const failed = normalizeAgentActivityFrame(frame({ operation: 'memory', phase: 'failed', subject: undefined }), 0);
+  assert.equal(activityLabel(failed, t), 'Could not remember');
+  assert.deepEqual(RUNNING_KEYS.memory, { with: 'Remembering…', without: 'Remembering…' });
+});
+
 test('LC10 every label key exists in messages.json with non-empty zh-CN and ja', { skip }, () => {
   const path = fileURLToPath(new URL('../src/lib/messages.json', import.meta.url));
   const messages = JSON.parse(readFileSync(path, 'utf8'));

@@ -57,6 +57,9 @@
   "Could not open this ikigai": { "zh-CN": "无法打开小天地", "ja": "心象風景を開けませんでした" },
   "Try again": { "zh-CN": "重试", "ja": "再試行" },
   "Currently here": { "zh-CN": "此刻在这里", "ja": "ここに居る" },
+  "Scene path inside ikigai": { "zh-CN": "小天地内的场景路径", "ja": "心象風景の場面経路" },
+  "Up one scene": { "zh-CN": "上一场景", "ja": "前の場面へ" },
+  "This scene is no longer there.": { "zh-CN": "这个场景已经不在了。", "ja": "この場面はもう無い。" },
   "Local character voices": { "zh-CN": "本机角色音色", "ja": "ローカルのキャラクター音声" },
   "Female voices default to Nanami. Character overrides apply across worlds; online keeps the original voice.": { "zh-CN": "女性音色默认使用七海声音。角色覆盖跨世界生效；填 online 保留原线上音色。", "ja": "女性音声は既定で七海の声を使います。役名IDの設定は全世界共通です。online で元のオンライン音声を使います。" },
   "Character ID": { "zh-CN": "角色 ID", "ja": "キャラクター ID" },
@@ -661,6 +664,18 @@
   "Working…": {
     "zh-CN": "处理中……",
     "ja": "処理中…"
+  },
+  "Remembering…": {
+    "zh-CN": "正在回忆…",
+    "ja": "思い出しています…"
+  },
+  "Remembered": {
+    "zh-CN": "回忆完成",
+    "ja": "思い出しました"
+  },
+  "Could not remember": {
+    "zh-CN": "无法回忆",
+    "ja": "思い出せませんでした"
   },
   "Added to belongings.": {
     "zh-CN": "已收入随身物品。",

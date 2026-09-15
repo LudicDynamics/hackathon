@@ -15,6 +15,32 @@ test('activity operation allowlist maps unknown tools to other', () => {
   assert.equal(normalizeActivityOperation('some_new_tool'), 'other');
 });
 
+test('activity operation maps every memory tool to memory', () => {
+  // Engine-authoritative list: vendor/pi-rp/packages/memory/src/module.ts:158-170.
+  const names = [
+    'recall', 'retrieve', 'memorize', 'revise', 'forget', 'relocate',
+    'associate', 'trigger', 'consolidate', 'retrace', 'set_time', 'awaken',
+  ];
+  for (const name of names) {
+    assert.equal(normalizeActivityOperation(name), 'memory', `${name} must map to memory`);
+  }
+  // Regression: unknown tools still fall back, and the fallback is 'other'.
+  assert.equal(normalizeActivityOperation('recall_memory_v2'), 'other');
+});
+
+test('memory tool subjects never reach the wire', () => {
+  // SUBJECT_FIELDS has no memory row by design: recall.uri / retrieve.keywords /
+  // memorize.content would otherwise be broadcast as a chip subject.
+  assert.equal(sanitizeActivitySubject({
+    toolName: 'recall',
+    args: { uri: 'core://locations/work/admin_desk' },
+  }), undefined);
+  assert.equal(sanitizeActivitySubject({
+    toolName: 'memorize',
+    args: { content: 'the safe is behind the painting' },
+  }), undefined);
+});
+
 test('activity subject only exposes a clipped safe object name', () => {
   const subject = sanitizeActivitySubject({
     toolName: 'write',

@@ -3,7 +3,7 @@ import path from 'node:path';
 export type ActivitySource = 'writer' | 'character' | 'functional';
 export type ActivityOperation =
   | 'read' | 'create' | 'write' | 'edit' | 'delete' | 'move'
-  | 'use' | 'look' | 'roll' | 'choose' | 'initialize' | 'other';
+  | 'use' | 'look' | 'roll' | 'choose' | 'initialize' | 'memory' | 'other';
 
 export interface AgentActivityFrame {
   type: 'agent_activity';
@@ -45,6 +45,12 @@ const TOOL_OPERATION: Record<string, ActivityOperation> = {
   link: 'edit', arrange: 'edit', set_following: 'edit', generate_image: 'create',
   subagent: 'use', subagent_profiles: 'use', 'airp-init': 'initialize',
   'scene-init': 'initialize', 'nook-init': 'initialize',
+  // Memory tools (vendor/pi-rp .../memory/src/module.ts:158-170, 12 names).
+  // Operation only — NO SUBJECT_FIELDS rows: memory args carry URIs and raw
+  // content that must never reach the wire (see sanitizeActivitySubject).
+  recall: 'memory', retrieve: 'memory', memorize: 'memory', revise: 'memory',
+  forget: 'memory', relocate: 'memory', associate: 'memory', trigger: 'memory',
+  consolidate: 'memory', retrace: 'memory', set_time: 'memory', awaken: 'memory',
 };
 
 const SUBJECT_FIELDS: Record<string, string[]> = {

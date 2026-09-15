@@ -56,7 +56,7 @@ interface AgentActivityFrame {
   phase: 'started' | 'completed' | 'failed';
   operation:
     | 'read' | 'create' | 'write' | 'edit' | 'delete' | 'move'
-    | 'use' | 'look' | 'roll' | 'choose' | 'initialize' | 'other';
+    | 'use' | 'look' | 'roll' | 'choose' | 'initialize' | 'memory' | 'other';
   subject?: string;
   toolName?: string;
   error?: string;
@@ -130,9 +130,12 @@ export class ActivityProjector {
 | `generate_image` | `create` | `name` / `path` | `image_generation_progress` 仍保留 |
 | `subagent` / `subagent_profiles` | `use` | 合法 `profileId` | parent writer 的委托动作；child 工具另有 functional 帧 |
 | `airp-init`, `scene-init`, `nook-init` | `initialize` | 合法 `target` | 命令过程及初始化 profile 的统一语义 |
+| `recall`, `retrieve`, `memorize`, `revise`, `forget`, `relocate`, `associate`, `trigger`, `consolidate`, `retrace`, `set_time`, `awaken` | `memory` | **省略（MUST）** | 全部 12 个记忆工具归一到单一值；**禁止**在 `SUBJECT_FIELDS` 登记任何记忆工具名，故无 subject |
 | 其它 | `other` | 省略 | 不显示未知参数或未知工具名 |
 
 `look_at / read` 等别名的取舍在这一张表中固定，禁止各工具文档再发明映射。若新增 functional 工具，先加入本表和 `docs/tools/12 §6.2`，再实现。
+
+**记忆工具的安全边界（MUST）**：`operation:'memory'` 的 `subject` 一律省略。记忆工具 args（`recall.uri`、`retrieve.keywords`、`memorize.content` 等）承载记忆 URI 与正文，属隐私面；今天不泄漏**只因** `SUBJECT_FIELDS` 未登记这些工具名（未登记 → `return undefined`），**不是** `safeText` 兜底。**MUST NOT** 为任何记忆工具加 `SUBJECT_FIELDS` 行。文案三 key 无插槽：`Remembering…` / `Remembered` / `Could not remember`（with === without，同 `roll`/`choose`/`initialize`）。
 
 ### 3.4 subject 裁剪
 

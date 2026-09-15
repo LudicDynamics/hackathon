@@ -79,8 +79,31 @@ export interface CursorItemRef {
 
 // ---- Tool → operation / path ----
 
-/** Mirrors the server table (apps/server/src/engine/agent-activity.ts) plus the
- *  pi built-ins that browse folders, which the activity lane calls `other`. */
+/**
+ * Tool name → operation for the pointer tag. Deliberately NOT a flat mirror of
+ * the server table (apps/server/src/engine/agent-activity.ts); the two differ by
+ * design, and both differences are load-bearing:
+ *
+ *  - web-only: `ls` / `find` / `grep` are pi built-ins that browse the folder
+ *    structure. The activity lane (an operation chip) calls them `other`, but a
+ *    pointer has a place to move to, so it calls them `look`.
+ *  - server-only: `subagent` / `subagent_profiles` come from a delegated child
+ *    process and `airp-init` / `scene-init` / `nook-init` are functional roots.
+ *    None of them drive a canvas pointer: the former two are relayed as
+ *    `agent_activity` only, and `airp-init` is a slash COMMAND relayed by the
+ *    extension (extensions/toolkit/init-command.ts:223), never a `tool_start` in
+ *    the writer's own stream.
+ *  - `set_following` is in the server table but not here: its act is about a
+ *    character, not a place, so it lands on the path-less branch (`applyToolStart`
+ *    points at the avatar) and its tag reads `Working…`. Kept as-is rather than
+ *    silently re-copied to `edit` copy — see the batch report.
+ *
+ * Memory tools: the memory copy has NO `{subject}` slot (`agent-activity.ts`
+ * RUNNING/OK/ERROR_KEYS: with === without), so the tag stays a bare
+ * `Remembering…` even for `forget`/`relocate`, whose `target`/`to` args are
+ * generic PATH_FIELDS and DO resolve a subject — no memory URI is ever
+ * interpolated into the tag (docs/agent-awareness/00 §3.1).
+ */
 const TOOL_OPERATION: Record<string, ActivityOperation> = {
   read: 'read', ls: 'look', find: 'look', grep: 'look', look_at: 'look', view_canvas: 'look',
   write: 'write', chalk: 'write', create_file: 'write', edit: 'edit',
@@ -88,6 +111,10 @@ const TOOL_OPERATION: Record<string, ActivityOperation> = {
   link: 'edit', arrange: 'edit', generate_image: 'create',
   choose: 'choose', choose_option: 'choose', roll_dice: 'roll',
   use_item: 'use', use_item_on: 'use', show: 'use', get_component: 'use',
+  // vendor/pi-rp/packages/memory/src/module.ts:158-170 — single value for all 12.
+  recall: 'memory', retrieve: 'memory', memorize: 'memory', revise: 'memory',
+  forget: 'memory', relocate: 'memory', associate: 'memory', trigger: 'memory',
+  consolidate: 'memory', retrace: 'memory', set_time: 'memory', awaken: 'memory',
 };
 
 /** Arg fields that name a place, in the order a pointer should prefer. */

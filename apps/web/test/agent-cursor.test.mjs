@@ -4,15 +4,19 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 let mod = null;
+// The pointer tag reuses the activity copy (AgentCursorLayer.tsx:183), so the
+// memory assertions read the same label the player sees.
+let activityLabel = null;
 try {
   const { createJiti } = await import('../../../vendor/pi-rp/node_modules/jiti/lib/jiti.mjs');
   const jiti = createJiti(import.meta.url, { moduleCache: false, tryNative: true });
   mod = await jiti.import('../src/lib/agent-cursor.ts');
+  ({ activityLabel } = await jiti.import('../src/lib/agent-activity.ts'));
 } catch (err) {
   console.error('jiti/bootstrap unavailable, skipping agent-cursor group:', err?.message ?? err);
 }
 
-const skip = mod ? false : 'jiti or pi-rp submodule unavailable';
+const skip = mod && activityLabel ? false : 'jiti or pi-rp submodule unavailable';
 const {
   normalizeToolPath, cursorPathFromArgs, operationForTool, resolveCursorTarget, cursorSubject,
   applyToolStart, applyToolEnd, applyIdle, pruneCursors, CURSOR_IDLE_HIDE_MS, CURSOR_STALE_MS,
@@ -48,6 +52,42 @@ test('AC3 operationForTool maps reads, browses, writes; unknown is other', { ski
   assert.equal(operationForTool('chalk'), 'write');
   assert.equal(operationForTool('edit'), 'edit');
   assert.equal(operationForTool('bash'), 'other');
+});
+
+// docs/agent-awareness/00 §3.1 — all 12 memory tools collapse to `memory`, and
+// the tag never shows a memory object: the `memory` copy has no `{subject}` slot.
+test('AC3b all 12 memory tools map to memory; the tag shows no memory object', { skip }, () => {
+  const MEMORY_TOOLS = [
+    'recall', 'retrieve', 'memorize', 'revise', 'forget', 'relocate',
+    'associate', 'trigger', 'consolidate', 'retrace', 'set_time', 'awaken',
+  ];
+  const REAL_ARGS = {
+    recall: { uri: 'core://locations/work/admin_desk' },
+    retrieve: { query: 'secret' },
+    memorize: { uri: 'core://x', content: 'PRIVATE' },
+    revise: { uri: 'core://x', old_text: 'a', new_text: 'b' },
+    forget: { target: 'core://locations/work/admin_desk' },
+    relocate: { uri: 'core://x', to: 'core://y/z' },
+    associate: { target_uri: 'core://a', new_uri: 'core://b' },
+    trigger: { uri: 'core://x', add: ['k'] },
+    consolidate: { target_uri: 'core://t', source_uris: ['core://a'], content: 'X' },
+    retrace: { uri: 'core://x' },
+    set_time: {},
+    awaken: {},
+  };
+  const t = (key) => key;
+  for (const tool of MEMORY_TOOLS) {
+    assert.equal(operationForTool(tool), 'memory', `${tool} → memory`);
+    // Path resolution is NOT blocked (forget.target / relocate.to are generic
+    // PATH_FIELDS) — what protects the player is the copy's missing {subject}:
+    // `with === without`, so a resolved subject is never interpolated.
+    const label = activityLabel(
+      { operation: operationForTool(tool), state: 'running', subject: cursorSubject(cursorPathFromArgs(REAL_ARGS[tool], tool)) },
+      t,
+    );
+    assert.equal(label, 'Remembering…', `${tool} renders a bare tag`);
+  }
+  assert.equal(operationForTool('memory'), 'other', 'the raw word is not a tool name');
 });
 
 test('AC4 a card on this canvas wins, including absolute and extension-less paths', { skip }, () => {
