@@ -43,3 +43,35 @@ test('canvas uses the merged action and event contracts', async () => {
   assert.match(widgets, /visibleChoiceOptions\(interactive.choice\)/);
   assert.match(widgets, /choice.id \?\? choice.label/);
 });
+
+/**
+ * The hover lift must be driven by the stationary `.object` shell, never by the
+ * card that moves. `.gate:hover` / `.letter:hover` applying `transform` is
+ * self-referential: the lift pulls the card's own edge out from under a pointer
+ * resting in that strip, so the pointer alternately lands inside and outside,
+ * and the card (plus its floating detail sheet) flashes. A probe parked on a
+ * real card measured 15 sheet toggles / 90 with the old rules vs 0 / 90 with
+ * `.object:hover` driving it.
+ */
+test('hover lift is driven by the stationary shell, not by the card that moves', async () => {
+  const css = await fs.readFile(new URL('../apps/web/src/index.css', import.meta.url), 'utf8');
+  const blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(match => ({ selector: match[1].trim(), body: match[2] }));
+  const displacing = blocks.filter(({ body }) => /transform:\s*(?!none)[^;]*translate/.test(body));
+  for (const rule of displacing) {
+    const selectors = rule.selector.split(',').map(part => part.trim().replace(/\s+/g, ' '));
+    for (const selector of selectors) {
+      // A rule on a card itself (or its `:hover`) moves the element that owns the
+      // hover state; the compound `.object:hover .gate` form is the safe one.
+      const targetsCard = /(^|[ >])\.(gate|letter|note|chalk)(--[\w-]+)?(:hover|:focus-within)?\s*$/.test(selector);
+      if (!targetsCard) continue;
+      assert.ok(
+        !/:hover\s*$/.test(selector),
+        `${selector} owns :hover and displaces itself — move the rule to .object:hover ${selector.split(':')[0]}`,
+      );
+    }
+  }
+  // The safe form is actually present for the two cards that lift.
+  assert.match(css, /\.object:hover \.gate,\s*\n\.object:focus-within \.gate \{/);
+  assert.match(css, /\.object:hover \.letter,\s*\n\.object:focus-within \.letter \{/);
+  assert.match(css, /\.object:hover \.gate \.gate__detail,\s*\n\.object:focus-within \.gate \.gate__detail \{/);
+});
