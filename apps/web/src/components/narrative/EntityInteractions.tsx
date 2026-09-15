@@ -186,6 +186,15 @@ export function EntityInteractions({ item, active = false, focus, onChoice, onDi
     } else if (action.kind === 'writer' && typeof action.prompt === 'string' && action.prompt.trim() && onChoice) {
       setDirect(null);
       onChoice(action.prompt);
+    } else if (action.kind === 'take') {
+      // The server already moved the items into player/ (declared-actions.ts);
+      // a `take` is done the moment it is clicked, so it gets a one-line
+      // receipt here, not a document to close (niko, 2026-09-15). Only `read`
+      // opens the focused popup.
+      setDirect(null);
+      const titles = action.items.map(item => item.title).filter(Boolean);
+      setFeedback(titles.length > 0 ? `${t('Taken')}: ${titles.join(', ')}` : t('Taken'));
+      setError('');
     } else {
       setDirect(action);
     }

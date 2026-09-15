@@ -99,8 +99,11 @@ export function DeclaredActionDialog({
   const items = value.items ?? [];
 
   const requestClose = () => {
-    const lease = leaseRef.current;
-    if (lease && !lease.markClosing()) return;
+    // Mark the surface first so Escape and a click cannot both dispatch, but
+    // never let a stale or already-closing lease swallow the player's Return:
+    // `onClose` is idempotent (`setDirect(null)`), and a dialog that stays
+    // open with a dead button is the worse failure (niko, 2026-09-15).
+    leaseRef.current?.markClosing();
     closeHandler.current();
   };
 
