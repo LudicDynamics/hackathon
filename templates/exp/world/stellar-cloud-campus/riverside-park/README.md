@@ -5,24 +5,6 @@ bg: assets/scenes/stellar-cloud-campus-riverside-park.jpg
 ambient: rain
 title: 小公园
 intent: 园区西南角到南侧边缘的绿化区。有篮球场、网球场、乒乓球台和一条八百米环形塑胶跑道；再往里是银杏林，透水砖步道、长椅间距离得很开、循环水景；最南边是大片阳光草坪。午休有人带饭来草坪上坐着。
-choice:
-  options:
-    - id: action-1
-      label: 沿银杏步道走一圈
-    - id: action-2
-      label: 在草坪上坐一会儿
-    - id: action-3
-      label: 回园区
-choice_actions:
-  action-1:
-    kind: writer
-    prompt: 玩家沿小公园的银杏林步道散步，阴天，水景的青石板槽里有循环的水声。写一段安静的具体场景，不推进线索。
-  action-2:
-    kind: writer
-    prompt: 玩家在小公园的草坪区坐下，午休时有人带餐食来这儿。写一段安静的具体场景，不推进线索。
-  action-3:
-    kind: enter
-    target: world/stellar-cloud-campus
 ---
 
 小公园在园区西南角，是这片玻璃楼里唯一一块潮湿的绿。

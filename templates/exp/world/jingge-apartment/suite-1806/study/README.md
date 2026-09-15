@@ -4,44 +4,8 @@ name: 1806 · 独立书房
 bg: assets/scenes/jingge-apartment-suite-1806-study.jpg
 ambient: rain
 title: 1806 · 独立书房
-intent: 走廊右侧的独立书房，一扇实体木门隔开。门边是落地衣帽架，里面是升降办公桌与人体工学椅、单侧通顶书架（酒店中文书与自购外文书）、单人沙发与落地灯。桌上是 MacBook 和外接显示器，桌下有一台 UPS。能翻桌上的 MacBook、看废纸篓里的草稿、抽一本外文书。
-choice:
-  options:
-    - id: action-1
-      label: 看桌上的 MacBook
-    - id: action-2
-      label: 看废纸篓里的算法草稿
-    - id: action-3
-      label: 从书架抽一本外文书
-    - id: action-4
-      label: 看桌下那台 UPS
-    - id: action-5
-      label: 回走廊，去会客厅
-    - id: action-6
-      label: 回 1806 门厅
-choice_actions:
-  action-1:
-    kind: read
-    paths:
-      - world/jingge-apartment/suite-1806/study/macbook.md
-  action-2:
-    kind: read
-    paths:
-      - world/jingge-apartment/suite-1806/study/draft-crumples.md
-  action-3:
-    kind: read
-    paths:
-      - world/jingge-apartment/suite-1806/study/crypto-shelf.md
-  action-4:
-    kind: read
-    paths:
-      - world/jingge-apartment/suite-1806/study/ups.md
-  action-5:
-    kind: enter
-    target: world/jingge-apartment/suite-1806/living-room
-  action-6:
-    kind: enter
-    target: world/jingge-apartment/suite-1806
+intent: 走廊右侧的独立书房，一扇实体木门隔开。门边是落地衣帽架，里面是升降办公桌与人体工学椅、单侧通顶书架（酒店中文书与自购外文书）、单人沙发与落地灯。桌上是
+  MacBook 和外接显示器，桌下有一台 UPS。能翻桌上的 MacBook、看废纸篓里的草稿、抽一本外文书。
 ---
 
 书房在走廊的右侧，是这个套房里唯一有实体门的地方。门是一扇厚木门，关上就把外面的客厅声全隔掉了。

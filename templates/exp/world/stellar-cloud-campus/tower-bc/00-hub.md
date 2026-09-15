@@ -1,0 +1,30 @@
+---
+type: chalk
+title: BC 双子大楼
+intent: 双子楼总览层。西侧与北侧 L 型排列的两栋 20 层玻璃幕墙楼。1-3 层裙楼扶梯互通，低区客梯通 4-12 层，高区通 13-17
+  层，18-20 层是高密区，要专用电梯加生物识别。你的实验室在 B 栋 12 层。18 层是联合创新实验室。
+choice:
+  options:
+    - id: action-1
+      label: 上 B 栋 12 层，回实验室
+    - id: action-2
+      label: 上 B 栋 18 层，去联合创新实验室
+    - id: action-3
+      label: 回园区
+choice_actions:
+  action-1:
+    kind: enter
+    target: world/stellar-cloud-campus/tower-bc/frontier-lab
+  action-2:
+    kind: enter
+    target: world/stellar-cloud-campus/tower-bc/joint-innovation-lab
+  action-3:
+    kind: enter
+    target: world/stellar-cloud-campus
+---
+
+裙楼一层是大堂。闸机、便利店、咖啡快取店挤在一起，早上九点半前这里全是排队买咖啡的人。
+
+你刷卡进低区电梯厅，等一台上 12 层的。电梯里的广告屏在循环播园区食堂的新菜，声音很轻。数字跳到 12 的时候，门开，走廊里那股恒温 22 度的冷气扑过来，混着一点现磨咖啡的味道。
+
+再往上，18 层到 20 层是高密区。要用专属电梯，还得过生物识别。你去过 18 层一两次——评审会的时候，跟着走流程。

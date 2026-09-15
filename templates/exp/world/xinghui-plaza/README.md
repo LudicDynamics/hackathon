@@ -4,25 +4,8 @@ name: 星汇天地
 bg: assets/scenes/xinghui-plaza.jpg
 ambient: cafe-murmur
 title: 星汇天地
-intent: 商圈总览层。园区正南侧一街之隔的大型综合商圈，含多层室内购物中心、室外步行街、下沉广场、地下车库。你下班早的时候会来这边吃个饭、买点东西。B1 是生鲜超市和美食广场，1-2 层快时尚和数码旗舰店，5-6 层有院线和健身房。
-choice:
-  options:
-    - id: action-1
-      label: 逛室外步行街和下沉广场
-    - id: action-2
-      label: 进购物中心，下 B1
-    - id: action-3
-      label: 回高新南区街上
-choice_actions:
-  action-1:
-    kind: enter
-    target: world/xinghui-plaza/outdoor-street
-  action-2:
-    kind: enter
-    target: world/xinghui-plaza/mall-b1
-  action-3:
-    kind: enter
-    target: map
+intent: 商圈总览层。园区正南侧一街之隔的大型综合商圈，含多层室内购物中心、室外步行街、下沉广场、地下车库。你下班早的时候会来这边吃个饭、买点东西。B1
+  是生鲜超市和美食广场，1-2 层快时尚和数码旗舰店，5-6 层有院线和健身房。
 ---
 
 从园区出来往南走，过一条街就是星汇天地。商场很大，玻璃幕墙和园区那边不是一种冷——这边亮着暖色灯，人声也密。

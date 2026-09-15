@@ -1,0 +1,37 @@
+---
+type: chalk
+title: 星汇天地 · B1 超市与美食广场
+intent: 购物中心地下一层。这一层是大型连锁生鲜超市、平价美食广场和生活杂物零售区。你下班早的时候会下来买点菜、吃点便宜的，或者随手补给日用品。能看生鲜超市、逛美食广场、在烘焙档买点面包，也能回商场总览。
+choice:
+  options:
+    - id: action-1
+      label: 进生鲜超市逛逛
+    - id: action-2
+      label: 去美食广场吃点东西
+    - id: action-3
+      label: 在超市门口的烘焙档买点面包
+    - id: action-4
+      label: 回星汇天地总览
+choice_actions:
+  action-1:
+    kind: read
+    paths:
+      - world/xinghui-plaza/mall-b1/supermarket.md
+  action-2:
+    kind: read
+    paths:
+      - world/xinghui-plaza/mall-b1/food-court.md
+  action-3:
+    kind: read
+    paths:
+      - world/xinghui-plaza/mall-b1/bakery.md
+  action-4:
+    kind: enter
+    target: world/xinghui-plaza
+---
+
+坐扶梯下到 B1，人比楼上多。这一层没有玻璃和射灯，全是过日子的东西。
+
+一侧是大型连锁生鲜超市，门口摆着堆头的蔬菜和水果，货架上是从头排到尾的日用品。另一侧是平价美食广场，中间一圈不锈钢的公共餐桌，四周是米线、盖饭、砂锅、水饺这些档口，油烟和汤气混在一起，喊号的声音此起彼伏。再往里有生活杂物的零售区，塑料收纳箱、拖把、保温杯，什么都有。
+
+你在这一层花的时间比楼上多。买菜、吃饭、顺手拿两样日用品，都是很实在的消费。人挤着人，谁也不认识谁，反而自在。

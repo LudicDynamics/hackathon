@@ -4,20 +4,8 @@ name: 联合创新实验室
 bg: assets/scenes/stellar-cloud-campus-tower-bc-joint-innovation-lab.jpg
 ambient: office-night
 title: 联合创新实验室
-intent: B 栋 18 层的高密区，恒星云与外部初创企业、高校合作的预研实体。进出要专属电梯加生物识别，网络与主站物理隔离。合作方入驻做阶段性封闭测试，恒星云出场地、算力和适配人员。埃利亚斯偶尔以评审委员身份来这儿开会。这里没有你的活，你只是听说过。
-choice:
-  options:
-    - id: action-1
-      label: 在评审席后排站着看一会儿
-    - id: action-2
-      label: 退回电梯厅
-choice_actions:
-  action-1:
-    kind: writer
-    prompt: 玩家（底层支持组的工程师）偶然站在联合创新实验室的评审会后排。合作方负责人正在陈述，恒星云方的专家坐在评审席上。写一小段观察，让埃利亚斯的专业与克制通过具体细节呈现，不要让他吐露私人情绪，不推进线索。
-  action-2:
-    kind: enter
-    target: world/stellar-cloud-campus/tower-bc
+intent: B 栋 18
+  层的高密区，恒星云与外部初创企业、高校合作的预研实体。进出要专属电梯加生物识别，网络与主站物理隔离。合作方入驻做阶段性封闭测试，恒星云出场地、算力和适配人员。埃利亚斯偶尔以评审委员身份来这儿开会。这里没有你的活，你只是听说过。
 ---
 
 十八层的门禁比十二层严得多。专属电梯直达，出来还要过一道生物识别。走廊是深色的，比楼下安静。
