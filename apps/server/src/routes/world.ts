@@ -5,12 +5,12 @@ import fs from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { readWorldSettings, writeWorldSettings } from '../engine/world-settings.js';
+import { readWorldSettings, updateWorldSettings } from '../engine/world-settings.js';
 import { runDeclaredChoice, runDeclaredRoll, serialDeclared, prepareMaterialReview } from '../engine/declared-actions.js';
 import {
   ActionError,
   AgentModelSelectionSchema,
-  WorldSettingsSchema,
+  WorldSettingsPatchSchema,
   startsChoiceTurn,
   LocalWorldStore,
   SEAT_ANCHOR,
@@ -538,15 +538,18 @@ export function createWorldRouter(
     if (!store) { res.status(409).json({ error: 'Load a world first.' }); return; }
     res.json({ world: store.worldRoot, ...readWorldSettings(store.worldRoot) });
   });
+  // Body is a PATCH (docs/command/00 §10.13): `WorldSettingsPatchSchema` accepts
+  // a subset of the fields, and `updateWorldSettings` merges it over what is on
+  // disk. Whole-object overwrite would reset every field the caller omitted.
   router.post('/world-settings', (req, res) => {
     const store = getActiveStore();
     if (!store) { res.status(409).json({ error: 'Load a world first.' }); return; }
-    const parsed = WorldSettingsSchema.safeParse(req.body);
+    const parsed = WorldSettingsPatchSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'Invalid world settings.' }); return;
     }
-    writeWorldSettings(store.worldRoot, parsed.data);
-    res.json({ world: store.worldRoot, ...parsed.data });
+    const next = updateWorldSettings(store.worldRoot, parsed.data);
+    res.json({ world: store.worldRoot, ...next });
   });
   const dispatch = (store: LocalWorldStore, prompt: string) => {
     void lifecycle.submitWriter(store.worldRoot, prompt).catch(error => {

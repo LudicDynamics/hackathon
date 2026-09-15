@@ -406,6 +406,10 @@ export function useWorld(): UseWorldApi {
       setState(next);
       // 幻影排座镜像 + 真实卡一到就把对应幻影撤掉（docs/perform/00 §6b-5）。
       publishSeatItems(next.layer, next.items);
+      // 真实卡一到就撤掉对应幻影。**MUST NOT 删这条调用**：它曾被 257fa65
+      // 的 `return true` 重构顺带删除，导致 component 骨架 land 后永不回收
+      // （phantom.ts 的 component 车道无 dwell 计时器），F-8/F-10 的泄漏复活。
+      reconcileLanded(new Set(next.items.map((it) => it.path)));
       return true;
     } catch (err) {
       console.warn('Could not fetch layer:', err);
@@ -737,7 +741,6 @@ export function useWorld(): UseWorldApi {
               | undefined;
             if (!ev || typeof ev.id !== 'string') break; // 畸形帧不污染去重集合
             if (!noteWorldEvent(ev.id)) break; // 同一行的重复副本到此为止
-            forwardWorldEvent(msg); // 转发集合命中才通知 App（:342）
             worldEventToastStore.ingest(ev as WorldEvent);
             // The I1 initialiser's outcome (docs/init/03 §3.6): clear the ghost.
             // `layer_initialized` -> the refetched product replaces it (handover);
@@ -1097,7 +1100,10 @@ export function useWorld(): UseWorldApi {
   const reloadSettings = useCallback(async () => {
     try {
       const next = await airpGateway.worldSettings();
-      settingsRef.current = { autoWrite: next.autoWrite };
+      // Keep the WHOLE object the server returned, not just `autoWrite`: the
+      // POST is a patch (docs/command/00 §10.13), so dropping fields here would
+      // re-introduce the very silent reset the patch semantics exists to stop.
+      settingsRef.current = next;
       setSettings(settingsRef.current);
     } catch {
       // Fail-soft: an unreachable settings route keeps the `off` default, which
@@ -1107,7 +1113,7 @@ export function useWorld(): UseWorldApi {
 
   const saveSettings = useCallback(async (next: WorldSettings) => {
     const saved = await airpGateway.saveWorldSettings(next);
-    settingsRef.current = { autoWrite: saved.autoWrite };
+    settingsRef.current = saved;
     setSettings(settingsRef.current);
   }, []);
 
