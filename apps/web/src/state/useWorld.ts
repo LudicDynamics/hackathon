@@ -297,7 +297,13 @@ export function useWorld(): UseWorldApi {
   const layerRef = useRef<string>(INITIAL_LAYER);
   const stateRef = useRef<LayerState | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  // World-change epoch: bumped when the active world is detached, so reads in
+  // flight across a world switch are discarded.
   const reqSeqRef = useRef(0);
+  // Per-layer latest-read token. A newer read of the SAME layer carries the
+  // same truth, so it is not a failure — only navigation away or a world
+  // switch invalidates a read (see `fetchLayer`).
+  const layerReadRef = useRef(new Map<string, number>());
   // One token per path lets concurrent optimistic moves fail independently:
   // a late rollback must not restore a snapshot that already includes another
   // drag (the visible "card jumps back" failure).
@@ -346,11 +352,20 @@ export function useWorld(): UseWorldApi {
   const settingsRef = useRef<WorldSettings>(DEFAULT_WORLD_SETTINGS);
 
   const fetchLayer = useCallback(async (target: string): Promise<boolean> => {
-    const seq = ++reqSeqRef.current;
+    const epoch = reqSeqRef.current;
+    const seq = (layerReadRef.current.get(target) ?? 0) + 1;
+    layerReadRef.current.set(target, seq);
     setLoading(true);
     try {
       const data = await airpGateway.layer<any>(target);
-      if (seq !== reqSeqRef.current) return false; // stale response (layer switched meanwhile)
+      if (epoch !== reqSeqRef.current) return false; // world switched meanwhile
+      // Superseded by a newer read of the same layer: it holds the same truth
+      // and has already written state, so this response is valid but its body
+      // must not overwrite the fresher one. Reporting `false` here used to turn
+      // a concurrent refresh (footprint write / `world_event`) into a spurious
+      // `reconcile_failed` on every scene entry.
+      if (layerReadRef.current.get(target) !== seq) return true;
+      if (layerRef.current !== target) return false; // navigated away
       const identity = data.identity && typeof data.identity === 'object'
         ? data.identity as Record<string, unknown>
         : null;
@@ -381,7 +396,7 @@ export function useWorld(): UseWorldApi {
       console.warn('Could not fetch layer:', err);
       return false;
     } finally {
-      if (seq === reqSeqRef.current) setLoading(false);
+      if (epoch === reqSeqRef.current && layerReadRef.current.get(target) === seq) setLoading(false);
     }
   }, []);
 

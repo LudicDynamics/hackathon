@@ -470,6 +470,25 @@ export function createWorldRouter(
   liveCalls: Pick<LiveCallRegistry, 'closeAll'> = { closeAll: async () => {} }
 ): Router {
   const router = Router();
+  // World-shelf operation gate. A load/delete intentionally detaches the store
+  // before it attaches the replacement (see the load route), so a world-scoped
+  // request landing mid-swap must WAIT for it. `no_active_world` is a durable
+  // state — the player picks a world — and answering it transiently makes the
+  // client tear down a world that is still arriving.
+  let shelfBusy = false;
+  // Resolved when the in-flight shelf operation settles. Starts resolved so the
+  // gate stays a no-op while idle.
+  let shelfSettled: Promise<void> = Promise.resolve();
+  let settleShelf: (() => void) | null = null;
+  const beginShelfOperation = (): void => {
+    shelfBusy = true;
+    shelfSettled = new Promise<void>((resolve) => { settleShelf = resolve; });
+  };
+  const endShelfOperation = (): void => {
+    shelfBusy = false;
+    settleShelf?.();
+    settleShelf = null;
+  };
   let releasingWorld: Promise<void> | null = null;
   router.use(async (req, res, next) => {
     const store = getActiveStore();
@@ -486,6 +505,7 @@ export function createWorldRouter(
       try { await releasingWorld; } catch { /* The unavailable world stays detached. */ }
     }
     const needsWorld = ['/agent-settings', '/manifest', '/nook', '/nook-note', '/layer', '/backpack', '/characters', '/following', '/move', '/card/position', '/card/footprint', '/dice', '/use-item', '/choice', '/material-review', '/enter-layer', '/viewpoint', '/freeze', '/god-action', '/snapshot', '/rollback', '/asset', '/audio'].includes(req.path);
+    if (needsWorld && shelfBusy) await shelfSettled;
     if (!getActiveStore() && needsWorld) {
       return res.status(409).json({ code: 'no_active_world', error: 'Choose a world or start a new save.' });
     }
@@ -544,7 +564,7 @@ export function createWorldRouter(
     return { ...manifest, audio: { theme } };
   };
 
-  let shelfBusy = false;
+
   // List available templates and worlds
   router.get('/worlds', async (_req, res) => {
     try {
@@ -569,7 +589,7 @@ export function createWorldRouter(
   router.post('/worlds/load', async (req, res) => {
     if (lifecycle.isModelSwitching()) return res.status(409).json({ error: 'Wait for model settings to finish applying.' });
     if (shelfBusy) return res.status(409).json({ error: 'A world operation is in progress.' });
-    shelfBusy = true;
+    beginShelfOperation();
     let store: LocalWorldStore | null = null;
     try {
       const { worldPath } = req.body;
@@ -635,18 +655,18 @@ export function createWorldRouter(
       }
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     } finally {
-      shelfBusy = false;
+      endShelfOperation();
     }
   });
 
   router.delete('/worlds/save', async (req, res) => {
     if (shelfBusy) return res.status(409).json({ error: 'A world operation is in progress.' });
-    shelfBusy = true;
+    beginShelfOperation();
     try {
       res.json(await trashWorldSave(repoRoot, req.body?.worldPath, getActiveStore()?.worldRoot));
     } catch (err) {
       res.status(err instanceof ShelfError ? err.status : 500).json({ error: err instanceof Error ? err.message : String(err) });
-    } finally { shelfBusy = false; }
+    } finally { endShelfOperation(); }
   });
 
   // Get active world manifest
