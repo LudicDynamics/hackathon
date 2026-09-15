@@ -38,7 +38,7 @@ Nothing is scripted: every scene, reply and world change is authored by these mo
 
 ## Judging criteria 2 — Originality (≤200 words)
 
-Worldlines is the product of three of our papers: a CHI PLAY paper establishing the concept; an EC2026 (Japan) paper on multi-character play with a writer/world agent; and one on worlds that grow naturally through co-play. All three land in this project.
+Worldlines is the product of three of our papers: a CHI PLAY paper establishing the concept; an EC2026 (Japan) paper on multi-character play with a writer/world agent; and one on worlds that grow naturally through co-play. All three land here.
 
 New for this hackathon:
 
@@ -63,7 +63,7 @@ Known limits: no separate authoring tool yet — you create while you play, not 
 
 ## Judging criteria 4 — Execution and craft (≤200 words)
 
-We polished the whole stack: a complete harness engine (isolated agent processes on a tool-calling runtime, per-role tool sets, a serialized, revision-guarded write path) and every frontend component. We defined the framework end to end — file-system world model, fallbacks, chunking, WS frame contract — and built it as code: nine mechanical gates and 1,180 passing tests pin the contracts, request bodies, i18n (452 keys, three languages), the seven worlds' structure and 24 UX rules.
+We polished the whole stack: a complete harness engine (isolated agent processes on a tool-calling runtime, per-role tool sets, serialized revision-guarded writes) and every frontend component. We defined the framework end to end — file-system world model, fallbacks, chunking, WS frame contract — and built it as code: nine mechanical gates and 1,180 passing tests pin the contracts, request bodies, i18n (452 keys, three languages), the seven worlds' structure and 24 UX rules.
 
 Every modality was fitted in with care: a 2.5D parchment canvas with parallax and particles, hand-written chalk, 3D physics dice with a reveal gate, six-emotion portraits, layered audio (ambient, BGM, foley, stingers), a glass world launcher with intro videos, saves and rollback, reduced-motion support — and UI/UX passes over every overlay so the play loop feels good in all three languages. We played it ourselves throughout — 45-minute sessions, all-nighters building worlds — and fixed every painful moment of play as we hit it.
 
