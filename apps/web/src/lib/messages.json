@@ -1206,5 +1206,14 @@
   "Arranging…": { "zh-CN": "正在排版…", "ja": "整列中…" },
   "Arrange the current layer (Shift+R)": { "zh-CN": "排版当前层（Shift+R）", "ja": "現在のレイヤーを整列（Shift+R）" },
   "Arrange the current layer": { "zh-CN": "排版当前层", "ja": "現在のレイヤーを整列" },
-  "The world is changing. Wait for the current scene to load.": { "zh-CN": "世界正在变化，请等待当前场景加载完成。", "ja": "世界が変化しています。現在のシーンの読み込みを待ってください。" }
+  "The world is changing. Wait for the current scene to load.": { "zh-CN": "世界正在变化，请等待当前场景加载完成。", "ja": "世界が変化しています。現在のシーンの読み込みを待ってください。" },
+  "Start a call": { "zh-CN": "开始通话", "ja": "通話を始める" },
+  "Text": { "zh-CN": "文字", "ja": "文字" },
+  "Dialogue mode": { "zh-CN": "对话模式", "ja": "会話モード" },
+  "On a call": { "zh-CN": "通话中", "ja": "通話中" },
+  "Listening…": { "zh-CN": "聆听中…", "ja": "聞いています…" },
+  "Hang up": { "zh-CN": "挂断", "ja": "通話を切る" },
+  "They say": { "zh-CN": "对方说", "ja": "相手の声" },
+  "You": { "zh-CN": "你", "ja": "あなた" },
+  "Could not connect": { "zh-CN": "无法连接", "ja": "接続できませんでした" }
 }

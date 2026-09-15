@@ -829,6 +829,51 @@ body:before {
   .identity-status .activity-rail__item[data-state='running'] .activity-rail__dot { animation: none; }
 }
 
+/* ---- dialogue call mode (docs/live-voice/12 §3.11) ---- */
+/* The paper keeps its −0.4° tilt: switching modes must not reseat the sheet. */
+.speech-paper[data-dialogue-mode='call'] {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  transform: translateX(-50%) rotate(-0.4deg);
+}
+/* Same baseline/line metrics as `.line-stage` so entering a call never jumps height. */
+.call-stage__transcript {
+  min-height: 3.2em;
+  max-height: 9.6em;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  line-height: 2;
+  font-family: 'LXGW WenKai', 'KaiTi', serif;
+  font-size: 1.12rem;
+  color: var(--ink);
+}
+.call-line { margin: 0; display: block; }
+.call-speaker { margin-right: .4rem; font-family: 'Manrope', system-ui, sans-serif; font-size: .78rem; color: var(--rust); }
+.call-line--streaming { color: color-mix(in srgb, var(--ink) 70%, transparent); }
+.call-line--voice { color: var(--muted); }
+.call-line--player { font-style: italic; color: var(--muted); }
+.call-line--player .call-speaker { font-style: normal; }
+.call-placeholder { margin: 0; font-style: italic; font-size: .95rem; color: var(--muted); }
+.call-bar { display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  border-top: 1px solid rgba(41, 40, 32, .12); margin-top: .5rem; padding-top: .35rem; }
+.call-status { display: inline-flex; align-items: center; gap: .35rem; font-family: 'Manrope', system-ui, sans-serif; font-size: .78rem; color: var(--rust); }
+.call-hangup { flex: none; border: 1px solid var(--rust); padding: .3rem .55rem; color: var(--ink); background: var(--cream);
+  font: .76rem/1.2 'Manrope', system-ui, sans-serif; cursor: pointer; }
+.call-hangup:hover, .call-hangup:focus-visible { color: var(--paper); background: var(--rust); }
+.dialogue-call-alert { margin: .35rem 0 0; font-size: .78rem; color: var(--rust); }
+.call-stage .activity-rail { display: flex; flex-direction: column; gap: 4px; margin-bottom: .4rem; pointer-events: none; }
+.call-stage .activity-rail__list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.call-stage .activity-rail__item { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; max-width: 100%; overflow: hidden; padding: 3px 10px; border-radius: 9999px;
+  background: var(--cream); color: var(--muted); border: 1px solid rgba(41, 40, 32, .18); font-family: 'Manrope', system-ui, sans-serif; font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
+.call-stage .activity-rail__item[data-state='running'] { color: var(--ink); }
+.call-stage .activity-rail__item[data-state='error'] { color: var(--ink); border-color: rgba(201, 111, 76, .55); background: #f9ece4; }
+.dialogue-modes { display: flex; gap: .4rem; margin-top: .55rem; }
+.dialogue-mode { flex: 1 1 auto; border: 1px solid var(--line); padding: .3rem .55rem; color: var(--ink);
+  background: var(--cream); font: .76rem/1.2 'Manrope', system-ui, sans-serif; cursor: pointer; }
+.dialogue-mode[aria-pressed='true'] { color: var(--paper); background: var(--rust); border-color: var(--rust); }
+.dialogue-mode:disabled { opacity: .7; cursor: default; }
+
 @media (max-width: 700px) {
   .identity-status {
     top: max(3.75rem, calc(env(safe-area-inset-top) + 2rem));
@@ -863,6 +908,11 @@ body:before {
     padding-right: 1rem;
     padding-left: 1rem;
   }
+}
+
+@media (max-width: 700px) {
+  .call-stage__transcript { max-height: 6.4em; }
+  .dialogue-modes { width: 100%; }
 }
 
 /* Visually hidden but screen-reader available (App.tsx already used the class). */

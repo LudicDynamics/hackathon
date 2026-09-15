@@ -49,7 +49,7 @@
 |---|---|---|
 | `useWorld` 的 WS `onmessage` | 唯一原始 WS 消费点；识别帧并只派发一个公开接缝 | 不开第二个 WebSocket；不按当前角色在 hook 内过滤；不让同一角色帧同时进入两个 UI 事件 |
 | `App` | 唯一角色帧订阅者与 `characterId` 路由器；保存 `activeModalFrame` | 不计算 dialogue phase/page/emotion；不把角色帧再广播给 Modal |
-| `CharacterModal` | 只消费 `incoming` prop；把已归属帧投影为页、表情、声音和输入门 | 不监听 `window` 的 `airp:agent-frame` / `airp:character-frame`；不再保留第二个 `receivedFrame` 入方向 |
+| `CharacterModal` | 只消费 `incoming` prop；把已归属帧投影为页、表情、声音和输入门。**L2 追加**：另投影**通话模式**（模式切换 + 字幕 + 挂断 + 错误告警），其数据来自 `live-call-store.ts` 的全局单例，**不是** `incoming` | 不监听 `window` 的 `airp:agent-frame` / `airp:character-frame`（通话字幕走 store，非本地监听）；不再保留第二个 `receivedFrame` 入方向；**不得直接 `fetch('/api/live/*')`**——通话请求归 `live-call-store.ts`（`docs/live-voice/10 §8` 反模式 2） |
 | `writer-state.ts` | 作家公开 `idle ⇄ writing` 与进度/最终公开回执的唯一读源 | `App`、`WriterBar`、`WriterResult` 不再从原始帧自行猜 phase |
 | `dialogue-pages.ts` | 角色分页、`[emo]` 清洗、节拍和边界的纯函数 | 不按标点另切页，不持有 React、WS、音频副作用 |
 | `audio.ts` / `/api/tts` | 语音通道及其 HTTP 预取；语音不触碰主轨 | 不把 TTS 变成 WS 帧，不伪造失败音频 |
@@ -233,7 +233,7 @@ interface CharacterFrameQueue {
 - dialogue → Nook：停止 voice 和 dialogue timer → 发送 `character_stop`（若仍 active）→ 调用 App-owned `closeDialogue` pop `dialogue:<characterId>:<callerSlot>` → 调用 `openNook` push/restore Nook frame → `setActiveCharacter(null)` / 设置 `nookChar` → 渲染 Nook。Modal 与 NookView 不直接操作 camera；当前 `App.tsx:753-758` 仅是现状落点，必须收敛到 A05 transition Adapter。
 - Nook 是与 layer 并列的 active projection；`NookView` 复用 Canvas 外壳、独立 `GET /api/nook?character=<id>`，但不调用 `useWorld()`（`NookView.tsx:19-27`）。
 - dialogue 关闭后返回 layer 时只恢复相机记忆，不把 character modal 的 portrait slot 或 page state 带入 Nook。
-- **nook 实时通话与遮罩朗读互斥**（docs/live-voice/00 §7.1 未决 1 的落地约束）：nook 内的 GPT-Live 实时通话走 WebRTC 媒体轨，**不是** `playVoice` 路径，因此与上一条「dialogue → Nook 时停止 voice」不冲突；但通话与角色对话遮罩会同时驱动同一个角色 agent，必须在 nook 内保证互斥——**通话进行中不打开对话遮罩，对话遮罩打开中不发起通话**。互斥是 nook 通话 UI 的局部判定，不新增全局状态（docs/live-voice/00 §2.8 不新增 WS 帧）。反向约束（通话中在别处打开遮罩）本批不处理，登记在 docs/live-voice/00 §7.1。
+- **L2 已裁决为双向互斥**（`docs/live-voice/10 §4.2`）：本条的「nook 内互斥」保留，但**反向约束**不再是「本批不处理」——L2 定为：对话框通话中，nook 对**同一角色**显示挂断（由单例 store 自动成立，无需新守卫）；nook 对**其他角色**不阻挡（`10 §4.3` 的守卫放宽为 `sameCharacterOnCall`）。原「通话与角色对话遮罩会同时驱动同一个角色 agent」的担忧由 `10 §2.2` 冻结 1（换角色先 stop）兜底。
 
 **漏接后果：** 同时挂 Modal 与 Nook 会出现两个交互 surface；直接在 Modal fetch 会制造第二个数据/加载/错误状态；未保存和恢复相机会让玩家失去“仍在原地”的连续性。
 

@@ -56,6 +56,22 @@ const CONSUMERS = [
   // The hook filters `character_delta`; NookView branches on all three.
   'apps/web/src/lib/live-call.ts',
   'apps/web/src/components/nook/NookView.tsx',
+  // L2 (docs/live-voice/10 §5.3) moved the frame listener into the module-level
+  // store, which now branches on delta/message/idle/error. `live-call.ts` keeps
+  // its row: it is the binding layer and still names the frames it projects.
+  'apps/web/src/lib/live-call-store.ts',
+  // The dialogue overlay consumes the same frames; the L2 batch gates it at one
+  // entry point (CharacterModal.tsx consumeCharacterFrameFromQueue).
+  'apps/web/src/components/overlay/CharacterModal.tsx',
+  // Not part of L2: pre-existing registration gaps where these files branch on
+  // character frames but were never listed. Adding them is free (every name they
+  // contribute is already consumed elsewhere) and restores the gate's coverage.
+  'apps/web/src/components/overlay/dialogue-pages.ts',
+  'apps/web/src/components/chrome/CanvasArrangeControl.tsx',
+  // `writer-state.ts` is the one that moves the count: it consumes
+  // `writer_message` (set({ lastMessage: frame.text })), so `consumed` goes
+  // 24 → 25 (docs/live-voice/10 §5.3, §9.1(c)).
+  'apps/web/src/lib/writer-state.ts',
 ];
 
 /**

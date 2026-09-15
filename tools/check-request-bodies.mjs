@@ -99,13 +99,13 @@ const BODIES = [
   // the note above BODIES) and is deliberately not registered here.
   {
     route: '/api/live/session',
-    file: 'apps/web/src/lib/live-call.ts',
+    file: 'apps/web/src/lib/live-call-store.ts',
     keys: ['character', 'sdp', 'language'],
     doc: 'docs/live-voice/00-共同上下文.md §2.2',
   },
   {
     route: '/api/live/close',
-    file: 'apps/web/src/lib/live-call.ts',
+    file: 'apps/web/src/lib/live-call-store.ts',
     keys: ['character'],
     doc: 'docs/live-voice/00-共同上下文.md §2.2',
   },

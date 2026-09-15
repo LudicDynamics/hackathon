@@ -26,6 +26,12 @@ import {
   type CharacterFrameQueueEvent,
 } from '../../lib/character-frame-queue.js';
 import type { FocusCoordinator, FocusReturnHandle, FocusSurfaceLease } from '../../lib/focus-coordinator.js';
+import {
+  useLiveCallState,
+  useLiveCallLines,
+  useLiveCallActions,
+  useLiveCallAvailable,
+} from '../../lib/live-call.js';
 const STINGER_VOICE_GRACE_MS = 1200;
 /**
  * CharacterModal — galgame dialogue overlay (wave 2 Task D T3.3; TTS pagination T1/03).
@@ -125,6 +131,41 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 }) => {
   const { locale: uiLocale, t } = useLocale();
   locale = uiLocale === 'ja' ? 'ja' : locale;
+  const call = useLiveCallState();
+  const lines = useLiveCallLines();
+  const liveCallActions = useLiveCallActions();
+  const liveCallAvailable = useLiveCallAvailable();
+  /** A call is actually transporting (connecting/live): the mode UI and the gates. */
+  const callActive = call.phase === 'connecting' || call.phase === 'live';
+  /**
+   * This paper shows the call panel while the call is live **or errored**. The
+   * error phase must stay on the call panel, otherwise its `role="alert"` would
+   * vanish together with the layout (contract §9.1(a)); `callActive` alone hides
+   * the alert. Ownership is per character, like the store snapshot (§4.1).
+   */
+  const callVisible = (callActive || call.phase === 'error') && call.characterId === characterId;
+  const modeSwitchVisible = liveCallAvailable === true;
+  /**
+   * The alert text IS the store's error — derived, never copied into state: a
+   * `useState` duplicate would be empty during a static render (effects never
+   * run) and could drift from the snapshot.
+   */
+  const callAlert = call.error ?? '';
+  const stopOwnedCall = useCallback(
+    () => liveCallActions.stop('dialogue:' + characterId),
+    [liveCallActions, characterId]
+  );
+  /** Unconditional: the dialogue hangs up the same character's call, whoever started it (§4.1). */
+  const hangUp = useCallback(() => {
+    void liveCallActions.stop();
+  }, [liveCallActions]);
+  const startDialogueCall = useCallback(() => {
+    void liveCallActions.start({
+      characterId,
+      locale: uiLocale === 'ja' ? 'ja' : 'en',
+      owner: 'dialogue:' + characterId,
+    });
+  }, [liveCallActions, characterId, uiLocale]);
   const [phase, setPhase] = useState<Phase>('idle');
   const [emo, setEmo] = useState<Emotion>('normal');
   const [pages, setPages] = useState<DialoguePage[]>([]); // read-only projection of pagesRef
@@ -149,6 +190,10 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 
   const streamTimer = useRef<number | null>(null);
   const closeTimer = useRef<number | null>(null);
+  /** Mirrors `callActive` (NOT `callVisible`): the gates ask "is a call transporting?".
+   *  Assigned during render so the `useCallback` closures reading it never go stale. */
+  const callActiveRef = useRef(false);
+  const hangUpRef = useRef<HTMLButtonElement>(null);
   const leaseRef = useRef<FocusSurfaceLease | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const turnBufferRef = useRef<CharacterTurnBuffer | null>(null); // turn/message aggregation truth
@@ -385,7 +430,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         if (!prev) {
           const fresh: StagePage = { text: np.text, emo: np.emo, sealed: np.sealed, voiceState: 'idle' };
           list.push(fresh);
-          if (fresh.sealed) void prefetchVoice(fresh, i); // 页封口即预取
+          if (fresh.sealed && !callActiveRef.current) void prefetchVoice(fresh, i); // 页封口即预取
           continue;
         }
         if (np.text !== prev.text) {
@@ -397,13 +442,13 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
           prev.voiceText = undefined;
           prev.voiceState = 'idle';
           if (np.sealed) {
-            void prefetchVoice(prev, i);
+            if (!callActiveRef.current) void prefetchVoice(prev, i);
             if (pageIndexRef.current === i) enterPage(i, { announce: false }); // 重驱当前页
           }
         }
         if (prev.sealed !== np.sealed) {
           prev.sealed = np.sealed;
-          if (np.sealed && prev.voiceState === 'idle') void prefetchVoice(prev, i);
+          if (np.sealed && prev.voiceState === 'idle' && !callActiveRef.current) void prefetchVoice(prev, i);
         }
       }
       const snapshot: DialoguePage[] = list.map((p) => ({ text: p.text, emo: p.emo, sealed: p.sealed }));
@@ -493,12 +538,16 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   // Close: brief paper-descend + fade (220ms), then unmount.
   const handleClose = useCallback(() => {
     if (closeTimer.current !== null) return;
+    // Stop the owned Live session BEFORE onClose(): App's `character_stop` kills
+    // the character agent, and a later stop would race an in-flight delegation
+    // (contract §3.1.1). `stop(owner)` never touches the agent itself.
+    void stopOwnedCall();
     setClosing(true);
     closeTimer.current = window.setTimeout(() => {
       closeTimer.current = null;
       onClose();
     }, 220);
-  }, [onClose]);
+  }, [onClose, stopOwnedCall]);
   const requestClose = useCallback(() => {
     const lease = leaseRef.current;
     if (lease && !lease.markClosing()) return;
@@ -540,6 +589,10 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 
   // 挂载时复位（幂等）+ seed mock 引导语（contract §6.1 / §7）。
   useEffect(() => {
+    // Call mode never seeds the mock greeting: it would be spoken by /api/tts and
+    // write the irreversible `airp:greeted` key although the call already opened
+    // the character's real greeting, losing it forever in text mode (contract §3.3).
+    if (callActiveRef.current) return;
     if (mockSeededRef.current) {
       // StrictMode remount: the unmount cleanup just cancelled the greeting's
       // timers and invalidated its voice fetch. Re-arm it (nothing else to do)
@@ -552,7 +605,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
       streamingRef.current = true;
       messageEndedRef.current = true;
       setPhase('streaming');
-      void prefetchVoice(pagesRef.current[0], 0);
+      if (!callActiveRef.current) void prefetchVoice(pagesRef.current[0], 0);
       enterPage(0, { announce: true });
       return;
     }
@@ -605,14 +658,18 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     streamingRef.current = true;
     messageEndedRef.current = true;
     setPhase('streaming');
-    void prefetchVoice(mockPage, 0); // §15.18 B1：mock 页必须走同一语音路径
+    if (!callActiveRef.current) void prefetchVoice(mockPage, 0); // §15.18 B1：mock 页必须走同一语音路径
     enterPage(0, { announce: true }); // 逐字 + 朗读，不响 stinger
   }, [characterId, language, worldId, prefetchVoice, enterPage]);
 
   // Frames are drained from the shared FIFO in delivery order. The callback
   // below handles one frame; the effect after it drains every queued frame.
   const consumeCharacterFrameFromQueue = useCallback((frame: CharacterFrame) => {
-
+    // Call mode owns the transcript: the frame is still dequeued by `drainUntil`,
+    // but this surface must not also drive the typewriter/pump against the same
+    // line (contract §2.3). Never `frameQueue.clear` — the store listens on its
+    // own window event, so clearing would manufacture a second truth.
+    if (callActiveRef.current) return;
     /** 真实帧到达 → mock 引导语整块退场（不是插在真页前面，contract §7.2）。 */
     const dropMock = () => {
       if (!mockRef.current) return;
@@ -764,6 +821,14 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
 
   // Unmount: cancel every pending timer + stop the voice channel.
   useEffect(() => streamTurn, [streamTurn]);
+  // Unmount: close only the call this dialogue started (owner-scoped). Covers the
+  // `key={activeCharacter.id}` swap, where handleClose never runs (contract §5.1).
+  useEffect(() => () => { void stopOwnedCall(); }, [characterId, stopOwnedCall]);
+  // Entering the call panel (or its error variant) parks focus on the hang-up /
+  // close control — the mode button that was focused is disabled by then (§3.6).
+  useEffect(() => {
+    if (callVisible) hangUpRef.current?.focus();
+  }, [callVisible]);
 
 
   // Reset the monogram fallback if the avatar path changes.
@@ -777,6 +842,8 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   }, [inputReady]);
 
   const handleSend = () => {
+    // Call mode must not drive the character through text as well (contract §3.1-4).
+    if (callActiveRef.current) return;
     const msg = inputText.trim();
     if (!msg || busyRef.current) return; // one performance at a time
     // A retry after a delivery gap explicitly reopens the queue lane. This
@@ -809,6 +876,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   };
 
   busyRef.current = busy;
+  callActiveRef.current = callActive; // render-phase mirror for the useCallback gates
   phaseRef.current = phase;
   const showAvatar = !avatarError && !!avatar;
   const monogram = characterId.trim().charAt(0).toUpperCase() || '?';
@@ -875,6 +943,22 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
             </button>
           )}
         </div>
+        {modeSwitchVisible && (
+          <div className="dialogue-modes" role="group" aria-label={t('Dialogue mode')} data-dialogue-mode-switch="">
+            <button type="button" className="dialogue-mode" aria-pressed={!callVisible} onClick={hangUp}>
+              {t('Text')}
+            </button>
+            <button
+              type="button"
+              className="dialogue-mode"
+              aria-pressed={callVisible}
+              disabled={callActive}
+              onClick={startDialogueCall}
+            >
+              {callActive ? t('On a call') : t('Start a call')}
+            </button>
+          </div>
+        )}
         <p id={dialogDescriptionId} className="identity-bio">{bio || '(necessary description)'}</p>
         <div className="identity-activity" aria-label={locale === 'ja' ? '活動状況' : 'Activity status'}>
           <ActivityRail surface="character-modal" agentId={`character:${characterId}`} />
@@ -888,59 +972,110 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
       </aside>
 
       {/* Bottom tilted paper: current line, advance prompt, player input. */}
-      <div className={`speech-paper${closing ? ' speech-paper-closing' : ''}`}>
-        <div
-          className={`line-stage${canAdvance ? ' is-advanceable' : ''}`}
-          role="button"
-          tabIndex={0}
-          aria-label={locale === 'ja' ? '続ける' : 'Continue dialogue'}
-          aria-keyshortcuts="Enter Space"
-          aria-describedby={dialogDescriptionId}
-          onClick={advance}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter' && event.key !== ' ' && event.code !== 'Space') return;
-            event.preventDefault();
-            advance();
-          }}
-        >
-          {phase === 'thinking' && (
-            <span className="thinking-hint">{locale === 'ja' ? `${characterId}は考えている…` : `${characterId} is thinking…`}</span>
-          )}
-          {currentPage && currentPage.text !== '' && (
-            <span className="speech-line">
-              {pageShown}
-              {phase === 'streaming' && pageShown.length < currentPage.text.length && (
-                <span className="type-caret" aria-hidden="true" />
+      <div
+        className={`speech-paper${closing ? ' speech-paper-closing' : ''}`}
+        data-dialogue-mode={callVisible ? 'call' : 'text'}
+      >
+        {callVisible ? (
+          <div className="call-stage">
+            <ActivityRail surface="character-modal" agentId={`character:${characterId}`} />
+            <div className="call-stage__transcript">
+              {lines.lines.map((line, i) => (
+                <p key={i} className="call-line">
+                  <span className="call-speaker">{t('They say')}</span>
+                  {line}
+                </p>
+              ))}
+              {lines.streaming !== '' && (
+                <p className="call-line call-line--streaming">
+                  <span className="call-speaker">{t('They say')}</span>
+                  {lines.streaming}
+                </p>
               )}
+              {lines.streaming === '' && call.outputText !== '' && (
+                <p className="call-line call-line--voice">
+                  <span className="call-speaker">{t('They say')}</span>
+                  {call.outputText}
+                </p>
+              )}
+              {call.inputText !== '' && (
+                <p className="call-line call-line--player">
+                  <span className="call-speaker">{t('You')}</span>
+                  {call.inputText}
+                </p>
+              )}
+              {lines.lines.length === 0 && lines.streaming === '' && call.outputText === '' && call.inputText === '' && (
+                <p className="call-placeholder">
+                  {call.phase === 'connecting' ? t('Connecting…') : t('Listening…')}
+                </p>
+              )}
+            </div>
+            <div className="call-bar">
+              <span className="call-status" role="status">
+                {call.phase === 'connecting' ? t('Connecting…') : call.phase === 'live' ? t('On a call') : t('Could not connect')}
+              </span>
+              <button ref={hangUpRef} type="button" className="call-hangup" onClick={hangUp}>
+                {call.phase === 'error' ? t('Close') : t('Hang up')}
+              </button>
+            </div>
+            {callAlert !== '' && <p className="dialogue-call-alert" role="alert">{callAlert}</p>}
+          </div>
+        ) : (
+          <>
+            <div
+              className={`line-stage${canAdvance ? ' is-advanceable' : ''}`}
+              role="button"
+              tabIndex={0}
+              aria-label={locale === 'ja' ? '続ける' : 'Continue dialogue'}
+              aria-keyshortcuts="Enter Space"
+              aria-describedby={dialogDescriptionId}
+              onClick={advance}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ' && event.code !== 'Space') return;
+                event.preventDefault();
+                advance();
+              }}
+            >
+              {phase === 'thinking' && (
+                <span className="thinking-hint">{locale === 'ja' ? `${characterId}は考えている…` : `${characterId} is thinking…`}</span>
+              )}
+              {currentPage && currentPage.text !== '' && (
+                <span className="speech-line">
+                  {pageShown}
+                  {phase === 'streaming' && pageShown.length < currentPage.text.length && (
+                    <span className="type-caret" aria-hidden="true" />
+                  )}
+                </span>
+              )}
+            </div>
+
+            <span className={`advance-indicator${canAdvance ? '' : ' is-hidden'}`} aria-hidden="true">
+              ▼
             </span>
-          )}
-        </div>
 
-        <span className={`advance-indicator${canAdvance ? '' : ' is-hidden'}`} aria-hidden="true">
-          ▼
-        </span>
-
-        <div className={`speech-input-row${inputReady ? ' is-ready' : ''}`}>
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={(e) => {
-              if (guardImeKey(e)) return;
-              if (e.key === 'Enter') handleSend();
-            }}
-            placeholder={locale === 'ja' ? `${characterId}に話す…（Enterで送信）` : `Say something to ${characterId}… (Enter to send)`}
-            aria-label={`Message to ${characterId}`}
-            disabled={busy}
-            className="speech-input"
-          />
-          <VoiceInputButton
-            disabled={busy}
-            getDraft={() => inputText}
-            onDraft={setInputText}
-          />
-        </div>
+            <div className={`speech-input-row${inputReady ? ' is-ready' : ''}`}>
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (guardImeKey(e)) return;
+                  if (e.key === 'Enter') handleSend();
+                }}
+                placeholder={locale === 'ja' ? `${characterId}に話す…（Enterで送信）` : `Say something to ${characterId}… (Enter to send)`}
+                aria-label={`Message to ${characterId}`}
+                disabled={busy}
+                className="speech-input"
+              />
+              <VoiceInputButton
+                disabled={busy}
+                getDraft={() => inputText}
+                onDraft={setInputText}
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
 

@@ -9,8 +9,12 @@ import { portraitStatusOf, statusLineOf } from '../../lib/nook-status.js';
 import type { LayerState } from '../../state/useWorld.js';
 import { NookNoteComposer } from './NookNoteComposer.js';
 import { UI_COPY, translate, type Locale } from '../../lib/i18n.js';
-import { useLiveCall } from '../../lib/live-call.js';
-import type { CharacterFrame } from '../../lib/character-frame-queue.js';
+import {
+  useLiveCallActions,
+  useLiveCallAvailable,
+  useLiveCallLines,
+  useLiveCallState,
+} from '../../lib/live-call.js';
 import { airpGateway, type AssetMediaKind } from '../../lib/airp-gateway.js';
 import { useStill } from '../../lib/motion.js';
 import { whenFontsSettled } from '../../lib/fonts.js';
@@ -169,41 +173,32 @@ export const NookView: React.FC<NookViewProps> = ({
 
   const copy = Object.fromEntries(Object.entries(UI_COPY.en).map(([key, value]) => [key, locale === 'ja' ? UI_COPY.ja[key as keyof typeof UI_COPY.ja] : translate(locale, value)])) as typeof UI_COPY.en;
 
-  // The character's REAL lines during a call, read off the frames `useWorld`
-  // already dispatches (docs/live-voice/00 §2.8) — never a second WS, never a
-  // second source of truth. `character_message` commits a line; `character_delta`
-  // streams the one in flight; `character_idle` drops a half-typed one.
-  const [callLines, setCallLines] = useState<{ streaming: string; lines: string[] }>({
-    streaming: '',
-    lines: [],
-  });
-  const handleCharacterFrame = useCallback((frame: CharacterFrame) => {
-    if (frame.type === 'character_delta') {
-      setCallLines((prev) => ({ ...prev, streaming: prev.streaming + frame.delta }));
-    } else if (frame.type === 'character_message') {
-      setCallLines((prev) => ({ lines: [...prev.lines, frame.text], streaming: '' }));
-    } else if (frame.type === 'character_idle') {
-      setCallLines((prev) => (prev.streaming === '' ? prev : { ...prev, streaming: '' }));
-    }
-  }, []);
-  const { state: call, available: callAvailable, start: startCall, stop: stopCall } = useLiveCall({
-    characterId,
-    locale: locale === 'ja' ? 'ja' : 'en',
-    onCharacterFrame: handleCharacterFrame,
-  });
+  // The call's state, lines and resources live in the module store shared with
+  // the character dialogue (docs/live-voice/10 §2.2, §4.1): two entries, one
+  // call. This component holds no call state of its own.
+  const callLines = useLiveCallLines();
+  const call = useLiveCallState();
+  const callAvailable = useLiveCallAvailable();
+  const { start: startCall, stop: stopCall } = useLiveCallActions();
   const callInProgress = call.phase === 'connecting' || call.phase === 'live';
-  // Mutual exclusion (docs/live-voice/00 §5.15, unresolved 1): a live call never
-  // opens the dialogue overlay, which would drive the same character agent twice.
+  // Mutual exclusion (docs/live-voice/10 §4.2/§4.3): a call never opens the
+  // dialogue overlay, which would drive the same character agent twice. The
+  // guard is PER CHARACTER — `call` is a global snapshot now, so keying off
+  // `callInProgress` alone would block every other character's dialogue too.
   const handleOpenCharacterModal = useCallback(
     (id: string) => {
-      if (callInProgress) {
+      const sameCharacterOnCall = callInProgress && call.characterId === id;
+      if (sameCharacterOnCall) {
         setNotice(copy.liveCallModalBlocked);
         return;
       }
       onOpenCharacterModal?.(id);
     },
-    [callInProgress, copy.liveCallModalBlocked, onOpenCharacterModal],
+    [callInProgress, call.characterId, copy.liveCallModalBlocked, onOpenCharacterModal],
   );
+  // Leaving the projection hangs up the call THIS entry opened and nothing
+  // else: a call started in the dialogue survives a nook unmount (10 §5.1).
+  useEffect(() => () => void stopCall(`nook:${characterId}`), [characterId, stopCall]);
 
   const nookIdRef = useRef('');
   const stateRef = useRef<LayerState | null>(null);
@@ -623,7 +618,7 @@ export const NookView: React.FC<NookViewProps> = ({
             onSelectChoice={handleSelectChoice}
             onEntityAction={handleEntityAction}
             onDiceRolled={onDiceRolled}
-            onOpenCharacterModal={onOpenCharacterModal}
+            onOpenCharacterModal={handleOpenCharacterModal}
             onItemDropOnTarget={handleItemDropOnTarget}
             onDropItemToScene={handleDropItemToScene}
             onTakeItem={handleTakeItem}
@@ -687,8 +682,13 @@ export const NookView: React.FC<NookViewProps> = ({
             <button
               type="button"
               onClick={() => {
-                if (call.phase === 'idle' || call.phase === 'error') void startCall();
-                else void stopCall();
+                if (call.phase === 'idle' || call.phase === 'error') {
+                  void startCall({
+                    characterId,
+                    locale: locale === 'ja' ? 'ja' : 'en',
+                    owner: `nook:${characterId}`,
+                  });
+                } else void stopCall();
               }}
               disabled={inactive}
               aria-label={callInProgress ? copy.liveCallStop : copy.liveCallStart}

@@ -2,6 +2,8 @@
 
 > 2026-09-14 · niko 需求：玩家用自己的声音输入 RP 行动，边说边出字。与实时通话（`00-共同上下文.md`）不同，这里只做「说话 → 文字进输入框草稿」。
 
+- **与通话模式的关系（L2 补充，2026-09-15）**：STT 与「对话框实时通话」（`docs/live-voice/10`）**互斥，且无需额外代码**。话筒按钮是文字输入行的兄弟节点（`CharacterModal.tsx` 的 `speech-input-row` 内），通话模式按 `10 §3.1` 冻结 4 **不渲染该输入行** → `useVoiceInput` 卸载清理释放麦克风轨并关 `/ws/stt`（`lib/voice-input.ts`）。**MUST NOT** 用 `display:none` 保留挂载——那样麦克风仍开着，会与通话的 `getUserMedia` **抢麦**。本文 §2 的两条 STT 路径（`/ws/stt`、`POST /api/stt`）与 `/api/live/*` 无交集；`POST /api/stt` 是二进制体，本就不进 `check-request-bodies.mjs`。
+
 ## 1. 行为
 
 - 作家输入栏（`WriterBar`）与角色对话输入框（`CharacterModal`）各有一个麦克风按钮：按一下开始，再按一下停止；最长 60 秒自动停止。
