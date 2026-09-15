@@ -12,6 +12,7 @@ import type { AgentScope } from './actor.js';
 import { registerAction } from './service.js';
 import { actorLabel } from './actor.js';
 import { seatFileOf } from './delete.js';
+import { commandDetail } from './types.js';
 import type { ActionContext, ActionResult } from './types.js';
 
 export interface MoveEntityInput {
@@ -216,6 +217,7 @@ export async function moveEntity(
         ...(input.near !== undefined ? { near: input.near } : {}),
         rewrote: rewrote.length,
         dangling: dangling.length,
+        ...commandDetail(ctx),
       },
       subject: to,
       // Layer keeps the end that is in the world tree (01 §3.9).

@@ -39,6 +39,7 @@ import type { WorldCommandSpec } from './world-command.js';
 import { canonicalCommandStepText } from './world-command.js';
 import type { CommandEffectOutcome, EffectArgScope } from './execute.js';
 import type { InterpolatedValue } from './limits.js';
+import type { WorldEvent } from '../schemas/events.js';
 import { runWorldCommand } from './execute.js';
 import type { CommandError, CommandLogEntry } from './idempotency.js';
 import {
@@ -369,7 +370,7 @@ async function settleLocked(ctx: ActionContext, input: SettleInput): Promise<Set
   // `resumed` verb plus `from`/`to` already says a prefix was carried over
   // (`05` §5.6 — and `resumed` MUST NOT be folded into `reused`, because
   // "finished what was left" and "did nothing new" are different sentences).
-  const summary = summaryOf(finished, 'ran', done);
+  const summary = summaryOf(finished, 'ran', done, effects);
   return resuming
     ? { ran: [], reused: [], resumed: [{ ...summary, from: done, to: effects.length }] }
     : { ran: [summary], reused: [], resumed: [] };
@@ -405,6 +406,14 @@ function receiptOf(outcome: CommandEffectOutcome): {
  * effect was skipped. (`resumed` is reported separately by the caller, which
  * knows it just completed a prefix.)
  *
+ * `live` carries this run's in-memory outcomes. It matters because the log
+ * persists ONLY the `evt-<seq>` string, and `10`'s receipt renders each line
+ * through `renderEvent` — which needs the event OBJECT. Without this the
+ * receipt silently dropped every effect line (measured: `effect "edit" has no
+ * event; its receipt line is omitted`) and degraded to a bare verb sentence.
+ * Each live event is matched by its `seq`, so a reused/replayed step — which
+ * has no live event — keeps none, exactly as before.
+ *
  * `path` is always `null` here: it is not persisted in the receipt (only
  * `event` is), and `settle` carries the verdict. An entry whose shape no longer
  * validates yields an EMPTY list rather than a repaired one — inventing details
@@ -413,7 +422,8 @@ function receiptOf(outcome: CommandEffectOutcome): {
 function summaryOf(
   entry: CommandLogEntry,
   settle: 'ran' | 'reused',
-  fromBase = 0
+  fromBase = 0,
+  live: readonly CommandEffectOutcome[] = []
 ): SettleRunSummary {
   const parsed = CommandLogEntrySchema.safeParse(entry);
   // The cursor is `steps.length` and `execute.ts` skips any effect below
@@ -422,14 +432,21 @@ function summaryOf(
   // whole entry is the answer.
   const tail = parsed.success ? parsed.data.steps.filter((s) => s.step >= fromBase) : [];
   const base = parsed.success ? parsed.data.steps.length - tail.length : 0;
-  const effects: CommandEffectOutcome[] = tail.map((s) => ({
-    action: s.action,
-    step: s.step - base,
-    at: s.at,
-    settle,
-    path: null,
-    seq: s.event === null ? null : Number(s.event.slice(4)),
-  }));
+  const eventsBySeq = new Map<number, WorldEvent>();
+  for (const o of live) if (o.seq !== null && o.event !== undefined) eventsBySeq.set(o.seq, o.event);
+  const effects: CommandEffectOutcome[] = tail.map((s) => {
+    const seq = s.event === null ? null : Number(s.event.slice(4));
+    const event = seq === null ? undefined : eventsBySeq.get(seq);
+    return {
+      action: s.action,
+      step: s.step - base,
+      at: s.at,
+      settle,
+      path: null,
+      seq,
+      ...(event === undefined ? {} : { event }),
+    };
+  });
   return { key: entry.key, command: entry.command, steps: effects.length, effects };
 }
 

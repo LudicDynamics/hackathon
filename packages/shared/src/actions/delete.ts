@@ -24,6 +24,7 @@ import { actorLabel } from './actor.js';
 // for `append_body` (契约 §8 反模式 3). No cycle: `chalk` does not reach back
 // into `delete`.
 import { renderAppend } from './chalk.js';
+import { commandDetail } from './types.js';
 import type { ActionContext, ActionResult } from './types.js';
 
 export interface RemoveEntityInput {
@@ -156,7 +157,7 @@ export async function removeEntity(
     event = await store.appendEvent({
       type: 'entity_deleted',
       actor,
-      detail: { path, name },
+      detail: { path, name, ...commandDetail(ctx) },
       subject: path,
       layer: (await store.resolveLayer(path)) ?? undefined,
       turn: ctx.turn,
@@ -255,7 +256,7 @@ export async function editEntity(
     event = await store.appendEvent({
       type: 'entity_edited',
       actor,
-      detail: { path, name, kind: eventKind },
+      detail: { path, name, kind: eventKind, ...commandDetail(ctx) },
       subject: path,
       layer: (await store.resolveLayer(path)) ?? undefined,
       turn: ctx.turn,

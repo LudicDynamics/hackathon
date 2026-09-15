@@ -20,6 +20,7 @@ import { resolveComponentKind } from '../components/registry.js';
 import { eventKindOf } from './delete.js';
 import { registerAction } from './service.js';
 import { actorLabel } from './actor.js';
+import { commandDetail } from './types.js';
 import type { ActionContext, ActionResult } from './types.js';
 
 export interface CreateEntityInput {
@@ -138,7 +139,7 @@ export async function createEntity(
   const event = await ctx.store.appendEvent({
     type: 'entity_created',
     actor: ctx.actor,
-    detail: { path, name, kind },
+    detail: { path, name, kind, ...commandDetail(ctx) },
     subject: path,
     layer: layer ?? undefined,
     turn: ctx.turn,

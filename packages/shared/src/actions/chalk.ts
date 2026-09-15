@@ -28,6 +28,7 @@ import { dirname } from './refs.js';
 import { registerAction } from './service.js';
 import type { LinkStyle } from '../schemas/canvas.js';
 import { linkCards } from './canvas.js';
+import { commandDetail } from './types.js';
 import type { ActionContext, ActionResult } from './types.js';
 
 const SLUG_MAX = 32;
@@ -540,7 +541,7 @@ export async function writeChalk(
         ? await store.appendEvent({
             type: 'entity_edited',
             actor,
-            detail: { path: targetPath, name: entityName(parsed?.frontmatter ?? null, targetPath), kind: 'chalk' },
+            detail: { path: targetPath, name: entityName(parsed?.frontmatter ?? null, targetPath), kind: 'chalk', ...commandDetail(ctx) },
             subject: targetPath,
             layer: layer ?? undefined,
             turn: ctx.turn,
@@ -548,7 +549,7 @@ export async function writeChalk(
         : await store.appendEvent({
             type: 'entity_created',
             actor,
-            detail: { path: targetPath, name, kind: 'chalk', summary },
+            detail: { path: targetPath, name, kind: 'chalk', summary, ...commandDetail(ctx) },
             subject: targetPath,
             layer: layer ?? undefined,
             turn: ctx.turn,

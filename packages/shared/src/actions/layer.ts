@@ -19,6 +19,7 @@ import { ActionError } from './errors.js';
 import { registerAction } from './service.js';
 import { actorLabel } from './actor.js';
 import { carryFollowers } from './presence.js';
+import { commandDetail } from './types.js';
 import type { ActionContext, ActionResult } from './types.js';
 
 /** The layer id a directory maps to, mirroring store/layers.ts (`world/` → `map`). */
@@ -85,7 +86,7 @@ export async function enterLayer(
   const event = await ctx.store.appendEvent({
     type: 'layer_entered',
     actor: ctx.actor,
-    detail: { layer, name, first },
+    detail: { layer, name, first, ...commandDetail(ctx) },
     subject: layer,
     layer,
     turn: ctx.turn,

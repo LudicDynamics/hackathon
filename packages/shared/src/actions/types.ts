@@ -28,6 +28,19 @@ export interface ActionContext {
    */
   commandDepth?: number;
   /**
+   * The id of the world command acting right now, when one is (`04` §6.5).
+   *
+   * Every event an effect appends MUST carry `detail.command` — it is the ONLY
+   * key that says "this change came from a command", and `10`'s renderer reads
+   * exactly this to give the sentence its subject ("The world, after the player
+   * acted, …"). Without it the event is indistinguishable from an ordinary
+   * action and the reader is told the player did it themselves.
+   *
+   * Set by `03`'s executor for the duration of one effect; absent for a real
+   * actor's own action. Same shape and same single-writer rule as `commandDepth`.
+   */
+  commandId?: string;
+  /**
    * Merge anchor (doc-21 §3.4). One agent turn, or one HTTP request.
    * Opaque string; the action layer never parses it, only forwards it.
    */
@@ -38,6 +51,27 @@ export interface ActionContext {
   rng?: () => number;
 }
 export type ActionDetails = Record<string, any>;
+
+/**
+ * The `detail.command` marker for an event appended on a command's behalf
+ * (`04` §6.5). Spread it into every `appendEvent({ detail })`:
+ *
+ * ```ts
+ * detail: { path, name, ...commandDetail(ctx) }
+ * ```
+ *
+ * A helper rather than a literal at each site because the SEVEN effect actions
+ * (plus the actions they compose) each build their own `detail`, and a
+ * forgotten spread fails silently in the worst way: the event still lands, the
+ * world still changes, and the only symptom is that the reader is told the
+ * player acted when a command did. `10`'s subject phrase reads exactly this key.
+ *
+ * Returns `{}` for a real actor's own action, so an ordinary event's `detail`
+ * stays byte-for-byte what it was.
+ */
+export function commandDetail(ctx: ActionContext): { command?: string } {
+  return ctx.commandId === undefined ? {} : { command: ctx.commandId };
+}
 
 /**
  * The single return shape of the whole action layer.

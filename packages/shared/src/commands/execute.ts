@@ -337,7 +337,12 @@ export async function runWorldCommand(
     }
     let outcomes: EffectOutcome[];
     try {
-      outcomes = await runEffect(ctx, input);
+      // The command id rides on the context for the duration of this effect, so
+      // every event it appends carries `detail.command` (`04` §6.5) — the only
+      // key that marks a change as command-produced, and the one `10` reads to
+      // give the sentence its subject. Set per call rather than mutated: an
+      // ambient field surviving a throw would mislabel a later real action.
+      outcomes = await runEffect({ ...ctx, commandId: spec.id, commandDepth: (ctx.commandDepth ?? 0) + 1 }, input);
     } catch (err) {
       await record(failedOutcome(item, 'io_failed', errorText(err)));
       break;
