@@ -66,14 +66,17 @@ idle
 - 同一 pointer 的重复 pointerup、lostpointercapture 和 unmount cleanup 必须幂等。
 - worldId、characterId 或 active projection 改变时，先取消旧 drag，再读取新 key；旧 RAF/事件不得写新角色位置。
 - Effects off、reduced motion、hidden 不得禁用拖拽；只影响媒体演出和过渡。媒体失败时仍保留可拖的 fallback。
+- **按下未移动 = 点击打开聊天**（2026-09-15 追加）：`pointerdown`→`pointerup` 的位移在 `CARD_POINTER_THRESHOLD`（`lib/card-interaction.ts`，5px）内视为**点击**，调用 **NookView 既有的** `handleOpenCharacterModal(characterId)`；超出阈值视为拖拽，**只移动、绝不打开**。复用画布卡片的同一个阈值原语，不新增第二套抖动容差。`pointercancel` / `onLostPointerCapture` 清空待判定点击，保证被取消的拖拽**永不被误判为点击**。
 
 ## 4. 视觉与可访问性
 
 - `.nook-character-media` 变为可交互浮层，立绘资源和 fallback 共用可聚焦拖拽容器；不改变 `CharacterMedia` 的媒体 readiness、voice 或 video owner。
 - 当前位置不得遮挡 Nook note、left lane 和主要 Canvas controls；clamp 使用容器 footprint，而不是固定 `280/180` 或读取每帧布局。
 - 拖动中显示最小的可选状态提示（如 `aria-live` 不应每帧播报）；释放后提供一次“位置已保存”公开反馈，失败 localStorage 不得伪称已保存。
-- `aria-label` 必须包含角色显示名；`role=group`、`tabIndex=0` 和 keyboard nudge 仅表达布局，不把立绘伪装成世界实体按钮。
-- 禁止新增 z-index 数字；使用既有 depth token 和 canonical `--ux-*`。
+- `aria-label` 必须包含角色显示名，并与画布在场头像说同一句话（`Talk to {name}`，复用 `messages.json` 既有键，en/ja/zh-CN 三处齐全）：`aria-label={activateLabel ?? \`${displayName} portrait position\`}`。
+- **角色随是否连上聊天入口而变**（2026-09-15 追加）：有 `onActivate` 且未 `hidden` 时 `role=button`（它现在**确实**是一个按钮，键盘 Enter/Space 可激活）；否则退回 `role=group`（纯可拖浮层）。**不要**在不可激活时仍宣称 `role=button` —— 那是「口头承诺而键盘够不到」。
+- **键盘激活走 window capture**：App 在 document capture 阶段拦截全局 `Enter` 去聚焦作家输入框，因此 Enter/Space 必须在**更早的 window capture 阶段**处理、且**仅当焦点就在立绘自身**（`document.activeElement === rootRef.current`）时 `preventDefault` + `stopPropagation`。拖拽进行中不激活。
+- 立绘是**可拖的浮层**，不是世界实体：激活打开的是**既有的** `CharacterModal`（`openCharacter`），不新增第二套对话入口，也不写任何世界事实。
 
 ## 5. 与 Nook/演出边界
 
@@ -104,6 +107,10 @@ idle
 6. hidden、Effects off、reduced motion、媒体 failed 下容器仍可聚焦、拖拽和键盘微调。
 7. world/layer Canvas、PerformanceLayer、projection marker 数量保持不变；拖拽不发 HTTP/WS/action request。
 8. Chromium 在 `390×844`、`1180×960`、`1440×960` 验证不遮挡 note/left lane、无横向溢出，并回放 pointer、Escape、keyboard 三条路径。
+9. **点击打开聊天、拖拽不打开**（2026-09-15 追加）：`pointerdown`→`pointerup` 位移在阈值内 ⇒ 打开既有 `CharacterModal`（`[data-depth-surface="modal"]` 出现）；位移超阈值 ⇒ 位置改变且**对话未打开**。两条都必须非空性成立 —— 只测「拖拽不打开」的话，一个**永远不激活**的实现也能通过。
+10. **键盘等价路径**：焦点在立绘上按 Enter/Space 打开对话，且**不被 App 的全局 Enter 抢去聚焦作家输入框**（window capture 先于 document capture）。焦点不在立绘时，全局 Enter 行为不变。
+11. **取消不是点击**：`pointercancel` / `onLostPointerCapture` 后不得打开对话，也不得写 committed key。
+12. **`role` 与能力一致**：有 `onActivate` 且未 hidden ⇒ `role=button` 可键盘激活；无 ⇒ `role=group`。
 
 ## 8. 代码落点与回写
 
@@ -111,6 +118,7 @@ idle
 - `NookView.tsx:547-563` 仅替换 character-media 内部资源为 `NookPortrait`，同时传入 active `worldId`；props 来源必须由 App 现有 manifest identity 提供。
 - 扩展 `nook-character-media.css` 的定位/拖拽状态和窄屏 clamp；不要改 global prototype depth。
 - 新增同目录或既有 web test 的纯逻辑测试，并加入浏览器回放；不使用永久 skip。
+- 立绘激活入口：`NookPortrait` 新增 `onActivate?` / `activateLabel?`；`NookView.tsx` 传入**既有的** `handleOpenCharacterModal(characterId)`（不新增对话入口），并用 `translate(locale, 'Talk to {name}', { name: displayName })` 作为 `activateLabel`，与画布在场头像同源于 `messages.json`。抖动阈值复用 `lib/card-interaction.ts` 的 `movedBeyondCardThreshold`。
 - 完成后回写 `docs/ux/05-Nook投影与相机连续性.md`、`docs/ux/02-舞台Depth与演出归属.md`、根索引和本文件状态；若存储 key、keyboard mapping 或 fallback 语义改变，先更新本文再改代码。
 
 ## 9. 已解决的冲突 / 边界

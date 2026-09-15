@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode, type KeyboardEvent } from 'react';
 import { CharacterMedia } from '../media/CharacterMedia.js';
+import { movedBeyondCardThreshold } from '../../lib/card-interaction.js';
 import {
   DEFAULT_PORTRAIT_BOUNDS,
   clampPortraitAnchor,
@@ -22,6 +23,10 @@ export interface NookPortraitProps {
   enabled: boolean;
   hidden?: boolean;
   fallback: ReactNode;
+  /** Activating the portrait opens the character dialogue (docs/ux/21 §3). */
+  onActivate?: () => void;
+  /** Accessible name for the activation, e.g. "Talk to Elias". */
+  activateLabel?: string;
 }
 
 function readAnchor(worldId: string, characterId: string): PortraitAnchor {
@@ -66,10 +71,15 @@ export function NookPortrait({
   enabled,
   hidden = false,
   fallback,
+  onActivate,
+  activateLabel,
 }: NookPortraitProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const committedRef = useRef<PortraitAnchor>(readAnchor(worldId, characterId));
   const dragRef = useRef<{ pointerId: number; bounds: PortraitBounds } | null>(null);
+  // Pointer origin of the current press: a release inside the shared card
+  // threshold is a click (open the dialogue), beyond it a drag (move the prop).
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const liveAnchorRef = useRef<PortraitAnchor>(committedRef.current);
   const rafRef = useRef<number | null>(null);
   const [anchor, setAnchor] = useState<PortraitAnchor>(committedRef.current);
@@ -106,6 +116,22 @@ export function NookPortrait({
     window.addEventListener('keydown', onEscape, true);
     return () => window.removeEventListener('keydown', onEscape, true);
   }, [dragging]);
+
+  // Enter and Space activate the portrait. App owns Enter on the document
+  // capture phase to focus the writer, so this must run earlier — on the window
+  // capture phase — and only while the portrait itself holds focus.
+  useEffect(() => {
+    if (!onActivate || hidden) return;
+    const onActivateKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      if (dragRef.current || document.activeElement !== rootRef.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onActivate();
+    };
+    window.addEventListener('keydown', onActivateKey, true);
+    return () => window.removeEventListener('keydown', onActivateKey, true);
+  }, [onActivate, hidden]);
 
   // A committed anchor outlives viewport changes; re-clamp it against the live
   // footprint on resize so a remembered position never leaves the stage. This
@@ -161,6 +187,7 @@ export function NookPortrait({
     setAnchor(previous);
     applyLiveAnchor(previous);
     dragRef.current = null;
+    pointerStartRef.current = null;
     setDragging(false);
     setSaveState('idle');
   };
@@ -183,12 +210,25 @@ export function NookPortrait({
     if (event.button !== 0 || !event.isPrimary || hidden) return;
     const root = rootRef.current;
     if (!root) return;
+    pointerStartRef.current = { x: event.clientX, y: event.clientY };
     // Measure once per drag: bounds follow the footprint, but must not be read
     // on every pointermove (that would force synchronous layout — AGENTS §5).
     dragRef.current = { pointerId: event.pointerId, bounds: boundsOf(root) };
     setDragging(true);
     setSaveState('idle');
     event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  // A press that never moved is a click on the prop, not a drag. Reusing the
+  // card threshold keeps ONE jitter tolerance for the canvas and the portrait
+  // (lib/card-interaction.ts), so a twitchy click cannot both move and open.
+  const possiblyActivate = (event: PointerEvent<HTMLDivElement>) => {
+    const start = pointerStartRef.current;
+    pointerStartRef.current = null;
+    if (!start || !onActivate || hidden) return;
+    if (movedBeyondCardThreshold(start.x, start.y, event.clientX, event.clientY)) return;
+    event.stopPropagation();
+    onActivate();
   };
 
   const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
@@ -198,6 +238,7 @@ export function NookPortrait({
     dragRef.current = null;
     setDragging(false);
     commit(next, drag.bounds);
+    possiblyActivate(event);
   };
 
   const onPointerCancel = (event: PointerEvent<HTMLDivElement>) => {
@@ -249,9 +290,9 @@ export function NookPortrait({
       ref={rootRef}
       className="nook-character-media"
       style={style}
-      role="group"
+      role={onActivate && !hidden ? 'button' : 'group'}
       tabIndex={hidden ? -1 : 0}
-      aria-label={`${displayName} portrait position`}
+      aria-label={activateLabel ?? `${displayName} portrait position`}
       aria-describedby={saveState === 'saved' ? `${characterId}-portrait-saved` : undefined}
       data-nook-portrait-dragging={dragging ? 'true' : 'false'}
       data-nook-portrait-save={saveState}

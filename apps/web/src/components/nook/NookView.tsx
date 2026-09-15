@@ -461,6 +461,9 @@ export const NookView: React.FC<NookViewProps> = ({
   const avatar = assetUrl(character.avatar, 'image');
   const avatarVideo = assetUrl(character.avatarVideo, 'video');
   const displayName = character.name?.trim() || character.id || characterId;
+  // The composited card and the portrait name the character the same way, so a
+  // player who hears one recognises the other (docs/ux/21 §3).
+  const portraitActivateLabel = translate(locale, 'Talk to {name}', { name: displayName });
   const statusLine = statusLineOf(sceneFrontmatter);
   // The nameplate already prints the display name, so it takes only the real
   // status — never the README-title fallback that would repeat the identity.
@@ -540,6 +543,8 @@ export const NookView: React.FC<NookViewProps> = ({
             poster={avatar ?? undefined}
             enabled={effectsEnabled}
             hidden={hidden}
+            onActivate={onOpenCharacterModal ? () => handleOpenCharacterModal(characterId) : undefined}
+            activateLabel={portraitActivateLabel}
             fallback={
               <div className="nook-character-media__fallback" role="img" aria-label={displayName}>
                 {displayName.slice(0, 1)}

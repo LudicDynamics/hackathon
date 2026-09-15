@@ -522,10 +522,13 @@ test('the nook guard is wired to the canvas and narrowed per character', () => {
   // read by the wrapper.
   assert.match(source, /onOpenCharacterModal=\{handleOpenCharacterModal\}/);
   assert.doesNotMatch(source, /onOpenCharacterModal=\{onOpenCharacterModal\}/);
-  const rawMentions = [...source.matchAll(/\bonOpenCharacterModal\b/g)];
-  assert.equal(rawMentions.length, 5, 'the raw prop never reaches a component prop again');
-  // The only JSX attribute carrying the raw identifier would be a regression.
-  assert.doesNotMatch(source, /onOpenCharacterModal=\{onOpenCharacterModal\}/);
+  // Every JSX attribute that mentions the raw prop must be a presence check or
+  // the wrapped handler — never a bare pass-through. Expressed structurally: a
+  // magic mention-count would break on the next legitimate read (e.g. gating a
+  // new entry point on the prop's existence) without catching any regression.
+  for (const [, value] of source.matchAll(/\bonOpenCharacterModal=\{([^}]*)\}/g)) {
+    assert.doesNotMatch(value, /^\s*onOpenCharacterModal\s*$/, 'the raw prop never reaches a component prop');
+  }
   // (2) Narrowing: the guard is per character, not global.
   assert.match(source, /const sameCharacterOnCall = callInProgress && call\.characterId === id;/);
   assert.equal(
@@ -533,4 +536,27 @@ test('the nook guard is wired to the canvas and narrowed per character', () => {
     true,
     'the handler is defined and handed to the canvas',
   );
+});
+
+test('leaving the nook hangs up the call this entry opened (contract 10 §2.2-5)', () => {
+  // Closing the nook unmounts NookView, and App.tsx renders the canvas only in
+  // the `!nookChar` branch — so after exit there is NO visible call UI or hang-up
+  // control anywhere. A surviving call is silent GPT-Live billing (`00` §2.9).
+  //
+  // This guard exists because the cleanup was once deleted by an unrelated edit
+  // and the suite stayed green: the sibling wiring test counted raw-prop
+  // mentions, so its failure pointed at that count instead of the lost cleanup.
+  // Assert the BEHAVIOUR (a cleanup effect that stops precisely this entry's
+  // call), not the presence of a line.
+  const source = readFileSync(
+    fileURLToPath(new URL('../src/components/nook/NookView.tsx', import.meta.url)),
+    'utf-8',
+  );
+  const cleanups = [...source.matchAll(/useEffect\(\s*\(\)\s*=>\s*\(\)\s*=>\s*([^;]*stopCall[^;]*);/g)];
+  assert.equal(cleanups.length, 1, 'exactly one unmount cleanup hangs up the call');
+  // Owner-scoped: only the call this entry opened may be stopped (10 §5.1).
+  assert.match(cleanups[0][1], /stopCall\(`nook:\$\{characterId\}`\)/, 'the cleanup is owner-scoped to this nook entry');
+  // The effect must depend on the owner and the stopper, or a character switch
+  // would leave the previous entry's call running.
+  assert.match(source, /\[characterId, stopCall\]\);/);
 });

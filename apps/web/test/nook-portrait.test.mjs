@@ -83,9 +83,34 @@ test('NookPortrait exposes drag semantics and stays operable without media, the 
   assert.match(styles, /touch-action: none/);
   assert.match(styles, /data-nook-portrait-dragging/);
   assert.match(portrait, /fallback=\{fallback\}/);
-  assert.match(portrait, /role="group"/);
+  assert.match(portrait, /role=\{onActivate && !hidden \? 'button' : 'group'\}/);
   assert.match(portrait, /tabIndex=\{hidden \? -1 : 0\}/);
   assert.match(view, /<NookPortrait/);
   assert.match(view, /worldId=\{worldId\}/);
   assert.match(portrait, /className="nook-character-media__asset"/);
+});
+
+test('activating the portrait opens the dialogue, dragging it does not', () => {
+  // The prop is both draggable and activatable. A press that stays inside the
+  // shared card threshold is a click; beyond it, a drag that must NOT open the
+  // overlay. One threshold keeps the canvas and the portrait consistent.
+  assert.match(portrait, /movedBeyondCardThreshold/);
+  assert.match(portrait, /import \{ movedBeyondCardThreshold \} from '\.\.\/\.\.\/lib\/card-interaction\.js'/);
+  const pointerUp = portrait.slice(portrait.indexOf('const onPointerUp'), portrait.indexOf('const onPointerCancel'));
+  assert.match(pointerUp, /possiblyActivate\(event\)/);
+  // The activation must happen AFTER the drag commits, and only when unmoved.
+  const activate = portrait.slice(portrait.indexOf('const possiblyActivate'), portrait.indexOf('const onPointerUp'));
+  assert.match(activate, /movedBeyondCardThreshold\(start\.x, start\.y, event\.clientX, event\.clientY\)/);
+  assert.match(activate, /onActivate\(\)/);
+  // A cancel restores the anchor and clears the pending press, so a cancelled
+  // drag can never be mistaken for a click.
+  assert.match(portrait, /pointerStartRef\.current = null/);
+  // Enter/Space must beat App's document-capture Enter (which focuses the
+  // writer) — window capture, and only while the portrait itself has focus.
+  assert.match(portrait, /window\.addEventListener\('keydown', onActivateKey, true\)/);
+  assert.match(portrait, /document\.activeElement !== rootRef\.current/);
+  assert.match(portrait, /event\.key !== 'Enter' && event\.key !== ' '/);
+  // NookView wires the existing dialogue entry point, not a second one.
+  assert.match(view, /onActivate=\{onOpenCharacterModal \? \(\) => handleOpenCharacterModal\(characterId\) : undefined\}/);
+  assert.match(view, /translate\(locale, 'Talk to \{name\}', \{ name: displayName \}\)/);
 });
