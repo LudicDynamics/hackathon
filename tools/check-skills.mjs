@@ -50,6 +50,10 @@ const TRIGGERS_BY_SKILL = {
   'scene-initialization': ['scene-init', 'airp-init', 'README', 'choice', 'roll_dice'],
   'abstract-directory-story': ['directory', 'time', 'parallel', 'decision', 'ending'],
   'nook-management': ['character', 'move', 'move_to', 'memory', 'player', 'world'],
+  // A7 needs two CONCRETE triggers named in the description. This skill's
+  // trigger is architectural (the player acts without the agent present), so
+  // the words are the three paths that bypass it (docs/command/07 §3.6 判据 0).
+  'world-commands': ['command', 'on', 'dice', 'choice'],
 };
 /** A0: the platform tier's exact membership. Adding a skill MUST update this. */
 const EXPECTED_PLATFORM = Object.keys(TRIGGERS_BY_SKILL);

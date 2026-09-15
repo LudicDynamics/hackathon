@@ -28,7 +28,7 @@
 import { LineCounter, isMap, isNode, isPair, isScalar, isSeq, parseDocument } from 'yaml';
 import type { Document, Node as YamlNode } from 'yaml';
 import type { ParsedFrontmatter } from '../schemas/frontmatter.js';
-import { WORLD_COMMAND_EFFECTS } from './effects.js';
+import { WORLD_COMMAND_EFFECTS, WORLD_COMMAND_EFFECT_ARGS } from './effects.js';
 import type { WorldCommandEffectName } from './effects.js';
 import { parseCommandWhen } from './condition.js';
 import type { ConditionAst } from './condition.js';
@@ -755,35 +755,13 @@ function parseSteps(
   return out;
 }
 
-/**
- * Effect argument table (`04` §2.1/§2.2). `list-args` / `fold-args` are noted
- * because they change how many effects one step expands to.
+/*
+ * The argument surface comes from `effects.ts` (`WORLD_COMMAND_EFFECT_ARGS`) —
+ * `04 §2.6` is explicit that the EFFECT table owns which forms it accepts and
+ * "`01` 不猜". A local copy here would be the R.4/R.11 drift class, and this one
+ * is load-bearing: `arg_shape_mismatch` is what tells an author their `rewards:`
+ * should have been `path:`.
  */
-interface EffectArgSpec {
-  /** Argument names the effect accepts. */
-  names: readonly string[];
-  /** At least one of these MUST be present (`give`: `path` XOR `rewards`). */
-  oneOf?: readonly string[];
-  required?: readonly string[];
-  /** Arrays the author may pass whole; their bound is the entity schema's. */
-  arrayNames?: readonly string[];
-}
-
-const EFFECT_ARGS: Record<WorldCommandEffectName, EffectArgSpec> = {
-  // `path` XOR `rewards` — `rewards` is the list-args form (04 §2.6 契约 A).
-  give: { names: ['path', 'title', 'body', 'frontmatter', 'link_to', 'rewards'], oneOf: ['path', 'rewards'], arrayNames: ['rewards'] },
-  move: { names: ['from', 'to', 'near'], required: ['to'], arrayNames: ['from'] },
-  // `frontmatter` / `body` are the in-place edit; `append_body` is the
-  // append-only sub-form (R.2's reserved-key rejection is enforced in `04`).
-  edit: { names: ['path', 'frontmatter', 'body', 'append_body'], required: ['path'] },
-  set_status: { names: ['path', 'values'], required: ['path', 'values'] },
-  // Compound over `editEntity`; `from` is an ordered candidate list.
-  consume: { names: ['from', 'to', 'mark', 'append_body', 'title'], required: ['from'], arrayNames: ['from'] },
-  enter: { names: ['layer'], required: ['layer'] },
-  // A rider of `give`: never a step of its own (`04` §2.3 E7).
-  link: { names: ['from', 'to', 'style', 'label'], required: ['from', 'to'] },
-};
-
 function parseArgs(
   action: WorldCommandEffectName,
   raw: unknown,
@@ -791,7 +769,7 @@ function parseArgs(
   stepIndex: number,
   sink: Sink
 ): Record<string, WorldCommandArgNode> {
-  const spec = EFFECT_ARGS[action];
+  const spec = WORLD_COMMAND_EFFECT_ARGS[action];
   const argsPath = `${at}.with`;
   if (raw === undefined || raw === null) {
     for (const key of spec.required ?? []) {
@@ -826,7 +804,7 @@ function parseArgs(
     // declared `list-args` names may carry an array, and only as a whole
     // `{{ }}` reference (which parses as a string here).
     if (Array.isArray(value)) {
-      if (spec.arrayNames?.includes(key)) {
+      if (spec.arrays?.includes(key)) {
         error(sink, 'arg_literal_array', `do[${stepIndex}].with.${key} is a literal array. Content lives in the entity, not the command - pass it as "{{ trigger.entry.${key} }}".`, `${argsPath}.${key}`);
       } else {
         error(sink, 'arg_shape_mismatch', `do[${stepIndex}]: "${action}" expects a scalar for "${key}", but it is an array. Use a scalar, or pass the array whole as "{{ ... }}".`, `${argsPath}.${key}`);

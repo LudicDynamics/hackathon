@@ -108,6 +108,60 @@ export type EffectInput =
   | { action: 'link'; from: string; to: string; style?: string; label?: string };
 
 /**
+ * One effect's declared argument surface (`04` §2.3's `参数` + `实参形态` rows).
+ *
+ * This table lives HERE, next to `EffectInput`, and is the single source `01`'s
+ * write-time validator reads. `04 §2.6` is explicit: "哪个效果接受哪种形态由本表
+ * 声明，`01` 不猜". A second copy inside `world-command.ts` would be exactly the
+ * drift class R.4/R.11 exist to prevent — and this one is load-bearing, because
+ * `arg_shape_mismatch` is the code that tells an author their `rewards:` should
+ * have been `path:`.
+ */
+export interface EffectArgForm {
+  /** Argument names the effect accepts. Anything else is `unknown_arg`. */
+  names: readonly string[];
+  /** At least one of these MUST be present. */
+  required?: readonly string[];
+  /** EXACTLY ONE of these MUST be present (`give`: `path` XOR `rewards`). */
+  oneOf?: readonly string[];
+  /**
+   * Array-valued arguments. `list-args` names are expanded by the ENGINE, one
+   * effect per element; a literal array is refused because content lives on the
+   * entity (`04` §2.6 / `[C-5]` route ④).
+   */
+  arrays?: readonly string[];
+  /** The array form's consumer contract (`04` §2.6). Absent = scalars only. */
+  arrayForm?: 'list-args' | 'fold-args';
+}
+
+/**
+ * The 7 effects' argument surfaces (`04` §2.3, E1-E7).
+ *
+ * `link` and `link_to` deserve a note: `linkCards` writes no event, so it can
+ * never be an effect of its own (hard gate 1) — it rides along on a `give` via
+ * `link_to`, and the standalone `link` entry exists only so the validator can
+ * recognise it as a known verb rather than report `unknown_action`.
+ */
+export const WORLD_COMMAND_EFFECT_ARGS: Readonly<
+  Record<WorldCommandEffectName, EffectArgForm>
+> = Object.freeze({
+  give: {
+    names: ['path', 'title', 'body', 'frontmatter', 'link_to', 'rewards'],
+    oneOf: ['path', 'rewards'],
+    arrays: ['rewards'],
+    arrayForm: 'list-args',
+  },
+  // 04 §2.3 E2 declares `from: string` — no array FORM. (`MoveEntityInput.from`
+  // is wider, but the declaration surface is a single path.)
+  move: { names: ['from', 'to', 'near'], required: ['from', 'to'] },
+  edit: { names: ['path', 'frontmatter', 'body', 'append_body'], required: ['path'] },
+  set_status: { names: ['path', 'values'], required: ['path', 'values'] },
+  consume: { names: ['from', 'to', 'mark', 'append_body', 'title'], required: ['from'], arrays: ['from'] },
+  enter: { names: ['layer'], required: ['layer'] },
+  link: { names: ['from', 'to', 'style', 'label'], required: ['from', 'to'] },
+});
+
+/**
  * What ONE effect reports back (04 §6.1). `03` uses `ok` to decide
  * `on_error: stop|continue`; `05` reads `reused` + `event`; `06` renders from
  * `path` + `event`; the trigger's tool_result carries it verbatim.

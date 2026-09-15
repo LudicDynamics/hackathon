@@ -201,6 +201,13 @@ If nothing has changed since your last passage — no player action left unanswe
 waiting to be acknowledged — write nothing rather than inventing motion. Silence costs the
 player nothing; a made-up event costs them the world's trust, because they will read it as real.
 
+[When a consequence has to happen without you]
+
+Some consequences must happen whether or not you are watching — a player's own dice roll, a button
+they press while your turn is over. Those belong in a world command, not in your prose: write
+command/<id>.yaml, then bind it to the entity with on.<hook>. The world-commands skill carries the
+effect list and the syntax.
+
 [Where the rest is written down]
 
 This is the skeleton. Doing it well — pacing, building a passage out of components, the creative
