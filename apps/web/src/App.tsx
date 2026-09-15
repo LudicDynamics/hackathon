@@ -1101,17 +1101,22 @@ export function App() {
     return () => lease.unregister();
   }, [closeRadial, focusCoordinator, radialState]);
 
-  const prepareChoiceDraft = useCallback((path: string, choice: string) => {
+  // A choice widget click is the choice (docs/settings/00): it lands the
+  // `choice_selected` event through `/api/choice` right away, and the world's
+  // `autoWrite` setting decides whether the writer picks it up. Nothing is
+  // parked in the writer draft.
+  const runChoice = useCallback((path: string, choice: string) => {
+    void airpGateway.choose(path, choice).catch(error => notify(error instanceof Error ? error.message : String(error)));
+  }, [notify]);
+  // An entity action ("the player requests …") goes straight to the writer;
+  // the only guard is a writer that is already mid-turn.
+  const runEntityAction = useCallback((prompt: string) => {
     if (writerLocked) {
       notify(t('The writer is already working.'));
       return;
     }
-    setWriterDraft(`Regarding world file ${JSON.stringify(path)}, the player selected the choice: ${choice}`);
-    setAttention('authoring');
-    setShell(current => ({ ...current, immersive: false }));
-    notify(t('Choice selected. Review it, then press Send.'));
-    window.requestAnimationFrame(() => writerRef.current?.focus());
-  }, [notify, t, writerLocked]);
+    void submitWriterText(prompt);
+  }, [notify, submitWriterText, t, writerLocked]);
   const createAt = async (type: RadialItemType, title: string, content: string, x: number, y: number) => {
     const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `creation-${Date.now()}`;
     const base = layer === 'map' ? 'world' : layer;
@@ -1192,17 +1197,8 @@ export function App() {
                 inactive={activeCharacter !== null}
                 onMoveCard={moveCardAction}
                 writerLocked={writerLocked}
-                onSelectChoice={prepareChoiceDraft}
-                onEntityAction={(prompt) => {
-                  if (writerLocked) {
-                    notify(t('The writer is already working.'));
-                    return;
-                  }
-                  setWriterDraft(prompt);
-                  setAttention('authoring');
-                  setShell(current => ({ ...current, immersive: false }));
-                  notify(t('Action draft ready. Review it, then press Send.'));
-                }}
+                onSelectChoice={runChoice}
+                onEntityAction={runEntityAction}
                 onOpenCharacterModal={(id) => {
                   const character = characters.find((item) => item.id === id);
                   if (character) openCharacter(character);
@@ -1241,17 +1237,8 @@ export function App() {
                 links={state?.links || []}
                 bg={(!loadingWorld && state?.bg) || { src: null, tone: 'warm', grain: 'parchment' }}
                 onMoveCard={moveCardAction}
-                onSelectChoice={prepareChoiceDraft}
-                onEntityAction={(choice) => {
-                  if (writerLocked) {
-                    notify(t('The writer is already working.'));
-                    return;
-                  }
-                  setWriterDraft(choice);
-                  setAttention('authoring');
-                  setShell(current => ({ ...current, immersive: false }));
-                  notify(t('Action draft ready. Review it, then press Send.'));
-                }}
+                onSelectChoice={runChoice}
+                onEntityAction={runEntityAction}
                 onOpenCharacterModal={(id) => {
                   const character = characters.find((item) => item.id === id);
                   if (character) openCharacter(character);
@@ -1512,7 +1499,7 @@ export function App() {
         <BagItemDialog
           item={selectedBagItem}
           onClose={() => setSelectedBagPath(null)}
-          onChoose={choice => prepareChoiceDraft(selectedBagItem.path, choice)}
+          onChoose={choice => runChoice(selectedBagItem.path, choice)}
           onPlace={handleReturnItem}
           onUse={prepareItemUse}
           useDisabled={writerLocked}

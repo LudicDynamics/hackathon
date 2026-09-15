@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 const dialog = await readFile(new URL('../src/components/narrative/DeclaredActionDialog.tsx', import.meta.url), 'utf8');
 const entity = await readFile(new URL('../src/components/narrative/EntityInteractions.tsx', import.meta.url), 'utf8');
 const card = await readFile(new URL('../src/components/canvas/CardRenderer.tsx', import.meta.url), 'utf8');
+const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 
 test('stage consumes the frozen action snapshot and remains presentation-only before submit', () => {
   assert.match(dialog, /kind: DeclaredActionKind/);
@@ -36,14 +37,22 @@ test('declared choices are classified through ActionFeedback and never become wr
   assert.doesNotMatch(declaredChoice, /onChoice\(/);
 });
 
-test('declared choices run on click; plain choices only draft (docs/ux/16 §choice exception)', () => {
+test('every choice click runs through /api/choice, never the writer draft (docs/ux/16 §choice exception)', () => {
   const choose = entity.slice(entity.indexOf('const choose = '), entity.indexOf('// The reader posted nothing itself'));
-  // The declared branch comes first and leaves through executeDeclaredChoice, never the draft.
-  assert.match(choose, /if \(fm\?\.choice_actions && typeof fm\.choice_actions === 'object'\) \{\s*void executeDeclaredChoice\(item\.path, choice\);\s*return;/);
-  // Whatever remains is the plain-choice draft, and it names no declared action.
-  const plain = choose.slice(choose.indexOf('return;') + 'return;'.length);
-  assert.match(plain, /onChoice\(`Regarding world file/);
-  assert.doesNotMatch(plain, /executeDeclaredChoice|airpGateway|reviewed the declared choice/);
+  // Plain and declared choices leave through the same authoritative request;
+  // only the server's `kind: writer` answer may reach the draft (handleDeclaredAction).
+  assert.match(choose, /void executeDeclaredChoice\(item\.path, choice\);/);
+  assert.doesNotMatch(choose, /onChoice\(|setWriterDraft|reviewed the declared choice/);
+});
+
+test('App runs widget choices and entity actions directly instead of parking them in the draft', () => {
+  const runChoice = app.slice(app.indexOf('const runChoice = '), app.indexOf('const runEntityAction = '));
+  assert.match(runChoice, /airpGateway\.choose\(path, choice\)/);
+  assert.doesNotMatch(runChoice, /setWriterDraft/);
+  const runEntityAction = app.slice(app.indexOf('const runEntityAction = '), app.indexOf('const createAt = '));
+  assert.match(runEntityAction, /void submitWriterText\(prompt\)/);
+  assert.doesNotMatch(runEntityAction, /setWriterDraft/);
+  assert.doesNotMatch(app, /prepareChoiceDraft/);
 });
 
 test('dice reward cards are read-only persisted outcome displays', () => {
