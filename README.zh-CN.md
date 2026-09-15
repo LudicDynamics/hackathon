@@ -7,7 +7,6 @@
 
 [![OpenAI × Tokyo AI · 100-Hour Game Challenge](https://img.shields.io/badge/OpenAI%20%C3%97%20Tokyo%20AI-100--Hour%20Game%20Challenge-10a37f?logo=openai&logoColor=white)](https://luma.com/3kj24doy)
 [![Track 1 · AI-Native Game Prototype](https://img.shields.io/badge/Track%201-AI--Native%20Game%20Prototype-blueviolet)](https://luma.com/3kj24doy)
-[![立即游玩](https://img.shields.io/badge/%E2%96%B6%20%E7%AB%8B%E5%8D%B3%E6%B8%B8%E7%8E%A9-ludic--test.xvps.jp-c96f4c)](https://ludic-test.xvps.jp/airp-infini-canvas/)
 [![1 分钟短片](https://img.shields.io/badge/YouTube-1%20%E5%88%86%E9%92%9F%E7%9F%AD%E7%89%87-ff0000?logo=youtube&logoColor=white)](https://youtu.be/FnUXFOv74Tg)
 [![7 worlds × 3 languages](https://img.shields.io/badge/worlds-7%20%C3%97%20EN%20%2F%20JA%20%2F%20ZH-899b87)](templates/)
 [![1,180 tests](https://img.shields.io/badge/tests-1%2C180%20passing-brightgreen)](README.md#developing)

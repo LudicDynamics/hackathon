@@ -7,7 +7,6 @@ You, your AI character agents, and a writer agent share the same world — and i
 
 [![OpenAI × Tokyo AI · 100-Hour Game Challenge](https://img.shields.io/badge/OpenAI%20%C3%97%20Tokyo%20AI-100--Hour%20Game%20Challenge-10a37f?logo=openai&logoColor=white)](https://luma.com/3kj24doy)
 [![Track 1 · AI-Native Game Prototype](https://img.shields.io/badge/Track%201-AI--Native%20Game%20Prototype-blueviolet)](https://luma.com/3kj24doy)
-[![Play now](https://img.shields.io/badge/%E2%96%B6%20Play%20now-ludic--test.xvps.jp-c96f4c)](https://ludic-test.xvps.jp/airp-infini-canvas/)
 [![Watch the 1-minute film](https://img.shields.io/badge/YouTube-1--minute%20film-ff0000?logo=youtube&logoColor=white)](https://youtu.be/FnUXFOv74Tg)
 
 [![7 worlds × 3 languages](https://img.shields.io/badge/worlds-7%20%C3%97%20EN%20%2F%20JA%20%2F%20ZH-899b87)](#worlds-english--japanese--chinese)
@@ -59,7 +58,6 @@ One game ran **44 minutes** — until our API credits hit zero.
 
 | | |
 |---|---|
-| ▶ **Play now** | https://ludic-test.xvps.jp/airp-infini-canvas/ (five concurrent seats; each player gets a whole engine) |
 | 🎬 **1-minute film** | https://youtu.be/FnUXFOv74Tg |
 | 🎞 Full film & gameplay recordings | https://youtu.be/pMtpObFnOug · https://youtu.be/ao9fL1g0Auc · https://youtu.be/lYuTEUDACMo |
 | 💻 Code | https://github.com/LudicDynamics/hackathon |
