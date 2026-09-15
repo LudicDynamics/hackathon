@@ -14,7 +14,7 @@ export interface Cam {
 export const Z_MIN = 0.28;
 export const Z_MAX = 2.2;
 /** Above this zoom, large text shadows are disproportionately expensive to repaint. */
-export const HIGH_ZOOM_RENDER_THRESHOLD = 1.5;
+export const HIGH_ZOOM_RENDER_THRESHOLD = 1.3;
 
 /** Whether the canvas should use its compact high-zoom paint profile. */
 export function isHighZoom(z: number): boolean {
