@@ -86,8 +86,9 @@ export function PhotoDetailDialog({
     <div
       className="photo-detail"
       role="presentation"
-      onMouseDown={event => {
+      onPointerDown={event => {
         if (event.target === event.currentTarget) requestClose();
+        else event.stopPropagation();
       }}
     >
       <div
@@ -100,7 +101,7 @@ export function PhotoDetailDialog({
         tabIndex={-1}
         {...appearance?.attrs}
         style={appearance?.style}
-        onMouseDown={event => event.stopPropagation()}
+        onPointerDown={event => event.stopPropagation()}
         onKeyDown={event => {
           if (event.key !== 'Tab') return;
           const panel = panelRef.current;
@@ -128,7 +129,18 @@ export function PhotoDetailDialog({
         }}
       >
         <header className="photo-detail__header">
-          <button ref={closeRef} type="button" className="photo-detail__close" aria-label="Close photo" onClick={requestClose}>
+          <button
+            ref={closeRef}
+            type="button"
+            className="photo-detail__close"
+            aria-label="Close photo"
+            onPointerDown={event => {
+              event.preventDefault();
+              event.stopPropagation();
+              requestClose();
+            }}
+            onClick={requestClose}
+          >
             Close
           </button>
           <h2 id={titleId}>{title}</h2>
