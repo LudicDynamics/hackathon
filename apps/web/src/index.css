@@ -1334,7 +1334,14 @@ body:before {
     transform var(--appearance-motion-duration, 0.25s) ease;
 }
 
-.gate:hover {
+/* The lift is driven by the SHELL, not by `.gate:hover`. `.gate` is the element
+   that moves (translateY + rotate), so letting it own `:hover` makes the state
+   self-referential: the lift pulls the card's own edge out from under a pointer
+   resting in that strip, which un-hovers it, drops it back, and re-hovers it —
+   a visible flash (the detail sheet fades in and straight back out). `.object`
+   never moves on hover, so its hit area is stable and the state is self-consistent. */
+.object:hover .gate,
+.object:focus-within .gate {
   box-shadow: var(--shadow-near);
   transform: translateY(-3px) rotate(-0.4deg);
 }
@@ -1407,7 +1414,8 @@ body:before {
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
 }
-.gate:hover .gate__detail {
+.object:hover .gate .gate__detail,
+.object:focus-within .gate .gate__detail {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
@@ -1457,7 +1465,8 @@ body:before {
   box-shadow: none;
 }
 
-.gate--stub:hover {
+.object:hover .gate--stub,
+.object:focus-within .gate--stub {
   box-shadow: var(--shadow-far);
 }
 
@@ -1523,7 +1532,10 @@ body:before {
     transform var(--appearance-motion-duration, 0.25s) ease;
 }
 
-.letter:hover {
+/* Same reasoning as `.gate:hover` above: `.letter` moves itself, so the shell
+   must own the hover state or the lift flickers the pointer at its edges. */
+.object:hover .letter,
+.object:focus-within .letter {
   box-shadow: var(--shadow-near);
   transform: translateY(-2px) rotate(0.4deg);
 }
