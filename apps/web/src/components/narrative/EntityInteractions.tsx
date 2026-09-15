@@ -208,16 +208,22 @@ export function EntityInteractions({ item, active = false, focus, onChoice, onDi
   };
 
   const choose = (choice: string) => {
-    // Choice clicks only prepare the writer draft. `/api/choice` is reserved
-    // for the explicit confirmation button inside DeclaredActionDialog.
+    // Declared actions (docs/settings/00 「显式直接动作」) are domain actions
+    // composed by HTTP, not writer prompts: enter / read / take / character /
+    // stage run on click through `/api/choice`, whose authoritative result
+    // opens the dialog or moves the player. Registered as the direct-API
+    // exception of docs/ux/16 §choice. A `writer` declaration still only
+    // fills the draft (handleDeclaredAction). Plain choices stay drafts.
+    if (fm?.choice_actions && typeof fm.choice_actions === 'object') {
+      void executeDeclaredChoice(item.path, choice);
+      return;
+    }
+    // Plain choice clicks only prepare the writer draft.
     if (!onChoice) {
       setError('The writer input is unavailable. Return to the scene.');
       return;
     }
-    const prefix = fm?.choice_actions && typeof fm.choice_actions === 'object'
-      ? 'The player reviewed the declared choice'
-      : 'The player selected the choice';
-    onChoice(`Regarding world file ${JSON.stringify(item.path)}, ${prefix}: ${choice}`);
+    onChoice(`Regarding world file ${JSON.stringify(item.path)}, The player selected the choice: ${choice}`);
   };
 
   // The reader posted nothing itself: draft the choice through the same path as the panel.

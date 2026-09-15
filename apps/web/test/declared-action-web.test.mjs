@@ -36,6 +36,16 @@ test('declared choices are classified through ActionFeedback and never become wr
   assert.doesNotMatch(declaredChoice, /onChoice\(/);
 });
 
+test('declared choices run on click; plain choices only draft (docs/ux/16 §choice exception)', () => {
+  const choose = entity.slice(entity.indexOf('const choose = '), entity.indexOf('// The reader posted nothing itself'));
+  // The declared branch comes first and leaves through executeDeclaredChoice, never the draft.
+  assert.match(choose, /if \(fm\?\.choice_actions && typeof fm\.choice_actions === 'object'\) \{\s*void executeDeclaredChoice\(item\.path, choice\);\s*return;/);
+  // Whatever remains is the plain-choice draft, and it names no declared action.
+  const plain = choose.slice(choose.indexOf('return;') + 'return;'.length);
+  assert.match(plain, /onChoice\(`Regarding world file/);
+  assert.doesNotMatch(plain, /executeDeclaredChoice|airpGateway|reviewed the declared choice/);
+});
+
 test('dice reward cards are read-only persisted outcome displays', () => {
   // Bound the persisted-reward branch at the next renderer branch so a
   // renamed legacy comment cannot accidentally make this test inspect a
