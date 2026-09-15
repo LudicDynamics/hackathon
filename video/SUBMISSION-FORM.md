@@ -53,31 +53,31 @@ Chatbots give one character in a box; traditional games give a field that needs 
 
 Playable now, in a browser, at the demo URL (five concurrent seats). Seven worlds × three languages ship as templates, each a launcher tile into a save you can return to.
 
-Four samples show the range: **Fogwharf**, a harbour mystery — take the badge, roll to search a berth, ask Vera along, share a theory, and the writer agent writes the next dock into the world; **First Snow**, a romance simulation that keeps generating new scenes for real-time role-play with the character; **Divergence**, a time-fork across parallel timelines; and **Holmes: The Fourth Case**, detective play. Beyond these the engine is open-ended — whatever you imagine, it can host.
+Four samples show the range: **Fogwharf**, a harbour mystery — take the badge, roll to search a berth, ask Vera along, share a theory, and the writer agent writes the next dock into the world; **First Snow**, a romance simulation that keeps generating new scenes for real-time role-play with the character; **Divergence**, a time-fork across parallel timelines; and **Holmes: The Fourth Case**, detective play. Beyond these the engine is open-ended.
 
-We got hooked ourselves: one of us burned $60 of credits on images and story in Fogwharf and played 45 minutes straight; another spent consecutive all-nighters immersed in building his own world.
+We got hooked ourselves: one of us burned $60 of credits on images and story in Fogwharf and played 45 minutes straight; another spent consecutive all-nighters immersed in building her own world around the character Ei.
 
 The practical value is the engine: a unique world simulator that agents and players share.
 
-Known limits: no separate authoring tool yet — you create while you play, not in a linear pipeline; a turn takes 5–20 s; live voice works but is not as polished as we want under current OpenAI limits; no multiplayer. Those are our next focus.
+Known limits: no separate authoring tool yet — you create while you play; a turn takes 5–20 s; live voice works but is not as polished as we want under current OpenAI limits; no multiplayer. Those are our next focus.
 
 ## Judging criteria 4 — Execution and craft (≤200 words)
 
-We polished the whole stack: a complete harness engine (isolated agent processes on a tool-calling runtime, per-role tool sets, serialized revision-guarded writes) and every frontend component. We defined the framework end to end — file-system world model, fallbacks, chunking, WS frame contract — and built it as code: nine mechanical gates and 1,180 passing tests pin the contracts, request bodies, i18n (452 keys, three languages), the seven worlds' structure and 24 UX rules.
+We polished the whole stack: a complete harness engine (isolated agent processes on a tool-calling runtime, per-role tool sets, serialized revision-guarded writes) and every frontend component. We defined the framework end to end — file-system world model, fallbacks, chunking, WS contract — built as code: nine mechanical gates and 1,180 passing tests pin the contracts, request bodies, i18n (452 keys, three languages), the seven worlds' structure and 24 UX rules.
 
-Every modality was fitted in with care: a 2.5D parchment canvas with parallax and particles, hand-written chalk, 3D physics dice with a reveal gate, six-emotion portraits, layered audio (ambient, BGM, foley, stingers), a glass world launcher with intro videos, saves and rollback, reduced-motion support — and UI/UX passes over every overlay so the play loop feels good in all three languages. We played it ourselves throughout — 45-minute sessions, all-nighters building worlds — and fixed every painful moment of play as we hit it.
+Every modality was fitted in with care: a 2.5D parchment canvas with parallax and particles, hand-written chalk, 3D physics dice with a reveal gate, six-emotion portraits, layered audio (ambient, BGM, foley, stingers), a glass world launcher with intro videos, saves and rollback, reduced-motion support, and UI/UX passes over every overlay in all three languages. We played it ourselves throughout and fixed every painful moment as we hit it.
 
-Not a line of code existed before the challenge. From Friday we built everything with Codex end to end — design, framework, engine, frontend, playability — switching to Claude Code when Codex quota ran out. GPT Astra and Blender produced the dice.
+Not a line of code existed before the challenge. From Friday we built everything with Codex end to end — design, framework, engine, frontend, playability — as a Japan–France relay: one coded while the other slept, each morning started with a merge. All three of us ran out of Codex quota and finished on Claude Code. GPT Astra and Blender produced the dice.
 
 ## Pre-existing code, open-source components, datasets, third-party tools (≤200 words)
 
 - **pi-rp** (our fork of Mario Zechner's `pi` coding-agent monorepo, MIT) — the agent RPC runtime; vendored as a submodule.
-- Runtime/libraries (MIT unless noted): React, React DOM, Vite, TypeScript, Tailwind CSS, Express, ws, cors, zod, yaml, three.js, cannon-es, lucide-react, clsx, tailwind-merge; Remotion (Remotion licence) for the demo video; edge-tts for the video's temporary narration.
+- Runtime/libraries (MIT unless noted): React, Vite, TypeScript, Tailwind CSS, Express, ws, zod, yaml, three.js, cannon-es, lucide-react; Remotion (Remotion licence) for the demo video; edge-tts for the video's temporary narration.
 - Fonts via Google Fonts: LXGW WenKai, Caveat, DM Mono, Manrope (SIL OFL).
 - Audio: CC-BY 4.0 tracks credited in `assets/audio/CREDITS.md`; foley/ambient from CC0 sources; the launcher theme is our own Suno-generated track (not redistributed).
-- **Local TTS**: a self-hosted voice fine-tuned by us on an open-source TTS model, 〈模型名, licence〉, trained on our own recordings — used for one character; other voices use Alibaba DashScope Qwen-TTS.
+- **Local TTS**: a self-hosted character voice we fine-tuned ourselves during the build period on an open-source TTS base model, 〈模型名, licence〉. The weights are ours, not yet released (open vs closed undecided); used for one character. Other voices use Alibaba DashScope Qwen-TTS.
 - Model/API services: OpenAI (GPT Live, GPT-5, GPT-4o-transcribe, GPT Image, GPT Astra), DeepSeek (optional writer model), Vercel AI Gateway.
-- Art: scene backgrounds, portraits and intro clips generated during the build period with image/video generation tools (Stable-Diffusion-based pipelines and Seedance) from our own prompts; dice modelled with GPT Astra + Blender.
+- Art: scene backgrounds, portraits and intro clips generated during the build period with Stable-Diffusion-based pipelines and Seedance from our own prompts; dice modelled with GPT Astra + Blender.
 - Pre-existing: an earlier internal prototype contributed design documents only; all code was written during the build period.
 
 **Submission confirmation**: ✅ We confirm…
