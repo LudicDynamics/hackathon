@@ -26,6 +26,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const PAPER = '0xf4ecd8'; // --paper canvas colour used for preview compositing
 
@@ -173,12 +174,13 @@ function alphaStats(file) {
 // filter graph
 // ---------------------------------------------------------------------------
 
-function buildAlphaFilter(opts, key) {
+export function buildAlphaFilter(opts, key) {
   const parts = [];
   if (opts.trimStart > 0) parts.push(`trim=start_frame=${opts.trimStart}`);
   parts.push('setpts=PTS-STARTPTS');
   parts.push(`chromakey=${key}:${opts.similarity}:${opts.blend}`);
   if (opts.despill) {
+    // `expand` stays 0 by default (see parseArgs): it is not a spill-removal knob.
     parts.push(`despill=type=${opts.screenType}:mix=${opts.despillMix}:expand=${opts.despillExpand}`);
   }
   if (opts.scale) parts.push(`scale=${opts.scale}:-2:flags=lanczos`);
@@ -241,8 +243,8 @@ Chroma key (alpha mode):
   --key-color <auto|hex>  key colour, e.g. 0x1e8549 (default auto)
   --similarity <f>        chromakey similarity 0..1        (default 0.12)
   --blend <f>             chromakey edge blend 0..1        (default 0.03)
-  --despill-mix <f>       despill mix 0..1                 (default 0.6)
-  --despill-expand <f>    despill expand 0..1              (default 0.4)
+  --despill-mix <f>       despill spillmap mix 0..1        (default 0.6)
+  --despill-expand <f>    despill spillmap expand 0..1     (default 0)
   --no-despill            skip the green-spill pass
 
 Encoding:
@@ -259,7 +261,7 @@ Output:
   --ffmpeg <bin>          ffmpeg binary (default $FFMPEG or "ffmpeg")
 `;
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const o = {
     input: null,
     out: null,
@@ -270,8 +272,12 @@ function parseArgs(argv) {
     similarity: 0.12,
     blend: 0.03,
     despill: true,
+    // 0 — matching ffmpeg's own `despill` default. Measured on three plates:
+    // `expand` removes no spill that `mix` has not already removed, and only
+    // eats the subject's green channel (an off-white blouse turns pink).
+    // Raise it only if a specific plate still shows fringing.
     despillMix: 0.6,
-    despillExpand: 0.4,
+    despillExpand: 0,
     scale: 0,
     crf: 0,
     pingpong: false,
@@ -463,4 +469,7 @@ function main() {
   }
 }
 
-main();
+// Only run when invoked directly; the test imports the pure parts. A gate that
+// never fires is coverage theatre — without this, `--despill-expand` could drift
+// back to 0.4 and nothing would notice (it did: see the note in parseArgs).
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
