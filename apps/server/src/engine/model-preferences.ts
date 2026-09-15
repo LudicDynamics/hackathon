@@ -47,12 +47,12 @@ export function readModelPreferences(worldRoot: string): ModelPreferences {
 }
 /**
  * Defaults for a world with no saved preference (niko, 2026-09-15): both roles
- * through the Vercel AI Gateway on OpenAI `gpt-5.6-luna`, low thinking. The
- * Agents panel still overrides per world.
+ * on OpenAI `gpt-5.6-luna` directly (not through the Vercel gateway), low
+ * thinking. The Agents panel still overrides per world.
  */
 export const DEFAULT_MODEL_PREFERENCES: Record<'writer' | 'character', ModelPreference> = {
-  writer: { provider: 'vercel-ai-gateway', model: 'openai/gpt-5.6-luna', thinking: 'low' },
-  character: { provider: 'vercel-ai-gateway', model: 'openai/gpt-5.6-luna', thinking: 'low' },
+  writer: { provider: 'openai', model: 'gpt-5.6-luna', thinking: 'low' },
+  character: { provider: 'openai', model: 'gpt-5.6-luna', thinking: 'low' },
 };
 
 export function modelPreferenceArgs(worldRoot: string, role: 'writer' | 'character'): string[] {
