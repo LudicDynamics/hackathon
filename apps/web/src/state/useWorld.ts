@@ -741,6 +741,7 @@ export function useWorld(): UseWorldApi {
               | undefined;
             if (!ev || typeof ev.id !== 'string') break; // 畸形帧不污染去重集合
             if (!noteWorldEvent(ev.id)) break; // 同一行的重复副本到此为止
+            forwardWorldEvent(msg); // 转发集合命中才通知 App（:342）
             worldEventToastStore.ingest(ev as WorldEvent);
             // The I1 initialiser's outcome (docs/init/03 §3.6): clear the ghost.
             // `layer_initialized` -> the refetched product replaces it (handover);
