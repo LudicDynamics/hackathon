@@ -175,7 +175,7 @@ case 'replay_done':
 - `sendToWriter`（`:518-543`）在 `getWriterState().phase === 'writing'`（`:523`）之外，再加 `|| replaying` → `{ accepted: false, reason: 'busy', message: 'Catching up…' }`。
   **若不接这一步**：玩家在回放中途提交，`writer_prompt` 与回放帧交错到达，湿墨状态机（`writer-state.ts:140` 的 `acceptWriterFrame`）会先 `start()` 再被历史 `writer_idle` 提前收尾 → **输入锁提前打开**，玩家连按两次。
 - **音效闸门（裁决 D 附带项）**：`chalk_writing` → `playCharge`（`useWorld.ts:849`）、`chalk_landed` → `playFoley('paper-slide')`（`:884`）随**内容帧**而来，而这两个帧在 allowlist 里、**会**被回放；前端 MUST 在 `replaying` 期间把这两个音效调用闸掉，否则「刷新会响两声」。共享同一个 `replaying` 布尔，不新增状态。
-- **超时兜底**：`replayTo` 是同步的，若它因异常没发出 `replay_done`，`replaying` 会永挂。`02 §7` 给前端一个 `REPLAY_DONE_TIMEOUT_MS`（建议 3000ms）的本地兜底——**这是唯一允许的兜底**，因为「服务端同步发帧」这一事实意味着超时只可能是异常路径。`[推断]` 是否值得加，见 §12.4。
+- **超时兜底（本批已落地）**：`replayTo` 是同步的，若它因异常没发出 `replay_done`，`replaying` 会永挂。前端在 `onopen` 用 `window.setTimeout(…, REPLAY_DONE_TIMEOUT_MS)` 布防（`REPLAY_DONE_TIMEOUT_MS = 3000`，单一真相源 `packages/shared/src/protocol/ws.ts`），`replay_done` / `onclose` / effect cleanup 三处撤防；超时后强制 `replaying = false` 并 `window.dispatchEvent(new CustomEvent('airp:notice', …))`——**这是唯一允许的兜底**，因为「服务端同步发帧」这一事实意味着超时只可能是异常路径。
 
 ### 6.3 与既有 `replay_entry` 的关系（**两件事，别混**）
 
@@ -200,7 +200,7 @@ case 'replay_done':
 | 环里尾部挂着半轮（作家正在写、或作家死亡路径，见 §12.2） | TAIL 裁：从尾回退到最后一个 `writer_idle`，其后的帧全部丢弃 | 回放**末帧恒为 `writer_idle`**；验收测试 §10-1 断言此条 |
 | 某个 socket 已 `CLOSING`/`CLOSED` | `replayTo` 跳过 `send`（`readyState !== 1`） | 不抛错 |
 | `client.send` 抛错（半死连接） | per-send try/catch + `console.warn` 带 socket 维度信息，**继续**发后续帧 | 与 `broadcast` 的 per-client 纪律一致（`:440-451` 的注释解释了「一个半死 socket 不能饿死其余」） |
-| 前端没收到 `replay_done`（异常路径） | **不静默**：`REPLAY_DONE_TIMEOUT_MS` 后强制 `replaying=false` 并 `window.dispatchEvent(new CustomEvent('airp:notice', …))` | `docs/tools/00` 硬约束 4：失败必须可见 |
+| 前端没收到 `replay_done`（异常路径） | **不静默**：`REPLAY_DONE_TIMEOUT_MS`（3000，`protocol/ws.ts`）后强制 `replaying=false` 并 `window.dispatchEvent(new CustomEvent('airp:notice', …))` | `docs/tools/00` 硬约束 4：失败必须可见。**已落地**（`useWorld.ts` 的 `onopen` 布防 / `replay_done`+`onclose`+cleanup 撤防） |
 | allowlist 外的帧被误压入环（回归） | **测试红**：`04 §10.2` 的源码扫描断言环内只含 allowlist 帧名（`world_event` 与 `error`/`turn_aborted`/`agent_progress` 均不得出现） | — |
 
 ---
@@ -256,6 +256,8 @@ case 'replay_done':
 - 把入环过滤从 allowlist 改回「排除 `world_event`/`file_changed`」→ 测试 7 必须红（`error`/`agent_progress` 会进环）。
 - `replay_done` 载荷去掉 `turns` → 测试 8 必须红。
 
+**前端超时兜底**（`useWorld.ts`，非本测试文件覆盖；手工验收）：把 `REPLAY_DONE_TIMEOUT_MS` 调到 100ms 且用假 server 不发 `replay_done` → `onopen` 后约 100ms 必须出现一次 `airp:notice`、且 `replaying` 归位（`sendToWriter` 不再返回 `Catching up…`）。若不出现 → 兜底没接上。
+
 ---
 
 ## 11. 发现的冲突 / 需要修订的上位文档
@@ -274,12 +276,12 @@ case 'replay_done':
 
 ---
 
-## 12. 仍未知待拍板（第 1–3 条已于修订 1 裁定，保留在此备查）
+## 12. 待拍板（第 1–4 条已裁定；第 5 条留后续；第 6–7 条仍待拍板）
 
 1. **（已裁定）窗口是否包含 `writer_delta`（湿墨）？** —— **不含**（裁决 D 的 allowlist 明确排除 `*_delta`）。窗口里的 `_delta` 是已落盘那一轮的墨，重放会让前端先画一遍湿墨、随后被 `fetchLayer` 的真实卡覆盖（**双画**，且覆盖顺序不保证），且 `appendInk` 是纯追加、无去重（`useWorld.ts:877`）。若评审要求「刷新后还能看到正在写的那一笔」，正确做法是给**进行中的那一轮**单独留一条非窗口通道，而不是把 `_delta` 塞进窗口。
 2. **（已裁定）尾部半轮的去留** —— **裁掉**（裁决 I）。理由：裁剪本身由 `replayWindow` 的 TAIL 步骤保证（§3 第 3 步），不需要额外机制。**为什么必须裁**——作家死亡路径会在环里留下**永不落地**的 `chalk_writing`：`lifecycle.handleWriterDeath`（`apps/server/src/engine/lifecycle.ts:378`）达 `MAX_RESTART_ATTEMPTS`（`:55`，5 次）后 `console.error` 并 `return`（`:391-395`），**不补** `writer_idle`；此时环尾是一段没有终帧的半轮。若照原设计只做 HEAD 裁、把这段半轮整段发出，前端 `registerPhantom` 会注册一个永不落地的幻影，骨架永久占位，且**每次刷新重演**。
 3. **（已裁定）`replay_done` 带 `turns`** —— **带**（裁决 H，载荷 `{ type, turns, timestamp }`）。`turns` = 实际回放的**完整轮数**，可 < 5：环里不足 5 轮（服务端刚起、或窗口内 `writer_idle` 少于 6 个），或尾部半轮被裁后只剩 2 轮。`00 §3.2`、`04 §2.1` 与本节已同批统一。
-4. **前端 `REPLAY_DONE_TIMEOUT_MS` 兜底是否必要？**（`00 §9-3`）倾向需要（不静默），但它是**唯一**允许的兜底；若评审认为「同步发帧不可能丢」则删。**待拍板。**
+4. **（已裁定）前端 `REPLAY_DONE_TIMEOUT_MS` 兜底** —— **要**（不静默）。`replayTo` 同步发帧，故超时只可能是异常路径；无声永锁比一次可见 notice 更糟。**本批已落地**（`REPLAY_DONE_TIMEOUT_MS = 3000` 在 `packages/shared/src/protocol/ws.ts`；`useWorld.ts` 三处撤防）。原条目引用的「`00 §9-3`」是**引用错位**——`00 §9-3` 实为「输入锁由谁持有」；超时兜底在 `00 §9` 中无对应条目，已在 `00 §9` 补登。
 5. **`replay_entry` 是否本批一并消费？**（`00 §9-7`）倾向不做（属 `perform` 批次）。
 6. **`replaying` 期间是否也拦 `character_prompt`/`airp_init`？** 倾向**只拦作家输入**：角色的遮罩是自己的会话（`character_start` 自带 high-water 语义，`index.ts:258-277`），回放的是作家演出。**待拍板。**
 7. **窗口是否跨世界清空？** 倾向**要**：`/api/worlds/load`（`routes/world.ts:589`）切世界时 `eventBridge` 不会自动知道——但 `startTailReader`（`:640`）会 bump epoch。**登记**：`replayTo` 应带 `worldRoot` 校验，或切世界时显式 `eventBridge.clearReplay()`；本批倾向**在 `broadcast` 压环处不做世界标记，改为切世界时清环**（`00 §8-2` 的既有接线点）。**待拍板。**

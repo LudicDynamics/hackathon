@@ -52,6 +52,10 @@
     "./dice": {
       "types": "./dist/rules/dice.d.ts",
       "import": "./dist/rules/dice.js"
+    },
+    "./protocol": {
+      "types": "./dist/protocol/ws.d.ts",
+      "import": "./dist/protocol/ws.js"
     }
   },
   "scripts": {

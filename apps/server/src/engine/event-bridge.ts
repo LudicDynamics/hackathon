@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { WebSocketServer } from 'ws';
 import type { JsonAgentSessionEvent } from '../../../../vendor/pi-rp/packages/coding-agent/dist/index.js';
-import { parseFrontmatter, cardKindOf, layerOfDir, dirOf, entityName, type LocalWorldStore } from '@airp/shared';
+import { parseFrontmatter, cardKindOf, layerOfDir, dirOf, entityName, REPLAY_TURNS, REPLAY_BUFFER_KEEP, REPLAY_FRAME_ALLOWLIST, type LocalWorldStore } from '@airp/shared';
 import { extractContentPrefix } from './chalk-delta.js';
 import {
   ActivityProjector,
@@ -47,6 +47,58 @@ export function messageText(message: unknown): string {
     .filter((block) => block.type === 'text')
     .map((block) => block.text ?? '')
     .join('');
+}
+
+/**
+ * Pure: take the newest `turns` COMPLETE turns out of a serialized-frame
+ * buffer. A turn ends at `writer_idle`.
+ *
+ * We trim at turn boundaries on BOTH ends, so what we return is only whole
+ * turns:
+ *  - HEAD trim: the oldest included turn is NEVER truncated — we start after
+ *    the (turns+1)th `writer_idle` from the tail.
+ *  - TAIL trim: frames after the LAST `writer_idle` (a trailing half-turn,
+ *    e.g. the writer is mid-turn, or it died and never emitted `writer_idle`)
+ *    are dropped.
+ * A buffer with no `writer_idle` at all → `[]`.
+ *
+ * Non-JSON lines are replayed verbatim but do not count toward the turn budget.
+ *
+ * Mirrors `~/projects/worldlines-rivet/services/gateway/session-host.mjs:80-100`
+ * with two substitutions: rivet cuts on `agent_end` (AIRP cuts on the FRAME
+ * `writer_idle` — decision C, docs/gateway/00 §7; `agent_end` never reaches the
+ * frame surface), and rivet only declares the HEAD trim (its docstring says
+ * "最旧一轮不截断") whereas we also trim the tail (decision I).
+ */
+export function replayWindow(buffer: readonly string[], turns = REPLAY_TURNS): string[] {
+  // HEAD trim: walk back to the (turns+1)th `writer_idle` and start after it.
+  // Fewer than turns+1 turn ends → the oldest included turn is the first frame.
+  let head = 0;
+  let found = 0;
+  for (let i = buffer.length - 1; i >= 0; i -= 1) {
+    if (!isWriterIdleLine(buffer[i])) continue;
+    found += 1;
+    if (found === turns + 1) {
+      head = i + 1;
+      break;
+    }
+  }
+  // TAIL trim: drop the trailing half-turn after the LAST `writer_idle`. No
+  // turn end at all → there is no complete turn to replay.
+  for (let i = buffer.length - 1; i >= head; i -= 1) {
+    if (isWriterIdleLine(buffer[i])) return buffer.slice(head, i + 1);
+  }
+  return [];
+}
+
+/** A ring entry is a serialized frame; a malformed line is replayed verbatim
+ *  but must never count as a turn boundary (docs/gateway/02 §3 step 4). */
+function isWriterIdleLine(line: string): boolean {
+  try {
+    return (JSON.parse(line) as { type?: unknown } | null)?.type === 'writer_idle';
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -407,6 +459,10 @@ export class EventBridge {
   /** Accumulated raw `toolcall_delta` fragments per contentIndex, until
    *  `toolcall_end` reveals the tool name (docs/perform/00 §3.1/§3.2). */
   private toolcallBuf = new Map<number, string[]>();
+  /** Serialized frames already broadcast — the replay source. Bounded by
+   *  REPLAY_BUFFER_KEEP; only names in REPLAY_FRAME_ALLOWLIST ever enter
+   *  (decision D, docs/gateway/00 §7). */
+  private replayRing: string[] = [];
 
   private tailTimer: NodeJS.Timeout | null = null;
   /** Tail-read cursor: the highest `seq` already broadcast. */
@@ -440,6 +496,19 @@ export class EventBridge {
   broadcast(message: Record<string, unknown>): void {
     if (!this.wss) return;
     const payload = JSON.stringify(message);
+    // Replay ring (docs/gateway/02 §3 steps 1-2): after serialization, BEFORE
+    // fan-out. An ALLOWLIST, not a denylist — the presentation frames have no
+    // client-side dedupe and non-idempotent side effects (a replayed
+    // `chalk_landed` would fire `playFoley` again), so they are kept out at the
+    // SOURCE. `*_delta`, ritual and meta frames never enter (decision D).
+    const type = message.type;
+    if (typeof type === 'string' && (REPLAY_FRAME_ALLOWLIST as readonly string[]).includes(type)) {
+      this.replayRing.push(payload);
+      // Bounded: a long demo must not grow the ring linearly with frame count.
+      if (this.replayRing.length > REPLAY_BUFFER_KEEP) {
+        this.replayRing.splice(0, this.replayRing.length - REPLAY_BUFFER_KEEP);
+      }
+    }
     for (const client of this.wss.clients) {
       if (client.readyState !== 1 /* OPEN */) continue;
       try {
@@ -447,6 +516,44 @@ export class EventBridge {
       } catch (err) {
         console.warn('[EventBridge] send failed, dropping frame for one client:', err);
       }
+    }
+  }
+
+  /**
+   * Send the last `turns` complete turns to ONE freshly-connected socket, then
+   * the boundary frame. Synchronous: registration and snapshot happen in the
+   * same tick, so a live frame can never interleave into the middle of a
+   * replayed turn (no reordering, no interleaving).
+   *
+   * That same-tick guarantee does NOT make duplicate frames harmless: the
+   * presentation frames have NO client-side dedupe and their effects are not
+   * idempotent (a replayed `chalk_landed` fires `playFoley('paper-slide')` again,
+   * a replayed `show_frame` re-runs the whole performance). So duplicates are
+   * kept out at the SOURCE, by the allowlist: any frame with a non-idempotent
+   * side effect is never put in the ring in the first place (decision D).
+   */
+  replayTo(client: { readyState: number; send(payload: string): void }): void {
+    const lines = replayWindow(this.replayRing);
+    // Report the COMPLETE turns actually sent (decision H): the ring may hold
+    // fewer than REPLAY_TURNS (fresh server), so the count is observed here, not
+    // assumed. Every whole turn the window returns ends in `writer_idle`.
+    let turns = 0;
+    for (const line of lines) if (isWriterIdleLine(line)) turns += 1;
+    if (client.readyState !== 1 /* OPEN */) return;
+    // Per-send try/catch: a half-dead socket must not abort the rest of the
+    // replay, nor bubble out of `wss.on('connection')` (same discipline as
+    // `broadcast`, docs/gateway/02 §3 step 6).
+    for (const line of lines) {
+      try {
+        client.send(line);
+      } catch (err) {
+        console.warn('[EventBridge] replay send failed, continuing with next frame:', err);
+      }
+    }
+    try {
+      client.send(JSON.stringify({ type: 'replay_done', turns, timestamp: new Date().toISOString() }));
+    } catch (err) {
+      console.warn('[EventBridge] replay_done send failed:', err);
     }
   }
 
@@ -622,6 +729,9 @@ export class EventBridge {
   close(): void {
     this.stopTailReader();
     this.activityProjector.clear();
+    // Drop the replay source: frames from the closed world must not replay into
+    // a later connection (docs/gateway/02 §8).
+    this.replayRing = [];
     if (this.fileWatcher) {
       this.fileWatcher.close();
       this.fileWatcher = null;

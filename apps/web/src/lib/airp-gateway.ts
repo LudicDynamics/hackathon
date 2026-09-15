@@ -5,6 +5,10 @@ import type {
   MoveEntityDetails,
   UseItemOnDetails,
 } from '@airp/shared';
+// Subpath import, NOT the root barrel: the barrel pulls in `node:crypto`
+// (`schemas/canvas.ts`) and breaks the browser build. Same convention as
+// `@airp/shared/forms` / `@airp/shared/characters` (docs/gateway/01 §5).
+import { PROTOCOL_VERSION } from '@airp/shared/protocol';
 export type AssetMediaKind = 'image' | 'video' | 'audio';
 
 export interface WorldShelf {
@@ -153,7 +157,10 @@ export const airpGateway = {
 
 export function openAirpSocket(onMessage: (message: Record<string, unknown>) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+  // The version gate MUST land in the same commit as the server's (docs/gateway
+  // 03 §9.1): an old backend ignores the extra query harmlessly, but a new
+  // backend without this closes every client with 4400.
+  const socket = new WebSocket(`${protocol}//${window.location.host}/ws?v=${PROTOCOL_VERSION}`);
   socket.onmessage = (event) => {
     try {
       onMessage(JSON.parse(event.data) as Record<string, unknown>);

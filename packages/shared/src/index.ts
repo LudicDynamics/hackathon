@@ -18,6 +18,11 @@ export * from './store/layers.js';
 export * from './db/schema.js';
 export * from './layout/flow-columns.js';
 
+// WS vocabulary (B6 / R0). Frame names, close codes, protocol version and the
+// replay ring's shape — the code-side anchor for AGENTS.md §2's "new frames land
+// in three places at once" (docs/gateway/00 §3, docs/gateway/01).
+export * from './protocol/ws.js';         // PROTOCOL_VERSION / WS_CLOSE / closeKind / WS_COMMANDS / GATEWAY_EVENTS / REPLAY_*
+
 // Init (I1) rules. Same no-glob discipline as below: a missing line is a silent
 // unreachable module. These are consumed by the server routes and the `airp-init`
 // extension command.

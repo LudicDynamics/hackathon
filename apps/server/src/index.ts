@@ -7,6 +7,7 @@ import cors from 'cors';
 import { cpSync, existsSync } from 'node:fs';
 import { WebSocketServer, WebSocket } from 'ws';
 import { LocalWorldStore, createActionService, initializeMissingCharacterPresence, settleTurnCursor } from '@airp/shared';
+import { PROTOCOL_VERSION, WS_CLOSE } from '@airp/shared';
 import { AgentLifecycleManager } from './engine/lifecycle.js';
 import { assertCharacterLaunchable } from './engine/launch.js';
 import { EventBridge } from './engine/event-bridge.js';
@@ -17,6 +18,7 @@ import { createLiveRouter } from './routes/live.js';
 import { createConnectionSettingsRouter } from './routes/connection-settings.js';
 import { createSttRouter } from './routes/stt.js';
 import { handleSttStream, STT_STREAM_PATH } from './engine/stt-stream.js';
+import { startHeartbeat } from './gateway/heartbeat.js';
 import { closeCanvasBrowser } from './engine/canvas-browser.js';
 import { createCanvasPerceptionRouter } from './routes/canvas-perception.js';
 
@@ -50,7 +52,31 @@ if (!process.env.DASHSCOPE_API_KEY) {
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+// `noServer` + an explicit upgrade hook, because a rejected upgrade must still
+// complete the handshake to carry a close CODE: a bare `socket.destroy()` leaves
+// the client with an HTTP 400 / 1006 and `closeKind` has nothing to classify
+// (docs/gateway/03 §3.1 step 2). The `/ws/stt` branch MUST call `handleUpgrade`
+// + `emit('connection')` too — under `noServer` the implicit upgrade handler is
+// gone, so returning early would never open the socket and voice input dies
+// (§3.1 step 4).
+const wss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (req, socket, head) => {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  // `/ws/stt` shares this wss and is split by path inside `wss.on('connection')`
+  // below — same semantics as the old `startsWith(STT_STREAM_PATH)` branch.
+  if (url.pathname === '/ws' || url.pathname.startsWith(STT_STREAM_PATH)) {
+    if (url.pathname === '/ws' && url.searchParams.get('v') !== PROTOCOL_VERSION) {
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        ws.close(WS_CLOSE.PROTOCOL_MISMATCH, 'protocol version mismatch');
+      });
+      return;
+    }
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+    return;
+  }
+  // Unknown path: no upgrade — `express.static` / the SPA fallback own it.
+});
 
 app.use(cors());
 app.use(express.json());
@@ -186,6 +212,19 @@ app.get('*', (req, res, next) => {
 
 // WebSocket client connection handling
 wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
+  // Connection-scoped liveness wiring (docs/gateway/03 §3.2 step 7 / §8, REVIEW
+  // M2): it MUST live here, not in `startHeartbeat`, because the sweeper only
+  // walks `wss.clients` when its timer fires and would never seed a connection
+  // created after the last sweep. Applies to `/ws/stt` too — harmless, since
+  // RFC 6455 answers protocol pings automatically. Without the pong reset a live
+  // socket stays `false` and is terminated on the next sweep (~every 60s).
+  // `ws` types do not declare `isAlive` (the rivet idiom); a structural alias
+  // keeps the annotation local instead of augmenting the global `ws` module.
+  const liveness = ws as WebSocket & { isAlive?: boolean };
+  liveness.isAlive = true;
+  ws.on('pong', () => {
+    liveness.isAlive = true;
+  });
   // Live voice input has its own socket; it never joins the event fan-out.
   if (req.url?.startsWith(STT_STREAM_PATH)) {
     handleSttStream(ws);
@@ -194,6 +233,11 @@ wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
   console.log('[AIRP WS] Client connected');
 
   ws.send(JSON.stringify({ type: 'connected', timestamp: new Date().toISOString() }));
+
+  // Replay the last complete turns to this client before live frames flow
+  // (docs/gateway/02 §6.1). Synchronous by design: no frame can interleave
+  // between the ring snapshot and `replay_done`.
+  eventBridge.replayTo(ws);
 
   ws.on('message', async (raw: string) => {
     try {
@@ -350,6 +394,11 @@ wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
   });
 });
 
+// 30s protocol-level ping + one-missed-pong terminate (docs/gateway/03 §3.2).
+// Started after the connection handler is registered and before `listen`, so no
+// connection can be created without the liveness wiring above.
+const heartbeat = startHeartbeat(wss);
+
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 const HOST = process.env.AIRP_HOST || '0.0.0.0';
 server.listen(PORT, HOST, () => {
@@ -359,6 +408,7 @@ server.listen(PORT, HOST, () => {
 // Retire every spawned agent and browser on shutdown.
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
+    heartbeat.stop();
     void lifecycle.stopAll().finally(async () => {
       await closeCanvasBrowser();
       process.exit(0);

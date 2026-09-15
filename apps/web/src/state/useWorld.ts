@@ -11,6 +11,7 @@ import {
 import { CARD_FORMS } from '@airp/shared/forms';
 import { isValidCharacterId } from '@airp/shared/characters';
 import type { AppearanceResolution, WorldEvent } from '@airp/shared';
+import { closeKind, REPLAY_DONE_TIMEOUT_MS } from '@airp/shared/protocol';
 import { register as registerPhantom, land as landPhantom, appendInk, setInk, evict as evictPhantom, reconcileLanded, getPhantomsSnapshot } from '../lib/phantom.js';
 import { cardWritingGuard } from '../lib/card-skeleton.js';
 import { phantomSeatFor, publishSeatItems } from '../lib/phantom-seat.js';
@@ -293,6 +294,19 @@ export function useWorld(): UseWorldApi {
   // provisional "taking shape" ghost; cleared ONLY by the `layer_initialized` /
   // `layer_init_failed` event — events are the single change source, so no timer.
   const [initializingLayer, setInitializingLayer] = useState<string | null>(null);
+  // Server replay window (docs/gateway/02 §2.3/§6.2): set on socket open, cleared
+  // by the `replay_done` boundary frame. Gates writer input and the two
+  // content-frame sounds so a reconnect does not let the player submit into the
+  // replay, nor replay the charge/land foley twice.
+  //
+  // State + mirror ref, both written together: the WS effect (`onopen`,
+  // `onMessage`) is mounted ONCE and closes over its first render, so it can
+  // never read a fresh `replaying` — it must read the ref. The ref is also the
+  // value that must be correct on the very first replayed frame, i.e. before
+  // React could flush an effect that derived it from the state. The state is the
+  // render-facing copy of the same boolean (same family as `initializingLayer`).
+  const [replaying, setReplaying] = useState<boolean>(false);
+  const replayingRef = useRef<boolean>(false);
 
   const layerRef = useRef<string>(INITIAL_LAYER);
   const stateRef = useRef<LayerState | null>(null);
@@ -523,6 +537,12 @@ export function useWorld(): UseWorldApi {
     if (getWriterState().phase === 'writing') {
       return { accepted: false, reason: 'busy', message: 'The writer is already working.' };
     }
+    // Still catching up (docs/gateway/02 §6.2): a prompt sent now would interleave
+    // with the replayed frames and let the historical `writer_idle` open the input
+    // lock early. Reject until `replay_done` clears the flag.
+    if (replayingRef.current) {
+      return { accepted: false, reason: 'busy', message: 'Catching up…' };
+    }
     const targetLayer = typeof layerOverride === 'string' && layerOverride.trim()
       ? layerOverride.trim()
       : layerRef.current;
@@ -686,6 +706,11 @@ export function useWorld(): UseWorldApi {
   useEffect(() => {
     let stopped = false;
     let retryTimer: number | null = null;
+    // Local failsafe for the replay window (docs/gateway/02 §7): armed on open,
+    // disarmed by `replay_done` / `onclose`. `replayTo` is synchronous, so a
+    // missing boundary frame means an exception path — and the writer input must
+    // not stay locked forever in silence (docs/tools/00 hard rule 4).
+    let replayDoneTimer: number | null = null;
 
     const onMessage = (msg: Record<string, unknown>) => {
       // Every writer presentation frame enters the canonical writer snapshot;
@@ -823,6 +848,18 @@ export function useWorld(): UseWorldApi {
             window.dispatchEvent(new CustomEvent('airp:notice', { detail: msg.message ?? 'The writer could not finish this turn.' }));
           }
           break;
+        case 'replay_done':
+          // Boundary frame (docs/gateway/02 §2.3): the server finished re-sending
+          // the last N complete turns. Clears the "still catching up" flag so the
+          // writer input is not held hostage by a replay that already ended, and
+          // disarms the local failsafe.
+          replayingRef.current = false;
+          setReplaying(false);
+          if (replayDoneTimer !== null) {
+            window.clearTimeout(replayDoneTimer);
+            replayDoneTimer = null;
+          }
+          break;
         case 'turn_aborted':
           if (
             msg.source === 'character' &&
@@ -846,7 +883,9 @@ export function useWorld(): UseWorldApi {
             seat,
             layer: layerRef.current,
           });
-          playCharge(0);
+          // 回放闸门（docs/gateway/02 §6.2 裁决 D 附带项）：内容帧会被回放，但音效
+          // 不该跟着重放（「刷新会响两声」）。
+          if (!replayingRef.current) playCharge(0);
           break;
         }
         // 组件骨架屏（docs/skeleton/02 §3.1）：作家 write 一张组件卡时，服务端在
@@ -881,7 +920,7 @@ export function useWorld(): UseWorldApi {
           if (msg.source !== 'writer' || typeof msg.toolCallId !== 'string') break;
           landPhantom(msg.toolCallId, typeof msg.path === 'string' ? { path: msg.path } : {});
           endCharge();
-          playFoley('paper-slide');
+          if (!replayingRef.current) playFoley('paper-slide');
           break;
         }
         case 'writer_idle': {
@@ -981,16 +1020,52 @@ export function useWorld(): UseWorldApi {
       ws.onopen = () => {
         if (generation !== socketGeneration || wsRef.current !== ws) return;
         resetWriter('socket_open');
+        // Expect a replay window before the socket is live (docs/gateway/02 §6.2);
+        // `replay_done` clears it. Arm the local failsafe in the same tick: a
+        // synchronous `replayTo` that threw would otherwise leave the flag set
+        // with nothing coming.
+        replayingRef.current = true;
+        setReplaying(true);
+        if (replayDoneTimer !== null) window.clearTimeout(replayDoneTimer);
+        replayDoneTimer = window.setTimeout(() => {
+          replayDoneTimer = null;
+          if (generation !== socketGeneration || wsRef.current !== ws) return;
+          if (!replayingRef.current) return;
+          // Fail loud (docs/tools/00 hard rule 4): say the catch-up did not finish,
+          // then release the input so the player is never locked out silently.
+          replayingRef.current = false;
+          setReplaying(false);
+          window.dispatchEvent(new CustomEvent('airp:notice', {
+            detail: 'Could not catch up on the last moments. You can keep playing.',
+          }));
+        }, REPLAY_DONE_TIMEOUT_MS);
         void fetchLayer(layerRef.current);
       };
-      ws.onclose = () => {
+      ws.onclose = (ev: CloseEvent) => {
         if (generation !== socketGeneration || wsRef.current !== ws) return;
         wsRef.current = null;
         resetWriter('socket_close');
+        // A dropped socket never sends `replay_done`: disarm the failsafe and
+        // clear the flag, or the reconnect would inherit a stale lock.
+        if (replayDoneTimer !== null) {
+          window.clearTimeout(replayDoneTimer);
+          replayDoneTimer = null;
+        }
+        replayingRef.current = false;
+        setReplaying(false);
         // A dropped socket never delivers terminal frames, so clear activity
         // immediately rather than waiting for its stale sweep.
         agentActivityStore.clearAll();
         agentCursorStore.clearAll();
+        // `closeKind` is the ONLY classifier (docs/gateway/00 §3.1). A protocol
+        // verdict means retrying with the same build fails forever — say so
+        // instead of hammering the server every 1.2s (docs/gateway/03 §3.3).
+        if (closeKind(ev.code) === 'protocol') {
+          window.dispatchEvent(new CustomEvent('airp:notice', {
+            detail: 'This page is out of date with the server. Reload to continue.',
+          }));
+          return;
+        }
         if (!stopped) retryTimer = window.setTimeout(connect, 1200);
       };
     };
@@ -1001,6 +1076,7 @@ export function useWorld(): UseWorldApi {
       stopped = true;
       socketGeneration++;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
+      if (replayDoneTimer !== null) window.clearTimeout(replayDoneTimer);
       wsRef.current?.close();
       wsRef.current = null;
     };
