@@ -1,6 +1,26 @@
-# Living Canvas - worldlines
+<div align="center">
+
+# Worldlines: LivingCanvas
+
+**一款 agent-native 的 AI 角色扮演游戏，全部发生在一张无限画布上。**
+你、你的角色 Agent 和一位作家 Agent 共享同一个世界——而世界随着游玩不断生长。
+
+[![OpenAI × Tokyo AI · 100-Hour Game Challenge](https://img.shields.io/badge/OpenAI%20%C3%97%20Tokyo%20AI-100--Hour%20Game%20Challenge-10a37f?logo=openai&logoColor=white)](https://luma.com/3kj24doy)
+[![Track 1 · AI-Native Game Prototype](https://img.shields.io/badge/Track%201-AI--Native%20Game%20Prototype-blueviolet)](https://luma.com/3kj24doy)
+[![立即游玩](https://img.shields.io/badge/%E2%96%B6%20%E7%AB%8B%E5%8D%B3%E6%B8%B8%E7%8E%A9-ludic--test.xvps.jp-c96f4c)](https://ludic-test.xvps.jp/airp-infini-canvas/)
+[![1 分钟短片](https://img.shields.io/badge/YouTube-1%20%E5%88%86%E9%92%9F%E7%9F%AD%E7%89%87-ff0000?logo=youtube&logoColor=white)](https://youtu.be/FnUXFOv74Tg)
+[![7 worlds × 3 languages](https://img.shields.io/badge/worlds-7%20%C3%97%20EN%20%2F%20JA%20%2F%20ZH-899b87)](templates/)
+[![1,180 tests](https://img.shields.io/badge/tests-1%2C180%20passing-brightgreen)](README.md#developing)
+[![GPT Live](https://img.shields.io/badge/GPT%20Live-full--duplex%20character%20calls-10a37f?logo=openai&logoColor=white)](README.md#openai-inside)
+[![Built with Codex + Claude Code](https://img.shields.io/badge/built%20with-Codex%20%2B%20Claude%20Code-000000)](README.md#how-it-was-built)
 
 [English](README.md) · **简体中文**
+
+<a href="https://youtu.be/FnUXFOv74Tg"><img src="https://img.youtube.com/vi/FnUXFOv74Tg/maxresdefault.jpg" alt="Worldlines: LivingCanvas — 1 分钟短片" width="720"></a>
+
+*▶ [1 分钟短片](https://youtu.be/FnUXFOv74Tg)——这 60 秒里绝大部分是真实游玩画面。* 完整影片与实录：[1](https://youtu.be/pMtpObFnOug) · [2](https://youtu.be/ao9fL1g0Auc) · [3](https://youtu.be/lYuTEUDACMo)
+
+</div>
 
 > 一个让玩家像角色一样活在“活的无限画布世界”里的 AI 互动叙事游戏。
 > 设计文档见 **[`docs/`](docs)**（入口 [`docs/00-文档骨架.md`](docs/00-文档骨架.md)；2026-09-11 从已退休的 `infini-canvas` 项目迁入）。开发手册见 **[`AGENTS.md`](AGENTS.md)**。
