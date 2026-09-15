@@ -162,10 +162,13 @@ export function WorldLauncher({ shelf, loading, onLoad, onClose, onManageSaves, 
   openedRef.current = opened;
   const leaseRef = useRef<FocusSurfaceLease | null>(null);
   const requestClose = useCallback(() => {
+    // Collapsing an opened brick keeps the launcher open, so it must not mark
+    // the lease closing: a lease left "closing" refuses every later close.
+    if (openedRef.current) { setOpened(null); return; }
+    if (!closeHandler.current) return;
     const lease = leaseRef.current;
     if (lease && !lease.markClosing()) return;
-    if (openedRef.current) setOpened(null);
-    else closeHandler.current?.();
+    closeHandler.current();
   }, []);
   const active = opened ?? hovered;
   useEffect(() => {
