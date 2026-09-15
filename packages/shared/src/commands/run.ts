@@ -38,6 +38,7 @@ import type { CommandTriggerHook } from './bindings.js';
 import type { WorldCommandSpec } from './world-command.js';
 import { canonicalCommandStepText } from './world-command.js';
 import type { CommandEffectOutcome, EffectArgScope } from './execute.js';
+import type { InterpolatedValue } from './limits.js';
 import { runWorldCommand } from './execute.js';
 import type { CommandError, CommandLogEntry } from './idempotency.js';
 import {
@@ -186,7 +187,7 @@ async function settleLocked(ctx: ActionContext, input: SettleInput): Promise<Set
   // would settle a run the player never asked for (`05` §5.1).
   const found = entries.find((e) => e.key === key);
   if (found !== undefined && found.status === 'done') {
-    return { ran: [], reused: [summaryOf(found)], resumed: [] };
+    return { ran: [], reused: [summaryOf(found, 'reused')], resumed: [] };
   }
   const resuming = found !== undefined; // `partial` ⇒ S5; absent ⇒ S4 below.
   if (!resuming && input.mode === 'resume') {
@@ -364,7 +365,11 @@ async function settleLocked(ctx: ActionContext, input: SettleInput): Promise<Set
   const finished = { ...entry, status: 'done' as const, steps: [...entry.steps, ...effects.map(receiptOf)] };
   await persist(finished, { kind: 'clear' });
 
-  const summary = resuming ? summaryOf(finished, done) : summaryOf(finished);
+  // A resumed run's effects were executed JUST NOW, so they carry `'ran'`; the
+  // `resumed` verb plus `from`/`to` already says a prefix was carried over
+  // (`05` §5.6 — and `resumed` MUST NOT be folded into `reused`, because
+  // "finished what was left" and "did nothing new" are different sentences).
+  const summary = summaryOf(finished, 'ran', done);
   return resuming
     ? { ran: [], reused: [], resumed: [{ ...summary, from: done, to: effects.length }] }
     : { ran: [summary], reused: [], resumed: [] };
@@ -390,15 +395,26 @@ function receiptOf(outcome: CommandEffectOutcome): {
 }
 
 /**
- * The report entry for an already-written log entry.
+ * The report entry built from a written log entry's receipts.
  *
- * `reused` carries effects too (`05` §5.6), so the receipts stored last time are
- * replayed with `settle: 'reused'`. `path` stays `null` and that does NOT imply
- * failure — read `settle` for the verdict. An entry whose receipt shape no
- * longer validates yields an empty receipt list rather than a repaired one:
- * inventing details would be worse than reporting none.
+ * `settle` is a PARAMETER, not a constant: the same receipts mean different
+ * things depending on why we are reading them. On a `reused` hit the steps were
+ * written by an EARLIER run, so they are `'reused'`; on a successful first run
+ * they are what JUST happened, so they are `'ran'` — the two are the whole point
+ * of the report, and labelling a fresh run `reused` tells the model its own
+ * effect was skipped. (`resumed` is reported separately by the caller, which
+ * knows it just completed a prefix.)
+ *
+ * `path` is always `null` here: it is not persisted in the receipt (only
+ * `event` is), and `settle` carries the verdict. An entry whose shape no longer
+ * validates yields an EMPTY list rather than a repaired one — inventing details
+ * would be worse than reporting none.
  */
-function summaryOf(entry: CommandLogEntry, fromBase = 0): SettleRunSummary {
+function summaryOf(
+  entry: CommandLogEntry,
+  settle: 'ran' | 'reused',
+  fromBase = 0
+): SettleRunSummary {
   const parsed = CommandLogEntrySchema.safeParse(entry);
   // The cursor is `steps.length` and `execute.ts` skips any effect below
   // `fromStep` without re-numbering, so the tail is `[fromBase..total)` and the
@@ -410,7 +426,7 @@ function summaryOf(entry: CommandLogEntry, fromBase = 0): SettleRunSummary {
     action: s.action,
     step: s.step - base,
     at: s.at,
-    settle: 'reused' as const,
+    settle,
     path: null,
     seq: s.event === null ? null : Number(s.event.slice(4)),
   }));
@@ -429,9 +445,14 @@ function summaryOf(entry: CommandLogEntry, fromBase = 0): SettleRunSummary {
  * matters (`list-args` reads the array whole, per `03` §14.2).
  */
 function argScopeOf(input: SettleInput, parsed: ParsedFrontmatter): EffectArgScope {
+  // Passed through verbatim: `SettleInput.trigger` and `EffectArgScope.trigger`
+  // both carry `02` §2.5's FULL names, which the author writes literally in the
+  // command file. No re-prefixing and no stripping — the earlier mismatch
+  // (`trigger.trigger.path`, and `roll.result` resolving to "") came from
+  // treating one side as bare keys.
   return {
     params: { ...input.args },
-    trigger: input.trigger,
+    trigger: input.trigger as Readonly<Record<string, InterpolatedValue>>,
     status: statusValuesOf(parsed),
   };
 }

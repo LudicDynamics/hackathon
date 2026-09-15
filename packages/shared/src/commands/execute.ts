@@ -170,9 +170,20 @@ export interface EffectArgScope {
    * executing, so every caller would have to lie.
    */
   params: Readonly<Record<string, Scalar | Scalar[]>>;
-  /** `trigger.*`, pre-seeded by `02` (facts + the matched array entry). */
+  /**
+   * The FULL names from `02` §2.5 — `trigger.path`, `trigger.hook`,
+   * `trigger.entry.*`, `trigger.fm.*`, `roll.result`, `choice.text`, `item.path`,
+   * `actor`, `actor_id`, `layer` — seeded by `02`, NOT bare keys.
+   *
+   * Full names because §2.5's table is a MIXED namespace (`trigger.`-prefixed
+   * members plus bare roots like `roll.result`), and the author writes the name
+   * they see in that table. Storing bare keys and prefixing at lookup time (the
+   * earlier shape) resolved `trigger.path` but turned `roll.result` into the
+   * unresolvable `trigger.roll.result` — so a published `roll.result` reference
+   * silently rendered as an empty string.
+   */
   trigger: Readonly<Record<string, InterpolatedValue>>;
-  /** `status.*` of the entity being written, when the effect needs it. */
+  /** BARE `status.data` keys; resolved as `status.<key>` (`03` §3.1). */
   status?: Readonly<Record<string, Scalar>>;
 }
 
@@ -516,7 +527,8 @@ function walkArgs(node: unknown, vars: ReadonlyMap<string, InterpolatedValue>): 
 function argVariables(scope: EffectArgScope): ReadonlyMap<string, InterpolatedValue> {
   const vars = new Map<string, InterpolatedValue>();
   for (const [k, v] of Object.entries(scope.params)) vars.set(`params.${k}`, v);
-  for (const [k, v] of Object.entries(scope.trigger)) vars.set(`trigger.${k}`, v);
+  // `trigger` already holds §2.5's full names — see the field's doc comment.
+  for (const [k, v] of Object.entries(scope.trigger)) vars.set(k, v);
   for (const [k, v] of Object.entries(scope.status ?? {})) vars.set(`status.${k}`, v);
   return vars;
 }
