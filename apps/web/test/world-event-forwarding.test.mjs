@@ -91,54 +91,62 @@ async function bootstrap() {
   const cacheDir = path.join(webRoot, 'node_modules/.cache');
   fs.mkdirSync(cacheDir, { recursive: true });
   const dir = fs.mkdtempSync(path.join(cacheDir, 'airp-wwe-'));
-  const stubFile = path.join(dir, 'react-stub.mjs');
-  fs.writeFileSync(stubFile, REACT_STUB, 'utf-8');
+  // The scratch bundle is needed only until the dynamic `import` below resolves.
+  // `try/finally` (not a call after the happy path) is what keeps an esbuild or
+  // import failure from stranding the directory — the hygiene defect this file's
+  // own report flagged across the suite: a `mkdtemp` with no exception-safe `rm`
+  // leaks one directory per run until the tmpfs fills.
+  try {
+    const stubFile = path.join(dir, 'react-stub.mjs');
+    fs.writeFileSync(stubFile, REACT_STUB, 'utf-8');
 
-  const entry = path.join(dir, 'entry.ts');
-  fs.writeFileSync(
-    entry,
-    `export { useEffectQueue } from ${JSON.stringify(stubFile)};\n` +
-      `export * from ${JSON.stringify(path.join(webRoot, 'src/state/useWorld.ts'))};\n`,
-    'utf-8'
-  );
+    const entry = path.join(dir, 'entry.ts');
+    fs.writeFileSync(
+      entry,
+      `export { useEffectQueue } from ${JSON.stringify(stubFile)};\n` +
+        `export * from ${JSON.stringify(path.join(webRoot, 'src/state/useWorld.ts'))};\n`,
+      'utf-8'
+    );
 
-  const built = await esbuild.build({
-    entryPoints: [entry],
-    bundle: true,
-    write: false,
-    format: 'esm',
-    jsx: 'automatic',
-    // `alias` (not a resolve plugin) is what actually keeps REAL React out: the
-    // JSX runtime is pulled in from the bundled modules too, and a partial stub
-    // leaves `react`'s dispatcher null => "Invalid hook call" at call time.
-    alias: { react: stubFile, 'react-dom': stubFile, 'react/jsx-runtime': stubFile, 'react-dom/client': stubFile },
-    loader: { '.css': 'empty' },
-    platform: 'node',
-    absWorkingDir: webRoot,
-    // `base-path.ts` reads `import.meta.env.BASE_URL` at module scope.
-    define: { 'import.meta.env.BASE_URL': '"/"' },
-  });
-  const file = path.join(dir, 'useWorld.mjs');
-  fs.writeFileSync(file, built.outputFiles[0].text, 'utf-8');
+    const built = await esbuild.build({
+      entryPoints: [entry],
+      bundle: true,
+      write: false,
+      format: 'esm',
+      jsx: 'automatic',
+      // `alias` (not a resolve plugin) is what actually keeps REAL React out: the
+      // JSX runtime is pulled in from the bundled modules too, and a partial stub
+      // leaves `react`'s dispatcher null => "Invalid hook call" at call time.
+      alias: { react: stubFile, 'react-dom': stubFile, 'react/jsx-runtime': stubFile, 'react-dom/client': stubFile },
+      loader: { '.css': 'empty' },
+      platform: 'node',
+      absWorkingDir: webRoot,
+      // `base-path.ts` reads `import.meta.env.BASE_URL` at module scope.
+      define: { 'import.meta.env.BASE_URL': '"/"' },
+    });
+    const file = path.join(dir, 'useWorld.mjs');
+    fs.writeFileSync(file, built.outputFiles[0].text, 'utf-8');
 
-  const mod = await import(pathToFileURL(file).href);
-  mod.useWorld();
-  // Effects that need a real DOM throw here; the socket effect does not.
-  for (const effect of mod.useEffectQueue) {
-    try { effect(); } catch { /* DOM-dependent effect */ }
+    const mod = await import(pathToFileURL(file).href);
+    mod.useWorld();
+    // Effects that need a real DOM throw here; the socket effect does not.
+    for (const effect of mod.useEffectQueue) {
+      try { effect(); } catch { /* DOM-dependent effect */ }
+    }
+    const socket = sockets[0];
+    const handler = socket && typeof socket.onmessage === 'function' ? socket.onmessage : null;
+
+    return {
+      /** Feed one WS frame and report which CustomEvents reached `window`. */
+      drive(frame) {
+        dispatched.length = 0;
+        handler({ data: JSON.stringify(frame) });
+        return dispatched.map((event) => ({ type: event.type, detail: event.detail }));
+      },
+    };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
-  const socket = sockets[0];
-  const handler = socket && typeof socket.onmessage === 'function' ? socket.onmessage : null;
-
-  return {
-    /** Feed one WS frame and report which CustomEvents reached `window`. */
-    drive(frame) {
-      dispatched.length = 0;
-      handler({ data: JSON.stringify(frame) });
-      return dispatched.map((event) => ({ type: event.type, detail: event.detail }));
-    },
-    dispose: () => fs.rmSync(dir, { recursive: true, force: true }),
-  };
 }
 
 const driver = await bootstrap().catch((error) => {
