@@ -27,8 +27,34 @@ export const MAX_COMMAND_NAME_LENGTH = 80;
 export const MAX_COMMAND_DESC_LENGTH = 200;
 export const MAX_COMMAND_FILE_BYTES = 32000;
 export const MAX_COMMAND_PARAMS = 12;
-export const MAX_COMMAND_STEPS = 16;
-export const MAX_COMMAND_EFFECTS = 32;
+/**
+ * Declared `do[]` entries per command file. **This is `03`'s
+ * `WORLD_COMMAND_STEP_LIMIT = 12`, NOT a second number.**
+ *
+ * Contract §R.17 (and §R.13's "阈值只存在一处") removed `01`'s own 16/32: two
+ * constants for one quantity drift, and here the drift is load-bearing — `03`'s
+ * T11 asserts that a 13-step command is REFUSED at write time. With 16 it was
+ * accepted, and the check the whole budget argument rests on silently stopped
+ * being a check. `execute.ts` also reads this name, so one value now decides
+ * write-time validation and pre-flight alike.
+ */
+export const MAX_COMMAND_STEPS = 12;
+/**
+ * Hard cap on a command's DECLARED `do[]` effects — the same quantity as
+ * `MAX_COMMAND_STEPS` on the write-time side (`01` §3.1's S11), kept as its own
+ * name only because `MAX_COMMAND_TOTAL_CHARS` is derived from it.
+ *
+ * NOT the per-TRIGGER budget: that is `WORLD_COMMAND_EFFECT_BUDGET` below (24),
+ * and the two MUST NOT be conflated (`03` §6.2).
+ */
+export const MAX_COMMAND_EFFECTS = MAX_COMMAND_STEPS;
+/**
+ * Hard cap on EXPANDED effects per TRIGGER, across every matching command
+ * (`03` §6.2). Lives here, not in `execute.ts`, so that consumers of the
+ * constant (`idempotency.ts`) do not pull the whole executor — and through it
+ * the entire action layer — into their runtime import graph.
+ */
+export const WORLD_COMMAND_EFFECT_BUDGET = 24;
 export const MAX_COMMAND_STRING = 2000;
 export const MAX_COMMAND_ARG_DEPTH = 6;
 export const MAX_COMMAND_ARG_KEYS = 16;
@@ -37,7 +63,7 @@ export const MAX_COMMAND_WHEN_LENGTH = 200;
 export const MAX_ENUM_VALUES = 16;
 export const MAX_RUN_DEPTH = 1;
 /** Post-substitution total across every arg of one command (§2.3 hard rule 2). */
-export const MAX_COMMAND_TOTAL_CHARS = 64000;
+export const MAX_COMMAND_TOTAL_CHARS = MAX_COMMAND_STEPS * MAX_COMMAND_STRING;
 /**
  * ENTITY-SIDE schema bounds, NOT command-file limits. They are the anchor of
  * `09`'s R10 argument (iteration count is decided by a quantity the untrusted
