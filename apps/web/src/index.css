@@ -15,14 +15,13 @@
   --ux-color-blue: #7893a2;
   --ux-surface-stage: radial-gradient(ellipse at 35% 35%, color-mix(in srgb, var(--ux-color-paper) 72%, transparent), transparent 55%), var(--ux-color-wall);
   --ux-surface-transparent-ink: transparent;
-  /* Chalk readability frame (docs/components/04, 2026-09-15): a translucent
-     box behind bare chalk so it survives a photo backdrop; the dark pair is the
-     old "purple chalk" — dusk frame, lavender ink. */
-  --ux-surface-chalk-frame: rgba(251, 248, 241, 0.62);
-  --ux-surface-chalk-frame-dark: rgba(30, 22, 44, 0.62);
-  --ux-color-chalk-ink-dark: #e6dcf2;
-  --ux-shadow-chalk-glow: -1px 1px 0 rgba(255, 252, 240, 0.8);
-  --ux-shadow-chalk-glow-dark: 0 1px 2px rgba(0, 0, 0, 0.55);
+  /* Chalk legibility (docs/components/04, 2026-09-15): bare chalk stays
+     transparent — no frame — and survives a photo backdrop through a soft
+     halo around the glyphs instead. Light scenes: dark ink, paper-coloured
+     halo. Dark scenes: lavender ink (the old "purple chalk"), ink-dark halo. */
+  --ux-color-chalk-ink-dark: #efe7f7;
+  --ux-shadow-chalk-glow: 0 0 1px rgba(255, 252, 240, 0.95), 0 0 7px rgba(255, 252, 240, 0.85), -1px 1px 0 rgba(255, 252, 240, 0.8);
+  --ux-shadow-chalk-glow-dark: 0 0 1px rgba(12, 8, 20, 0.95), 0 0 7px rgba(12, 8, 20, 0.85), 0 1px 2px rgba(12, 8, 20, 0.7);
   --ux-surface-paper: var(--ux-color-paper);
   --ux-font-human: 'LXGW WenKai', 'Kaiti SC', 'KaiTi', serif;
   --ux-font-hand: 'Caveat', 'LXGW WenKai', 'Kaiti SC', 'KaiTi', serif;
@@ -1133,7 +1132,7 @@ body:before {
   --shadow-far: var(--ux-shadow-soft);
   --shadow-mid: var(--ux-shadow-halo);
   --shadow-near: var(--ux-shadow-deep);
-  --chalk-size: 19px; /* chalk base size; a form may inline-override */
+  --chalk-size: 20px; /* chalk base size; a form may inline-override */
 }
 
 /* ---- appearance token IDs (docs/components/04 §:104, 01 §2.4) ----
@@ -1227,20 +1226,19 @@ body:before {
    lets it survive the grain overlay.
    ============================================================ */
 .chalk--bare {
-  /* Bare Chalk has no paper and no border, but it does get a translucent
-     readability frame (docs/components/04, 2026-09-15) — pure transparency
-     was unreadable on photo backdrops. `--appearance-surface` still wins. */
-  background: var(--appearance-surface, var(--ux-surface-chalk-frame));
+  /* Bare Chalk is a first-class transparent surface; paper belongs to
+     `.chalk--card` or an explicit reading/dialogue surface. Legibility on a
+     photo backdrop comes from the glyph halo, never from a box
+     (docs/components/04, 2026-09-15). */
+  background: var(--ux-surface-transparent-ink);
   border: none;
   box-shadow: none;
-  border-radius: 10px;
-  padding: 10px 14px;
-  box-sizing: border-box;
+  border-radius: 0;
   font-family: var(--appearance-font-family, var(--kai));
   font-size: var(--chalk-size);
   line-height: 1.7;
   color: var(--appearance-ink, var(--ink));
-  text-shadow: var(--ux-shadow-chalk-glow); /* warm paper glow */
+  text-shadow: var(--ux-shadow-chalk-glow); /* paper-coloured halo */
   white-space: pre-wrap;
   /* Narration hugs its shell: the shell has no fixed height, so long chalk is
      never cropped — but it can never bleed past the declared box either. */
@@ -1248,12 +1246,8 @@ body:before {
 }
 
 /* Dark scenes (declared `bgStyle.tone: dark`, or a sampled dark backdrop —
-   lib/scene-tone.ts): the frame turns to dusk and the ink to lavender. */
-[data-scene-tone="dark"] .chalk--bare {
-  background: var(--appearance-surface, var(--ux-surface-chalk-frame-dark));
-  color: var(--appearance-ink, var(--ux-color-chalk-ink-dark));
-  text-shadow: var(--ux-shadow-chalk-glow-dark);
-}
+   lib/scene-tone.ts): lavender ink with an ink-dark halo, still no box. */
+[data-scene-tone="dark"] .chalk--bare,
 [data-scene-tone="dark"] .chalk {
   color: var(--appearance-ink, var(--ux-color-chalk-ink-dark));
   text-shadow: var(--ux-shadow-chalk-glow-dark);

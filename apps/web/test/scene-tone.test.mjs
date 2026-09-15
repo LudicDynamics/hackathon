@@ -24,11 +24,14 @@ test('mean luminance below the threshold reads as dark', () => {
   assert.ok(DARK_LUMINANCE > 0.3 && DARK_LUMINANCE < 0.5);
 });
 
-test('bare chalk keeps a translucent frame that flips with the scene tone (docs/components/04)', () => {
+test('bare chalk stays transparent and flips its ink and halo with the scene tone (docs/components/04)', () => {
   const bare = css.slice(css.indexOf('.chalk--bare {'), css.indexOf('white-space: pre-wrap;', css.indexOf('.chalk--bare {')));
-  assert.match(bare, /background: var\(--appearance-surface, var\(--ux-surface-chalk-frame\)\)/);
+  // No box: legibility comes from the glyph halo, never from a background.
+  assert.match(bare, /background: var\(--ux-surface-transparent-ink\);/);
   assert.match(bare, /border: none;/);
-  assert.match(css, /\[data-scene-tone="dark"\] \.chalk--bare \{[\s\S]*--ux-surface-chalk-frame-dark[\s\S]*--ux-color-chalk-ink-dark/);
+  assert.match(bare, /text-shadow: var\(--ux-shadow-chalk-glow\);/);
+  assert.doesNotMatch(bare, /padding:/);
+  assert.match(css, /\[data-scene-tone="dark"\] \.chalk--bare,\s*\[data-scene-tone="dark"\] \.chalk \{[\s\S]*--ux-color-chalk-ink-dark[\s\S]*--ux-shadow-chalk-glow-dark/);
   assert.match(canvas, /data-scene-tone=\{sceneTone\}/);
   assert.match(canvas, /useSceneTone\(/);
 });
