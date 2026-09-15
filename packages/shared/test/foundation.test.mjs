@@ -56,7 +56,16 @@ test('HTTP_STATUS is exhaustive over ActionErrorCode and carries the adjudicated
   assert.equal(HTTP_STATUS.no_free_seat, 507);
   assert.equal(HTTP_STATUS.not_movable, 409);
   assert.equal(HTTP_STATUS.invalid_asset_ref, 400);
-  assert.equal(Object.keys(HTTP_STATUS).length, 19);
+  // doc-command/05 §7 — the three idempotency codes this batch added. Their
+  // statuses are adjudicated, not incidental: a corrupt log is an unprocessable
+  // file (422), while a full log and a drifted resume are state conflicts (409).
+  assert.equal(HTTP_STATUS.command_log_corrupt, 422);
+  assert.equal(HTTP_STATUS.command_log_full, 409);
+  assert.equal(HTTP_STATUS.command_resume_drifted, 409);
+  // Exhaustiveness is guaranteed at compile time by `Record<ActionErrorCode, number>`;
+  // this count is the mechanical proxy that catches a code added to the union but
+  // forgotten in the map. Bump it in the same commit that adds a code.
+  assert.equal(Object.keys(HTTP_STATUS).length, 22);
   const err = new ActionError({ code: 'not_found', message: 'nope' });
   assert.equal(err.httpStatus, 404);
   assert.deepEqual(err.toHttp(), { status: 404, body: { ok: false, code: 'not_found', error: 'nope' } });

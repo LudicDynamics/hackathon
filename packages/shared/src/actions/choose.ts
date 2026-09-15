@@ -5,6 +5,7 @@ import { ActionError, fail } from './errors.js';
 import { registerAction } from './service.js';
 import { actorLabel } from './actor.js';
 import type { ActionContext, ActionResult } from './types.js';
+import { runTriggeredCommands } from '../commands/trigger.js';
 
 export interface ChooseOptionInput {
   /** World-relative, POSIX, no leading './' (00 §2.1). An entity with a choice group. */
@@ -24,6 +25,14 @@ export interface ChooseOptionDetails {
   index: number;
   /** The visible candidate count at resolution time; the UI uses it to detect staleness. */
   count: number;
+  /**
+   * The option's stable author-assigned id, when it declares one. The label is
+   * localized free text and the index shifts when a sibling's `when` hides it,
+   * so `id` is the ONLY key a command binding may dispatch on (docs/command/02
+   * §2.5). Details-only: it MUST NOT enter the event (`events.ts` fixes
+   * `choice_selected` at four fields).
+   */
+  optionId?: string;
   event?: WorldEvent;
 }
 
@@ -162,9 +171,41 @@ export async function chooseOption(
   const who = actor.charAt(0).toUpperCase() + actor.slice(1);
   const text = `${who} chose "${option.label}" (option ${option.index} of ${visible.length}) on "${name}" (${path}).`;
 
+  // Steps 11b/12 — world commands bound to this entity (docs/command/02 §3).
+  // `chooseOption` never writes a file, so this reuse of `parsed` is safe by
+  // construction: there is no later write that could invalidate `on`.
+  const commands = await runTriggeredCommands(ctx, {
+    source: path,
+    hook: 'choice_selected',
+    mode: 'fresh',
+    parsed,
+    facts: {
+      'choice.option_id': option.id ?? null,
+      'choice.option': option.label,
+      'choice.index': option.index,
+      'choice.count': visible.length,
+      'choice.name': name,
+      'trigger.path': path,
+      'trigger.name': name,
+      'trigger.id': null,
+      actor: ctx.actor.type,
+      actor_id: ctx.actor.id ?? null,
+      layer,
+    },
+  });
+
   return {
     text,
-    details: { path, name, choice: option.label, index: option.index, count: visible.length, event },
+    details: {
+      path,
+      name,
+      choice: option.label,
+      index: option.index,
+      count: visible.length,
+      ...(option.id === undefined ? {} : { optionId: option.id }),
+      event,
+      ...(commands ? { commands } : {}),
+    },
   };
 }
 

@@ -11,6 +11,7 @@ import {
 import { ActionError, fail } from './errors.js';
 import { registerAction } from './service.js';
 import type { ActionContext, ActionResult } from './types.js';
+import { runTriggeredCommands } from '../commands/trigger.js';
 
 export interface RollDiceInput {
   /** World-root relative path, POSIX, no leading './' (00 §2.1). An existing single .md file. */
@@ -242,8 +243,40 @@ export async function rollDice(
     );
   }
 
+  // Steps 11b/12 — world commands bound to this entity (docs/command/02 §3).
+  // Runs AFTER the event landed: a command may only react to a fact that is
+  // already true. NEVER throws — the roll is already adjudicated, and the
+  // re-roll gate would turn a thrown error into a dead end.
+  const commands = await runTriggeredCommands(ctx, {
+    source: path,
+    hook: 'roll_resolved',
+    mode: 'fresh',
+    parsed,
+    facts: {
+      'roll.result': result,
+      'roll.passed': passed,
+      'roll.crit': crit,
+      'roll.fumble': fumble,
+      'roll.forged': forged,
+      'roll.dice': declared.type,
+      'roll.expect': declared.expect,
+      'roll.desc': declared.desc,
+      'roll.name': name,
+      'roll.layer': layer,
+      'trigger.path': path,
+      'trigger.name': name,
+      'trigger.id': null,
+      actor: ctx.actor.type,
+      actor_id: ctx.actor.id ?? null,
+      layer,
+    },
+  });
+
   // Step 12 — return the stable details payload the router / toolkit wrap.
-  return { text, details: { ...details, event } };
+  // `...(commands ? { commands } : {})` is NOT style: no `on` ⇒ no `commands`
+  // key; a declared `on` ⇒ always a `commands` key, even all-skipped. That is
+  // what makes "wrote `on`, nothing ran" impossible to miss in the response.
+  return { text, details: { ...details, event, ...(commands ? { commands } : {}) } };
 }
 
 registerAction('rollDice', (ctx, input) => rollDice(ctx, input as unknown as RollDiceInput));

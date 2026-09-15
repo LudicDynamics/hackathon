@@ -19,6 +19,9 @@ export type ActionErrorCode =
   | 'unsupported' // legal but not implemented in this phase
   | 'write_failed' // disk write failed (incl. atomic write failure)
   | 'event_failed' // append failed after the file write already succeeded
+  | 'command_log_corrupt' // doc-command/05 §7: a hand-edited command_log entry is malformed
+  | 'command_log_full' // doc-command/05 §7: the 32-entry idempotency log is full; refusing beats truncating
+  | 'command_resume_drifted' // doc-command/05 §7: on.<hook>[index] no longer names the running command
   | 'internal';
 
 /** HTTP status per code — the single落点 for the C entry (01 §7.1). */
@@ -41,6 +44,9 @@ export const HTTP_STATUS: Record<ActionErrorCode, number> = {
   unsupported: 501,
   write_failed: 500,
   event_failed: 500,
+  command_log_corrupt: 422,
+  command_log_full: 409,
+  command_resume_drifted: 409,
   internal: 500,
 };
 

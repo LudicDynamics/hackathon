@@ -103,6 +103,28 @@ export interface CommandOutcome {
   /** Present iff `status === 'error'`. */
   code?: CommandOutcomeCode;
   message?: string;
+  /**
+   * The idempotency verdict, surfaced verbatim (`02:537`): the trigger's ONLY
+   * same-turn channel for telling "this actually ran" from "this reused an
+   * earlier result". Both are correct outcomes, but conflating them lies to the
+   * reader. Structurally typed rather than imported from `run.ts`, because the
+   * dependency direction is `run.ts → bindings.ts`, never the reverse — so this
+   * shape MUST stay STRUCTURALLY IDENTICAL to `run.ts`'s `SettleReport` or it
+   * stops being a structural match and becomes a second, drifting truth.
+   *
+   * Two things that must not be dropped:
+   *   - `effects` on every verb, including `reused`: without it "this was a
+   *     reuse" collapses to a bare verb with no way to see WHICH effects were
+   *     reused. `reused` entries are rebuilt from the settled `command_log`.
+   *   - `resumed`'s `from` / `to` (`05` §5.6): the model reads "how many steps
+   *     were completed", and `resumed` MUST NOT be folded into `reused`.
+   */
+  settleReport?: {
+    ran: ReadonlyArray<{ key: string; command: string; steps: number; effects: ReadonlyArray<CommandEffectOutcome> }>;
+    reused: ReadonlyArray<{ key: string; command: string; steps: number; effects: ReadonlyArray<CommandEffectOutcome> }>;
+    resumed: ReadonlyArray<{ key: string; command: string; steps: number; effects: ReadonlyArray<CommandEffectOutcome>; from: number; to: number }>;
+    failed?: { key: string; command: string; step: number; code: string; message: string };
+  };
   /** Per-effect projection from the evaluator; type owned by `03` (`execute.ts`). */
   effects?: CommandEffectOutcome[];
 }

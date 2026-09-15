@@ -40,21 +40,29 @@ export const MAX_COMMAND_PARAMS = 12;
  */
 export const MAX_COMMAND_STEPS = 12;
 /**
- * Hard cap on a command's DECLARED `do[]` effects — the same quantity as
- * `MAX_COMMAND_STEPS` on the write-time side (`01` §3.1's S11), kept as its own
- * name only because `MAX_COMMAND_TOTAL_CHARS` is derived from it.
- *
- * NOT the per-TRIGGER budget: that is `WORLD_COMMAND_EFFECT_BUDGET` below (24),
- * and the two MUST NOT be conflated (`03` §6.2).
- */
-export const MAX_COMMAND_EFFECTS = MAX_COMMAND_STEPS;
-/**
  * Hard cap on EXPANDED effects per TRIGGER, across every matching command
  * (`03` §6.2). Lives here, not in `execute.ts`, so that consumers of the
  * constant (`idempotency.ts`) do not pull the whole executor — and through it
  * the entire action layer — into their runtime import graph.
+ *
+ * Declared BEFORE the two names derived from it: `const` bindings are in the
+ * temporal dead zone until initialised, so a forward reference would throw at
+ * module load, not at first use.
  */
 export const WORLD_COMMAND_EFFECT_BUDGET = 24;
+/**
+ * Hard cap on a command's DECLARED `do[]` effects at write time (`01` §3.1's
+ * S11). A `list-args` step expands, so the expanded count can exceed the step
+ * count; this bounds the DECLARATION. `01` §R.17 fixes it at `03`'s
+ * `WORLD_COMMAND_EFFECT_BUDGET` (24) — the same number the per-trigger gate uses,
+ * because a single command can never lawfully exceed a whole trigger's budget.
+ *
+ * Two different quantities live here; do not conflate them:
+ *   - `MAX_COMMAND_STEPS` (12) = declared `do[]` entries.
+ *   - `MAX_COMMAND_EFFECTS` (24) = declared effects after `list-args` expansion,
+ *     and ALSO the per-TRIGGER budget across every matching command (`03` §6.2).
+ */
+export const MAX_COMMAND_EFFECTS = WORLD_COMMAND_EFFECT_BUDGET;
 export const MAX_COMMAND_STRING = 2000;
 export const MAX_COMMAND_ARG_DEPTH = 6;
 export const MAX_COMMAND_ARG_KEYS = 16;
@@ -62,8 +70,9 @@ export const MAX_COMMAND_REFS = 24;
 export const MAX_COMMAND_WHEN_LENGTH = 200;
 export const MAX_ENUM_VALUES = 16;
 export const MAX_RUN_DEPTH = 1;
-/** Post-substitution total across every arg of one command (§2.3 hard rule 2). */
-export const MAX_COMMAND_TOTAL_CHARS = MAX_COMMAND_STEPS * MAX_COMMAND_STRING;
+/** Post-substitution total across every arg of one command (§2.3 hard rule 2).
+ *  `R.17` fixes it at `MAX_COMMAND_EFFECTS × MAX_COMMAND_STRING` = 48 000. */
+export const MAX_COMMAND_TOTAL_CHARS = MAX_COMMAND_EFFECTS * MAX_COMMAND_STRING;
 /**
  * ENTITY-SIDE schema bounds, NOT command-file limits. They are the anchor of
  * `09`'s R10 argument (iteration count is decided by a quantity the untrusted

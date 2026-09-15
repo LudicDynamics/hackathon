@@ -11,13 +11,16 @@
  *   resolve paths → read item → read target → run handler → append event →
  *   assemble details/text → return.
  */
+import { createHash } from 'node:crypto';
 import { entityName, parseFrontmatter } from '../schemas/frontmatter.js';
+import type { ParsedFrontmatter } from '../schemas/frontmatter.js';
 import type { WorldEvent } from '../schemas/events.js';
 import { componentDefOf, resolveComponentKind } from '../components/registry.js';
 import type { EntityRef, HandlerOutcome } from '../components/types.js';
 import { ActionError, fail } from './errors.js';
 import { registerAction } from './service.js';
 import type { ActionContext, ActionResult } from './types.js';
+import { runTriggeredCommands } from '../commands/trigger.js';
 
 export interface UseItemOnInput {
   /** World-relative path of the item being applied (a single .md file). */
@@ -154,7 +157,7 @@ async function readEntity(
   ctx: ActionContext,
   path: string,
   label: 'Item' | 'Target'
-): Promise<{ frontmatter: Record<string, any> | null; body: string }> {
+): Promise<ParsedFrontmatter> {
   try {
     return parseFrontmatter(await ctx.store.readFile(path));
   } catch (err) {
@@ -197,15 +200,12 @@ export async function useItemOn(
   if (targetStat === 'dir') {
     fail('invalid_path', `use_item_on takes a single .md file as "target", got a directory: "${targetPath}"`);
   }
-  if (targetStat === 'missing') {
-    fail('not_found', `Target not found: "${targetPath}"`);
-  }
-
-  const itemRef = toEntityRef(itemPath, await readEntity(ctx, itemPath, 'Item'));
-  const targetRef = toEntityRef(targetPath, await readEntity(ctx, targetPath, 'Target'));
+  const itemParsed = await readEntity(ctx, itemPath, 'Item');
+  const targetParsed = await readEntity(ctx, targetPath, 'Target');
+  const itemRef = toEntityRef(itemPath, itemParsed);
+  const targetRef = toEntityRef(targetPath, targetParsed);
 
   // Step 4 — handler lookup keyed on the TARGET's kind, never the item's
-  // (doc-08 §3.4 discipline 1).
   const resolvedKind = resolveComponentKind(targetRef.frontmatter, targetPath.split('/').pop() ?? '');
   const def = componentDefOf(resolvedKind);
   const targetKind = def ? resolvedKind : null;
@@ -269,6 +269,40 @@ export async function useItemOn(
   let reason: UseItemOnReason | null = null;
   if (!outcome.handled) reason = outcome.reason ?? 'no_handler';
 
+  // Steps 11b/12 — world commands bound to `on.use_item_on` (docs/command/02
+  // §3). The trigger entity is the TARGET, not the item: the handler lookup
+  // above is already keyed on the target's kind, and binding follows the same
+  // discipline so one action cannot have two entities each claiming the
+  // consequences. A handler may have rewritten the target's `status.data`, but
+  // never its `on` — so `targetRef.frontmatter` is still the right snapshot.
+  const commands = await runTriggeredCommands(ctx, {
+    source: targetPath,
+    hook: 'use_item_on',
+    mode: 'fresh',
+    parsed: targetParsed,
+    facts: {
+      'item.path': itemPath,
+      // `02:517`: the fact component is the item path plus its content hash —
+      // the item is the varying half, the target is the binding's home.
+      'item.sha256': createHash('sha256')
+        .update(`${JSON.stringify(itemRef.frontmatter)}|${itemRef.body}`, 'utf8')
+        .digest('hex'),
+      'item.name': itemRef.name,
+      'target.path': targetPath,
+      'target.name': targetRef.name,
+      'target.kind': targetKind,
+      handled: outcome.handled,
+      effect,
+      reason,
+      'trigger.path': targetPath,
+      'trigger.name': targetRef.name,
+      'trigger.id': null,
+      actor: ctx.actor.type,
+      actor_id: ctx.actor.id ?? null,
+      layer,
+    },
+  });
+
   return {
     text: renderText(itemRef, targetRef, outcome, targetKind),
     details: {
@@ -282,6 +316,7 @@ export async function useItemOn(
       reason,
       presentation: pickPresentation(outcome.handled, resolvedKind, targetPath),
       event,
+      ...(commands ? { commands } : {}),
     },
   };
 }

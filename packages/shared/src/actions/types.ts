@@ -5,7 +5,11 @@ import type { AgentScope, Actor } from './actor.js';
 /**
  * Everything an action needs, and nothing else.
  * Deliberately transport-free: no HTTP req/res, no WebSocket, no pi-rp types.
- * Frozen fields: store / actor / turn / now? / rng?. No AbortSignal, no progress channel.
+ * Frozen fields: store / actor / turn / now? / rng?. The one later addition is
+ * `commandDepth` (docs/command/02 §11.4) — the ONLY thing that stops a world
+ * command's effects from triggering further world commands. No AbortSignal, no
+ * progress channel: a command chain is depth 1 by construction, so nothing
+ * needs to interrupt it.
  */
 export interface ActionContext {
   store: WorldStore;
@@ -15,6 +19,14 @@ export interface ActionContext {
   agentScope?: AgentScope;
   /** Internal capability used only by the validated /api/nook-note adapter. */
   nookNote?: boolean;
+  /**
+   * How many world commands deep this call is. Absent === 0 === a real actor's
+   * first action. Any value > 0 suppresses every implicit command trigger point
+   * (docs/command/02 §3 step 2): a command's effects never trigger further
+   * commands. The ONLY writer is `03`'s executor, adding 1 when it invokes an
+   * action on a command's behalf.
+   */
+  commandDepth?: number;
   /**
    * Merge anchor (doc-21 §3.4). One agent turn, or one HTTP request.
    * Opaque string; the action layer never parses it, only forwards it.
