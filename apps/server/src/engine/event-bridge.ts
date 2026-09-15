@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { WebSocketServer } from 'ws';
 import type { JsonAgentSessionEvent } from '../../../../vendor/pi-rp/packages/coding-agent/dist/index.js';
-import { parseFrontmatter, cardKindOf, layerOfDir, dirOf, entityName, REPLAY_TURNS, REPLAY_BUFFER_KEEP, REPLAY_FRAME_ALLOWLIST, type LocalWorldStore } from '@airp/shared';
+import { parseFrontmatter, cardKindOf, layerOfDir, dirOf, entityName, isLayerDir, characterIdOfPath, characterRootConfigOf, REPLAY_TURNS, REPLAY_BUFFER_KEEP, REPLAY_FRAME_ALLOWLIST, type LocalWorldStore } from '@airp/shared';
 import { extractContentPrefix } from './chalk-delta.js';
 import {
   ActivityProjector,
@@ -129,6 +129,32 @@ function emitChalkDeltas(
     push({ type: 'writer_delta', source: 'writer', delta: truth, toolCallId, mode: 'replace' });
   }
 }
+
+/**
+ * True when `relPath` is a member of SOME layer's `items` — the precondition for
+ * `reconcileLanded` (front end) to ever reclaim the skeleton this frame seats.
+ *
+ * Seating a phantom for a path that belongs to no layer leaks it forever: the
+ * card never enters `items`, so the handover never fires, and the entry keeps
+ * occupying a seat in `phantomSeatFor` (docs/skeleton/04 §10.4a).
+ *
+ * Mirrors how each lane derives its members — deliberately WITHOUT calling the
+ * store (`cardWritingFrame` is pure and runs on the synchronous map loop), but
+ * reusing the ONE predicates that own each question:
+ * - `world/**` is the layer tree — `isLayerDir` (`layers.ts`), the same call
+ *   `deriveLayers` makes;
+ * - `characters/<id>/**` is a nook page, minus the four root config files that
+ *   `nookCardPaths` excludes via `characterRootConfigOf` (not public nook cards);
+ * - `player/**`, `world.json`, and those root configs are in NO layer's `items`.
+ *
+ * `kind === 'gate'` (any README) is already rejected downstream, so the map
+ * layer's own README needs no special case here.
+ */
+function isLayerMemberPath(relPath: string): boolean {
+  if (isLayerDir(dirOf(relPath))) return true;
+  return characterIdOfPath(relPath) !== null && characterRootConfigOf(relPath) === null;
+}
+
 /**
  * Build the `card_writing` presentation frame from a `write` tool's start event
  * (docs/skeleton/01 §3). The writer is about to land a component card; this
@@ -138,8 +164,10 @@ function emitChalkDeltas(
  * Pure: no I/O, never throws (the caller is the synchronous `mapEngineEvent`
  * loop — a throw here would drop every later frame). `content` absent or
  * unparseable → `kind` falls back to `'note'` (NOT `'default'`: `cardKindOf`'s
- * final return is `note`). `layer` is omitted when `args.path` has no directory
- * (docs/skeleton/00 F-2).
+ * final return is `note`). `layer` is omitted when the path has no directory
+ * (docs/skeleton/00 F-2) **or** when the path is in no layer's `items`
+ * (docs/skeleton/04 §10.4a) — the front end reads a missing `layer` as "not a
+ * layer card" and skips the skeleton, which is the one mechanism for both.
  *
  * Owner: docs/skeleton/01.
  */
@@ -152,6 +180,7 @@ function cardWritingFrame(
   const relPath = typeof a?.path === 'string' ? a.path : '';
   const content = typeof a?.content === 'string' ? a.content : '';
   const layer = layerOfDir(dirOf(relPath));
+  const seatable = isLayerMemberPath(relPath);
   const fm = parseFrontmatter(content).frontmatter;
   const kind = cardKindOf(fm, path.basename(relPath));
   const frame: Record<string, unknown> = {
@@ -161,9 +190,10 @@ function cardWritingFrame(
     kind,
     title: entityName(fm, relPath),
   };
-  // Omit `layer` when the path has no directory (F-2 §2): the front end treats a
-  // missing layer as "not a layer card" and skips the skeleton (F-10 ruling O).
-  if (layer !== '') frame.layer = layer;
+  // Omit `layer` when the path has no directory (F-2 §2) or belongs to no layer's
+  // `items` (§10.4a): the front end reads a missing layer as "not a layer card"
+  // and skips the skeleton (F-10 ruling O). One mechanism, two reasons.
+  if (layer !== '' && seatable) frame.layer = layer;
   return frame;
 }
 

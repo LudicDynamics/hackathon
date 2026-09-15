@@ -49,6 +49,24 @@ export function dirOf(p: string): string {
 }
 
 /**
+ * True when `dir` is (or is under) the layer tree — `world` or `world/**`.
+ *
+ * This is the ONE predicate behind "is this directory a layer?"; `deriveLayers`
+ * uses the same expression below. A caller that needs "would this PATH ever
+ * appear in some layer's `items`" must ask this instead of re-deriving it from
+ * the directory string (see `cardWritingFrame` in the server bridge).
+ *
+ * Note it is deliberately NOT `layerOfDir`: that function is an identity map for
+ * everything except `world` (`characters/<id>` maps to itself, `player` to
+ * `player`), so it cannot answer membership. And it is NOT `resolveLayer`
+ * either, whose `characters/** → null` is a frozen semantic about the LAYER
+ * TABLE, not about nook pages (docs/skeleton/04 §10.4a).
+ */
+export function isLayerDir(dir: string): boolean {
+  return dir === WORLD_DIR || dir.startsWith(`${WORLD_DIR}/`);
+}
+
+/**
  * Build the layer map from the set of directories under `world/`.
  * `readFm(dir)` returns that directory's README frontmatter, or null when the
  * directory has no README (a stub layer).
@@ -58,9 +76,7 @@ export function deriveLayers(
   readFm: (dir: string) => Record<string, any> | null
 ): Record<string, LayerConfig> {
   // Only directories at or under world/ are layers.
-  const layerDirs = dirs
-    .filter((d) => d === WORLD_DIR || d.startsWith(`${WORLD_DIR}/`))
-    .sort();
+  const layerDirs = dirs.filter(isLayerDir).sort();
 
   const inTree = new Set(layerDirs);
   const layers: Record<string, LayerConfig> = {};

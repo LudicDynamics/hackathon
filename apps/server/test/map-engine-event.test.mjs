@@ -393,3 +393,69 @@ test('card_writing resolves a nook path (characters/<id>/** is its own layer)', 
   assert.equal(frame.layer, 'characters/bob');
   assert.equal(frame.kind, 'photo');
 });
+
+// ── docs/skeleton/04 §10.4a: never seat a skeleton that no layer can reclaim ──
+//
+// The frame carries `layer` only when the path is in SOME layer's `items`.
+// `reconcileLanded` (front end, `useWorld.ts`) reclaims keyed on those paths, so a
+// path that never enters `items` leaves the phantom sitting on a seat forever —
+// the leak F-8/F-10 exist to prevent. Each case below is a path the writer CAN
+// legally `write` but which belongs to no layer.
+test('card_writing omits `layer` for player/** (bag space is not a layer)', () => {
+  const out = frames('writer', {
+    type: 'tool_execution_start',
+    toolCallId: 'c20',
+    toolName: 'write',
+    args: { path: 'player/brass-key.md', content: '---\ntype: note\n---\n' },
+  });
+  const frame = out.find((f) => f.type === 'card_writing');
+  assert.equal(frame.kind, 'note');
+  assert.equal('layer' in frame, false);
+});
+
+test('card_writing omits `layer` for a character root config file', () => {
+  // identity/personality/memory/README are nook CONFIGURATION, explicitly
+  // excluded from the page's items by `nookCardPaths`/`characterRootConfigOf`.
+  for (const name of ['identity.md', 'personality.md', 'memory.md']) {
+    const out = frames('writer', {
+      type: 'tool_execution_start',
+      toolCallId: `c21-${name}`,
+      toolName: 'write',
+      args: { path: `characters/bob/${name}`, content: '---\ntype: note\n---\n' },
+    });
+    const frame = out.find((f) => f.type === 'card_writing');
+    assert.equal('layer' in frame, false, `${name} must not seat a skeleton`);
+  }
+});
+
+test('card_writing omits `layer` for a character sub-scene config at the nook root', () => {
+  // Same rule, one level down: a root config of a NESTED scene is not config,
+  // it is an ordinary lived trace and DOES belong to that scene's items.
+  const nested = frames('writer', {
+    type: 'tool_execution_start',
+    toolCallId: 'c22-nested',
+    toolName: 'write',
+    args: { path: 'characters/bob/office/memory.md', content: '---\ntype: note\n---\n' },
+  }).find((f) => f.type === 'card_writing');
+  assert.equal(nested.layer, 'characters/bob/office');
+});
+
+test('card_writing keeps `layer` for the two lanes that DO have items', () => {
+  // Positive control: the guard must not over-reject — both lanes below are
+  // reclaimed by `reconcileLanded` today.
+  const world = frames('writer', {
+    type: 'tool_execution_start',
+    toolCallId: 'c23-world',
+    toolName: 'write',
+    args: { path: 'world/baker-street/lock.md', content: '---\ntype: component\n---\n' },
+  }).find((f) => f.type === 'card_writing');
+  assert.equal(world.layer, 'world/baker-street');
+
+  const nook = frames('writer', {
+    type: 'tool_execution_start',
+    toolCallId: 'c23-nook',
+    toolName: 'write',
+    args: { path: 'characters/bob/desk.md', content: '---\ntype: component\n---\n' },
+  }).find((f) => f.type === 'card_writing');
+  assert.equal(nook.layer, 'characters/bob');
+});
