@@ -25,6 +25,22 @@ export const WorldSettingsSchema = z.object({
 }).strict();
 export type WorldSettings = z.infer<typeof WorldSettingsSchema>;
 
+/**
+ * A PARTIAL update to the stored settings (docs/command/00 §10.13).
+ *
+ * `POST /api/world-settings` is a patch, not a whole-object overwrite: the body
+ * carries only the fields the caller means to change, and they are merged over
+ * what is already on disk. Without this, the endpoint's correctness would rest
+ * on the coincidence that `WorldSettings` has exactly one field — the moment a
+ * second field is added, any caller that posts a one-field body would silently
+ * reset the other (`docs/settings/00 §2.4`).
+ *
+ * Strict (inherited from `WorldSettingsSchema`), so an unknown key is rejected
+ * rather than silently dropped; `.partial()`, so a one-field body stays valid.
+ */
+export const WorldSettingsPatchSchema = WorldSettingsSchema.partial();
+export type WorldSettingsPatch = z.infer<typeof WorldSettingsPatchSchema>;
+
 export const DEFAULT_WORLD_SETTINGS: WorldSettings = { autoWrite: 'scenes-and-choices' };
 
 /** True when walking into an unwritten scene should start the I1 initialiser. */

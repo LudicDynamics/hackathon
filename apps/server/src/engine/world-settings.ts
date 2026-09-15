@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { WorldSettingsSchema, DEFAULT_WORLD_SETTINGS, type WorldSettings } from '@airp/shared';
+import { WorldSettingsSchema, DEFAULT_WORLD_SETTINGS, type WorldSettings, type WorldSettingsPatch } from '@airp/shared';
 
 /**
  * Per-world player settings, stored beside the save (<worldRoot>/.airpworld/settings.json).
@@ -33,4 +33,17 @@ export function writeWorldSettings(worldRoot: string, settings: WorldSettings): 
   const file = path.join(dir, 'settings.json');
   fs.writeFileSync(`${file}.tmp`, JSON.stringify(settings, null, 2) + '\n');
   fs.renameSync(`${file}.tmp`, file);
+}
+
+/**
+ * Apply a PARTIAL patch over the stored settings (docs/command/00 §10.13).
+ *
+ * `writeWorldSettings` stays the whole-object primitive; this is what
+ * `POST /api/world-settings` calls, so the body may carry a subset of the
+ * fields without resetting the ones it omits. Returns the merged result.
+ */
+export function updateWorldSettings(worldRoot: string, patch: WorldSettingsPatch): WorldSettings {
+  const next: WorldSettings = { ...readWorldSettings(worldRoot), ...patch };
+  writeWorldSettings(worldRoot, next);
+  return next;
 }
