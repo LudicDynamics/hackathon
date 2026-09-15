@@ -38,6 +38,7 @@ import type { InterpolatedValue } from './limits.js';
 import type { CommandEffectOutcome } from './execute.js';
 import { settleWorldCommands } from './run.js';
 import { parseWorldCommand } from './world-command.js';
+import { resolveDiceOutcomes } from './legacy-dice-outcomes.js';
 import type { WorldCommandSpec } from './world-command.js';
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -65,6 +66,46 @@ export interface RunTriggeredCommandsArgs {
  *
  * Static literal table → `Record`, per the repo's `ts-set-map` rule.
  */
+/**
+ * `08`'s read-time fallback: give an entity with a `dice_outcomes` table the
+ * `on.roll_resolved` block it never declared, and keep the synthesized command
+ * specs where the binding loop can find them.
+ *
+ * Returns the frontmatter unchanged for every other entity — an explicit
+ * `on.roll_resolved` is authoritative (`08` §10.5 item 2), and so is having no
+ * legacy table at all. A malformed table yields no bindings here; the entity
+ * then behaves exactly as it did before this fallback existed rather than
+ * failing a roll the player already made.
+ *
+ * The synthesized specs are recorded in `synthesized` because they have NO file
+ * under `command/`: the binding loop reads `command/<id>.yaml` from disk, and a
+ * fallback command would otherwise report `command_not_found` for a binding the
+ * engine itself just created.
+ */
+function frontmatterWithLegacyBindings(
+  frontmatter: Record<string, unknown>,
+  entityPath: string,
+  hook: CommandTriggerHook,
+  synthesized: Map<string, WorldCommandSpec>
+): Record<string, unknown> {
+  // Only `roll_resolved` has a legacy form: `dice_outcomes` is a dice table.
+  if (hook !== 'roll_resolved') return frontmatter;
+  const resolved = resolveDiceOutcomes(frontmatter, entityPath);
+  if ('kind' in resolved && resolved.kind === 'legacy') {
+    for (const command of resolved.commands) synthesized.set(command.id, command);
+    return { ...frontmatter, on: resolved.on };
+  }
+  // An `{ errors }` verdict must STOP the hook, not be ignored: the one error
+  // this can carry is `legacy_and_modern_conflict`, and swallowing it would let
+  // the entity run its `on` block while the table it also declares is silently
+  // dead — a card whose published table never fires, with no report anywhere.
+  if ('errors' in resolved) {
+    return { ...frontmatter, on: { __legacyConflict: resolved.errors } };
+  }
+  // `modern`: an explicit `on.roll_resolved` is authoritative (`08` §10.5 item 2).
+  return frontmatter;
+}
+
 const FACT_KEYS: Record<CommandTriggerHook, readonly string[]> = {
   roll_resolved: ['roll.result'],
   choice_selected: ['choice.index', 'choice.option'],
@@ -105,15 +146,44 @@ export async function runTriggeredCommands(
     // ── Step 3 — take `on` from the caller's snapshot, never re-read the file.
     // This is also why a command that rewrites its own entity cannot change the
     // bindings of the run that rewrote it (§4.3).
-    const rawOn = frontmatter['on'];
+    // ── Step 3 — `on` from the caller's snapshot, never re-read (§4.3).
+    //
+    // An entity with NO `on.roll_resolved` but WITH a `dice_outcomes` table is
+    // routed through `08`'s read-time expansion: the table predates commands and
+    // 48 shipped cards still carry it, so without this those cards keep
+    // declaring outcomes nothing ever executes — the exact silent failure the
+    // whole module exists to end. The judgment is "does this entity declare
+    // `on.roll_resolved`" (`08` §10.5 item 2), never "which syntax is newer":
+    // an explicit block is authoritative, and the expansion must not shadow it.
+    const synthesizedCommands = new Map<string, WorldCommandSpec>();
+    const frontmatterForOn = frontmatterWithLegacyBindings(frontmatter, source, hook, synthesizedCommands);
+    const rawOn = frontmatterForOn['on'];
     if (rawOn === undefined || rawOn === null) return undefined;
     if (typeof rawOn !== 'object' || Array.isArray(rawOn)) return undefined;
+    // The legacy/modern conflict is a contradiction in the CARD, not in `on`:
+    // report it as its own code and run nothing, rather than letting `on` run
+    // while the declared table stays dead.
+    const conflict = (rawOn as Record<string, unknown>)['__legacyConflict'];
+    if (Array.isArray(conflict)) {
+      const first = conflict[0] as { code: string; message: string } | undefined;
+      return [
+        {
+          command: '',
+          hook,
+          source,
+          binding: 0,
+          status: 'error',
+          code: 'legacy_and_modern_conflict',
+          message: first?.message ?? 'this entity declares both "dice_outcomes" and "on.roll_resolved".',
+        },
+      ];
+    }
     if ((rawOn as Record<string, unknown>)[hook] == null) return undefined;
 
     // ── Step 4 — parse the bindings (pure, no I/O). Fail-closed: one receipt,
     // and no binding of this hook runs. The write gate should have stopped this
     // already; this is the second line of defence against silent `on` damage.
-    const parsedOn = parseOnBindings(frontmatter, hook);
+    const parsedOn = parseOnBindings(frontmatterForOn, hook);
     if (parsedOn.errors.length > 0) {
       const first = parsedOn.errors[0]!;
       const code: CommandOutcomeCode =
@@ -229,27 +299,38 @@ export async function runTriggeredCommands(
       // ── Step 6 — read `command/<id>.yaml` and parse it (strict schema).
       const commandPath = `command/${binding.run}.yaml`;
       let rawCommand: string;
-      try {
-        rawCommand = await ctx.store.readFile(commandPath);
-      } catch {
-        outcomes.push(
-          bindingError(binding, hook, source, index, 'command_not_found',
-            `Binding ${index} of "on.${hook}" on "${source}" runs "${binding.run}", but ${commandPath} ` +
-            `does not exist. The action itself succeeded.`)
-        );
-        if (binding.onError === 'stop') shortCircuited = true;
-        continue;
+      // A generated binding's command has no file to read (`08` §10.4): the
+      // expansion produced the spec in memory, so consult it FIRST — reading
+      // disk first would report `command_not_found` for a binding the engine
+      // just created.
+      const synthesized = synthesizedCommands.get(binding.run);
+      let spec: WorldCommandSpec;
+      if (synthesized !== undefined) {
+        spec = synthesized;
+      } else {
+        let rawCommand: string;
+        try {
+          rawCommand = await ctx.store.readFile(commandPath);
+        } catch {
+          outcomes.push(
+            bindingError(binding, hook, source, index, 'command_not_found',
+              `Binding ${index} of "on.${hook}" on "${source}" runs "${binding.run}", but ${commandPath} ` +
+              `does not exist. The action itself succeeded.`)
+          );
+          if (binding.onError === 'stop') shortCircuited = true;
+          continue;
+        }
+        const specResult = parseWorldCommand(binding.run, rawCommand);
+        if (!specResult.ok) {
+          outcomes.push(
+            bindingError(binding, hook, source, index, 'command_malformed',
+              `${commandPath} failed to parse: ${specResult.errors.map((e) => e.message).join(' ')}`)
+          );
+          if (binding.onError === 'stop') shortCircuited = true;
+          continue;
+        }
+        spec = specResult.command;
       }
-      const specResult = parseWorldCommand(binding.run, rawCommand);
-      if (!specResult.ok) {
-        outcomes.push(
-          bindingError(binding, hook, source, index, 'command_malformed',
-            `${commandPath} failed to parse: ${specResult.errors.map((e) => e.message).join(' ')}`)
-        );
-        if (binding.onError === 'stop') shortCircuited = true;
-        continue;
-      }
-      const spec: WorldCommandSpec = specResult.command;
 
       // ── Step 7 — bind `with`. A failure echoes the ORIGINAL reference: a typo
       // silently resolving to "" would write an empty path — the world changed,
