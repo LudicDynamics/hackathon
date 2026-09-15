@@ -4,7 +4,7 @@
 //   node video/music/make-narration.mjs  → video/remotion/public/vo/n-<i>.wav + src/lib/narration.json
 // Each line is normalised to -16 LUFS and, if it runs past its subtitle window, sped up (≤ 1.25×) to fit.
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -58,7 +58,17 @@ const tmp = mkdtempSync(join(tmpdir(), 'vo-'));
 const out = [];
 for (const [i, c] of cues.entries()) {
   const raw = join(tmp, `${i}.wav`);
-  if (PROVIDER === 'edge') {
+  if (PROVIDER === 'files') {
+    // The user's own recordings, one file per line: NARRATOR_DIR/n-00.wav, n-01.m4a, … (numbering as in NARRATION-zh.md).
+    // Missing lines are skipped, so a partial take can already be heard in the film.
+    const base = join(resolve(process.env.NARRATOR_DIR || '.'), `n-${String(i).padStart(2, '0')}`);
+    const src = ['.wav', '.m4a', '.mp3', '.aiff', '.aif'].map((e) => base + e).find((p) => existsSync(p));
+    if (!src) {
+      console.log(`MISS  n-${String(i).padStart(2, '0')}  ${c.text}`);
+      continue;
+    }
+    ff(['-i', src, '-ac', '1', '-ar', '44100', raw]);
+  } else if (PROVIDER === 'edge') {
     // Microsoft neural narrator voices via edge-tts (pip3 install edge-tts) — the clean, neutral read of paper videos.
     const mp3 = join(tmp, `${i}.mp3`);
     execFileSync('python3', ['-m', 'edge_tts', '--voice', VOICE, '--text', c.text, '--write-media', mp3], { stdio: ['ignore', 'ignore', 'pipe'] });

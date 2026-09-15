@@ -6,6 +6,7 @@ import { AxisIcon } from "../components/Icons";
 import { cast, WORLDS, type World } from "../lib/assets";
 import { DISPLAY, INK, ORANGE, PAPER } from "../lib/theme";
 import { LauncherSlot } from "./parts/LauncherSlot";
+import { tr } from "../lib/lang";
 
 // ACT 4 · "Pick a world." — the launcher (0–150), then Fogwharf 68s, First Snow 10s, Divergence 12s.
 // (Holmes was dropped, v12; its time went to Fogwharf.)
@@ -79,9 +80,9 @@ export const CreditsStat: React.FC = () => {
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", background: `rgba(10,10,10,${0.55 * s})` }}>
       <div style={{ transform: `scale(${0.9 + 0.1 * s})`, opacity: s, display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-        <div style={{ fontFamily: DISPLAY, fontWeight: 900, fontSize: 120, color: PAPER, letterSpacing: -4 }}>44-MIN RUN</div>
-        <div style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 56, color: PAPER, opacity: 0.85 }}>48M+ tokens this week</div>
-        <div style={{ fontFamily: DISPLAY, fontWeight: 900, fontSize: 64, color: ORANGE, letterSpacing: 4 }}>CREDITS: 0</div>
+        <div style={{ fontFamily: DISPLAY, fontWeight: 900, fontSize: 120, color: PAPER, letterSpacing: -4 }}>{tr("44-MIN RUN", "一局 44 分钟")}</div>
+        <div style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 56, color: PAPER, opacity: 0.85 }}>{tr("48M+ tokens this week", "本周 4800 万+ tokens")}</div>
+        <div style={{ fontFamily: DISPLAY, fontWeight: 900, fontSize: 64, color: ORANGE, letterSpacing: 4 }}>{tr("CREDITS: 0", "额度：0")}</div>
       </div>
     </AbsoluteFill>
   );

@@ -181,6 +181,12 @@
 
 - 产品名改为 **Worldlines: LivingCanvas**：logo 下的 "INFINITE CANVAS" 换成 "LivingCanvas"（公式结果和结尾 logo 两处）；旁白 "This is Worldlines: LivingCanvas."（1 分钟版开场一句同样）。画面里没有 mock 字样（"MOCK · TTS" 标签已删）。
 
+### 中文版（2026-09-16，发 B站 / 小红书）
+
+- 完整版 3:52 的中文版，横屏 16:9，旁白 **云扬**（zh-CN-YunyangNeural）。同一个 `Launch` 工程，`--props='{"lang":"zh"}'` 切换（`src/lib/lang.ts`）：旁白与字幕（`captions-zh.ts`）、对话气泡、GPT Live 气泡、标签（实录 · GPT LIVE 通话 / 已写入世界 / 下一步）、数据卡、书页与画布手写字、契约卡、结尾一句都换成中文；世界名、公式、LivingCanvas logo、BUILT BY LUDICDYNAMICS 保持英文。角色原声（Vera 日语、Elias 英语）保留，配中文字幕。
+- 用语：writer agent = 作家智能体；character agents = 角色智能体。
+- 渲染：`SCALE=1 NAME_TAG=zh PROPS='{"lang":"zh"}' VO_TAG=novo sh scripts/render-chunks.sh`，再 `DIR=out/chunks-1-zh V=v19 sh scripts/mix-vo.sh yunyang` → `out/worldlines-launch-v19-yunyang.mp4`。
+
 ### 定名 LivingCanvas，完整版对齐 1 分钟版（2026-09-15）
 
 - 项目名定为 **LivingCanvas**（CharaCanvas 版保留在 `-chara` 文件里，不再往下做）。

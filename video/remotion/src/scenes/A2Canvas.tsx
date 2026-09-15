@@ -5,6 +5,7 @@ import { ChalkWrite, CursorAvatar, Flash, PlayerCursor, Slam } from "../componen
 import { RUST, walk, WriterCursor, type Step } from "../components/WriterCursor";
 import { CAST, type Cast, type CastId, WORLDS } from "../lib/assets";
 import { INK, ORANGE, PAPER } from "../lib/theme";
+import { tr } from "../lib/lang";
 import { S0ColdOpen } from "./S0ColdOpen";
 
 // ACT 2 · key press (0–90, burst on the drop at 0:18) → one canvas with the writer at work (90–300) → cast (300–480).
@@ -63,7 +64,7 @@ const WriterCanvas: React.FC = () => {
           )}
           {f >= SPAWN_AT && (
             <div style={{ position: "absolute", left: sp.x - (SPAWN.w * cam.scale) / 2, top: sp.y - (SPAWN.h * cam.scale) / 2, width: SPAWN.w * cam.scale, height: SPAWN.h * cam.scale, background: PAPER, borderRadius: 12, padding: 18, transform: `scale(${born})`, boxShadow: "0 16px 40px rgba(0,0,0,.55)", outline: f < 160 ? `3px solid ${RUST}` : "none" }}>
-              <ChalkWrite text="The fog parts over berth seven." start={SPAWN_AT + 4} cps={24} size={30} />
+              <ChalkWrite text={tr("The fog parts over berth seven.", "第七泊位上空，雾散开了。")} start={SPAWN_AT + 4} cps={24} size={30} />
             </div>
           )}
           {CAST.map((c, i) => {

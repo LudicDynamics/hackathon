@@ -1,5 +1,7 @@
 import type { Cue } from "../components/Captions";
 import { withProject } from "./project";
+import { LANG } from "./lang";
+import { NARRATION_ZH } from "./captions-zh";
 
 /**
  * Narration subtitles, absolute seconds on the Launch timeline (video/SCRIPT.md, v17 = 3:52).
@@ -62,4 +64,5 @@ const RAW: Cue[] = [
   { from: 222.6, to: 225.8, text: "Books let us read stories. Games let us play them." },
   { from: 226.6, to: 231.6, text: "Worldlines lets you live in the world, with your character agents." },
 ];
-export const NARRATION: Cue[] = RAW.map((c) => ({ ...c, text: withProject(c.text) }));
+/** The Chinese cut (lang "zh") uses captions-zh.ts, same timings. */
+export const NARRATION: Cue[] = LANG === "zh" ? NARRATION_ZH : RAW.map((c) => ({ ...c, text: withProject(c.text) }));

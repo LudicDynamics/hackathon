@@ -8,6 +8,7 @@ import { VoiceClip } from "../components/Voice";
 import { RUST, walk, WriterCursor, type Step } from "../components/WriterCursor";
 import { LYRA1, LYRA2, line, shown, VERA2, vlen } from "../lib/voice";
 import { DISPLAY, HAND, INK, MONO, ORANGE, PAPER, TEXT } from "../lib/theme";
+import { tr } from "../lib/lang";
 import { DiveIn, NookMock, PullBack } from "./S5Infinite";
 
 // ACT 5 · Infinite exploration. The Moonlit Pact: one promise, one door, and the writer builds the next place
@@ -33,7 +34,11 @@ const MoonlitOpen: React.FC = () => {
 };
 
 // Real choices from templates/moonlit-contract/world/opening.md.
-const OPTIONS = ["Make a contract. With you, beyond this door.", "But before that, I want to hear what you promise in the contract.", "Not making a contract now. Please let me think a little."];
+const OPTIONS = [
+  tr("Make a contract. With you, beyond this door.", "缔结契约。和你一起，走过这扇门。"),
+  tr("But before that, I want to hear what you promise in the contract.", "在那之前，我想先听听你在契约里许下什么。"),
+  tr("Not making a contract now. Please let me think a little.", "现在还不缔约。请让我再想一想。"),
+];
 const CLICK = 130;
 
 type Made = { at: number; x: number; y: number; w: number; h: number; file: string; kind: "md" | "image" | "gate" };
@@ -90,8 +95,8 @@ const Contract: React.FC = () => {
         <Img src={staticFile(MOON)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       </AbsoluteFill>
       <div style={{ position: "absolute", left: 130, top: 150, width: 800, background: PAPER, borderRadius: 16, padding: "34px 40px", boxShadow: "0 30px 70px rgba(0,0,0,.6)" }}>
-        <div style={{ fontFamily: HAND, fontWeight: 700, fontSize: 54, color: INK }}>By Your Own Will</div>
-        <ChalkWrite text="“Will you bind a contract with me and walk this night together?”" start={4} cps={40} size={34} color="#3a2f26" style={{ marginTop: 10 }} />
+        <div style={{ fontFamily: HAND, fontWeight: 700, fontSize: 54, color: INK }}>{tr("By Your Own Will", "出于你自己的意志")}</div>
+        <ChalkWrite text={tr("“Will you bind a contract with me and walk this night together?”", "“你愿意与我缔结契约，共度这一夜吗？”")} start={4} cps={40} size={34} color="#3a2f26" style={{ marginTop: 10 }} />
         <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 26 }}>
           {OPTIONS.map((o, i) => (
             <div key={o} style={{ fontFamily: TEXT, fontWeight: 600, fontSize: 25, color: chosen && i === 0 ? INK : "#3a2f26", background: chosen && i === 0 ? ORANGE : "rgba(0,0,0,.06)", padding: "14px 18px", borderRadius: 10, opacity: chosen && i > 0 ? 0.35 : 1 }}>

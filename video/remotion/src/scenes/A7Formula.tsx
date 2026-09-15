@@ -5,6 +5,7 @@ import { Face, Grid, RoleplayIcon } from "../components/Icons";
 import { CursorAvatar, Flash, PlayerCursor, Slam, WorldlinesMark } from "../components/Kit";
 import { CAST } from "../lib/assets";
 import { PROJECT } from "../lib/project";
+import { tr } from "../lib/lang";
 import { DISPLAY, INK, ORANGE, PAPER, PLAYERS } from "../lib/theme";
 import { burstScale } from "./S0ColdOpen";
 
@@ -111,7 +112,7 @@ const Logo: React.FC = () => {
       {/* Studio credit, quieter than the product name. */}
       <div style={{ marginTop: 70, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, opacity: fade(55) }}>
         <div style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 26, letterSpacing: 8, color: PAPER, opacity: 0.85 }}>BUILT BY LUDICDYNAMICS</div>
-        <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: 26, letterSpacing: 1, color: PAPER, opacity: 0.55 }}>From Tokyo, to the world.</div>
+        <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: 26, letterSpacing: 1, color: PAPER, opacity: 0.55 }}>{tr("From Tokyo, to the world.", "从东京，走向世界。")}</div>
       </div>
     </AbsoluteFill>
   );

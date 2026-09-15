@@ -1,5 +1,6 @@
 import React from "react";
 import { MONO, PAPER } from "../lib/theme";
+import { tr } from "../lib/lang";
 
 /** The app's writer keeps a rust pointer (agent-cursor.css: --ux-color-rust). */
 export const RUST = "#B5532C";
@@ -15,7 +16,7 @@ export const WriterCursor: React.FC<{ x: number; y: number; label?: string; colo
     </svg>
     {label && (
       <div style={{ marginTop: 26, background: color, color: PAPER, fontFamily: MONO, fontSize: 21, padding: "5px 12px", borderRadius: 8, whiteSpace: "nowrap" }}>
-        <span style={{ fontWeight: 700 }}>Writer agent</span> · {label}
+        <span style={{ fontWeight: 700 }}>{tr("Writer agent", "作家智能体")}</span> · {label}
       </div>
     )}
   </div>

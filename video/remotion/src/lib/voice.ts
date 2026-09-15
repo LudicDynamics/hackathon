@@ -1,5 +1,19 @@
 import voice from "./voice.json";
+import { LANG } from "./lang";
 import { FPS } from "./timing";
+
+/** On-screen text for the Chinese cut (bubbles in A3, subtitles in A5); the voices stay as they are. */
+const ZH: Record<string, string> = {
+  "player-1": "Vera，你在灯塔发现了什么？",
+  "vera-1": "十二分钟的黑暗。有人想让港口失明。",
+  "player-2": "Nanami，下雪了吗？",
+  "nanami-1": "刚开始下！快上天台来！",
+  "player-3": "Wataru，你在等我吗？",
+  "wataru-1": "……我没在等。只是刚好帮你留了座。",
+  "lyra-1": "我是 Lyra。为守护你而来。",
+  "lyra-2": "你愿意与我缔结契约，共度这一夜吗？",
+  "vera-2": "这里啊，是我放那些没能修好的东西的地方。",
+};
 
 /** `text` is what is spoken (Lyra speaks Japanese); `subtitle`, when present, is the English shown on screen. */
 export type VoiceLine = { id: string; speaker: string; text: string; subtitle?: string; language?: string; file: string; duration: number };
@@ -7,7 +21,7 @@ const LINES = voice as VoiceLine[];
 
 export const line = (id: string) => LINES.find((l) => l.id === id)!;
 /** On-screen text for a line — always English. */
-export const shown = (id: string) => line(id).subtitle ?? line(id).text;
+export const shown = (id: string) => (LANG === "zh" && ZH[id]) || line(id).subtitle || line(id).text;
 /** Length of a generated line in frames. */
 export const vlen = (id: string) => Math.round(line(id).duration * FPS);
 

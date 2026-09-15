@@ -9,6 +9,7 @@ import { SNIPPETS } from "../lib/snippets";
 import { DiceSlot } from "./parts/DiceSlot";
 import { DISPLAY, INK, INK_2, MONO, ORANGE, PAPER, PLAYERS } from "../lib/theme";
 import { H, W } from "../lib/timing";
+import { tr } from "../lib/lang";
 
 export const MULTI = 300;
 export const WRITER = 180;
@@ -94,7 +95,7 @@ export const Multiplayer: React.FC = () => {
     <AbsoluteFill style={{ background: "#050505" }}>
       {rects.map((r, i) => (merge > 0 && i > 0 ? null : <BrowserWindow key={i} r={r} viewer={i} cards={cards} chrome={1 - merge} />))}
       {merge === 0 && rects.slice(1).map((r, i) => <BrowserWindow key={`w${i + 1}`} r={r} viewer={i + 1} cards={cards} chrome={1} />)}
-      <Chip text="next" style={{ right: 40, top: 30 }} />
+      <Chip text={tr("next", "下一步")} style={{ right: 40, top: 30 }} />
     </AbsoluteFill>
   );
 };

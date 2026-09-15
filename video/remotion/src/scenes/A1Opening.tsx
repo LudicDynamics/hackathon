@@ -3,6 +3,7 @@ import { AbsoluteFill, Easing, Img, interpolate, Sequence, spring, staticFile, u
 import { ChalkWrite, Slam, TypingDots } from "../components/Kit";
 import { cast } from "../lib/assets";
 import { INK, PAPER } from "../lib/theme";
+import { LANG, tr } from "../lib/lang";
 import { DiceSlot } from "./parts/DiceSlot";
 
 // ACT 1 · "Stories have always been worlds." Read → play → talk to one character → but never *live* in one.
@@ -20,8 +21,8 @@ const Ink: React.FC = () => {
           <div key={i} style={{ position: "absolute", left: 0, right: 0, top: 150 + i * 92, height: 2, background: "rgba(90,70,50,.10)" }} />
         ))}
         <div style={{ position: "absolute", left: 210, top: 330, width: 1500, display: "flex", flexDirection: "column", gap: 18 }}>
-          <ChalkWrite text="A slender moonlight fell through" start={6} cps={21} size={96} color="#2a2118" />
-          <ChalkWrite text="a crumbling stone arch." start={56} cps={21} size={96} color="#2a2118" />
+          <ChalkWrite text={tr("A slender moonlight fell through", "一缕细细的月光，")} start={6} cps={LANG === "zh" ? 9 : 21} size={96} color="#2a2118" />
+          <ChalkWrite text={tr("a crumbling stone arch.", "穿过坍塌的石拱。")} start={56} cps={LANG === "zh" ? 9 : 21} size={96} color="#2a2118" />
         </div>
       </AbsoluteFill>
       <AbsoluteFill style={{ background: "radial-gradient(ellipse at 38% 48%, rgba(255,244,220,.55), transparent 55%), radial-gradient(ellipse at center, transparent 50%, rgba(50,32,16,.6) 100%)" }} />
@@ -123,7 +124,7 @@ const Chatbot: React.FC = () => {
 /** Whip's white turn card: one word. */
 const Live: React.FC = () => (
   <AbsoluteFill style={{ background: "#FAF8F3", alignItems: "center", justifyContent: "center" }}>
-    <Slam text="live." size={380} color={INK} delay={4} />
+    <Slam text={tr("live.", "活在其中。")} size={LANG === "zh" ? 300 : 380} color={INK} delay={4} />
   </AbsoluteFill>
 );
 

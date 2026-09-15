@@ -3,6 +3,7 @@ import { AbsoluteFill, Sequence, useCurrentFrame } from "remotion";
 import { Footage } from "../components/Media";
 import { Flash } from "../components/Kit";
 import { VoiceClip } from "../components/Voice";
+import { tr } from "../lib/lang";
 import { Bubble, ELIAS_TINT, EliasTag, reveal } from "./A3Voice";
 
 // GPT LIVE · a feature of its own, between infinite exploration and "Next" (v17). Introduced before it is shown
@@ -21,8 +22,8 @@ export const LIVE_VOICE_LEN = 195;
 
 /** His two lines, relative to the call beat. */
 const LINES = [
-  { text: "Okay, let's take it slow and get it right.", from: 107, to: 207 },
-  { text: "I'm checking what the ticket should cover.", from: 215, to: 296 },
+  { text: tr("Okay, let's take it slow and get it right.", "好，我们慢慢来，把它做对。"), from: 107, to: 207 },
+  { text: tr("I'm checking what the ticket should cover.", "我在确认这张工单该写些什么。"), from: 215, to: 296 },
 ];
 
 /** On a GPT Live call. The box shows your request (English); his replies are voice only, so they are bubbles. */
@@ -33,7 +34,7 @@ export const Call: React.FC = () => {
       <Footage slot="el-live" push={0} />
       {/* The character card's bio is in Chinese in this take; soften it (the film shows English only). */}
       <div style={{ position: "absolute", left: 52, top: 282, width: 500, height: 108, backdropFilter: "blur(10px)", background: "rgba(40,38,34,.35)", borderRadius: 10 }} />
-      <EliasTag label="REAL · GPT LIVE CALL" />
+      <EliasTag label={tr("REAL · GPT LIVE CALL", "实录 · GPT LIVE 通话")} />
       <div style={{ position: "absolute", right: 70, top: 250, width: 640, display: "flex", flexDirection: "column", gap: 20 }}>
         {LINES.filter((l) => f >= l.from).map((l) => (
           <Bubble key={l.text} text={reveal(l.text, f, l.from, l.to - l.from)} mine={false} tint={ELIAS_TINT} />
@@ -57,7 +58,7 @@ export const World: React.FC = () => (
       <AbsoluteFill style={{ transform: "scale(1.6)", transformOrigin: "21% 35%" }}>
         <Footage slot="el-item" push={0.05} />
       </AbsoluteFill>
-      <EliasTag label="SAVED TO THE WORLD" />
+      <EliasTag label={tr("SAVED TO THE WORLD", "已写入世界")} />
     </Sequence>
     <Flash at={LIVE_ACT} len={1} />
   </AbsoluteFill>

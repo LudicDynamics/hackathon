@@ -100,19 +100,20 @@ assets/audio/licensed/
 !docs/worlds/
 !docs/worlds/**
 
-# Launch video (large media; public/ assets are copied from templates by video/remotion/scripts/sync-assets.sh)
+# Launch video. Kept OUT of git: raw screen recordings (1.5 GB, two copies) and
+# rendered outputs (3.5 GB) — the finished films live on YouTube — plus the
+# public/ media that video/remotion/scripts/sync-assets.sh copies straight from
+# templates/ (cast, bg, scenes, portraits: regenerate with that script).
+# Everything else the film needs is tracked since 2026-09-16 (niko): sfx,
+# covers, models, voices, narration (vo/), the icon and the two score mixes.
 video/footage/
 video/remotion/out/
 video/remotion/public/cast/
 video/remotion/public/bg/
 video/remotion/public/scenes/
 video/remotion/public/portraits/
-video/remotion/public/sfx/
 video/remotion/public/footage/
-# Placeholder score renders (the mp3 is kept; the 25MB wav is a local intermediate).
-video/remotion/public/music/*.wav
-video/remotion/public/covers/
-video/remotion/public/models/
-video/remotion/public/voice/
-video/remotion/public/icons/
-video/remotion/public/vo/
+# Score candidates / placeholders: the mp3 is kept; the 25 MB wav is a local intermediate.
+video/remotion/public/music/candidate-*.wav
+video/remotion/public/music/placeholder-*.wav
+video/remotion/public/music/try-*.wav

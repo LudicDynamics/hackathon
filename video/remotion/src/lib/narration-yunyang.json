@@ -1,0 +1,299 @@
+[
+ {
+  "from": 0.4,
+  "to": 3.8,
+  "text": "故事，一直都是一个个世界。",
+  "file": "vo/yunyang/n-00.wav",
+  "duration": 2.101,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 4.2,
+  "to": 6.8,
+  "text": "书，让我们读它。",
+  "file": "vo/yunyang/n-01.wav",
+  "duration": 1.291,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 7.2,
+  "to": 9.8,
+  "text": "游戏，让我们玩它。",
+  "file": "vo/yunyang/n-02.wav",
+  "duration": 1.238,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 10.2,
+  "to": 13.8,
+  "text": "聊天机器人：一个角色，困在一个框里。",
+  "file": "vo/yunyang/n-03.wav",
+  "duration": 2.706,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 14.3,
+  "to": 16.8,
+  "text": "但从没有人让你活在其中。",
+  "file": "vo/yunyang/n-04.wav",
+  "duration": 1.896,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 19.3,
+  "to": 21.35,
+  "text": "这是 Worldlines：LivingCanvas。",
+  "file": "vo/yunyang/n-05.wav",
+  "duration": 2.056,
+  "tempo": 1.097,
+  "fits": true
+ },
+ {
+  "from": 21.4,
+  "to": 27.4,
+  "text": "一张无限画布，你、角色智能体和作家智能体共享同一个世界。",
+  "file": "vo/yunyang/n-06.wav",
+  "duration": 5.453,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 33.1,
+  "to": 34.9,
+  "text": "而且，他们会回话。",
+  "file": "vo/yunyang/n-07.wav",
+  "duration": 1.342,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 59.3,
+  "to": 63.8,
+  "text": "选一个世界。",
+  "file": "vo/yunyang/n-08.wav",
+  "duration": 0.853,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 64.3,
+  "to": 67.4,
+  "text": "雾坞镇：船只接连失踪，你接下委托。",
+  "file": "vo/yunyang/n-09.wav",
+  "duration": 2.661,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 67.7,
+  "to": 72.3,
+  "text": "在港口搜寻线索。关键时刻，由骰子决定。",
+  "file": "vo/yunyang/n-10.wav",
+  "duration": 3.929,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 72.6,
+  "to": 75,
+  "text": "玩家问 Vera 为什么要帮忙。",
+  "file": "vo/yunyang/n-11.wav",
+  "duration": 2.006,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 86,
+  "to": 91.1,
+  "text": "说出你的推理，作家智能体就把下一个地点写进世界。",
+  "file": "vo/yunyang/n-12.wav",
+  "duration": 4.133,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 91.3,
+  "to": 93.7,
+  "text": "玩家邀请她同行。",
+  "file": "vo/yunyang/n-13.wav",
+  "duration": 1.344,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 95.9,
+  "to": 99.6,
+  "text": "她跟上来，你们一起找到第二艘船。",
+  "file": "vo/yunyang/n-14.wav",
+  "duration": 2.457,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 101.7,
+  "to": 103.9,
+  "text": "玩家发现了新的路。",
+  "file": "vo/yunyang/n-15.wav",
+  "duration": 1.279,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 111,
+  "to": 115.2,
+  "text": "深入之后，玩家问要不要回头。",
+  "file": "vo/yunyang/n-16.wav",
+  "duration": 2.268,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 125.8,
+  "to": 131.8,
+  "text": "我们玩上了瘾：一局玩了44分钟，直到100美元额度用完。",
+  "file": "vo/yunyang/n-17.wav",
+  "duration": 4.705,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 132.3,
+  "to": 135.9,
+  "text": "初雪之夜，守住一个约定。",
+  "file": "vo/yunyang/n-18.wav",
+  "duration": 1.786,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 138.3,
+  "to": 141.7,
+  "text": "结局，由你的选择写成。",
+  "file": "vo/yunyang/n-19.wav",
+  "duration": 1.903,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 142.3,
+  "to": 146.8,
+  "text": "改变1994年的一个早晨，看看今晚谁还在。",
+  "file": "vo/yunyang/n-20.wav",
+  "duration": 3.662,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 151.1,
+  "to": 153.8,
+  "text": "同一条街，前后对比。",
+  "file": "vo/yunyang/n-21.wav",
+  "duration": 1.651,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 154.2,
+  "to": 156.6,
+  "text": "或者，只从一个约定开始。",
+  "file": "vo/yunyang/n-22.wav",
+  "duration": 1.853,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 164.6,
+  "to": 169.8,
+  "text": "答应她，作家智能体就在你走进去时写出下一个地方。",
+  "file": "vo/yunyang/n-23.wav",
+  "duration": 4.186,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 170.3,
+  "to": 174.1,
+  "text": "每个角色，也都有自己的小天地。",
+  "file": "vo/yunyang/n-24.wav",
+  "duration": 2.245,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 178.2,
+  "to": 181.8,
+  "text": "而且，它永远不会走到尽头。",
+  "file": "vo/yunyang/n-25.wav",
+  "duration": 2.055,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 182.2,
+  "to": 185.5,
+  "text": "用 GPT Live，和角色实时通话。",
+  "file": "vo/yunyang/n-26.wav",
+  "duration": 2.72,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 192.1,
+  "to": 196.2,
+  "text": "通话里答应的事，会被写进世界。",
+  "file": "vo/yunyang/n-27.wav",
+  "duration": 2.247,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 200.3,
+  "to": 204.8,
+  "text": "作家智能体会写剧情、规则，也会写代码。",
+  "file": "vo/yunyang/n-28.wav",
+  "duration": 3.553,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 205,
+  "to": 209.5,
+  "text": "故事需要什么，它就能造出什么。",
+  "file": "vo/yunyang/n-29.wav",
+  "duration": 2.266,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 210.3,
+  "to": 217.5,
+  "text": "下一步：拉上朋友，进入同一个故事。",
+  "file": "vo/yunyang/n-30.wav",
+  "duration": 2.389,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 222.6,
+  "to": 225.8,
+  "text": "书让我们读，游戏让我们玩。",
+  "file": "vo/yunyang/n-31.wav",
+  "duration": 1.941,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 226.6,
+  "to": 231.6,
+  "text": "而 Worldlines，让你和角色智能体一起活在世界里。",
+  "file": "vo/yunyang/n-32.wav",
+  "duration": 3.861,
+  "tempo": 1,
+  "fits": true
+ }
+]

@@ -2,11 +2,13 @@ import { loadFont as loadDisplay } from "@remotion/google-fonts/InterTight";
 import { loadFont as loadHand } from "@remotion/google-fonts/Caveat";
 import { loadFont as loadMono } from "@remotion/google-fonts/JetBrainsMono";
 
-export const DISPLAY = loadDisplay("normal", { weights: ["500", "800", "900"], subsets: ["latin"] }).fontFamily;
+/** CJK fallbacks for the Chinese cut (lib/lang.ts); Latin glyphs still come from the loaded fonts. */
+const CJK = '"PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif';
+export const DISPLAY = `${loadDisplay("normal", { weights: ["500", "800", "900"], subsets: ["latin"] }).fontFamily}, ${CJK}`;
 /** Subtitles and UI text: same family, regular weight. */
 export const TEXT = DISPLAY;
-export const HAND = loadHand("normal", { weights: ["600", "700"], subsets: ["latin"] }).fontFamily;
-export const MONO = loadMono("normal", { weights: ["500"], subsets: ["latin"] }).fontFamily;
+export const HAND = `${loadHand("normal", { weights: ["600", "700"], subsets: ["latin"] }).fontFamily}, "Kaiti SC", "STKaiti", ${CJK}`;
+export const MONO = `${loadMono("normal", { weights: ["500"], subsets: ["latin"] }).fontFamily}, ${CJK}`;
 
 export const INK = "#0A0A0A";
 export const INK_2 = "#161616";

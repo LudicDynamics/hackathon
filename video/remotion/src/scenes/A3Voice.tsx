@@ -4,6 +4,7 @@ import { Footage, Media } from "../components/Media";
 import { Flash, TypingDots } from "../components/Kit";
 import { Mic } from "../components/Icons";
 import { VoiceClip } from "../components/Voice";
+import { tr } from "../lib/lang";
 import { cast } from "../lib/assets";
 import { CUT, CUT2, CUT3, N1, P1, P2, P3, shown, V1, vlen, W1 } from "../lib/voice";
 import { DISPLAY, INK, ORANGE, PAPER, TEXT } from "../lib/theme";
@@ -126,7 +127,7 @@ export const EliasTag: React.FC<{ label: string }> = ({ label }) => (
 const EliasText: React.FC = () => (
   <AbsoluteFill>
     <Footage slot="el-text" push={0.04} />
-    <EliasTag label="REAL · IN-APP VOICE" />
+    <EliasTag label={tr("REAL · IN-APP VOICE", "实录 · 应用内语音")} />
     <VoiceClip id="elias-1" />
   </AbsoluteFill>
 );
