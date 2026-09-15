@@ -72,10 +72,10 @@ Not a line of code existed before the challenge. From Friday we built everything
 ## Pre-existing code, open-source components, datasets, third-party tools (≤200 words)
 
 - **pi-rp** (our fork of Mario Zechner's `pi` coding-agent monorepo, MIT) — the agent RPC runtime; vendored as a submodule.
-- Runtime/libraries (MIT unless noted): React, Vite, TypeScript, Tailwind CSS, Express, ws, zod, yaml, three.js, cannon-es, lucide-react; Remotion (Remotion licence) for the demo video; edge-tts for the video's temporary narration.
+- Runtime/libraries (MIT unless noted): React, Vite, TypeScript, Tailwind CSS, Express, ws, zod, yaml, three.js, cannon-es, lucide-react; Remotion (Remotion licence) and edge-tts for the demo video.
 - Fonts via Google Fonts: LXGW WenKai, Caveat, DM Mono, Manrope (SIL OFL).
 - Audio: CC-BY 4.0 tracks credited in `assets/audio/CREDITS.md`; foley/ambient from CC0 sources; the launcher theme is our own Suno-generated track (not redistributed).
-- **Local TTS**: a self-hosted character voice we fine-tuned ourselves during the build period on Fish Audio's open-weights **Fish Speech S2 Pro** (weights CC BY-NC-SA 4.0, code Apache-2.0). The fine-tuned weights are ours, not yet released (open vs closed undecided); used for one character. Other voices use Alibaba DashScope Qwen-TTS.
+- **Local TTS**: a self-hosted character voice we fine-tuned ourselves during the build period on Fish Audio's open-weights **Fish Speech S2 Pro** (weights CC BY-NC-SA 4.0, code Apache-2.0). Our fine-tuned weights are unreleased (open vs closed undecided); used for one character. Other voices use Alibaba DashScope Qwen-TTS.
 - Model/API services: OpenAI (GPT Live, GPT-5, GPT-4o-transcribe, GPT Image, GPT Astra), DeepSeek (optional writer model), Vercel AI Gateway.
 - Art: scene backgrounds, portraits and intro clips generated during the build period with Stable-Diffusion-based pipelines and Seedance from our own prompts; dice modelled with GPT Astra + Blender.
 - Pre-existing: an earlier internal prototype contributed design documents only; all code was written during the build period.
