@@ -48,19 +48,14 @@ export const COMMAND_TRIGGER_HOOKS = Object.freeze([
 ] as const);
 
 /**
- * §10.2.1's error codes — 17 as of `08`'s fallback landing. Bidirectionally
- * equal to that table's `code` column (contract §R.25: EQUAL, never a union).
- * Kept as a runtime frozen list so the union and the list cannot drift and the
- * equality is checkable. Bump `02 §10.2.1` in the SAME commit that adds a code.
+ * §10.2.1 — the 16 error codes. Bidirectionally equal to that table's `code`
+ * column (contract §R.25: EQUAL, never a union). Kept as a runtime frozen list
+ * so the union and the list cannot drift and the equality is checkable.
  */
 export const COMMAND_OUTCOME_CODES = Object.freeze([
   // Parse layer — the write gate should already have stopped these (second line).
   'on_malformed',
   'choice_actions_conflict',
-  // `08` §11.3: a card declaring BOTH `dice_outcomes` and `on.roll_resolved`.
-  // Its own code because the repair is different from a damaged `on` (delete one
-  // of the two), and reusing `on_malformed` would send the author to fix `on`.
-  'legacy_and_modern_conflict',
   'command_not_found',
   'command_malformed',
   'param_invalid',
