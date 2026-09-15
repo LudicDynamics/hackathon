@@ -14,7 +14,8 @@ test('model preferences remain world-local and keep writer and character separat
     writeModelPreferences(root, { writer: preference });
     assert.deepEqual(readModelPreferences(root), { writer: preference });
     assert.deepEqual(modelPreferenceArgs(root, 'writer'), ['--provider', 'openai', '--model', 'gpt-5.4-mini', '--thinking', 'off']);
-    assert.deepEqual(modelPreferenceArgs(root, 'character'), ['--provider', 'deepseek', '--model', 'deepseek-v4-flash', '--thinking', 'low']);
+    // No saved character preference → the shipped default (Vercel AI Gateway, gpt-5.6-luna, low).
+    assert.deepEqual(modelPreferenceArgs(root, 'character'), ['--provider', 'vercel-ai-gateway', '--model', 'openai/gpt-5.6-luna', '--thinking', 'low']);
     assert.equal(AgentModelSelectionSchema.safeParse({ ...preference, role: 'writer', world: root }).success, true);
     assert.equal(AgentModelSelectionSchema.safeParse({ ...preference, role: 'writer' }).success, false);
   } finally { await fs.rm(root, { recursive: true, force: true }); }

@@ -28,8 +28,10 @@ test('doors record the entry; only the auto-write switch starts a turn', async (
     assert.equal(page.items.filter(item => item.frontmatter?.type === 'gate' || item.filename === 'README.md').length, 1);
     assert.equal(page.items.length, 4);
 
-    // Default settings: `autoWrite` is absent ⟹ `off` (docs/settings/00). A choice
-    // lands as an event and MUST NOT start a writer turn (docs/protocols/doc-21 §5.5).
+    // `off` (docs/settings/00): a choice lands as an event and MUST NOT start a
+    // writer turn (docs/protocols/doc-21 §5.5). Written explicitly — the shipped
+    // default is `scenes-and-choices` since 2026-09-15.
+    await fs.writeFile(path.join(root, '.airpworld/settings.json'), '{"autoWrite":"off"}\n');
     const chosen = await (await post('/choice', { path: 'world/letter.md', choice: 'Open the envelope' })).json();
     assert.equal(chosen.ok, true);
     assert.equal(calls.length, 0, 'off: a choice must not dispatch the writer');
