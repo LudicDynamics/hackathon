@@ -38,6 +38,8 @@ import { editCharacterConfigTool } from './toolkit/edit-character-config.js'; //
 import { registerTurnTracking } from './toolkit/turn.js';          // doc-tools/12
 import { registerInitCommand } from './toolkit/init-command.js';   // docs/init/00
 import { registerWriterToolCallGuard } from './toolkit/writer-beat-guard.js'; // docs/ux/14
+import { withoutBlankOptionals } from './toolkit/blank-optionals.js';
+import { registerActionErrorFlag } from './toolkit/error-flag.js';
 /**
  * The complete AIRP tool face, in registration order.
  *
@@ -77,6 +79,10 @@ export default function registerAirpTools(pi: ExtensionAPI): void {
   // This remains outside AIRP_TOOLS so it never changes the model tool face.
   registerWriterToolCallGuard(pi);
 
+  // A returned `isError: true` is dropped by the vendored pi-rp; this hook
+  // re-raises the ActionError shape as a real failure (toolkit/error-flag.ts).
+  registerActionErrorFlag(pi);
+
   // Turn anchor for the A entry (docs/tools/01 §3.7). Registered BEFORE the tools
   // so the very first tool call of the first turn already has an anchor.
   registerTurnTracking(pi);
@@ -93,6 +99,8 @@ export default function registerAirpTools(pi: ExtensionAPI): void {
     if (tool.name !== name) {
       throw new Error(`tools.ts: AIRP_TOOLS entry "${name}" carries a definition named "${tool.name}"`);
     }
-    pi.registerTool(tool);
+    // `append_to: ""` / `near: ""` from an over-eager model mean "omitted"
+    // (toolkit/blank-optionals.ts); the shells keep their strict contracts.
+    pi.registerTool(withoutBlankOptionals(tool));
   }
 }
