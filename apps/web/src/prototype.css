@@ -701,6 +701,41 @@
   display: block;
 }
 
+/* Immersive-only hang-up for a call the character rail started
+   (docs/live-voice/33 §7.3). A separate element that never carries
+   `prototype-chrome`, so it needs no override against the hide: same shape as
+   `.prototype-edge-wake` above. Its `top`/`right` line up with the rail column
+   (`.prototype-residents`, scene-shell.css:135). */
+.prototype-call-wake {
+  position: absolute;
+  z-index: var(--depth-chrome-badge);
+  top: 155px;
+  right: 26px;
+  display: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--ux-color-line);
+  border-radius: var(--ux-radius-touch);
+  background: var(--ux-surface-paper);
+  color: var(--ux-color-ink);
+  cursor: pointer;
+}
+
+.prototype-call-wake::before {
+  content: '';
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: var(--ux-color-ink);
+}
+
+.is-immersive .prototype-call-wake {
+  display: block;
+}
+
 .prototype-dialog-backdrop {
   position: fixed;
   z-index: var(--depth-modal);

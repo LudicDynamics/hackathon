@@ -53,7 +53,8 @@
 | `writer-state.ts` | 作家公开 `idle ⇄ writing` 与进度/最终公开回执的唯一读源 | `App`、`WriterBar`、`WriterResult` 不再从原始帧自行猜 phase |
 | `dialogue-pages.ts` | 角色分页、`[emo]` 清洗、节拍和边界的纯函数 | 不按标点另切页，不持有 React、WS、音频副作用 |
 | `audio.ts` / `/api/tts` | 语音通道及其 HTTP 预取；语音不触碰主轨 | 不把 TTS 变成 WS 帧，不伪造失败音频 |
-| `NookView` / `useWorld` | Nook 的独立 Adapter 与同一 world 事件接缝 | Nook 不调用 `useWorld()`，不拥有第二个 WS/相机/active projection |
+| `NookView` / `useWorld` | Nook 的独立 Adapter 与同一 world 事件接缝。**L3 追加**：nook 的 `call` lane 按 `characterId` 判定归属（`call.characterId === characterId`），**不**按全局相位（`docs/live-voice/30 §4.1` 冻结 6；`tools/ux-contract.json` 的 `call.nook-button-is-per-character` 机械核验） | Nook 不调用 `useWorld()`，不拥有第二个 WS/相机/active projection |
+| `CharacterRail` | **L3 追加**：三个能力之外的第四个（通话入口 + 通话卡）+ 四个 hook（`useLiveCallState`/`Lines`/`Actions`/`Available`）派生 | **MUST NOT** 读 store 的通话资源（只读四个 hook 派生）；**MUST NOT** 直接 `fetch('/api/live/*')`（`docs/live-voice/10 §8` 反模式 2；L3 把这条登记为**可由既有 `forbidden-source` kind 表达的事前防线**（`docs/live-voice/35 §2.5` 末的第 7 条规则，**SHOULD**），但**本批不落地**——它不在 L3 的规则数递增链内（`35 §2.5` 的 `23` 只含 P1-P3 与规则 5/6）；若要落地，规则数在同链之外再 +1） |
 
 ### 2.2 Theatre Depth
 
@@ -234,6 +235,7 @@ interface CharacterFrameQueue {
 - Nook 是与 layer 并列的 active projection；`NookView` 复用 Canvas 外壳、独立 `GET /api/nook?character=<id>`，但不调用 `useWorld()`（`NookView.tsx:19-27`）。
 - dialogue 关闭后返回 layer 时只恢复相机记忆，不把 character modal 的 portrait slot 或 page state 带入 Nook。
 - **L2 已裁决为双向互斥**（`docs/live-voice/10 §4.2`）：本条的「nook 内互斥」保留，但**反向约束**不再是「本批不处理」——L2 定为：对话框通话中，nook 对**同一角色**显示挂断（由单例 store 自动成立，无需新守卫）；nook 对**其他角色**不阻挡（`10 §4.3` 的守卫放宽为 `sameCharacterOnCall`）。原「通话与角色对话遮罩会同时驱动同一个角色 agent」的担忧由 `10 §2.2` 冻结 1（换角色先 stop）兜底。
+- **L3 追加（2026-09-15，三载体到齐）**：互斥粒度**仍是角色**（契约 `30 §2.4` 冻结 3，沿用 `10:243`）；**第三态**是本条 L2 二元之外的：**角色栏通话中进入 nook ⇒ 挂断**（生命周期绑载体，契约 `30 §2.3` 冻结 2 的**有意后果**）。⇒ 实现方 **MUST NOT** 以为「角色栏也应 restore 通话」——nook 打开时角色栏通话被释放，不是缺陷。
 
 **漏接后果：** 同时挂 Modal 与 Nook 会出现两个交互 surface；直接在 Modal fetch 会制造第二个数据/加载/错误状态；未保存和恢复相机会让玩家失去“仍在原地”的连续性。
 

@@ -214,6 +214,54 @@
       "allow": ["transparent", "currentColor"],
       "forbid": ["new global literal source", "legacy consumer"],
       "reason": "UI/state literals consume canonical tokens; only bounded illustration paint is registered."
+    },
+    {
+      "id": "visibility.rail-root-keeps-chrome",
+      "kind": "required-source",
+      "doc": { "path": "docs/ux/05-Nook投影与相机连续性.md", "anchor": "§4.2" },
+      "owner": "CharacterRail",
+      "scope": "right rail root visibility class",
+      "target": "apps/web/src/components/sidebar/CharacterRail.tsx",
+      "expect": { "literals": ["prototype-residents prototype-chrome character-rail"] },
+      "allow": [],
+      "forbid": [],
+      "reason": "The right rail root must keep its prototype-chrome membership so the immersive gate (G-B) owns its visibility; changing this literal changes the visibility list (docs/live-voice/33 §9.1 P1)."
+    },
+    {
+      "id": "visibility.nook-lanes-carry-no-chrome",
+      "kind": "forbidden-source",
+      "doc": { "path": "docs/ux/05-Nook投影与相机连续性.md", "anchor": "§4.2" },
+      "owner": "NookView",
+      "scope": "nook inner zones",
+      "target": "apps/web/src/components/nook/NookView.tsx",
+      "expect": { "literals": ["prototype-chrome"] },
+      "allow": [],
+      "forbid": ["prototype-chrome"],
+      "reason": "Every nook lane (call, transcript, scene-intro, ...) stays outside prototype-chrome so the immersive gate cannot hide it (docs/live-voice/33 §9.1 P2)."
+    },
+    {
+      "id": "visibility.immersive-hides-chrome",
+      "kind": "css-declaration",
+      "doc": { "path": "docs/ux/05-Nook投影与相机连续性.md", "anchor": "§4.2" },
+      "owner": "prototype CSS",
+      "scope": "immersive chrome gate",
+      "target": "apps/web/src/prototype.css",
+      "expect": { "selector": ".is-immersive .prototype-chrome", "property": "opacity", "value": "0 !important" },
+      "allow": [],
+      "forbid": [],
+      "reason": "G-B is defined by this declaration; the design cannot regress to a plain opacity (docs/live-voice/33 §9.1 P3)."
+    },
+    {
+      "id": "visibility.call-wake-immersive-only",
+      "kind": "css-declaration",
+      "doc": { "path": "docs/ux/05-Nook投影与相机连续性.md", "anchor": "§4.2" },
+      "owner": "prototype CSS",
+      "scope": "immersive call-wake exception",
+      "target": "apps/web/src/prototype.css",
+      "expect": { "selector": ".is-immersive .prototype-call-wake", "property": "display", "value": "block" },
+      "allow": [],
+      "forbid": [],
+      "reason": "The immersive empty-set patch: the rail's call wake stays reachable while the chrome gate hides the rail root. Dropping this declaration silently re-opens the no-hang-up window (docs/live-voice/33 §9.1 P4)."
     }
   ],
   "depth": [
@@ -307,7 +355,31 @@
       "allow": ["the one derivation for canvas + rail"],
       "forbid": ["< 1 call"],
       "reason": "A second call site would recreate the two-derivations defect the contract forbids."
-     }
+    },
+    {
+      "id": "call.nook-button-is-per-character",
+      "kind": "required-source",
+      "doc": { "path": "docs/live-voice/30-角色栏通话与三载体可见性-共同上下文.md", "anchor": "§4.1" },
+      "owner": "NookView",
+      "scope": "nook call lane ownership",
+      "target": "apps/web/src/components/nook/NookView.tsx",
+      "expect": { "literals": ["call.characterId === characterId"] },
+      "allow": [],
+      "forbid": ["void stopCall();"],
+      "reason": "The nook call lane judges ownership per character and hangs up with an owner; an unowned hang-up could stop another character's call (docs/live-voice/30 §4.1 冻结 6)."
+    },
+    {
+      "id": "call.modal-disabled-is-per-character",
+      "kind": "required-source",
+      "doc": { "path": "docs/live-voice/30-角色栏通话与三载体可见性-共同上下文.md", "anchor": "§4.2" },
+      "owner": "CharacterModal",
+      "scope": "dialogue call button gate",
+      "target": "apps/web/src/components/overlay/CharacterModal.tsx",
+      "expect": { "literals": ["disabled={callActive && call.characterId === characterId}"] },
+      "allow": [],
+      "forbid": ["disabled={callActive}"],
+      "reason": "The dialogue call button is disabled only while THIS character is on a call; a global gate blocks every other character's dialogue (docs/live-voice/30 §4.2 冻结 7)."
+    }
   ],
   "fixtures": [
     { "id": "protected-clean", "group": "protected", "status": "clean" },
@@ -325,6 +397,10 @@
     { "id": "depth-unregistered-number", "group": "depth", "status": "failure" },
     { "id": "visual-literal-clean", "group": "visual", "status": "clean" },
     { "id": "visual-literal-unregistered", "group": "visual", "status": "failure" },
-    { "id": "visual-literal-expired-exception", "group": "visual", "status": "failure" }
+    { "id": "visual-literal-expired-exception", "group": "visual", "status": "failure" },
+    { "id": "call-per-character-clean", "group": "projection", "status": "clean" },
+    { "id": "call-global-gate", "group": "projection", "status": "failure" },
+    { "id": "visibility-immersive-chrome-clean", "group": "visual", "status": "clean" },
+    { "id": "visibility-immersive-chrome-plain-opacity", "group": "visual", "status": "failure" }
   ]
 }

@@ -1,6 +1,6 @@
 /* Right-hand character rail (docs/presence/03 §3.1, §3.6).
    Positioning lives in the EXISTING `.prototype-residents` rule
-   (`scene-shell.css:110`); this file only adds the rail's own hooks.
+   (`scene-shell.css:135`); this file only adds the rail's own hooks.
    No new z-index numbers, no left/top transitions (contract §4.3). */
 /* The parent already occupies the writer/chrome depth surface. Child panels stay
    in that stacking context rather than inventing another z-index tier. */
@@ -110,7 +110,9 @@
   pointer-events: auto;
 }
 
-/* The three keys are ALWAYS in the DOM (UF-3a); CSS decides visibility. */
+/* The keys are ALWAYS in the DOM (UF-3a); CSS decides visibility. The call
+   entry joins them under a double gate (docs/live-voice/32 §2.4), so it is
+   absent — not hidden — when the service has no calling ability. */
 .character-rail__actions {
   position: absolute;
   top: 0;
@@ -200,3 +202,56 @@
     padding-left: 8px;
   }
 }
+
+/* The rail carrier's call card (docs/live-voice/32 §3.2). It sits in the column
+   as a direct child of the rail root, so it needs no absolute positioning of its
+   own: at most one call exists process-wide, and the card is the always-on
+   hang-up entry (33 §6.2 B2) — the entry panel above stays hover-gated. */
+.character-rail__call {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 220px;
+  margin-left: auto;
+  padding: 8px 10px;
+  border: 1px solid #b6a0c344;
+  border-radius: 10px;
+  background: #262030f2;
+  box-shadow: 0 10px 26px #0d0a1466;
+  color: #eee1f3;
+}
+
+.character-rail__call-status {
+  font: 11px/1.3 system-ui, sans-serif;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #c9b6d6;
+}
+
+/* Errors stay on the card, with the store's own reason (32 §3.2 step 5). */
+.character-rail__call-alert {
+  margin: 0;
+  font: 12px/1.4 system-ui, sans-serif;
+  color: #f0c9c9;
+}
+
+/* Size and scrolling belong to the host, never the shared component (31 §3.3). */
+.character-rail__call-transcript {
+  max-height: 108px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+}
+
+.character-rail__call-hangup {
+  padding: 7px 11px;
+  border: 1px solid #b6a0c355;
+  border-radius: 8px;
+  background: #2c243bd9;
+  color: #eee1f3;
+  font: 12px/1.3 system-ui, sans-serif;
+  text-align: center;
+  cursor: pointer;
+}
+.character-rail__call-hangup:hover { background: #e8ddc9; color: #382b42; }
+.character-rail__call-hangup:focus-visible { outline: 2px solid #e8c78b; outline-offset: 2px; }

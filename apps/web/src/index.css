@@ -848,13 +848,6 @@ body:before {
   font-size: 1.12rem;
   color: var(--ink);
 }
-.call-line { margin: 0; display: block; }
-.call-speaker { margin-right: .4rem; font-family: 'Manrope', system-ui, sans-serif; font-size: .78rem; color: var(--rust); }
-.call-line--streaming { color: color-mix(in srgb, var(--ink) 70%, transparent); }
-.call-line--voice { color: var(--muted); }
-.call-line--player { font-style: italic; color: var(--muted); }
-.call-line--player .call-speaker { font-style: normal; }
-.call-placeholder { margin: 0; font-style: italic; font-size: .95rem; color: var(--muted); }
 .call-bar { display: flex; align-items: center; justify-content: space-between; gap: .5rem;
   border-top: 1px solid rgba(41, 40, 32, .12); margin-top: .5rem; padding-top: .35rem; }
 .call-status { display: inline-flex; align-items: center; gap: .35rem; font-family: 'Manrope', system-ui, sans-serif; font-size: .78rem; color: var(--rust); }

@@ -32,6 +32,7 @@ import {
   useLiveCallActions,
   useLiveCallAvailable,
 } from '../../lib/live-call.js';
+import { LiveCallTranscript } from '../live/LiveCallTranscript.js';
 const STINGER_VOICE_GRACE_MS = 1200;
 /**
  * CharacterModal — galgame dialogue overlay (wave 2 Task D T3.3; TTS pagination T1/03).
@@ -135,8 +136,10 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
   const lines = useLiveCallLines();
   const liveCallActions = useLiveCallActions();
   const liveCallAvailable = useLiveCallAvailable();
-  /** A call is actually transporting (connecting/live): the mode UI and the gates. */
-  const callActive = call.phase === 'connecting' || call.phase === 'live';
+  /** The raw global snapshot. NOT an ownership test (contract 30 §2.2 冻结 1). */
+  const callTransporting = call.phase === 'connecting' || call.phase === 'live';
+  /** This paper speaks for THIS character only (contract 30 §4.2 冻结 7/7b). */
+  const callActive = callTransporting && call.characterId === characterId;
   /**
    * This paper shows the call panel while the call is live **or errored**. The
    * error phase must stay on the call panel, otherwise its `role="alert"` would
@@ -952,7 +955,7 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
               type="button"
               className="dialogue-mode"
               aria-pressed={callVisible}
-              disabled={callActive}
+              disabled={callActive && call.characterId === characterId}
               onClick={startDialogueCall}
             >
               {callActive ? t('On a call') : t('Start a call')}
@@ -979,37 +982,11 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
         {callVisible ? (
           <div className="call-stage">
             <ActivityRail surface="character-modal" agentId={`character:${characterId}`} />
-            <div className="call-stage__transcript">
-              {lines.lines.map((line, i) => (
-                <p key={i} className="call-line">
-                  <span className="call-speaker">{t('They say')}</span>
-                  {line}
-                </p>
-              ))}
-              {lines.streaming !== '' && (
-                <p className="call-line call-line--streaming">
-                  <span className="call-speaker">{t('They say')}</span>
-                  {lines.streaming}
-                </p>
-              )}
-              {lines.streaming === '' && call.outputText !== '' && (
-                <p className="call-line call-line--voice">
-                  <span className="call-speaker">{t('They say')}</span>
-                  {call.outputText}
-                </p>
-              )}
-              {call.inputText !== '' && (
-                <p className="call-line call-line--player">
-                  <span className="call-speaker">{t('You')}</span>
-                  {call.inputText}
-                </p>
-              )}
-              {lines.lines.length === 0 && lines.streaming === '' && call.outputText === '' && call.inputText === '' && (
-                <p className="call-placeholder">
-                  {call.phase === 'connecting' ? t('Connecting…') : t('Listening…')}
-                </p>
-              )}
-            </div>
+            <LiveCallTranscript
+              lines={lines}
+              call={{ outputText: call.outputText, inputText: call.inputText, phase: call.phase }}
+              className="call-stage__transcript"
+            />
             <div className="call-bar">
               <span className="call-status" role="status">
                 {call.phase === 'connecting' ? t('Connecting…') : call.phase === 'live' ? t('On a call') : t('Could not connect')}

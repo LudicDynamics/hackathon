@@ -293,6 +293,42 @@ test('A17 stop() is idempotent while idle', async () => {
   assert.equal(h.store.getSnapshot().phase, 'idle');
 });
 
+// ── T3a / T3b: the nook carrier is owner-scoped (contract 30 §4.1 冻结 6) ─────
+
+test('T3a a foreign carrier neither depicts nor hangs up another nook call', async () => {
+  const h = await harness();
+  await liveCall(h, { characterId: 'nanami', owner: 'nook:nanami' });
+
+  // (1) The carrier-level replay of the defect (34 §3.2): watson's judge answers
+  //     per character, so the click must reach `start`, never `stop`.
+  const call = h.store.getSnapshot();
+  const characterId = 'watson';
+  const callVisible =
+    call.characterId === characterId &&
+    (call.phase === 'connecting' || call.phase === 'live' || call.phase === 'error');
+  assert.equal(callVisible, false, "a foreign call MUST NOT read as this nook's (§2.2 冻结 1)");
+
+  // (2) Reverse control: the judge above is what carries the fix. Reverting it to
+  //     the raw global phase flips this assert red — that is its discriminating
+  //     power (a bare `call.phase !== 'idle'` would read `true` here).
+  const rawInProgress = call.phase === 'connecting' || call.phase === 'live';
+  assert.equal(rawInProgress, true, 'non-emptiness: the raw flag IS set on a foreign call');
+
+  // (3) ...and if it did call stop(owner), the store swallows it — the reason the
+  //     judge and the call site MUST ship together (30 §4.1 冻结 6).
+  await h.store.stop(`nook:${characterId}`);
+  assert.equal(h.store.getSnapshot().phase, 'live', "nanami's call survives");
+  assert.equal(h.state.closePosts, 0, 'a foreign owner MUST NOT POST /api/live/close');
+});
+
+test('T3b a matching owner still hangs up (guards against over-fixing)', async () => {
+  const h = await harness();
+  await liveCall(h, { characterId: 'nanami', owner: 'nook:nanami' });
+  await h.store.stop('nook:nanami');
+  assert.equal(h.store.getSnapshot().phase, 'idle');
+  assert.equal(h.state.closePosts, 1);
+});
+
 // ── A7 / A8 / A9: throttled subtitles ────────────────────────────────────────
 
 test('A7 deltas do not move the line snapshot until a tick', async () => {
@@ -559,4 +595,35 @@ test('leaving the nook hangs up the call this entry opened (contract 10 §2.2-5)
   // The effect must depend on the owner and the stopper, or a character switch
   // would leave the previous entry's call running.
   assert.match(source, /\[characterId, stopCall\]\);/);
+});
+
+// ── The rail's immersive wake: does the owner actually take effect? ──────────
+
+test('the rail wake\'s owner is passed through verbatim, so it really hangs up', async () => {
+  // The App-level wake button (docs/live-voice/33 §7.3, S4b) hands the snapshot's
+  // ownership field straight to `stop`. It is the ONLY hang-up entry once
+  // `.is-immersive` hides the rail root, so "renders but does nothing" is the
+  // failure mode this pins down: an extra `rail:` prefix would make the owner
+  // `rail:rail:<id>`, the guard below would return silently, and every
+  // existence-only assertion would still pass (30 §5.4 freeze 10).
+  const h = await harness();
+  await liveCall(h, { characterId: 'X', owner: 'rail:X' });
+
+  await h.store.stop('rail:X');
+
+  assert.equal(h.store.getSnapshot().phase, 'idle', 'the exact owner MUST reach the live call');
+  assert.equal(h.state.closePosts, 1, 'and the session MUST actually be closed');
+});
+
+test('a mis-prefixed rail owner is refused (non-emptiness of the wake test)', async () => {
+  // The contrast that gives the test above its discriminating power: remove the
+  // verbatim pass-through and this is what the button would be sending. The
+  // guard rejects it, so the assertion above cannot pass by accident.
+  const h = await harness();
+  await liveCall(h, { characterId: 'X', owner: 'rail:X' });
+
+  await h.store.stop('rail:rail:X');
+
+  assert.equal(h.store.getSnapshot().phase, 'live', 'a doubled prefix has no effect');
+  assert.equal(h.state.closePosts, 0, 'and no session is closed');
 });

@@ -148,3 +148,24 @@ test('CLI supports JSON and text reports and stays clean after P0 seams land', (
   assert.equal(text.status, 0);
   assert.match(text.stdout, /check-ux-contract: clean/);
 });
+
+test('per-character call gates fail both ways (missing seam and global gate)', () => {
+  const nook = rule('required-source', 'NookView.tsx', { literals: ['call.characterId === characterId'] }, { forbid: ['void stopCall();'] });
+  assert.deepEqual(run('<div>{call.characterId === characterId && <button />}</div>', nook), []);
+  // Missing ownership judgement: the gate cannot see who the call belongs to.
+  const missing = run('<div><button /></div>', nook);
+  assert.ok(missing.some((f) => f.message.includes('required source literal')));
+  // An unowned hang-up is the forbidden parallel path even when the seam is present.
+  const unowned = run('<div>{call.characterId === characterId && <button />}</div>; } else void stopCall();', nook);
+  assert.ok(unowned.some((f) => f.message.includes('forbidden source literal')));
+  const modal = rule('required-source', 'CharacterModal.tsx', { literals: ['disabled={callActive && call.characterId === characterId}'] }, { forbid: ['disabled={callActive}'] });
+  assert.deepEqual(run('<button disabled={callActive && call.characterId === characterId} />', modal), []);
+  assert.ok(run('<button disabled={callActive} />', modal).length > 0);
+});
+
+test('css-declaration matches the canonical value as a substring, including !important', () => {
+  const r = rule('css-declaration', 'fixture.css', { selector: '.is-immersive .prototype-chrome', property: 'opacity', value: '0 !important' });
+  assert.deepEqual(run('.is-immersive .prototype-chrome { opacity: 0 !important; }', r), []);
+  // Control: a plain `opacity: 0` is NOT the frozen declaration.
+  assert.ok(run('.is-immersive .prototype-chrome { opacity: 0; }', r).length > 0);
+});

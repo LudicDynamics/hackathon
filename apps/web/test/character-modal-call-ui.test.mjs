@@ -81,6 +81,9 @@ try {
     platform: 'node',
     absWorkingDir: webRoot,
     logLevel: 'error',
+    // The shared subtitle component imports its own stylesheet; without an
+    // empty `.css` loader esbuild aborts the whole bundle (31 §3.1).
+    loader: { '.css': 'empty' },
     plugins: [
       {
         name: 'live-call-stub',
@@ -364,4 +367,60 @@ test('A13: callVisible is derived from callActive together with the error phase'
   assert.ok(line, 'callVisible definition not found');
   assert.match(line, /callActive/);
   assert.match(line, /'error'/);
+});
+
+// ---------------------------------------------------------------------------
+// T4-1 – T4-4 / T4b — defect 2: the disabled predicate is per character
+// (contract 30 §4.2 冻结 7/7b).
+// ---------------------------------------------------------------------------
+
+/** `.dialogue-modes` has two buttons: index 0 = "Text", index 1 = the call mode. */
+const modeTags = (html) => [...html.matchAll(/<button[^>]*class="dialogue-mode"[^>]*>([^<]*)</g)];
+const modeDisabled = (html) => /disabled/.test(modeTags(html)[1]?.[0] ?? '');
+const modeLabel = (html) => modeTags(html)[1]?.[1];
+
+test("T4-1 another character's call leaves the button ENABLED (defect 2, 10 §4.1)", () => {
+  const html = render({ phase: 'live', characterId: OTHER });
+  assert.equal(modeDisabled(html), false, "a foreign call MUST NOT disable this paper's button");
+  assert.match(html, /Start a call/, 'and the label MUST say the paper is free');
+  // Non-emptiness: the same paper with its OWN call is disabled, so the assert
+  // above is not passing just because the mode switch failed to render.
+  assert.equal(modeDisabled(render({ phase: 'live', characterId: X })), true);
+});
+
+test('T4-2 the error phase stays retryable (12 §3.2 / 冻结 7)', () => {
+  for (const other of [X, OTHER]) {
+    const html = render({ phase: 'error', characterId: other, error: 'x' });
+    assert.equal(modeDisabled(html), false, 'error MUST be clickable to retry');
+  }
+});
+
+test('T4-3 our own transport disables the button (no double start)', () => {
+  assert.equal(modeDisabled(render({ phase: 'live', characterId: X })), true);
+  assert.equal(modeDisabled(render({ phase: 'connecting', characterId: X })), true);
+});
+
+test('T4-4 the frozen predicate is spelled verbatim (35 §2.5 rule 6)', () => {
+  assert.match(source, /disabled=\{callActive && call\.characterId === characterId\}/);
+  assert.doesNotMatch(source, /disabled=\{callActive\}/);
+});
+
+test('T4b a foreign call MUST NOT leave the label or the text-mode gates on (S-7/S-8)', () => {
+  const html = render({ phase: 'live', characterId: OTHER });
+  assert.equal(modeLabel(html), 'Start a call', 'the label MUST NOT say "On a call" for a foreign call');
+  // The render-phase mirror is what the eight text-mode gates read; assert the
+  // DEFINITION is narrowed, not just the use site (冻结 7b).
+  assert.match(source, /const callActive = callTransporting && call\.characterId === characterId;/);
+});
+
+test('T4c the paper subtitles are rendered by the shared component (A9)', () => {
+  assert.match(source, /<LiveCallTranscript/);
+  // `.call-stage__transcript` now travels as the component's `className` — it is
+  // still in the source, so the judge is "inside the component tag", never
+  // "absent from the file" (31 §6.3 A9).
+  const tag = source.match(/<LiveCallTranscript[\s\S]*?\/>/)?.[0] ?? '';
+  assert.match(tag, /className="call-stage__transcript"/, 'the host layout class MUST ride the component');
+  // The status bar and its hang-up stay in the host (31 §3.4).
+  assert.match(source, /className="call-bar"/);
+  assert.match(source, /className="call-hangup"/);
 });

@@ -1,4 +1,5 @@
 import { useLocale } from './lib/i18n.js';
+import { useLiveCallActions, useLiveCallState } from './lib/live-call.js';
 import { withBase } from './lib/base-path.js';
 import { AgentSettings } from './components/AgentSettings.js';
 import { TtsSettings } from './components/TtsSettings.js';
@@ -431,6 +432,15 @@ export function App() {
     // Japanese session.
     notify: (key: string) => notify(t(key)),
   });
+  // The rail carrier's call, if any. The immersive wake button below is its
+  // only reachable hang-up once `.is-immersive` hides the rail root, so it MUST
+  // carry the snapshot's ownership field verbatim — `rail:<id>` already has its
+  // prefix (docs/live-voice/30 §5.4 freeze 10 / 32 §4.2).
+  const liveCall = useLiveCallState();
+  const { stop: liveCallStop } = useLiveCallActions();
+  const railCallOwner = typeof liveCall.owner === 'string' && liveCall.owner.startsWith('rail:')
+    ? liveCall.owner
+    : null;
   // Ids whose follow request is in flight. UI only — NOT the follow truth:
   // nothing reads it as `following` (docs/presence/00 §2.4).
   const [pendingFollowing, setPendingFollowing] = useState<ReadonlySet<string>>(new Set());
@@ -1315,6 +1325,22 @@ export function App() {
               onClick={() => toggleShell('immersion')}
               aria-label={t('Show interface')}
               title={t('Show interface')}
+            />
+          )}
+          {/* Immersive-only hang-up for a rail call (docs/live-voice/33 §7.3):
+              the rail root carries `prototype-chrome`, which `.is-immersive`
+              hides — mounting, not unmounting — so without this the call would
+              keep billing with no reachable exit. Same shape as the edge wake
+              above: a SEPARATE element that never carries `prototype-chrome`,
+              never a CSS override fought against the hide. `railCallOwner` is
+              already prefixed, so it is passed through untouched. */}
+          {!nookChar && shell.immersive && railCallOwner && (
+            <button
+              type="button"
+              className="prototype-call-wake"
+              onClick={() => void liveCallStop(railCallOwner)}
+              aria-label={t('Hang up')}
+              title={t('Hang up')}
             />
           )}
 

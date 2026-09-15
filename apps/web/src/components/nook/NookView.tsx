@@ -25,6 +25,7 @@ import {
   type FootprintScheduler,
 } from '../../lib/footprint.js';
 import './nook-character-media.css';
+import { LiveCallTranscript } from '../live/LiveCallTranscript.js';
 
 /**
  * NookView — a character's private space (docs/nook/00 §3, 02 §2.2).
@@ -180,7 +181,29 @@ export const NookView: React.FC<NookViewProps> = ({
   const call = useLiveCallState();
   const callAvailable = useLiveCallAvailable();
   const { start: startCall, stop: stopCall } = useLiveCallActions();
+  /**
+   * The RAW global phase (contract 30 §2.2 冻结 1): answers "is a call up at all",
+   * never "is it this nook's". Kept un-narrowed AND under its original name so the
+   * L2 guard below stays byte-identical (docs/live-voice/10 §4.3).
+   */
   const callInProgress = call.phase === 'connecting' || call.phase === 'live';
+  /** Ownership: the ONLY correct answer to "is this call mine" (30 §2.2 冻结 1). */
+  const callMine = call.characterId === characterId;
+  /**
+   * What every RENDER site reads. Includes `error` on purpose: the store keeps the
+   * transport alive through a character error (contract 30 §5.3 冻结 9), so error
+   * must stay on the call lane with a working hang-up. Mirrors the dialogue paper.
+   */
+  const callVisible = callMine && (callInProgress || call.phase === 'error');
+  /**
+   * The transcript lane's gate. Ownership-scoped like the call lane, but WITHOUT
+   * the error phase: the lane carries no hang-up, so error has nothing to add
+   * here, and mounting it would print "Listening…" beside the call lane's error
+   * alert (31 §4.2 Step N-2). The raw global flag alone would leak a foreign
+   * call's subtitles into this nook (34 §3.1 S-3), so the conjunction is required.
+   */
+  const callTranscript = callMine && callInProgress;
+  const callConnecting = callVisible && call.phase === 'connecting';
   // Mutual exclusion (docs/live-voice/10 §4.2/§4.3): a call never opens the
   // dialogue overlay, which would drive the same character agent twice. The
   // guard is PER CHARACTER — `call` is a global snapshot now, so keying off
@@ -687,39 +710,42 @@ export const NookView: React.FC<NookViewProps> = ({
             <button
               type="button"
               onClick={() => {
-                if (call.phase === 'idle' || call.phase === 'error') {
+                // Owner-scoped (30 §2.2 冻结 1 / §4.1 冻结 6): a FOREIGN call is
+                // neither depicted nor hangable from here. `start()` preempts it
+                // (live-call-store.ts:531-534 先挂后开) — that is 10 §4.1's rule.
+                if (callVisible) void stopCall(`nook:${characterId}`);
+                else
                   void startCall({
                     characterId,
                     locale: locale === 'ja' ? 'ja' : 'en',
                     owner: `nook:${characterId}`,
                   });
-                } else void stopCall();
               }}
               disabled={inactive}
-              aria-label={callInProgress ? copy.liveCallStop : copy.liveCallStart}
-              title={callInProgress ? copy.liveCallStop : copy.liveCallStart}
+              aria-label={callVisible ? copy.liveCallStop : copy.liveCallStart}
+              title={callVisible ? copy.liveCallStop : copy.liveCallStart}
               className={
-                callInProgress
+                callVisible
                   ? 'flex items-center gap-1.5 rounded-xl border border-rust bg-rust/90 px-3 py-2 text-xs text-white shadow-soft backdrop-blur-md transition-all hover:bg-rust'
                   : 'flex items-center gap-1.5 rounded-xl border border-ink/10 bg-paper-card/95 px-3 py-2 text-xs text-ink/80 shadow-soft backdrop-blur-md transition-all hover:bg-ink hover:text-white'
               }
             >
-              {call.phase === 'connecting' ? (
+              {callConnecting ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : callInProgress ? (
+              ) : callVisible ? (
                 <PhoneOff className="h-3.5 w-3.5" />
               ) : (
                 <Mic className="h-3.5 w-3.5" />
               )}
               <span>
-                {call.phase === 'connecting'
+                {callConnecting
                   ? copy.liveCallConnecting
-                  : callInProgress
+                  : callVisible
                     ? copy.liveCallStop
                     : copy.liveCallStart}
               </span>
             </button>
-            {call.phase === 'live' && (
+            {callVisible && call.phase === 'live' && (
               <span
                 role="status"
                 className="flex items-center gap-1.5 rounded-lg border border-rust/30 bg-rust/10 px-2 py-1 font-mono text-[10px] text-rust"
@@ -728,7 +754,7 @@ export const NookView: React.FC<NookViewProps> = ({
                 {copy.liveCallLive}
               </span>
             )}
-            {call.phase === 'error' && call.error && (
+            {callVisible && call.phase === 'error' && call.error && (
               <span
                 role="alert"
                 className="max-w-full rounded-lg border border-rust/40 bg-rust/10 px-2 py-1 font-mono text-[10px] text-ink"
@@ -741,46 +767,16 @@ export const NookView: React.FC<NookViewProps> = ({
 
         {/* Subtitles are sourced from the existing live-call transcript; this
             is a presentation lane only and never a second transport. */}
-        {callInProgress && (
+        {callTranscript && (
           <div
             data-nook-zone="transcript"
             className="pointer-events-auto order-3 w-80 max-w-full rounded-xl border border-ink/10 bg-paper-card/90 p-3 shadow-soft backdrop-blur-md"
           >
-            <div className="max-h-32 space-y-1.5 overflow-y-auto">
-              {callLines.lines.length === 0 &&
-                callLines.streaming === '' &&
-                call.outputText === '' &&
-                call.inputText === '' && (
-                  <div className="font-mono text-[10px] text-ink/40">{copy.liveCallConnecting}</div>
-                )}
-              {callLines.lines.map((line, index) => (
-                <div key={index} className="text-xs leading-snug text-ink">
-                  <span className="mr-1 font-serif font-bold text-rust">{copy.liveCallThem}</span>
-                  {line}
-                </div>
-              ))}
-              {callLines.streaming !== '' && (
-                <div className="text-xs leading-snug text-ink/70">
-                  <span className="mr-1 font-serif font-bold text-rust">{copy.liveCallThem}</span>
-                  {callLines.streaming}
-                </div>
-              )}
-              {/* The voice front-end's own spoken transcript. Shown only when no
-                  character line is streaming, so the same sentence is never
-                  printed twice (docs/live-voice/00 §2.7). */}
-              {callLines.streaming === '' && call.outputText !== '' && (
-                <div className="text-xs leading-snug text-ink/60">
-                  <span className="mr-1 font-mono">{copy.liveCallThem}</span>
-                  {call.outputText}
-                </div>
-              )}
-              {call.inputText !== '' && (
-                <div className="text-xs italic leading-snug text-ink/50">
-                  <span className="mr-1 font-mono not-italic">{copy.liveCallYou}</span>
-                  {call.inputText}
-                </div>
-              )}
-            </div>
+            <LiveCallTranscript
+              lines={callLines}
+              call={{ outputText: call.outputText, inputText: call.inputText, phase: call.phase }}
+              className="max-h-32 space-y-1.5 overflow-y-auto"
+            />
           </div>
         )}
       </div>

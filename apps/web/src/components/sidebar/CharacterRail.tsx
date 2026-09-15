@@ -1,6 +1,8 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocale } from '../../lib/i18n.js';
 import { railEntry } from '../../lib/character-rail.mjs';
+import { useLiveCallActions, useLiveCallAvailable, useLiveCallLines, useLiveCallState } from '../../lib/live-call.js';
+import { LiveCallTranscript } from '../live/LiveCallTranscript.js';
 import type { CharacterPresenceView } from '../../lib/presence.js';
 import type { AssetMediaKind } from '../../lib/airp-gateway.js';
 import { withBase } from '../../lib/base-path.js';
@@ -57,8 +59,42 @@ export function CharacterRail({
   notify,
   assetUrl,
 }: CharacterRailProps): React.ReactElement {
-  const { t } = useLocale();
+  const { locale, t } = useLocale();
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set<string>());
+
+  // ---- the rail carrier's call (docs/live-voice/32 §3.1; contract 30 §3.2) ---
+  // Everything below is DERIVED from the store snapshot: the rail holds no call
+  // state, so the `useState` above stays the only one in this file (32 §3.1).
+  const available = useLiveCallAvailable();
+  const call = useLiveCallState();
+  const lines = useLiveCallLines();
+  const { start, stop } = useLiveCallActions();
+  /** `rail:` in the snapshot's ownership field IS this carrier's identity
+   * (30 §2.2 freeze 1) — the global phase is never an ownership test. */
+  const railOwnsCall = typeof call.owner === 'string' && call.owner.startsWith('rail:');
+  /** Transporting = the call is moving bytes. Says nothing about who owns it. */
+  const railCallActive = call.phase === 'connecting' || call.phase === 'live';
+  /** The card shows while live OR errored (32 §3.1): the error phase MUST stay
+   * reachable, or its alert and its hang-up vanish together. Deliberately does
+   * NOT consult `views` — a call whose character left the projection still needs
+   * an exit. Deliberately NOT gated on `available` (32 §3.6). */
+  const railCallVisible = railOwnsCall && (railCallActive || call.phase === 'error');
+  /** Display-only suffix for the aria-labels; a missing row yields ''. */
+  const railCallName = views.find(view => view.id === call.characterId)?.name ?? call.characterId ?? '';
+
+  // Render-time mirrors so the unmount cleanup reads the LAST snapshot rather
+  // than the first render's closure — same shape as `NookView`'s refs.
+  const railOwnsCallRef = useRef(railOwnsCall);
+  railOwnsCallRef.current = railOwnsCall;
+  const callRef = useRef(call);
+  callRef.current = call;
+
+  // A carrier's call dies with it (30 §2.3 freeze 2). Owner-scoped on purpose:
+  // a bare `stop()` would hang up a dialogue call too. `stop` is a module-level
+  // stable reference, so this effect never re-fires (live-call.ts `ACTIONS`).
+  useEffect(() => () => {
+    if (railOwnsCallRef.current) void stop(`rail:${callRef.current.characterId}`);
+  }, [stop]);
 
   const resolve = useCallback(
     (path?: string): string | undefined => (path ? (assetUrl ? assetUrl(path, 'image') : path) : undefined),
@@ -78,6 +114,45 @@ export function CharacterRail({
     // `prototype-residents` = existing top-right column positioning; `prototype-chrome`
     // = shell chrome visibility; `character-rail` = this component's style hook.
     <div className="prototype-residents prototype-chrome character-rail" role="group" aria-label={t('Characters')}>
+      {/* This carrier's call card — a direct child of the rail root, NOT inside
+          a row: at most one call exists process-wide (30 §2.4 freeze 3), and a
+          row would fight its fixed height and the hover panel's anchor. Always
+          rendered while the rail owns a call, so the hang-up is reachable with
+          no hover at all (32 §3.2; 33 §6.2 B2). */}
+      {railCallVisible && (
+        <div
+          className={`character-rail__call character-rail__call--${call.phase}`}
+          data-rail-call=""
+          role="log"
+        >
+          <span className="character-rail__call-status" role="status">
+            {call.phase === 'connecting'
+              ? t('Connecting…')
+              : call.phase === 'live'
+                ? t('On a call')
+                : t('Could not connect')}
+          </span>
+
+          {call.phase === 'error' && call.error ? (
+            <p className="character-rail__call-alert" role="alert">{call.error}</p>
+          ) : (
+            <LiveCallTranscript
+              lines={lines}
+              call={{ outputText: call.outputText, inputText: call.inputText, phase: call.phase }}
+              className="character-rail__call-transcript"
+            />
+          )}
+
+          <button
+            type="button"
+            className="character-rail__call-hangup"
+            onClick={() => void stop(`rail:${call.characterId}`)}
+            aria-label={`${call.phase === 'error' ? t('Close') : t('Hang up')} · ${railCallName}`}
+          >
+            {call.phase === 'error' ? t('Close') : t('Hang up')}
+          </button>
+        </div>
+      )}
       {/* Rendered in `views` array order — never re-sorted (UF-7c): a state flip
           must not move the row the player is about to click (contract §4.2). */}
       {views.map(view => {
@@ -91,6 +166,10 @@ export function CharacterRail({
         const statusLabel = view.following
           ? `${t(entry.statusKey)} · ${t('Following you')}`
           : t(entry.statusKey);
+        /** This row's character is the one on the call (30 §2.2 freeze 1: the
+         * judgment is the character id, never the global phase — a foreign call
+         * MUST NOT grey this row out, and the error phase must stay retryable). */
+        const rowCallActive = railCallActive && call.characterId === view.id;
 
         return (
           <div
@@ -163,6 +242,25 @@ export function CharacterRail({
               >
                 {t('Visit their ikigai')}
               </button>
+              {/* The entry. Double-gated: `available` says the service can take a
+                  call at all (00 §2.9 — "no entry may be rendered"), and
+                  `entry.canTalk` keeps the row from contradicting its own orb,
+                  which refuses to talk to a non-present character (32 §3.5). */}
+              {available && entry.canTalk && (
+                <button
+                  type="button"
+                  className="character-rail__action"
+                  onClick={() => void start({
+                    characterId: view.id,
+                    locale: locale === 'ja' ? 'ja' : 'en',
+                    owner: `rail:${view.id}`,
+                  })}
+                  disabled={rowCallActive}
+                  aria-label={`${t(rowCallActive ? 'On a call' : 'Start a call')} · ${displayName}`}
+                >
+                  {t(rowCallActive ? 'On a call' : 'Start a call')}
+                </button>
+              )}
             </div>
           </div>
         );
