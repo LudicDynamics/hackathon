@@ -48,7 +48,7 @@
   "language": "en",
   "text": "Vera, what did you find at the lighthouse?",
   "file": "voice/player-1.wav",
-  "duration": 2.287
+  "duration": 2.883
  },
  {
   "id": "player-2",
@@ -56,7 +56,7 @@
   "language": "en",
   "text": "Nanami, is it snowing yet?",
   "file": "voice/player-2.wav",
-  "duration": 1.765
+  "duration": 2.064
  },
  {
   "id": "player-3",
@@ -64,14 +64,30 @@
   "language": "en",
   "text": "Wataru, did you wait for me?",
   "file": "voice/player-3.wav",
-  "duration": 1.824
+  "duration": 2.158
  },
  {
   "id": "wataru-1",
   "speaker": "Wataru",
   "language": "en",
-  "text": "Of course I did. I saved you the seat by the window.",
+  "text": "...I wasn't waiting. I just happened to keep your seat.",
   "file": "voice/wataru-1.wav",
-  "duration": 3.033
+  "duration": 4.849
+ },
+ {
+  "id": "player-4",
+  "speaker": "Player",
+  "language": "en",
+  "text": "Working late again, Ei?",
+  "file": "voice/player-4.wav",
+  "duration": 1.982
+ },
+ {
+  "id": "ei-1",
+  "speaker": "Ei",
+  "language": "en",
+  "text": "Almost done. Stay a while, would you?",
+  "file": "voice/ei-1.wav",
+  "duration": 2.873
  }
 ]

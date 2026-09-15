@@ -12,15 +12,26 @@ export const shown = (id: string) => line(id).subtitle ?? line(id).text;
 export const vlen = (id: string) => Math.round(line(id).duration * FPS);
 
 // ── A3 (they talk back): frames relative to the act. Each reply starts right after the question.
-// Three exchanges in 20s: Vera → Nanami → Wataru.
-export const P1 = 45;
-export const V1 = P1 + vlen("player-1") + 12;
-export const CUT = V1 + vlen("vera-1") + 4;
-export const P2 = CUT + 6;
-export const N1 = P2 + vlen("player-2") + 12;
-export const CUT2 = N1 + vlen("nanami-1") + 4;
-export const P3 = CUT2 + 6;
-export const W1 = P3 + vlen("player-3") + 12;
+// Three mock exchanges (Vera → Nanami → Wataru), then Elias for real. The player speaks with TTS voices too (longer
+// than `say`), so gaps are tight: a reply lands 8 frames after the question, the next scene 4 frames after the reply.
+const REPLY_GAP = 8;
+const SCENE_GAP = 4;
+// Starts after the narrated "And they talk back." (33.1–34.9s) so the two voices never overlap.
+export const P1 = 55;
+export const V1 = P1 + vlen("player-1") + REPLY_GAP;
+export const CUT = V1 + vlen("vera-1") + SCENE_GAP;
+export const P2 = CUT + SCENE_GAP;
+export const N1 = P2 + vlen("player-2") + REPLY_GAP;
+export const CUT2 = N1 + vlen("nanami-1") + SCENE_GAP;
+export const P3 = CUT2 + SCENE_GAP;
+export const W1 = P3 + vlen("player-3") + REPLY_GAP;
+export const CUT3 = W1 + vlen("wataru-1") + SCENE_GAP;
+// Elias (the team calls him Ei), from the user's two recordings of his world — not a mock (cuts.ts `el-*`):
+// his voiced reply (4.1s), the GPT Live call (8s), then the ticket he wrote showing up on the canvas (to the act's end).
+export const EL_LIVE = CUT3 + 124;
+export const EL_WORLD = EL_LIVE + 240;
+/** Inside the world beat: "Action confirmed…" on the canvas, then the ticket card. */
+export const EL_ACT_LEN = 60;
 
 // ── A5 (infinite exploration): frames relative to the act.
 // Lyra speaks Japanese (3.5s), so her first line starts earlier to clear her second at LYRA2.

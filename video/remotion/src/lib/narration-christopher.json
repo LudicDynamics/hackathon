@@ -1,0 +1,272 @@
+[
+ {
+  "from": 0.4,
+  "to": 3.8,
+  "text": "Stories have always been worlds.",
+  "file": "vo/christopher/n-00.wav",
+  "duration": 1.738,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 4.2,
+  "to": 6.8,
+  "text": "Books let us read them.",
+  "file": "vo/christopher/n-01.wav",
+  "duration": 1.144,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 7.2,
+  "to": 9.8,
+  "text": "Games let us play them.",
+  "file": "vo/christopher/n-02.wav",
+  "duration": 1.168,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 10.2,
+  "to": 13.8,
+  "text": "Chatbots let us talk to one character, alone, in a box.",
+  "file": "vo/christopher/n-03.wav",
+  "duration": 3.613,
+  "tempo": 1.056,
+  "fits": true
+ },
+ {
+  "from": 14.3,
+  "to": 16.8,
+  "text": "But no one has ever let you live in one.",
+  "file": "vo/christopher/n-04.wav",
+  "duration": 1.964,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 19.6,
+  "to": 21.2,
+  "text": "This is Worldlines.",
+  "file": "vo/christopher/n-05.wav",
+  "duration": 1.239,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 21.4,
+  "to": 27.4,
+  "text": "One infinite canvas, where you, your character agents, and a writer agent share the same world.",
+  "file": "vo/christopher/n-06.wav",
+  "duration": 5.495,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 33.1,
+  "to": 34.9,
+  "text": "And they talk back.",
+  "file": "vo/christopher/n-07.wav",
+  "duration": 1.061,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 67.4,
+  "to": 71.4,
+  "text": "On a live call, he writes it straight into the world.",
+  "file": "vo/christopher/n-08.wav",
+  "duration": 2.851,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 73.3,
+  "to": 77.8,
+  "text": "Pick a world.",
+  "file": "vo/christopher/n-09.wav",
+  "duration": 0.756,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 78.3,
+  "to": 81.4,
+  "text": "A harbour where ships vanish. You take the case.",
+  "file": "vo/christopher/n-10.wav",
+  "duration": 3.113,
+  "tempo": 1.188,
+  "fits": true
+ },
+ {
+  "from": 81.7,
+  "to": 86.3,
+  "text": "Search the harbour for signs. When luck matters, the dice decide.",
+  "file": "vo/christopher/n-11.wav",
+  "duration": 4.613,
+  "tempo": 1.053,
+  "fits": true
+ },
+ {
+  "from": 100.5,
+  "to": 104.2,
+  "text": "Ask her to come along, and she walks the harbour with you.",
+  "file": "vo/christopher/n-12.wav",
+  "duration": 2.95,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 104.5,
+  "to": 109.8,
+  "text": "Share your theory, and the writer agent writes the next place into the world.",
+  "file": "vo/christopher/n-13.wav",
+  "duration": 3.77,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 110,
+  "to": 112.3,
+  "text": "Together, you find the second ship.",
+  "file": "vo/christopher/n-14.wav",
+  "duration": 1.929,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 121,
+  "to": 123.7,
+  "text": "When you want to turn back, she keeps you going.",
+  "file": "vo/christopher/n-15.wav",
+  "duration": 2.43,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 135.8,
+  "to": 141.8,
+  "text": "We got hooked — one game ran 44 minutes, until our $100 in credits hit zero.",
+  "file": "vo/christopher/n-16.wav",
+  "duration": 5.633,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 142.3,
+  "to": 145.9,
+  "text": "Keep a promise on the night of the first snow.",
+  "file": "vo/christopher/n-17.wav",
+  "duration": 2.118,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 148.3,
+  "to": 151.7,
+  "text": "Two routes. Two endings.",
+  "file": "vo/christopher/n-18.wav",
+  "duration": 2.608,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 152.3,
+  "to": 156.8,
+  "text": "Change one morning in 1994, and see who's still here tonight.",
+  "file": "vo/christopher/n-19.wav",
+  "duration": 4.06,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 161.1,
+  "to": 163.8,
+  "text": "Same street, before and after.",
+  "file": "vo/christopher/n-20.wav",
+  "duration": 2.076,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 164.2,
+  "to": 166.6,
+  "text": "Or start with nothing but a promise.",
+  "file": "vo/christopher/n-21.wav",
+  "duration": 1.937,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 174.6,
+  "to": 179.8,
+  "text": "Say yes, and the writer agent builds the next place as you walk into it.",
+  "file": "vo/christopher/n-22.wav",
+  "duration": 3.89,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 180.3,
+  "to": 184.1,
+  "text": "Every character has a place of their own, too.",
+  "file": "vo/christopher/n-23.wav",
+  "duration": 2.536,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 188.2,
+  "to": 191.8,
+  "text": "And it never runs out.",
+  "file": "vo/christopher/n-24.wav",
+  "duration": 1.257,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 192.3,
+  "to": 199.5,
+  "text": "Next: bring your friends into the same story.",
+  "file": "vo/christopher/n-25.wav",
+  "duration": 2.639,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 200.3,
+  "to": 204.8,
+  "text": "The writer agent writes the plot, the rules, and the code.",
+  "file": "vo/christopher/n-26.wav",
+  "duration": 3.335,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 205,
+  "to": 209.5,
+  "text": "Whatever the story needs, it can build.",
+  "file": "vo/christopher/n-27.wav",
+  "duration": 2.305,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 214.6,
+  "to": 217.8,
+  "text": "Books let us read stories. Games let us play them.",
+  "file": "vo/christopher/n-28.wav",
+  "duration": 3.202,
+  "tempo": 1.152,
+  "fits": true
+ },
+ {
+  "from": 218.6,
+  "to": 223.6,
+  "text": "Worldlines lets you live in the world, with your character agents.",
+  "file": "vo/christopher/n-29.wav",
+  "duration": 3.242,
+  "tempo": 1,
+  "fits": true
+ }
+]

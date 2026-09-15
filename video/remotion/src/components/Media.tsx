@@ -32,7 +32,7 @@ export const resolveSlot = (slot: string) => {
       const n = name.toLowerCase();
       return typeof c.match === "string" ? n.startsWith(c.match) : c.match.every((m) => n.includes(m));
     });
-    if (hit) return { src: hit, from: c.from ?? 0, rate: c.rate ?? 1 };
+    if (hit) return { src: hit, from: c.from ?? 0, rate: c.rate ?? 1, muted: c.muted };
   }
   return null;
 };
@@ -69,7 +69,7 @@ export const Footage: React.FC<{ slot: string; fit?: "cover" | "contain"; push?:
   return (
     <AbsoluteFill style={{ background: INK, overflow: "hidden" }}>
       {isVideo(r.src) ? (
-        <OffthreadVideo src={staticFile(r.src)} trimBefore={Math.round(r.from * fps)} playbackRate={r.rate} muted={muted} style={s} />
+        <OffthreadVideo src={staticFile(r.src)} trimBefore={Math.round(r.from * fps)} playbackRate={r.rate} muted={r.muted ?? muted} style={s} />
       ) : (
         <Img src={staticFile(r.src)} style={s} />
       )}

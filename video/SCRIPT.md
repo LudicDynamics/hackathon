@@ -119,6 +119,56 @@
 - 语音对话加第三位：**Wataru**（女性向男主，素材 `video/assets/wataru-loop.scene.mp4`）。本机 TTS 只有 setsuna（女声），所以他走 App 的线上音色 **Ethan**（备选 Kai）。
 - 结尾 logo 下加署名：**BUILT BY LUDICDYNAMICS / From Tokyo, to the world.**（比产品名小一级、偏灰）。
 
+### v7 拍板（2026-09-15）
+
+- 全片 **2:46**：语音对话段 0:33–1:03（30 秒），四段对话 **Vera → Nanami → Wataru → Ei**。音乐 A 在安静段按小节拼入 8 小节（`video/music/make-track-a-156.sh`）。
+- **Ei**：AI 研究员，素材用办公室白板版 `video/assets/ei-office-loop.raw.mp4`（绿幕版留作抠像备选）。
+- 声音：男声全部用 **OpenAI `echo`**（用户选的冷静动漫风），按人设给不同演绎指令——玩家对 Vera/Nanami 是冷静男声；Wataru（高中社团同学，闷骚内敛）、Ei（最有磁性、成熟）；对他们说话时玩家是两个冷静女声（`sage`、`shimmer`）。**整个语音对话段全英文**（日文只留给 Lyra 和 Vera 小天地那句）。线上音色表里的 Lenn / Emilien / Alek 会**静默回退成女声 Cherry**，不要用。
+- 气泡与字幕永远是英文（`subtitle` 字段）。
+
+### v8 拍板（2026-09-15）
+
+- 署名确认：**BUILT BY LUDICDYNAMICS**（连写）。
+- **Divergence 用上用户实录**（`video/footage/divergence-run-raw.mp4`，日文版 11 分钟），块长 8 → **12 秒**，全片 **2:50**。用户指定的四个瞬间：
+  1. 一前一后进入 2024 —— 先进（原片 1:30，1994 午后店 → 2024 雨夜）；
+  2. 输入改变世界的那句话（4:34 起，6× 速）；
+  3. 和小女孩（幼いリョウ）聊天改变时空的瞬间 —— 原速、保留她本人的声音：「鮭が跳ねるところ、また見たいな。」，字幕 *I want to see the salmon leap again.*（Whisper 听成了「カエル」，以画面文字为准）；
+  4. 时空变化后再进 2024（8:26 起，3.4× 速，满墙新便签）。
+- 音乐 A 在 Divergence 自己的律动里再拼 2 小节（`make-track-a-156.sh`）。
+
+### v9（2026-09-15）
+
+- **Fogwharf 用上用户 44 分钟实录**（`video/footage/fogwharf-run-raw.mp4`）：事务所开场 → 港城地图 → 灯塔掷骰（3D 骰子与结果）→ 迷雾散开、新码头出现。
+- **小天地（R5b）** 换成实录 16:01 Vera 的小天地（纸面画布、她的头像移动、便签长出来）。
+- 未用高光清单见 `RECORDING.md`。
+
+### v12（2026-09-15）
+
+- **删掉福尔摩斯**，时间给雾坞镇：雾坞镇 **24 秒**，全部来自用户 44 分钟实录，按游玩顺序——事务所 → 港城地图 → 掷骰 → 「一緒に回らない？」、Vera 自己动身、跟到第七泊位 → 迷雾散开出现新码头 → Vera「2隻目だね」（踩音乐重拍）→ 灯笼夜码头 → 「戻る？」/「私なら、まだ戻らない」→ 蓝光门暗厅（作家光标）→ Vera 的回复框弹出 *You have no credits remaining*，叠数据卡 **44-MIN RUN · 48M+ tokens this week · CREDITS: 0**（用量截图是项目近 7 天，不是这一局）。
+- **分歧线**结尾改为同一条街的前后对比：原来的世界 2:13（空地与墙）↔ 复原后 9:07（常盘堂亮灯开门），橙色分界线横扫，BEFORE / AFTER。
+- **心像空间**用实录 6:48–7:02：Vera 的便签墙（今日の日記・まだ言えないこと・好きなこと、怖いこと・いつか、なりたいもの）。
+- 全片回到 **2:54**。
+
+### v15（2026-09-15）
+
+- **Ei 的假对话换成 Elias 实录**（用户的两段 Ei 世界录屏，`footage/ei-run-raw.mp4` = 13.27、`footage/ei-live-run-raw.mp4` = 15.59）。A3 在 Wataru 之后接三拍：
+  1. 语音回复（13.27 录屏 0:50.2，4 秒）：「Take your time. But I'm not going back to my office until I hear it.」
+  2. **GPT Live 通话**（15.59 录屏 3:40.5，8 秒）：对话框里是你要工单的原话（英文），他的两句「Okay, let's take it slow and get it right.」「I'm checking what the ticket should cover.」做成气泡；人物卡的中文简介做了模糊。
+  3. **落到世界里**（6 秒）：5:33 走廊里点开放办公区 → 5:35「Action confirmed and the scene is synchronized.」→ 5:54 他写的任务单成了办公室里的卡片（Chrome 翻成英文的那一帧，裁掉翻译弹窗），旁白「On a live call, he writes it straight into the world.」
+- 录屏里只有 Elias 的声音（你的麦克风没录进去），两句原声抽出来单独放（`voice/elias-1.wav`、`elias-2.wav`，拉到 -16 LUFS）。
+- A3 28 → 40 秒，全片 **3:14**（194 秒）；音乐在 A3 的安静段多拼 6 小节，后面所有落点不变。
+- 旁白四个版本（Christopher / Andrew / Brian / Ryan）按新时间轴重新生成。
+
+### v16（2026-09-15）
+
+- **雾坞镇讲成一个故事**（34 → 64 秒）：每一段旁白说这一幕在干什么；Vera 的台词整句播完，前面先放你打的那句（字幕标 You）。
+  委托 → 找线索 → 掷骰（*When luck matters, the dice decide.*）→ 你问她为什么帮你，她答「我可没无条件信你…」→ 「一緒に回らない？」她自己跟上来 → 你的推理让 writer agent 写出新地点（19:00 光标在写 old-customs-landing）→ 新码头 → 「また新しい道がみえた」/「二隻目だね…」（音乐重拍落在她这句）→ 灯笼码头 → 「ここまで来たけど戻る？」/「私なら、まだ戻らない…先查木箱的擦痕或没沾泥的车辙」→ 额度用光：*We got hooked — one game ran 44 minutes, until our $100 in credits hit zero.*
+- **初雪**换成你的两条线路实录：直播间 → 雪夜街道 → 和 Nanami 通话 → **ENDING 1**（16.24 录屏 4:42）/ **ENDING 2**（16.07 录屏 14:12），旁白 *Two routes. Two endings.*
+- **writer → writer agent**（旁白和画面上作家光标的标签都改了）：英文里单说 writer 会被当成人。
+- 结尾：*Books let us read stories. Games let us play them.* / *Worldlines lets you live in the world, with your character agents.*
+- 旁白下音乐只轻压（约 -4 dB，原来约 -8 dB 以上），旋律和重拍要听得见；角色说话时照旧压深。
+- 旁白默认 **Andrew**，备选 Christopher。全片 **3:44**。
+
 ## 6. 请你评价（v1 大纲时的问题，已答复）
 
 1. 这条"读世界 → 玩世界 → 跟一个角色说话 → **住进一个世界**"的主线，能不能代表你想讲的故事？

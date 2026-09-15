@@ -17,8 +17,8 @@ MUSIC=${MUSIC:-music/track-a.wav}
 DIR=out/chunks-$SCALE
 # --gl=angle: the 3D dice (parts/Dice3D.tsx, three.js) need a real GL context.
 FLAGS="--scale=$SCALE --concurrency=2 --offthreadvideo-cache-size-in-bytes=268435456 --gl=angle --log=error"
-# Act boundaries (frames at 30fps, v6 = 156s); A4 is split after the second world to keep each chunk short.
-CHUNKS="0-509 510-989 990-1589 1590-2339 2340-2879 2880-3719 3720-4259 4260-4679"
+# Act boundaries (frames at 30fps, v16 = 224s); A4 is split inside and after Fogwharf to keep each chunk short.
+CHUNKS="0-509 510-989 990-2189 2190-3209 3210-4259 4260-4919 4920-5759 5760-6299 6300-6719"
 
 mkdir -p "$DIR"
 for r in $CHUNKS; do
@@ -29,8 +29,9 @@ for r in $CHUNKS; do
   mv "$DIR/tmp-$r.mp4" "$f"
 done
 
-# One audio track per song (music + voices + foley), cached by song name.
-AUDIO="$DIR/audio-$(basename "$MUSIC" .wav).aac"
+# One audio track per song and narration (music + voices + foley + VO), cached by both names.
+# VO_TAG names the narration currently in src/lib/narration.json (e.g. VO_TAG=andrew after make-narration.mjs).
+AUDIO="$DIR/audio-$(basename "$MUSIC" .wav)${VO_TAG:+-$VO_TAG}.aac"
 if [ ! -s "$AUDIO" ]; then
   echo "audio  $MUSIC  $(date +%T)"
   npx remotion render src/index.ts Launch "$AUDIO" --codec=aac --gl=angle --concurrency=2 --props="{\"music\":\"$MUSIC\"}" --log=error || { echo "FAILED audio"; exit 1; }

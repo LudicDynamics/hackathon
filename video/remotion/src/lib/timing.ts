@@ -9,20 +9,22 @@ export const sec = (s: number) => Math.round(s * FPS);
 export const beats = (n: number) => Math.round(n * BEAT);
 
 /**
- * Act boundaries in seconds — must match video/SCRIPT.md and the music (track A, spliced to 156s).
- * v6: the voice demo grew by 6s for a third character (Wataru), so every later act moved +6s.
+ * Act boundaries in seconds — must match video/SCRIPT.md and the music (track A, spliced to 224s).
+ * v13: the voice demo lost its dead air after Ei (30 → 28s); Fogwharf got room to breathe (24 → 34s).
+ * v15: the Ei mock became the real Elias footage — a voiced reply, a GPT Live call, the ticket landing in the world (28 → 40s).
+ * v16: Fogwharf tells its story — narrated beats and Vera's lines in full, with what you said first (34 → 64s).
  */
 export const SECTIONS = {
   A1: [0, 17], // stories were always worlds: read / play / talk → "live"
-  A2: [17, 33], // key press → one canvas (writer cursor) → cast
-  A3: [33, 53], // they talk back (STT → TTS): Vera, Nanami, Wataru
-  A4: [53, 96], // launcher + four worlds
-  A5: [96, 124], // infinite exploration: Moonlit Pact, nook, pull-back
-  A6: [124, 142], // next: multiplayer, writer writes code
-  A7: [142, 156], // formula + logo + credit
+  A2: [17, 33], // key press → one canvas (writer agent's cursor) → cast
+  A3: [33, 73], // they talk back: Vera, Nanami, Wataru (TTS mock), then Elias for real (voice, GPT Live, item saved)
+  A4: [73, 164], // launcher + Fogwharf 64s, First Snow 10s (two endings), Divergence 12s
+  A5: [164, 192], // infinite exploration: Moonlit Pact, nook, pull-back
+  A6: [192, 210], // next: multiplayer, the writer agent writes code
+  A7: [210, 224], // formula + logo + credit
 } as const;
 
 export type SectionId = keyof typeof SECTIONS;
 export const sectionFrom = (id: SectionId) => sec(SECTIONS[id][0]);
 export const sectionLength = (id: SectionId) => sec(SECTIONS[id][1] - SECTIONS[id][0]);
-export const TOTAL = sec(156);
+export const TOTAL = sec(224);

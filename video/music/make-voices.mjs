@@ -9,7 +9,7 @@
 // the characters' own (Lyra's comes from templates/moonlit-contract-jp/world/opening.md) — while everything on
 // screen stays English: `subtitle` is what the film shows.
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,20 +22,59 @@ const TTS_VOICE = process.env.AIRP_TTS_LOCAL_VOICE || 'setsuna';
 // setsuna is deterministic (identical audio per request), so one take is enough.
 const TAKES = 1;
 
+// OpenAI gpt-4o-mini-tts delivery instructions (the user picked `echo` for the calm anime-style male voices).
+const CALM_PLAYER_M = 'A calm, natural young man speaking casually to a friend. Relaxed and understated, not theatrical.';
+const CALM_PLAYER_F = 'A calm, gentle young woman. Soft and composed, quietly warm, not cheerful or theatrical.';
+const WATARU_STYLE = 'A calm, soft-spoken high-school boy from a Japanese anime (seiyuu style): reserved and a little aloof, hiding that he cares. Low energy, never cheerful.';
+const EI_STYLE = 'A calm, mature male lead from a Japanese otome anime (seiyuu style): low, magnetic and unhurried, a quiet warmth under a composed researcher.';
+
 const LINES = [
   { id: 'vera-1', speaker: 'Vera', emotion: 'neutral', language: 'en', text: 'Twelve minutes of darkness. Someone wanted the harbour blind.' },
   { id: 'nanami-1', speaker: 'Nanami', emotion: 'happy', language: 'en', text: 'It just started! Come up to the roof, quick!' },
   { id: 'lyra-1', speaker: 'Lyra', emotion: 'neutral', language: 'ja', text: '私はライラ。あなたを守るために、ここへ来ました。', subtitle: 'I am Lyra. I have come to protect you.' },
   { id: 'lyra-2', speaker: 'Lyra', emotion: 'neutral', language: 'ja', text: '私と契約を結び、この夜を共に歩んでくれますか。', subtitle: 'Will you bind a contract with me, and walk this night together?' },
   { id: 'vera-2', speaker: 'Vera', emotion: 'neutral', language: 'ja', text: 'ここはね、直せなかったものを置いておく場所なの。', subtitle: "This is where I keep the things I couldn't fix." },
-  { id: 'player-1', speaker: 'Player', say: true, language: 'en', text: 'Vera, what did you find at the lighthouse?' },
-  { id: 'player-2', speaker: 'Player', say: true, language: 'en', text: 'Nanami, is it snowing yet?' },
+  // The player's own voice: a calm male voice opposite Vera and Nanami, calm female voices on the otome side
+  // (Wataru, Ei). The whole voice demo is English; only Lyra and Vera's nook line (A5) speak Japanese.
+  // Male voices are OpenAI `echo` with delivery instructions (the palette has no anime-style male voice).
+  { id: 'player-1', speaker: 'Player', openai: { voice: 'echo', style: CALM_PLAYER_M }, language: 'en', text: 'Vera, what did you find at the lighthouse?' },
+  { id: 'player-2', speaker: 'Player', openai: { voice: 'echo', style: CALM_PLAYER_M }, language: 'en', text: 'Nanami, is it snowing yet?' },
   // Wataru (otome love interest) needs a male voice; setsuna is the only local voice, so he goes through the
-  // app's online TTS palette (docs/tts/07 — verified ids). Ethan: warm, young. Alternative: Kai.
-  { id: 'player-3', speaker: 'Player', say: true, language: 'en', text: 'Wataru, did you wait for me?' },
-  { id: 'wataru-1', speaker: 'Wataru', online: 'Ethan', language: 'en', text: 'Of course I did. I saved you the seat by the window.' },
+  // app's online TTS palette (docs/tts/07). Beware: an unknown voice id silently falls back to Cherry (female) —
+  // Lenn / Emilien / Alek did, byte for byte. Verified distinct: Neil, Ethan, Nofish, Elias, Kai, Arthur, Vincent.
+  // Wataru: high-school club classmate, quietly intense (闷骚), reserved — never bright.
+  // The whole voice demo is spoken in English (the user's call), Wataru and Ei included.
+  { id: 'player-3', speaker: 'Player', openai: { voice: 'sage', style: CALM_PLAYER_F }, language: 'en', text: 'Wataru, did you wait for me?' },
+  { id: 'wataru-1', speaker: 'Wataru', openai: { voice: 'echo', style: WATARU_STYLE }, language: 'en', text: "...I wasn't waiting. I just happened to keep your seat." },
+  // Ei: AI researcher, the most magnetic male voice of the cast — lower, mature, unhurried.
+  { id: 'player-4', speaker: 'Player', openai: { voice: 'shimmer', style: CALM_PLAYER_F }, language: 'en', text: 'Working late again, Ei?' },
+  { id: 'ei-1', speaker: 'Ei', openai: { voice: 'echo', style: EI_STYLE }, language: 'en', text: 'Almost done. Stay a while, would you?' },
 ];
 const APP_URL = (process.env.AIRP_APP_URL || 'http://localhost:3001').replace(/\/+$/, '');
+
+/** The project's OpenAI key, from the same env files the server reads (never printed). */
+function openaiKey() {
+  if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
+  for (const f of ['.local.env', '.env.local']) {
+    try {
+      const m = readFileSync(resolve(HERE, '../..', f), 'utf8').match(/^OPENAI_API_KEY=(.*)$/m);
+      if (m) return m[1].trim().replace(/^"|"$/g, '');
+    } catch { /* try the next file */ }
+  }
+  throw new Error('OPENAI_API_KEY not found');
+}
+
+/** OpenAI gpt-4o-mini-tts: a base voice plus delivery instructions. */
+async function openaiTts(text, { voice, style }, file) {
+  const res = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${openaiKey()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'gpt-4o-mini-tts', voice, input: text, instructions: style, response_format: 'wav' }),
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!res.ok) throw new Error(`OpenAI TTS HTTP ${res.status}`);
+  writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+}
 
 /** The running app's /api/tts (DashScope palette voices); returns a URL to the cached WAV. */
 async function onlineTts(text, voice, language, file) {
@@ -124,6 +163,11 @@ for (const line of LINES) {
     const aiff = join(tmp, `${line.id}.aiff`);
     execFileSync('say', ['-v', sayVoice, '-r', '175', '-o', aiff, line.text]);
     finish(aiff, dst);
+  } else if (line.openai) {
+    const raw = join(tmp, `${line.id}.wav`);
+    await openaiTts(line.text, line.openai, raw);
+    finish(raw, dst);
+    console.log(`${line.id} [${line.language}, openai ${line.openai.voice}]: ${duration(dst).toFixed(2)}s`);
   } else if (line.online) {
     const raw = join(tmp, `${line.id}.wav`);
     await onlineTts(line.text, line.online, line.language, raw);

@@ -15,7 +15,7 @@ export const WriterCursor: React.FC<{ x: number; y: number; label?: string; colo
     </svg>
     {label && (
       <div style={{ marginTop: 26, background: color, color: PAPER, fontFamily: MONO, fontSize: 21, padding: "5px 12px", borderRadius: 8, whiteSpace: "nowrap" }}>
-        <span style={{ fontWeight: 700 }}>Writer</span> · {label}
+        <span style={{ fontWeight: 700 }}>Writer agent</span> · {label}
       </div>
     )}
   </div>

@@ -1,0 +1,227 @@
+[
+ {
+  "from": 0.4,
+  "to": 3.8,
+  "text": "Stories have always been worlds.",
+  "file": "vo/ryan/n-00.wav",
+  "duration": 1.77,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 4.2,
+  "to": 6.8,
+  "text": "Books let us read them.",
+  "file": "vo/ryan/n-01.wav",
+  "duration": 1.074,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 7.2,
+  "to": 9.8,
+  "text": "Games let us play them.",
+  "file": "vo/ryan/n-02.wav",
+  "duration": 1.177,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 10.2,
+  "to": 13.8,
+  "text": "Chatbots let us talk to one character, alone, in a box.",
+  "file": "vo/ryan/n-03.wav",
+  "duration": 3.591,
+  "tempo": 1.023,
+  "fits": true
+ },
+ {
+  "from": 14.3,
+  "to": 16.8,
+  "text": "But no one has ever let you live in one.",
+  "file": "vo/ryan/n-04.wav",
+  "duration": 1.886,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 19.6,
+  "to": 21.2,
+  "text": "This is Worldlines.",
+  "file": "vo/ryan/n-05.wav",
+  "duration": 1.194,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 21.4,
+  "to": 27.4,
+  "text": "One infinite canvas, where you, your characters, and an AI writer share the same world.",
+  "file": "vo/ryan/n-06.wav",
+  "duration": 5.264,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 33.1,
+  "to": 34.9,
+  "text": "And they talk back.",
+  "file": "vo/ryan/n-07.wav",
+  "duration": 0.976,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 67.4,
+  "to": 71.4,
+  "text": "On a live call, he writes it straight into the world.",
+  "file": "vo/ryan/n-08.wav",
+  "duration": 2.952,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 73.3,
+  "to": 77.8,
+  "text": "Pick a world.",
+  "file": "vo/ryan/n-09.wav",
+  "duration": 0.74,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 78.3,
+  "to": 86.7,
+  "text": "Investigate a harbour where ships vanish.",
+  "file": "vo/ryan/n-10.wav",
+  "duration": 2.12,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 92.6,
+  "to": 95.9,
+  "text": "Ask, and they come with you.",
+  "file": "vo/ryan/n-11.wav",
+  "duration": 1.508,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 109.8,
+  "to": 111.9,
+  "text": "We played until the credits ran out.",
+  "file": "vo/ryan/n-12.wav",
+  "duration": 1.82,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 112.3,
+  "to": 121.5,
+  "text": "Keep a promise on the night of the first snow.",
+  "file": "vo/ryan/n-13.wav",
+  "duration": 2.032,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 122.3,
+  "to": 126.8,
+  "text": "Change one morning in 1994, and see who's still here tonight.",
+  "file": "vo/ryan/n-14.wav",
+  "duration": 4.204,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 131.1,
+  "to": 133.8,
+  "text": "Same street, before and after.",
+  "file": "vo/ryan/n-15.wav",
+  "duration": 1.877,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 134.2,
+  "to": 136.6,
+  "text": "Or start with nothing but a promise.",
+  "file": "vo/ryan/n-16.wav",
+  "duration": 1.713,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 144.6,
+  "to": 149.8,
+  "text": "Say yes, and the writer builds the next place as you walk into it.",
+  "file": "vo/ryan/n-17.wav",
+  "duration": 3.589,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 150.3,
+  "to": 154.1,
+  "text": "Every character has a place of their own, too.",
+  "file": "vo/ryan/n-18.wav",
+  "duration": 2.244,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 158.2,
+  "to": 161.8,
+  "text": "And it never runs out.",
+  "file": "vo/ryan/n-19.wav",
+  "duration": 1.213,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 162.3,
+  "to": 169.5,
+  "text": "Next: bring your friends into the same story.",
+  "file": "vo/ryan/n-20.wav",
+  "duration": 2.458,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 170.3,
+  "to": 174.8,
+  "text": "The writer writes the plot, the rules, and the code.",
+  "file": "vo/ryan/n-21.wav",
+  "duration": 2.906,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 175,
+  "to": 179.5,
+  "text": "Whatever the story needs, it can build.",
+  "file": "vo/ryan/n-22.wav",
+  "duration": 2.192,
+  "tempo": 1,
+  "fits": true
+ },
+ {
+  "from": 184.6,
+  "to": 187.8,
+  "text": "Books let us read worlds. Games let us play them.",
+  "file": "vo/ryan/n-23.wav",
+  "duration": 3.198,
+  "tempo": 1.078,
+  "fits": true
+ },
+ {
+  "from": 188.6,
+  "to": 193.6,
+  "text": "Worldlines lets you live in one.",
+  "file": "vo/ryan/n-24.wav",
+  "duration": 1.655,
+  "tempo": 1,
+  "fits": true
+ }
+]
