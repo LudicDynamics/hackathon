@@ -93,6 +93,8 @@ export function DeclaredActionDialog({
   const [reviewPrompt, setReviewPrompt] = useState('');
   const dialog = useRef<HTMLDivElement>(null);
   const leaseRef = useRef<FocusSurfaceLease | null>(null);
+  /** Latest `requestClose`, for the window-level pointer listener below. */
+  const requestCloseRef = useRef<() => void>(() => {});
   const closeHandler = useRef(onClose);
   closeHandler.current = onClose;
   const slots = value.slots ?? [];
@@ -106,6 +108,7 @@ export function DeclaredActionDialog({
     leaseRef.current?.markClosing();
     closeHandler.current();
   };
+  requestCloseRef.current = requestClose;
 
   useEffect(() => {
     if (!focus) return;
@@ -127,6 +130,23 @@ export function DeclaredActionDialog({
     const previous = document.activeElement as HTMLElement | null;
     dialog.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
     return () => previous?.focus();
+  }, []);
+
+  // Close on the POINTER, not on `click` (niko, 2026-09-15). In play the
+  // Return button and the backdrop stopped answering clicks while Escape still
+  // closed the dialog — the `click` never reached us (a captured pointer or an
+  // intervening layer retargets it), while a window-level capture-phase
+  // `pointerdown` always sees the original target. Same mechanism the reader
+  // (BagItemDialog) uses for its outside-press.
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      const root = dialog.current;
+      if (!root) return;
+      const target = event.target as Node | null;
+      if (!target || !root.contains(target)) requestCloseRef.current();
+    };
+    window.addEventListener('pointerdown', onPointerDown, true);
+    return () => window.removeEventListener('pointerdown', onPointerDown, true);
   }, []);
 
   const place = (path: string, target?: string) => {
@@ -197,7 +217,7 @@ export function DeclaredActionDialog({
       }}
     >
       <div ref={dialog} className="declared-action-dialog" role="dialog" aria-modal="true" aria-label={copy(locale, 'Declared action', '宣言された行動', '声明动作')}>
-        <button type="button" onClick={requestClose}>{copy(locale, 'Return ↩', 'この場に戻る ↩', '回到场景 ↩')}</button>
+        <button type="button" onPointerDown={event => { event.preventDefault(); requestClose(); }} onClick={requestClose}>{copy(locale, 'Return ↩', 'この場に戻る ↩', '回到场景 ↩')}</button>
         {value.kind === 'stage' && <p>{copy(locale, 'Selecting materials does not submit or execute them.', '材料を選ぶだけでは、まだ提出も実行もされません。', '选择材料不会提交或执行。')}</p>}
 
         {value.kind === 'stage' && <fieldset className="material-slots" disabled={busy}>
