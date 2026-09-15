@@ -39,7 +39,9 @@ Every world-state block ends with one plain line saying what is still owed this 
 
 Read it as a fact, not a script. It names what is outstanding; how you resolve it is your call, and it never tells you what a character should say or do. An unresolved player action has to be answered before you move on. A line that says nothing changed means nothing is owed, and a quiet turn is a legitimate turn.
 
-Anything the line points at that you have not read is one look_at away. Never guess the contents of a path you have not opened.`;
+Anything the line points at that you have not read is one look_at away. Never guess the contents of a path you have not opened.
+
+Some of what the world state reports was not written by anyone: an action, once taken, can settle itself through rules that live in the world. When it has, the files are already on disk and the line says so. Your job is to say what it means, not to make it happen a second time: do not create, move, or rewrite something the world has already settled.`;
 
 /** Character-side stance (04 §3.3). "Just opened + player is present" lives in the `standing`
  *  section (00 §3.3), so this constant does not restate it — only how to read the line. */

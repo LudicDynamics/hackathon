@@ -21,6 +21,7 @@ import { ActionError, fail } from './errors.js';
 import { registerAction } from './service.js';
 import type { ActionContext, ActionResult } from './types.js';
 import { runTriggeredCommands } from '../commands/trigger.js';
+import { commandReceiptText, commandReceipts } from '../commands/receipt.js';
 
 export interface UseItemOnInput {
   /** World-relative path of the item being applied (a single .md file). */
@@ -303,8 +304,10 @@ export async function useItemOn(
     },
   });
 
+  // Original action sentence FIRST, receipt after (docs/command/10 §3.8.2 /
+  // §8.2 item 3). `''` when no command matched keeps the text unchanged.
   return {
-    text: renderText(itemRef, targetRef, outcome, targetKind),
+    text: renderText(itemRef, targetRef, outcome, targetKind) + commandReceiptText(commandReceipts(commands)),
     details: {
       item: itemPath,
       itemName: itemRef.name,

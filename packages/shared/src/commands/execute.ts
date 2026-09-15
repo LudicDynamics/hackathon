@@ -129,6 +129,14 @@ export interface CommandEffectOutcome {
    * imply failure — read `settle` for the verdict.
    */
   seq: number | null;
+  /**
+   * The world event this effect appended, when it appended one.
+   *
+   * Carried alongside `seq` because `10`'s receipt renders each effect line
+   * through `renderEvent`; a bare seq would force a second renderer. NOT
+   * persisted: `05`'s `receiptOf` stores only the `evt-<seq>` string.
+   */
+  event?: WorldEvent;
   /** Present only when `settle === 'failed'`. */
   error?: { code: ActionErrorCode | WorldCommandRuntimeErrorCode; message: string };
 }
@@ -361,6 +369,11 @@ export async function runWorldCommand(
       settle: 'ran',
       path: first.path,
       seq: seqOf(first.event),
+      // The event OBJECT is kept alongside its seq: `10`'s receipt renders each
+      // effect line through `renderEvent`, and a bare seq would force a second
+      // renderer beside it (`contract §8` anti-pattern 5). `05` persists only
+      // `seq` (via `receiptOf`), so the log stays small.
+      ...(first.event === undefined ? {} : { event: first.event }),
     });
   }
 
@@ -522,14 +535,26 @@ function walkArgs(node: unknown, vars: ReadonlyMap<string, InterpolatedValue>): 
   }
   return { ok: true, value: normalizeScalar(node) };
 }
-
 /** Flatten the typed scope into the flat map `{{ }}` substitution reads. */
 function argVariables(scope: EffectArgScope): ReadonlyMap<string, InterpolatedValue> {
   const vars = new Map<string, InterpolatedValue>();
-  for (const [k, v] of Object.entries(scope.params)) vars.set(`params.${k}`, v);
-  // `trigger` already holds §2.5's full names — see the field's doc comment.
+  // `trigger` first: it holds §2.5's full names (`trigger.path`, `roll.result`,
+  // `actor`), which the author writes literally (see the field's doc comment).
   for (const [k, v] of Object.entries(scope.trigger)) vars.set(k, v);
   for (const [k, v] of Object.entries(scope.status ?? {})) vars.set(`status.${k}`, v);
+  for (const [k, v] of Object.entries(scope.params)) {
+    vars.set(`params.${k}`, v);
+    // `{{ grade }}` is the documented shorthand for `{{ params.grade }}`
+    // (`01` §2.8: "两种写法等价"), and the write-time checker accepts both — so
+    // the evaluator must resolve both too. Registering only the prefixed form
+    // made every shorthand fail at RUN time with `"grade" is not a readable
+    // reference here`, the worst split: accepted on write, broken on trigger.
+    //
+    // Safe against collisions because `01` rejects a parameter whose name equals
+    // a reserved root (`reserved_param_name`), and a name already claimed by
+    // `trigger`/`status` is left alone rather than shadowed.
+    if (!vars.has(k)) vars.set(k, v);
+  }
   return vars;
 }
 

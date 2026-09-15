@@ -6,6 +6,7 @@ import { registerAction } from './service.js';
 import { actorLabel } from './actor.js';
 import type { ActionContext, ActionResult } from './types.js';
 import { runTriggeredCommands } from '../commands/trigger.js';
+import { commandReceiptText, commandReceipts } from '../commands/receipt.js';
 
 export interface ChooseOptionInput {
   /** World-relative, POSIX, no leading './' (00 §2.1). An entity with a choice group. */
@@ -194,8 +195,12 @@ export async function chooseOption(
     },
   });
 
+  // The receipt rides `text`, AFTER the action's own sentence (docs/command/10
+  // §3.8.2 / §8.2 item 3): a writer-triggered command's events are excluded from
+  // its own next injection and the cursor already passed them, so this is the
+  // only same-turn channel. '' when nothing matched ⇒ byte-identical text.
   return {
-    text,
+    text: text + commandReceiptText(commandReceipts(commands)),
     details: {
       path,
       name,

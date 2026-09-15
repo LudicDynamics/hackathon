@@ -21,6 +21,7 @@ import {
   type EventWindow,
 } from '../render/events.js';
 import type { Section } from '../render/state.js';
+import { WORLD_COMMAND_EFFECT_BUDGET } from '../commands/limits.js';
 import { SECTION_CAPS, type SectionCaps, type SectionSpec } from '../render/sections.js';
 
 /** 05 的类型由本模块 re-export（02 §2.1 如此引用）。 */
@@ -249,7 +250,19 @@ export async function makeSectionDeps(opts: {
           // 层过滤**只对角色**（00 §6.1）：作家读全天下的 dynamics。
           layer: actor.type === 'character' ? (layer ?? undefined) : undefined,
           excludeActor: actor,
-          caps: caps.dynamics,
+          // READ budget ≠ RENDER cap (10 §2.6 / M-9). One trigger can append up
+          // to `WORLD_COMMAND_EFFECT_BUDGET` events, and they are NEWER than
+          // everything else, so at `caps.dynamics` they would eat the read slots
+          // and push older facts out of the slice entirely — where nothing could
+          // even count them: `dropped` only counts what the RENDER cap folded.
+          // Gone from the read + cursor advanced (`cursor.ts`) = gone for good.
+          // `renderEventWindow` below keeps `caps.dynamics`: only the READ grows.
+          //
+          // HARD PREREQUISITE (10 §2.6 ⚠️): the constant is an upper bound on
+          // EXPANDED events, because `03` counts `list-args` array lengths during
+          // pre-flight (`n = Σ_steps (array length or 1)`). Move that expansion
+          // out of pre-flight and this guard silently stops covering a burst.
+          caps: caps.dynamics + WORLD_COMMAND_EFFECT_BUDGET,
         }));
 
   const eventWindow = (): Promise<EventWindow> =>

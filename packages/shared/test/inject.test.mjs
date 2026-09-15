@@ -33,6 +33,8 @@ import {
   makeSectionDeps,
   readEventSlice,
 } from '../dist/inject/collect.js';
+import { WORLD_COMMAND_EFFECT_BUDGET } from '../dist/commands/limits.js';
+import { settleTurnCursor } from '../dist/store/cursor.js';
 import { renderEventWindow } from '../dist/render/events.js';
 import { LocalWorldStore, VIEWPOINT_TTL_MS } from '../dist/store/local-store.js';
 
@@ -431,6 +433,155 @@ test('01 §4.5: unseenCreation — an unentered layer elsewhere counts; entering
       turn: 't1',
     });
     assert.equal((await factsOf()).unseenCreation, false, 'a later layer_entered consumes it');
+  } finally {
+    store.close();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// ------------------------------------------- 10 T5a / T8 — command bursts
+
+test('10 T5a: a writer-triggered command event is invisible to the writer itself', async () => {
+  const { store, root } = await tempStore();
+  try {
+    // The command's own event carries the TRIGGERING actor (`actor = writer`).
+    await store.appendEvent({
+      type: 'entity_created',
+      actor: WRITER,
+      detail: { path: 'world/baker-street/a.md', name: 'A', kind: 'note', command: 'investigate-clue' },
+      subject: 'world/baker-street/a.md',
+      turn: 't-7',
+      layer: 'world/baker-street',
+    });
+    const slice = await readEventSlice(store, 'writer', { excludeActor: WRITER, caps: 12 });
+    // PASSES BEFORE AND AFTER (10 §10 T5a): this pins the PREMISE that makes
+    // the same-turn receipt (`receipt.test.mjs`) necessary, not a fix.
+    assert.deepEqual(
+      slice.events.filter((e) => e.detail.command === 'investigate-clue'),
+      []
+    );
+    // A different reader DOES see it: the exclusion is per-actor, not global.
+    const god = await readEventSlice(store, 'god-reader', { excludeActor: { type: 'god' }, caps: 12 });
+    assert.equal(god.events.length, 1);
+  } finally {
+    store.close();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('10 T8: a command burst cannot push older facts out of the READ', async () => {
+  const { store, root } = await tempStore();
+  try {
+    // One command landing 5 effects, on top of 12 older facts. Each old fact
+    // gets its own turn, or rule 1 folds all twelve into ONE group and there is
+    // nothing left for the cap to evict.
+    for (let i = 1; i <= 12; i += 1) {
+      await store.appendEvent({
+        type: 'entity_edited',
+        actor: ENGINE,
+        detail: { path: `world/baker-street/old-${i}.md`, name: `old-${i}`, kind: 'note' },
+        subject: `world/baker-street/old-${i}.md`,
+        turn: `t-old-${i}`,
+        layer: 'world/baker-street',
+      });
+    }
+    for (let i = 1; i <= 5; i += 1) {
+      await store.appendEvent({
+        type: 'entity_created',
+        actor: PLAYER,
+        detail: {
+          path: `player/reward-${i}.md`,
+          name: `reward-${i}`,
+          kind: 'note',
+          command: 'investigate-clue',
+        },
+        subject: `player/reward-${i}.md`,
+        turn: 't-7',
+        layer: 'world/baker-street',
+      });
+    }
+    await store.writeCursor('writer', 0); // pin BEFORE every event
+
+    const hot = await readEventSlice(store, 'writer', {
+      excludeActor: WRITER,
+      // The constant, never the literal 24: `03` owns the number (10 §10 T8).
+      caps: 12 + WORLD_COMMAND_EFFECT_BUDGET,
+    });
+    assert.equal(hot.events.length, 17, 'the READ must exceed the render cap');
+
+    // At the render cap the burst folds into ONE line (`count: 5`), so at most
+    // that many groups can be evicted. Before the fix the 5 effects vanished at
+    // the READ, where nothing counts them: they appeared in neither `lines` nor
+    // `dropped` (10 §10 T8).
+    const w = renderEventWindow(hot, { caps: 12, actor: WRITER, layerNames: {} });
+    assert.equal(w.events.length, 12);
+    assert.equal(w.dropped, 1, '12 old facts + 1 folded command line = 13 groups');
+
+    // The FIX itself lives in `makeSectionDeps` (10 §8.1 item 11): the turn's
+    // one event read must use `caps.dynamics + WORLD_COMMAND_EFFECT_BUDGET`, or
+    // the burst takes read slots and the old facts are gone before anyone can
+    // count them. `deps.events()` is the memoised read every section shares.
+    const deps = await makeSectionDeps({ store, actor: WRITER, reader: 'writer', specs: [] });
+    const turnSlice = await deps.events();
+    assert.equal(turnSlice.events.length, 17, 'the turn read must not stop at caps.dynamics');
+  } finally {
+    store.close();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('10 T6: a character never sees a command elsewhere (nor a bag write) — by design', async () => {
+  const { store, root } = await tempStore();
+  try {
+    const W = { type: 'writer' };
+    // The command creates something in ANOTHER layer...
+    await store.appendEvent({
+      type: 'entity_created',
+      actor: PLAYER,
+      detail: { path: 'world/other/a.md', name: 'A', kind: 'note', command: 'c' },
+      subject: 'world/other/a.md',
+      turn: 't',
+      layer: 'world/other',
+    });
+    // ...and writes the player's bag (`resolveLayer` -> null, so no layer column).
+    await store.appendEvent({
+      type: 'entity_created',
+      actor: PLAYER,
+      detail: { path: 'player/key.md', name: 'K', kind: 'note', command: 'c' },
+      subject: 'player/key.md',
+      turn: 't',
+    });
+    const watson = await readEventSlice(store, 'character:watson', {
+      layer: 'world/inn',
+      excludeActor: W,
+      caps: 12,
+    });
+    // Both invisible. This is the DESIGN (10 §11 conflict 3), not a bug: the
+    // character's window is layer-scoped, and the receipt is the writer's channel.
+    assert.deepEqual(watson.events, []);
+  } finally {
+    store.close();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('10 T9: the cursor still advances to getMaxSeq — module 10 changes nothing here', async () => {
+  const { store, root } = await tempStore();
+  try {
+    await store.appendEvent({
+      type: 'entity_created',
+      actor: PLAYER,
+      detail: { path: 'world/baker-street/a.md', name: 'A', kind: 'note', command: 'c' },
+      subject: 'world/baker-street/a.md',
+      turn: 't-7',
+      layer: 'world/baker-street',
+    });
+    await settleTurnCursor(store, 'writer', { advance: true });
+    assert.equal(await store.readCursor('writer'), await store.getMaxSeq());
+    // The consequence of that advance: a second read sees nothing, which is
+    // exactly why the same-turn receipt exists (10 §3.9).
+    const after = await readEventSlice(store, 'writer', { excludeActor: WRITER, caps: 12 });
+    assert.deepEqual(after.events, []);
   } finally {
     store.close();
     await fs.rm(root, { recursive: true, force: true });

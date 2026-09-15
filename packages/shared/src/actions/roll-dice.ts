@@ -12,6 +12,7 @@ import { ActionError, fail } from './errors.js';
 import { registerAction } from './service.js';
 import type { ActionContext, ActionResult } from './types.js';
 import { runTriggeredCommands } from '../commands/trigger.js';
+import { commandReceiptText, commandReceipts } from '../commands/receipt.js';
 
 export interface RollDiceInput {
   /** World-root relative path, POSIX, no leading './' (00 §2.1). An existing single .md file. */
@@ -276,7 +277,16 @@ export async function rollDice(
   // `...(commands ? { commands } : {})` is NOT style: no `on` ⇒ no `commands`
   // key; a declared `on` ⇒ always a `commands` key, even all-skipped. That is
   // what makes "wrote `on`, nothing ran" impossible to miss in the response.
-  return { text, details: { ...details, event, ...(commands ? { commands } : {}) } };
+  //
+  // The receipt rides `text` (docs/command/10 §3.8.2): for a WRITER-triggered
+  // command the events are excluded from its own next injection (`excludeActor`)
+  // and the cursor has already passed them, so this is the only channel that
+  // reaches the model in the SAME turn. Original text FIRST, receipt after
+  // (10 §8.2 item 3); '' when nothing matched keeps the text byte-identical.
+  return {
+    text: text + commandReceiptText(commandReceipts(commands)),
+    details: { ...details, event, ...(commands ? { commands } : {}) },
+  };
 }
 
 registerAction('rollDice', (ctx, input) => rollDice(ctx, input as unknown as RollDiceInput));

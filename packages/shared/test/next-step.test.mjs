@@ -146,3 +146,108 @@ test('04 §6.1: the output never embeds a `name` — it is fixed prose', () => {
   ];
   for (const text of sections) assert.ok(!text.includes('Morgan'), 'a name must never reach the imperative');
 });
+
+// ------------------------------------------- 10 §3.7.3 — the settled register
+
+const W_CHOICE_SETTLED = 'The player has just made a choice, and the world has already carried it out: what it owed is on disk now. Say what it means; do not re-describe the mechanics, and do not write the same thing again.';
+const W_ITEM_SETTLED = 'The player has just used an item on something, and the world has already carried it out on disk. Say what it means; do not repeat the effect or write a second copy of it.';
+const W_ROLL_SETTLED = 'A dice check has just resolved and the world has already settled what it owed: the result is on disk. Report what it means this turn; do not grant, move, or write any of it again.';
+const W_ACT_SETTLED = 'The world has already settled what the player\u2019s last act owed. Whatever landed is on disk; narrate its meaning, and do not repeat it.';
+
+/** A command's consequence: the same view as `ev`, plus the `command` projection. */
+const byCommand = (type, command = 'investigate-clue') => ({ ...ev(type), command });
+
+test('10 T1 (non-emptiness): the command pushes the act off the tail — the section MUST NOT vanish', () => {
+  const rollResolved = ev('roll_resolved');
+  const createdByCommand = byCommand('entity_created');
+  const base = facts({ events: [rollResolved, createdByCommand], quiet: false });
+
+  // BEFORE the fix this was `''`: the tail was the command event, its type was
+  // not in the whitelist, and the whole "next step" section disappeared.
+  assert.notEqual(computeNextStep(base), '', 'the section must not be absent');
+  assert.equal(computeNextStep(base), W_ROLL_SETTLED);
+
+  // Control: with no command the wording is byte-identical to today's.
+  assert.equal(computeNextStep(facts({ events: [rollResolved], quiet: false })), W_ROLL);
+});
+
+test('10 §3.7.2 order 1′: each interactive act has its own settled wording', () => {
+  const cases = [
+    ['choice_selected', W_CHOICE_SETTLED],
+    ['use_item_on', W_ITEM_SETTLED],
+    ['roll_resolved', W_ROLL_SETTLED],
+  ];
+  for (const [type, wording] of cases) {
+    const f = facts({ events: [ev(type), byCommand('entity_created')], quiet: false });
+    assert.equal(computeNextStep(f), wording, `${type} settled`);
+  }
+});
+
+test('10 §3.7.2 order 1″: an act survives but owes nothing, yet something WAS settled', () => {
+  // `actTail` finds the non-command `entity_created`, whose type is NOT in the
+  // whitelist (`owed === undefined`), and a command event is present. This is
+  // 1″'s exact domain: "at least one non-command event" (10 §3.7.2's gate).
+  const f = facts({ events: [ev('entity_created'), byCommand('entity_created')], quiet: false });
+  assert.equal(computeNextStep(f), W_ACT_SETTLED);
+  // `CASE_QUIET` would claim the world did not change; that would be a lie.
+  assert.notEqual(computeNextStep(f), W_QUIET);
+});
+
+test('10 §3.7.2: a window of ONLY command events falls through to silence (tail === null)', () => {
+  // The doc's §3.7.2 gate `tail !== null` puts this outside 1″'s domain: with no
+  // non-command event at all, `owed` is unknowable and the arm falls to 2/3/4.
+  // This row pins the implemented rule; §8/§10's prose reads the other way and
+  // the inconsistency is reported (see the report's "§3.7.2 gate" note).
+  const onlyCommand = facts({ events: [byCommand('entity_created')], quiet: false });
+  assert.equal(computeNextStep(onlyCommand), '');
+  // It never reaches `CASE_QUIET` (which would state "nothing changed" — false).
+  assert.notEqual(computeNextStep(onlyCommand), W_QUIET);
+});
+
+test('10 §3.7.2: a command that matched nothing lands no event, so the plain wording stands', () => {
+  // No `command` anywhere ⇒ nothing was settled ⇒ order 1, not 1′.
+  const f = facts({ events: [ev('roll_resolved')], quiet: false });
+  assert.equal(computeNextStep(f), W_ROLL);
+});
+
+test('10 §3.7.2: a writer-authored act is still dropped, settled or not', () => {
+  const writerRoll = ev('roll_resolved', { type: 'writer' });
+  assert.equal(
+    computeNextStep(facts({ events: [writerRoll], quiet: false })),
+    '',
+    'A-12 guard unchanged'
+  );
+  // With a command event present the 1″ arm may fire — it states a world fact
+  // and names no act, so it is still safe for a writer-authored trigger.
+  assert.equal(
+    computeNextStep(facts({ events: [writerRoll, byCommand('entity_created')], quiet: false })),
+    W_ACT_SETTLED
+  );
+});
+
+test('10 §3.7.2: the cap may drop the act entirely — 1″ still speaks when any non-command survives', () => {
+  // The cap folded the older non-command events away, but one survives: 1″'s
+  // domain is met and it names no act, so the section is not lost.
+  const f = facts({
+    events: [ev('entity_deleted'), byCommand('entity_created'), byCommand('entity_moved')],
+    quiet: false,
+  });
+  assert.equal(computeNextStep(f), W_ACT_SETTLED);
+
+  // With EVERY event commanded there is nothing left to name: silence (above).
+  assert.equal(
+    computeNextStep(
+      facts({ events: [byCommand('entity_created'), byCommand('entity_moved')], quiet: false })
+    ),
+    ''
+  );
+});
+
+test('10 §3.7.2: the settled wording never leaks a command id or a path', () => {
+  const f = facts({
+    events: [ev('roll_resolved'), byCommand('entity_created', 'investigate-clue')],
+    quiet: false,
+  });
+  assert.ok(!computeNextStep(f).includes('investigate-clue'), 'the id is a key, not narrative');
+  assert.ok(!computeNextStep(f).includes('world/'), 'no file path in the imperative');
+});

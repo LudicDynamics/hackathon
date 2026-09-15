@@ -11,6 +11,7 @@ import type { Actor } from '../actions/actor.js';
 import type { WorldEvent, WorldEventType } from '../schemas/events.js';
 import { dirOfLayer, MAP_LAYER } from '../store/layers.js';
 import { sanitiseForBlock } from './sanitise.js';
+import { COMMAND_ID_RE } from '../commands/limits.js';
 
 /** The raw read, owned by the injector (01). Declared HERE (not in
  *  inject/collect.ts) so the dependency is one-way: collect -> render. The
@@ -41,6 +42,11 @@ export interface EventWindowLine {
   subject: string | null;
   /** The rendered English sentence. Bare — no bullet, no indent, no newline. */
   text: string;
+  /** NEW — 10 §2.3. The producing world command id, when this WHOLE group came
+   *  from one. Absent for every ordinary event (never set to ''), so
+   *  `'command' in line` is false in the common case — same discipline as
+   *  `name` (see the `OUT` step). */
+  command?: string;
 }
 
 export interface EventWindow {
@@ -153,6 +159,51 @@ export function actorPhrase(actor: Actor): string {
   }
 }
 
+/**
+ * The command that produced this event, or null. The ONE authority for
+ * "the world did this by rule, not by hand" (10 §2.1).
+ *
+ * Reads `detail.command` ONLY. `detail.by` is NOT consulted: it is already
+ * taken by `layer_initialized` as a closed enum (schemas/events.ts:99), and
+ * reusing it would be a second truth source.
+ *
+ * Pure and total: never throws. `detail` is `Record<string, any>` off a JSON
+ * column, and the injection block may never fail a turn (hooks/00 §11).
+ * An illegal value is NOT an error — it degrades to "ordinary event".
+ */
+export function commandOf(event: WorldEvent): string | null {
+  const raw = ((event?.detail ?? {}) as Detail)['command'];
+  // The id grammar is `01`'s, reused rather than re-declared (10 §2.1: the
+  // field is a judgement key, so "which strings are legal" has ONE home).
+  return typeof raw === 'string' && COMMAND_ID_RE.test(raw) ? raw : null;
+}
+
+/**
+ * The sentence subject. For an ordinary event this is EXACTLY `actorPhrase`
+ * (so every existing golden holds byte-for-byte). For an event produced by a
+ * world command it names the WORLD as executor and keeps the actor as cause
+ * (10 §3.6):
+ *
+ *   subjectPhrase({type:'player'},    'investigate-clue') -> 'The world, after the player acted,'
+ *   subjectPhrase({type:'writer'},    'investigate-clue') -> 'The world, after the narrator acted,'
+ *   subjectPhrase({type:'god'},       'investigate-clue') -> 'The world, after the world itself acted,'
+ *   subjectPhrase({type:'character', id:'watson'}, 'x')   -> 'The world, after the character "watson" acted,'
+ *   subjectPhrase(a, null)                                -> actorPhrase(a)          // unchanged
+ *
+ * Pure; never throws. Only the PRESENCE of `command` matters — the id itself is
+ * never printed (10 §2.1: it is a judgement key, not narrative).
+ *
+ * `10` §2.5 keeps a `lowerFirst` helper so every arm reads as one assembly
+ * path; it is the IDENTITY for the `character` arm and only lowers the first
+ * letter of the other five, so it is folded into the one line below rather
+ * than declared as a second name.
+ */
+function subjectPhrase(actor: Actor, command: string | null): string {
+  if (command === null) return actorPhrase(actor);
+  const cause = actorPhrase(actor);
+  return `The world, after ${cause.charAt(0).toLowerCase()}${cause.slice(1)} acted,`;
+}
+
 /** Pure. `path` is world-root relative, POSIX. Never stats, never reads. */
 export function pathPhrase(path: string): string {
   if (path.startsWith('player/')) return "the player's bag";
@@ -197,7 +248,7 @@ function renderEventChecked(
   opts: { layerNames: Record<string, string> }
 ): { text: string; ok: boolean } {
   const d = (event.detail ?? {}) as Detail;
-  const S = actorPhrase(event.actor);
+  const S = subjectPhrase(event.actor, commandOf(event));
   // Layer names come from world files (`opts.layerNames`), so the phrase is
   // folded at the seam before it enters a sentence (03 §3.3.1: `layerPhrase`
   // only picks the word; the projection step sanitises it).
@@ -409,7 +460,7 @@ export function renderEvent(
 
 /** Merged sentence for a group with count > 1 (03 §3.5.1). */
 function countPhrase(g: Group): string {
-  const S = actorPhrase(g.actor);
+  const S = subjectPhrase(g.actor, commandOf(g.events[0]));
   const first = (g.events[0].detail ?? {}) as Detail;
   switch (g.type) {
     case 'entity_moved': {
@@ -466,8 +517,12 @@ export function renderEventWindow(
     window.push(clean);
   }
 
-  // Step 2: MERGE-BY-TURN (doc-21 §5.4 rule 1). Key is (turn, type, actor) —
-  // never `subject` (four consecutive `entity_moved` carry four subjects).
+  // Step 2: MERGE-BY-TURN (doc-21 §5.4 rule 1). Key is (turn, type, actor,
+  // command) — never `subject` (four consecutive `entity_moved` carry four
+  // subjects). The `command` term is added by 10 §2.3: without it a hand-written
+  // creation and a command-produced one would merge into one group carrying a
+  // single `command`, i.e. "the command wrote 2 pages" when one was not its
+  // doing. Same rule as `MERGE_EXEMPT` — a merge MUST NOT lie about its source.
   const groups: Group[] = [];
   for (const e of window) {
     const mergeable = e.turn !== null && !MERGE_EXEMPT.includes(e.type);
@@ -478,7 +533,8 @@ export function renderEventWindow(
       prev.open &&
       prev.turn === e.turn &&
       prev.type === e.type &&
-      actorKey(prev.actor) === actorKey(e.actor);
+      actorKey(prev.actor) === actorKey(e.actor) &&
+      commandOf(prev.events[0]) === commandOf(e);
     if (sameKey) {
       prev.count += 1;
       prev.events.push(e);
@@ -573,6 +629,11 @@ export function renderEventWindow(
       text: g.text,
     };
     if (g.name !== undefined) line.name = g.name;
+    // `commandOf` on the group's FIRST event, exactly like `type` / `actor` /
+    // `name` / `subject` above. Absent (never '') for ordinary events, so
+    // `'command' in line` is false in the common case.
+    const command = commandOf(g.events[0]);
+    if (command !== null) line.command = command;
     return line;
   });
 
