@@ -600,6 +600,8 @@ const pos = node?.range ? lc.linePos(node.range[0]) : undefined;  // → { line,
 
 ## 7. 错误边界
 
+> **本文 §7 不包含 `edit` 写入目标校验规则（2026-09-15，契约 §11.3 C8 裁定）**：该规则（`edit` / `set_status` / `consume` 的写入 `path` MUST 是触发实体自己或 `trigger.entry.*`）**归 `04 §4.4`**，本文**只引用、不重述、不新增码**。理由：本文的码集是**写入期**封闭 46 码（§7.1，每码恰有一行文案），而这条规则的判据在**求值后**才成立（`trigger.entry` 的值来自实体 frontmatter，写入时不可知）⇒ 校验的唯一落点是运行期，错值走 `02` 的 `CommandOutcomeCode.param_invalid`（`packages/shared/src/commands/bindings.ts:61`）。**`01` 侧 MUST NOT 为它加码**（§7.3 的"每码恰有一行文案"是加码的同步义务，不是许可）。
+
 ### 7.1 结果类型（`07` 硬需求：错误**数组** + 封闭 code 联合）
 
 ```ts
