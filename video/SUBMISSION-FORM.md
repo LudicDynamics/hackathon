@@ -11,7 +11,7 @@
 **Project title**: Worldlines — live in a story with your character agents
 **Demo URL**: https://ludic-test.xvps.jp/airp-infini-canvas/
 **Repository URL**: https://github.com/LudicDynamics/hackathon
-**Demo video URL**: 〈待上传，≤1 分钟〉
+**Demo video URL**: https://youtu.be/FnUXFOv74Tg （1 分钟；完整影片与实录：https://youtu.be/pMtpObFnOug · https://youtu.be/ao9fL1g0Auc · https://youtu.be/lYuTEUDACMo）
 
 ---
 
