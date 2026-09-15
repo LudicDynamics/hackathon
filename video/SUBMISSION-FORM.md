@@ -4,9 +4,9 @@
 **Team or Solo**: Team
 **Team name**: Ludic Dynamics
 **Members** (one per line — fill real names):
-- Yuhang Huang (niko) — product / design / worlds / voice & audio
-- yoshi — engine / agent runtime / canvas
-- Sunjian Fang — infra / local TTS
+- Yuhang Huang (niko)
+- yoshi
+- Sunjian Fang
 **Track**: Track 1: AI-Native Game Prototype
 **Project title**: Worldlines — live in a story with your character agents
 **Demo URL**: https://ludic-test.xvps.jp/airp-infini-canvas/
@@ -17,60 +17,65 @@
 
 ## Project description (≤200 words)
 
-Worldlines is an AI-native narrative game: one infinite canvas where you, a writer agent and a cast of character agents share the same world — and the world is just a folder of Markdown files.
+Worldlines is a playable agent world: an infinite canvas where you, a writer agent and a cast of character agents live in the same continuously simulated world — and that world is just a folder of Markdown files. Play it casually, or design a world with care; six worlds ship prebuilt.
 
-Every place is a layer (map → harbour → office → drawer). Scenes are cards on the canvas: chalk narration, letters, props, doors, dice. You drag a key onto a lock, roll a physical 3D die, open a door and the writer agent writes the next place into existence as you walk in. Characters are present on the canvas; click one and a galgame-style dialogue opens, or call them on a live voice line and they act inside the world while you talk.
+It is for anyone who wants to live alongside their own characters in a world that responds. Characters are not chat windows: they stand on the canvas as entities, follow you from place to place, keep their own memory, act in real time and stay with you. You can talk to a character, watch her act inside the world, or change the world yourself — through the writer agent or through interactive components (props, doors, dice, letters).
 
-Seven playable worlds ship in English, Japanese and Chinese — a fog-bound harbour mystery, a first-snow radio romance with two endings, a 1994 time-fork, a Holmes case, a magic academy, a moonlit pact and a door that writes itself — plus a world launcher, saves, per-world settings and layered audio.
+The result is an immersive, endlessly expanding world that is generated and maintained by AI yet belongs to you and your companion — a harbour explored together with Vera, and whatever comes after the fog.
 
-It is for people who want to live inside a story instead of reading or chatting to one — and for authors: a world is files, so anyone can write one.
+The same engine makes it simple to create and play complex RPG worlds, romance/companion simulators, and detective or puzzle games.
 
 ## Judging criteria 1 — Meaningful use of OpenAI tools (≤200 words)
 
-- **GPT Live (gpt-live-1, WebRTC + client delegation)** is the voice of every character. The voice front-end only carries identity and a delegation policy; anything that needs memory, judgement or an action in the world is delegated to the character's backend agent, which runs a real turn (moves items, writes scenes, rolls dice) and hands its lines back through `session.commentary.append`, plus a spoken receipt of what it actually did. The call is a duplex link to a living agent, not a chatbot with a voice.
-- **GPT-4o-transcribe** is the player's voice input into the writer.
-- **GPT-5 / GPT-4.1 family** run the writer and character agents through our tool-calling runtime (chalk, move, use_item_on, roll_dice, link, arrange…), with per-world model settings.
-- **OpenAI image generation (gpt-image)** draws scene and prop art on demand when the writer invents a place that has no picture yet.
-- **A one-click connection self-test** probes each model, TTS, STT and Live from the settings panel.
+The core of the project is a **full-duplex GPT Live character environment**. We built an agent runtime that is natively matched to our world: the voice front-end (gpt-live-1, WebRTC + client delegation) carries only identity and a delegation policy; anything needing memory, judgement or an action is delegated to the character's backend agent, which runs a real turn (moves items, writes scenes, rolls dice) and hands back its lines plus a spoken receipt of what it did. So a character on a call is a living agent that changes the world with you — not a chatbot with a voice.
 
-Why it matters: the game has no scripted branches. Every scene, reply and world change is authored at play time by these models against a file-based world — the OpenAI stack is the engine's authoring layer, not a bolted-on feature.
+- **GPT Image** generates scene and prop art for the interactive game at play time, in about 10 seconds, whenever the writer invents a place that has no picture. When GPT offers real-time video, the same seam becomes real-time animation.
+- **GPT-5 family** runs the writer and character agents through our tool-calling runtime (chalk, move, use_item_on, roll_dice, link, arrange…).
+- **GPT-4o-transcribe** is the player's voice input.
+- **GPT Astra + Blender** produced the 3D dice model.
+
+Nothing is scripted: every scene, reply and world change is authored by these models against a file-based world.
 
 ## Judging criteria 2 — Originality (≤200 words)
 
-1. **Files are the world.** There is no hidden game state: a world is a directory of Markdown with frontmatter (`type: gate`, `choice_actions`, `dice_outcomes`, `requires.items`). Agents and players edit the same files; every change is an event. Anyone can write a world with a text editor, and the writer agent can grow one forever.
-2. **One canvas, three authors.** Player, writer agent and character agents act in the same space. Characters are physically present on the canvas, follow you between layers, have a "nook" of their own, and can be called on a live voice line while you keep exploring.
-3. **Point-and-click meets improv.** Declared actions (enter / read / take / stage / character) resolve instantly and deterministically; free choices go to the writer. Dice are real dice — the server rolls, a 3D die tumbles, and outcome bands write persistent reward cards.
-4. **A layered infinite canvas** instead of a chat log: zoom from a harbour map into a drawer, with parallax, particles and chalk that flips ink and frame with the backdrop.
+Worldlines is the product of three of our papers: a CHI PLAY paper establishing the concept; an EC2026 (Japan) paper on multi-character play with a writer/world agent; and one on worlds that grow naturally through co-play. All three land in this project.
 
-AI games give you one character in a box; visual novels give you fixed branches. Worldlines gives you a place to live in.
+New for this hackathon:
+
+1. **One canvas, multiple authors.** Player, writer agent and character agents act in the same infinite canvas, not a chat log. Characters are physically present, follow you between layers, have places of their own, and can be called on a live voice line while you explore.
+2. **Our own harness engine** — our third: the first lived in the paper, the second in our shipping product; this one is built on pi with GPT behind it, specialised for world evolution, simulation and character operation.
+3. **Chalk**, the narrative tool at the centre of the design: the writer's words live on the canvas as objects.
+4. **Files are the world.** No hidden state; anyone can write one in Markdown.
+
+Chatbots give one character in a box; traditional games give a field that needs programmers and cannot react in real time. Worldlines gives characters that truly live in — and change — the field, near real time.
 
 ## Judging criteria 3 — Playability / Utility (≤200 words)
 
-It is playable now, in a browser, at the demo URL (five concurrent seats). Seven worlds × three languages are shipped as templates; each starts from a launcher tile into a save you can return to.
+It is playable now, in a browser, at the demo URL (five concurrent seats). Seven worlds × three languages ship as templates; each starts from a launcher tile into a save you can return to.
 
-A typical Fogwharf session: read the commission, take the badge, cross the harbour map, roll to search a berth, drag the badge onto the lighthouse keeper, ask Vera to come along, share a theory, and watch the writer agent write the next dock into the world. Our own playtest ran 44 minutes without a scripted end — it stopped when the API credits did.
+Four sample experiences show the range: **Fogwharf**, a harbour mystery — take the badge, roll to search a berth, ask Vera to come along, share a theory, and the writer agent writes the next dock into the world (our own playtest ran 44 minutes, until the API credits ran out); **First Snow**, a romance simulation that keeps generating new scenes for real-time role-play with the character; **Divergence**, a time-fork across parallel timelines; and **Holmes: The Fourth Case**, detective play. Beyond these, the engine is open-ended — whatever you can imagine, it can host.
 
-Beyond the games, the same stack is a usable authoring tool: worlds are Markdown, so the six shipped worlds were produced in the 100 hours by writing files and letting the writer agent fill gaps. A per-world settings panel controls models, auto-write policy and voices; a connection self-test catches a dead key before a session starts.
+Practical value: the engine itself is unique — a world simulator that agents and players share.
 
-Known limits: turn latency depends on the model (5–20 s per writer turn), live voice needs an OpenAI key with Live access, and the canvas arranger is a single-flight background agent.
+Known limits: there is no separate authoring tool yet — you create while you play, not in a linear pipeline; a turn takes 5–20 s; live voice works but is not as polished as we want under current OpenAI limits; multiplayer is not built. Those are our next focus.
 
 ## Judging criteria 4 — Execution and craft (≤200 words)
 
-- **Engine**: pnpm monorepo — Express + WebSocket server, React 19 / Vite canvas, a shared package with the world model, action services and SQLite-backed canvas/history stores. Agents run as isolated RPC processes on a tool-calling runtime with per-role tool sets and a serialized, revision-guarded write path (no two agents can commit the same seat).
-- **Contracts as code**: nine mechanical gates (`check:merge/docs/ws/i18n/bodies/worlds/skills/voices/ux`) pin the WS frame contract, request bodies, i18n coverage of 452 keys, the seven worlds' structure, and 24 UX-contract rules. 1,180 tests pass across shared/server/web.
-- **Presentation**: 2.5D parchment canvas with parallax and particles, hand-written chalk, 3D physics dice with a reveal gate so results never leak before the ceremony, six-emotion character portraits, layered audio (ambient, BGM, foley, stingers) with loudness-normalised tracks, and a glass "brick wall" world launcher with per-world intro videos.
-- **Polish**: three-language worlds and UI, saves and rollback, focus/escape discipline across every overlay, reduced-motion support, and a settings panel with local-only connection tests.
+We polished the whole stack: a complete harness engine (isolated agent processes on a tool-calling runtime, per-role tool sets, a serialized, revision-guarded write path) and every frontend component and behaviour. We defined the framework end to end — the file-system world model, fallbacks, chunking, WS frame contract — and built it as code: nine mechanical gates and 1,180 passing tests pin the contracts, request bodies, i18n (452 keys, three languages), the seven worlds' structure and 24 UX rules.
 
-Everything above was built in the 100-hour window on top of the listed open-source components.
+Every modality was fitted in with care: a 2.5D parchment canvas with parallax and particles, hand-written chalk, 3D physics dice with a reveal gate, six-emotion portraits, layered audio (ambient, BGM, foley, stingers), a glass world launcher with intro videos, saves and rollback, reduced-motion support — and UI/UX passes over every overlay so the play loop feels good in all three languages.
+
+Not a line of code existed before the challenge. From Friday we built everything with Codex end to end — design, framework, engine, frontend, playability, overall design — switching to Claude Code when Codex quota ran out. GPT Astra and Blender produced the dice model.
 
 ## Pre-existing code, open-source components, datasets, third-party tools (≤200 words)
 
-- **pi-rp** (our fork of Mario Zechner's `pi` coding-agent monorepo, MIT) — the agent RPC runtime the writer/character/arranger agents run on; vendored as a submodule.
-- Runtime/libraries (all MIT unless noted): React, React DOM, Vite, TypeScript, Tailwind CSS, Express, ws, cors, zod, yaml, three.js, cannon-es, lucide-react, clsx, tailwind-merge; Remotion (Remotion licence, free for individuals/small teams) for the demo video; edge-tts for the video's temporary narration.
+- **pi-rp** (our fork of Mario Zechner's `pi` coding-agent monorepo, MIT) — the agent RPC runtime; vendored as a submodule.
+- Runtime/libraries (MIT unless noted): React, React DOM, Vite, TypeScript, Tailwind CSS, Express, ws, cors, zod, yaml, three.js, cannon-es, lucide-react, clsx, tailwind-merge; Remotion (Remotion licence) for the demo video; edge-tts for the video's temporary narration.
 - Fonts via Google Fonts: LXGW WenKai, Caveat, DM Mono, Manrope (SIL OFL).
 - Audio: CC-BY 4.0 tracks credited in `assets/audio/CREDITS.md`; foley/ambient from CC0 sources; the launcher theme is our own Suno-generated track (not redistributed).
-- Model/API services: OpenAI (GPT Live, GPT-4o-transcribe, GPT-5/4.1, gpt-image), DeepSeek (optional writer model), Alibaba DashScope Qwen-TTS (online character voices), a self-hosted local TTS for one character.
-- Art: scene backgrounds, portraits and intro clips were generated during the build period with image/video generation tools (Stable-Diffusion-based pipelines and Seedance) from our own prompts.
-- Pre-existing: an earlier internal infinite-canvas prototype (retired 2026-09-11) contributed design documents only; all game code was written during the build period.
+- **Local TTS**: a self-hosted voice fine-tuned by us on an open-source TTS model, 〈模型名, licence〉, trained on our own recordings — used for one character; other voices use Alibaba DashScope Qwen-TTS.
+- Model/API services: OpenAI (GPT Live, GPT-5, GPT-4o-transcribe, GPT Image, GPT Astra), DeepSeek (optional writer model), Vercel AI Gateway.
+- Art: scene backgrounds, portraits and intro clips generated during the build period with image/video generation tools (Stable-Diffusion-based pipelines and Seedance) from our own prompts; dice modelled with GPT Astra + Blender.
+- Pre-existing: an earlier internal prototype contributed design documents only; all code was written during the build period.
 
 **Submission confirmation**: ✅ We confirm…
