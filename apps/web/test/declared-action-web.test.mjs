@@ -55,6 +55,14 @@ test('App runs widget choices and entity actions directly instead of parking the
   assert.doesNotMatch(app, /prepareChoiceDraft/);
 });
 
+test('a character elsewhere is visited first, then the dialogue opens in place', () => {
+  const meet = app.slice(app.indexOf('const meetCharacter = '), app.indexOf('const closeRadial = '));
+  assert.match(meet, /view\?\.state === 'elsewhere' && await navigateToCharacter\(id\) === 'failed'\) return;/);
+  // The freshest closure opens the dialogue, so the caller projection is the layer just entered.
+  assert.match(meet, /openCharacterRef\.current\(character\)/);
+  assert.match(app, /onOpenCharacterModal=\{\(id\) => \{ void meetCharacter\(id\); \}\}/);
+});
+
 test('dice reward cards are read-only persisted outcome displays', () => {
   // Bound the persisted-reward branch at the next renderer branch so a
   // renamed legacy comment cannot accidentally make this test inspect a

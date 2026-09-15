@@ -1083,6 +1083,20 @@ export function App() {
       recentContext: chalks.slice(-3).map((chalk) => chalk.body).join('\n\n'),
     });
   };
+  // Keep the freshest closure reachable after an awaited layer change.
+  const openCharacterRef = useRef(openCharacter);
+  openCharacterRef.current = openCharacter;
+  // Meet them where they are (niko, 2026-09-15): a declared `character` action
+  // or a portrait click on someone in another scene first travels to that scene
+  // (navigateToCharacter: enterLayer → one frame → flyTo), so the dialogue
+  // opens with that scene's chalk as its context and returns there on close.
+  // Someone already here, or nowhere in particular, is opened in place.
+  const meetCharacter = useCallback(async (id: string) => {
+    const view = presenceViews.find((item) => item.id === id);
+    if (view?.state === 'elsewhere' && await navigateToCharacter(id) === 'failed') return;
+    const character = characters.find((item) => item.id === id);
+    if (character) openCharacterRef.current(character);
+  }, [characters, navigateToCharacter, presenceViews]);
   const closeRadial = useCallback(() => {
     setRadialState(null);
     const token = radialAdmissionRef.current;
@@ -1239,10 +1253,7 @@ export function App() {
                 onMoveCard={moveCardAction}
                 onSelectChoice={runChoice}
                 onEntityAction={runEntityAction}
-                onOpenCharacterModal={(id) => {
-                  const character = characters.find((item) => item.id === id);
-                  if (character) openCharacter(character);
-                }}
+                onOpenCharacterModal={(id) => { void meetCharacter(id); }}
                 presence={presenceViews}
                 assetUrl={assetUrl}
                 onEnterGate={(target) => { void enterGate(target, 'double-click'); }}
