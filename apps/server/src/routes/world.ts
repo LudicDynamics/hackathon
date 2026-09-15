@@ -606,6 +606,11 @@ export function createWorldRouter(
         });
         resolvedPath = playPath;
       }
+      // One line per switch: the server holds ONE active world, so every other
+      // connected tab is about to be reset to that world's entry layer. The
+      // log is how "my scene jumped back on its own" gets traced to a second
+      // tab or another session loading a save (niko, 2026-09-15).
+      console.log(`[AIRP Server] Loading world: ${path.relative(repoRoot, resolvedPath)}`);
 
       worldFrozen = false;
       // Hang up every live call before the character agents go away, so no
