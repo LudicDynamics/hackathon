@@ -21,6 +21,9 @@ import {
 import { diceStageDisplay } from '../../lib/d10-display.js';
 import { D10Stage } from './D10Stage.js';
 import { useStill } from '../../lib/motion.js';
+import { releaseReveal } from '../../lib/reveal-gate.js';
+import { useLocale } from '../../lib/i18n.js';
+import { declaredDiceFaces, parseCommandReceipts, receiptLine } from '../../lib/world-command.js';
 
 /** Reduced motion still rolls, just briefly: less movement, same information. */
 const STILL_ROLL_MS = 180;
@@ -40,6 +43,25 @@ interface DiceCeremonyProps {
 /** The frame path has no charge phase (docs/perform/02 §3.3). */
 type CeremonyPhase = 'rolling' | 'settled';
 
+/** The player-visible receipt, projected once per render from the raw payload. */
+function CommandReceiptLine({ commands }: { commands: unknown }): React.ReactElement | null {
+  const { t } = useLocale();
+  const receipts = parseCommandReceipts(commands);
+  const line = receiptLine(receipts, t);
+  if (line === null) return null;
+  return (
+    <p
+      className={`dice-stage__commands dice-stage__commands--${line.tone}`}
+      data-command-status={receipts[0]?.status ?? 'applied'}
+      // The wire code is machine vocabulary (docs/command/06 §7.1): kept
+      // inspectable as data, never rendered as player text.
+      {...(line.detail === undefined ? {} : { 'data-command-code': line.detail })}
+    >
+      {line.text}
+    </p>
+  );
+}
+
 export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict, onDone }) => {
   const input: DiceCeremonyInput | null =
     'requestKey' in rawVerdict
@@ -53,6 +75,9 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict,
   // the model and simulating the throw takes; a fixed timer used to settle (and
   // close) the ceremony before the animation had even started.
   const staged = stageDisplay !== null;
+  // Faces of the DECLARED die, so the tumble can never show a value the die
+  // cannot land on (docs/command/06 §11.3). `null` keeps the legacy guess.
+  const faces = input ? declaredDiceFaces(input.dice) : null;
   const still = useStill();
   const [phase, setPhase] = useState<CeremonyPhase>('rolling');
   const [tick, setTick] = useState(0);
@@ -86,10 +111,19 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict,
     );
     el?.classList.add('dice-ceremony-highlight');
     const hi = window.setTimeout(() => el?.classList.remove('dice-ceremony-highlight'), HIGHLIGHT_MS);
-    const done = window.setTimeout(() => onDoneRef.current(), staged ? STAGE_HOLD_MS : SETTLE_MS);
+    const done = window.setTimeout(() => {
+      // Release the held layer refetch BEFORE ending the ceremony: that refetch
+      // carries the cards the command just created, and they must land as the
+      // mask lifts, not behind it (docs/command/06 §8.3).
+      releaseReveal();
+      onDoneRef.current();
+    }, staged ? STAGE_HOLD_MS : SETTLE_MS);
     return () => {
       window.clearTimeout(hi);
       window.clearTimeout(done);
+      // A layer switch forces the ceremony to end early (docs/perform/02 §7.2):
+      // the gate must open with it, or the canvas never updates again.
+      releaseReveal();
       el?.classList.remove('dice-ceremony-highlight');
     };
   }, [phase, input, staged]);
@@ -134,7 +168,7 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict,
           <div className="dice-stage__faces">
             {input.rolls.map((value, i) => (
               <div key={i} className="dice-face-tile">
-                {phase === 'rolling' ? rollingFace(i, tick, value) : value}
+                {phase === 'rolling' ? rollingFace(i, tick, value, faces ?? undefined) : value}
               </div>
             ))}
           </div>
@@ -171,6 +205,12 @@ export const DiceCeremony: React.FC<DiceCeremonyProps> = ({ verdict: rawVerdict,
               {input.result}
             </div>
             {badge(input.passed)}
+            {/* The command receipt appears at the SETTLE mark, never during the
+                tumble: showing it earlier would tell the player the outcome
+                before the dice land (docs/command/06 §3.2 step 9). One silent
+                line — `give` handing over three cards reads as "three cards are
+                on the table", not three operations. */}
+            <CommandReceiptLine commands={input.commands} />
             <button
               onClick={onDone}
               className="px-5 py-2 rounded-full bg-ink text-white text-xs font-semibold tracking-wide shadow-sm hover:opacity-80 transition-opacity"

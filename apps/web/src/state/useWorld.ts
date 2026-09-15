@@ -19,6 +19,7 @@ import { mergeItemPatch, mergeLinkPatch } from '../lib/canvas-patch.js';
 import { acceptWriterFrame, beginWriterPrompt, getWriterState, resetForReconnect as resetWriter, type WriterPromptAcceptance } from '../lib/writer-state.js';
 import { agentActivityStore } from '../lib/agent-activity-store.js';
 import { agentCursorStore } from '../lib/agent-cursor.js';
+import { deferReveal } from '../lib/reveal-gate.js';
 import { worldEventToastStore } from '../lib/world-event-toast.js';
 import { playFoley, playCharge, endCharge, setAmbient } from '../lib/audio.js';
 import { ghostSizeFor, stageText, GHOST_WAIT_AMBIENT } from '../lib/ghost.js';
@@ -722,7 +723,11 @@ export function useWorld(): UseWorldApi {
       }
       switch (msg.type) {
         case 'file_changed':
-          void fetchLayer(layerRef.current);
+          // A command's writes land in the same HTTP request that rolled the
+          // dice, so this frame arrives at ~150ms — long before the ceremony
+          // settles (docs/command/06 §3.4). Hold the refetch, or the reward
+          // cards it created appear while the dice are still tumbling.
+          deferReveal(() => { void fetchLayer(layerRef.current); });
           break;
         case 'world_event':
           // 世界事件（docs/tools/12 §6.3）：先判重，再转发，最后整层重取。
@@ -746,7 +751,11 @@ export function useWorld(): UseWorldApi {
               setInitializingLayer((cur) => (cur !== null && (done === null || done === cur) ? null : cur));
               window.dispatchEvent(new CustomEvent('airp:layer-init', { detail: msg }));
             }
-            void fetchLayer(layerRef.current);
+            // The layer refetch goes through the gate for the same reason as
+            // `file_changed` above, and for every other effect too: a command
+            // that only `link`ed writes canvas rows and lands no event, so this
+            // is the second of two independent consumption paths (06 §8.3).
+            deferReveal(() => { void fetchLayer(layerRef.current); });
           }
           break;
         case 'world_frozen':

@@ -101,12 +101,27 @@ const CONFLICT_CODES = new Set([
   'requirements_not_met', 'wrong_item', 'already_open', 'not_ready', 'no_handler',
   'choice_not_found', 'not_interactive', 'dice_already_rolled', 'already_exists',
   'not_movable', 'near_out_of_layer', 'no_free_seat', 'stale', 'conflict',
+  // World-command refusals that mean "the world said no" (docs/command/06 §7.1):
+  // without these the fallback below reports a misleading red "execution failed"
+  // for what is really "this was already settled" or "a rule is missing".
+  'command_reused', 'command_not_found', 'command_malformed', 'command_invalid',
+  'command_target_missing', 'command_limit_exceeded', 'on_malformed',
+  'param_invalid', 'when_malformed', 'facts_unavailable', 'on_from_missing_key',
+  'on_from_not_a_list', 'on_from_empty_list', 'on_entry_unavailable',
+  'on_entry_not_bound', 'choice_actions_conflict', 'limit_exceeded',
+  'command_resume_drifted',
 ]);
 const REJECTED_CODES = new Set([
   'forbidden', 'permission_denied', 'unauthorized', 'not_allowed', 'rejected',
   'dice_forced_not_allowed',
+  // The one command refusal that is a permission answer, not a state conflict.
+  'command_not_allowed',
 ]);
-const FAILED_CODES = new Set(['invalid_argument', 'invalid_path', 'internal', 'not_found', 'unsupported', 'timeout']);
+const FAILED_CODES = new Set([
+  'invalid_argument', 'invalid_path', 'internal', 'not_found', 'unsupported', 'timeout',
+  // The world changed and then broke part-way — genuinely a failure.
+  'effect_failed', 'command_effect_failed', 'command_write_failed',
+]);
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' ? value as Record<string, unknown> : null;

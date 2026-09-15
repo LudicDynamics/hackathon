@@ -206,6 +206,22 @@
   cursor: pointer;
 }
 
+/* Tone variants for the command receipt (docs/command/06 §7.5). The envelope
+   skeleton above is reused verbatim — only the border and the title colour
+   change, so a failure reads as a failure without a second style sheet. */
+.dice-outcome-letter--error {
+  border-color: color-mix(in srgb, var(--rust) 55%, var(--line));
+}
+
+.dice-outcome-letter--error > summary {
+  color: var(--rust);
+}
+
+.dice-outcome-letter--log > summary {
+  color: var(--ink);
+  opacity: 0.75;
+}
+
 .dice-outcome-letter[open] > div {
   max-height: 320px;
   overflow: auto;

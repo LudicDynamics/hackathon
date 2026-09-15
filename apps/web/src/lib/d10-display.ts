@@ -65,13 +65,19 @@ export function d10Display(
     ? percentile ? [0, 0] : [0]
     : percentile ? [Math.floor((value % 100) / 10), value % 10] : [value % 10];
   const tens = percentile && value !== undefined ? Math.floor((value % 100) / 10) * 10 : 0;
+  // The authoritative score is `sum + modifier` (rules/dice.ts), and `expect` is
+  // judged against THAT. A reading that stopped at the raw face made the player
+  // read 40 off a die the world scored as 50 (docs/command/06 §11.4).
+  const modifier = parsed.value.modifier;
+  const score = value === undefined ? undefined : value + modifier;
+  const suffix = modifier === 0 ? '' : ` ${modifier > 0 ? '+' : '−'} ${Math.abs(modifier)} → ${score}`;
 
   return {
     percentile,
     digits,
     labels: percentile ? ['×10', '×1'] : ['D10'],
     reading: value === undefined ? '' : percentile
-      ? `${String(tens).padStart(2, '0')} + ${value % 10} → ${value}`
-      : `${value % 10} → ${value}`,
+      ? `${String(tens).padStart(2, '0')} + ${value % 10}${suffix || ` → ${value}`}`
+      : `${value % 10}${suffix || ` → ${value}`}`,
   };
 }

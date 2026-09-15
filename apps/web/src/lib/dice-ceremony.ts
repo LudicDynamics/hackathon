@@ -20,9 +20,22 @@ export interface DiceFrameVerdict {
   crit: boolean;
   fumble: boolean;
   layer: string | null;
+  /**
+   * The optional world-command receipt the server attaches to a roll that
+   * declared `on.roll_resolved` (docs/command/06 §8.1). RAW wire shape — the
+   * projection into a player-readable view is `parseCommandReceipts`'s job at
+   * render time, so both aliases below can carry it without re-projecting.
+   */
+  commands?: unknown;
 }
-
-/** The sole internal contract consumed by DiceCeremony. */
+/**
+ * The sole internal contract consumed by DiceCeremony.
+ *
+ * `commands` is an OPTIONAL addition (docs/command/06 §8.2): it is carried
+ * verbatim, never validated here, and its absence is the normal case for a roll
+ * that declared no `on.roll_resolved`. The projection into a player-facing view
+ * belongs to `lib/world-command.ts`; the ceremony only knows how to hold it.
+ */
 export interface DiceCeremonyInput extends RollDiceDetails {
   source: 'player-http' | 'writer-frame' | 'character-frame';
   sourceId: string;
@@ -30,6 +43,7 @@ export interface DiceCeremonyInput extends RollDiceDetails {
   fingerprint: string;
   /** Allocated by the canonical ingress; never copied from transport data. */
   sourceSeq: number;
+  commands?: unknown;
 }
 
 export interface CeremonySnapshot {
@@ -51,7 +65,34 @@ const SEEN_LIMIT = 50;
 const seen = new Map<string, number>();
 const pendingFingerprintByPath = new Map<string, string>();
 const inputByFingerprint = new Map<string, DiceCeremonyInput>();
+/**
+ * The strict guard's output: the twelve authoritative keys, plus the optional
+ * world-command receipt when the server sent one (docs/command/06 §8.2 red
+ * line 2 — the rebuild below lists its keys BY HAND, so a field the server adds
+ * does not reach `DiceCeremonyInput` unless it is named here).
+ */
+export interface RollDiceDetailsWithCommands extends RollDiceDetails {
+  commands?: unknown;
+}
+
 const detailsKeys = ['path', 'name', 'dice', 'desc', 'expect', 'result', 'passed', 'rolls', 'crit', 'fumble', 'forged', 'layer'] as const;
+
+/**
+ * Absorb the OPTIONAL `commands` receipt without letting it into `detailsKeys`.
+ *
+ * That array is the REQUIRED-key list (checked with `hasOwn` below), so adding
+ * `commands` to it would make every plain roll — the common case — fail the
+ * guard, return null, and leave the player staring at "missing authoritative
+ * roll details" instead of a ceremony. This is the module's single most
+ * dangerous edit (06 §8.2 red line 1); it lives in its own function so the
+ * absence of `commands` from that list is visible at the point of use.
+ */
+function withOptionalCommands(
+  details: RollDiceDetails,
+  raw: Record<string, unknown>,
+): RollDiceDetailsWithCommands {
+  return hasOwn(raw, 'commands') ? { ...details, commands: raw.commands } : details;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object';
@@ -62,7 +103,7 @@ function hasOwn(o: Record<string, unknown>, key: string): boolean {
 }
 
 /** Strict guard for an authoritative HTTP details object. */
-export function parseRollDiceDetails(raw: unknown): RollDiceDetails | null {
+export function parseRollDiceDetails(raw: unknown): RollDiceDetailsWithCommands | null {
   if (!isRecord(raw)) return null;
   for (const key of detailsKeys) if (!hasOwn(raw, key)) return null;
   if (typeof raw.path !== 'string' || raw.path === '') return null;
@@ -86,9 +127,12 @@ export function parseRollDiceDetails(raw: unknown): RollDiceDetails | null {
   const fumble = raw.fumble as boolean;
   const forged = raw.forged as boolean;
   const layer = raw.layer as string | null;
-  return { path, name, dice, desc, expect, result, passed, rolls: [...rolls], crit, fumble, forged, layer };
+  return withOptionalCommands(
+    { path, name, dice, desc, expect, result, passed, rolls: [...rolls], crit, fumble, forged, layer },
+    raw,
+  );
 }
-export function parsePlayerDiceResponse(raw: unknown, httpOk: boolean): RollDiceDetails | null {
+export function parsePlayerDiceResponse(raw: unknown, httpOk: boolean): RollDiceDetailsWithCommands | null {
   if (!httpOk || !isRecord(raw) || raw.ok !== true) return null;
   const nested = isRecord(raw.details) ? raw.details : raw;
   return parseRollDiceDetails(nested);
@@ -124,8 +168,11 @@ export function parseDiceFrame(raw: unknown): DiceFrameVerdict | null {
     crit: typeof raw.crit === 'boolean' ? raw.crit : false,
     fumble: typeof raw.fumble === 'boolean' ? raw.fumble : false,
     layer: raw.layer === undefined ? null : raw.layer as string | null,
+    // The frame carries the same optional receipt as the HTTP details (§8.1).
+    ...(hasOwn(raw, 'commands') ? { commands: raw.commands } : {}),
   };
 }
+
 export type DiceFrameParseResult =
   | { ok: true; value: DiceFrameVerdict }
   | { ok: false; reason: 'invalid_frame' };
@@ -137,6 +184,12 @@ export function parseDiceFrameResult(raw: unknown): DiceFrameParseResult {
   return value ? { ok: true, value } : { ok: false, reason: 'invalid_frame' };
 }
 
+/**
+ * The identity payload behind the dedup fingerprint. `commands` is deliberately
+ * EXCLUDED: it describes what a roll caused, not which roll this is, and folding
+ * it in would make a re-delivered frame with a re-projected receipt look like a
+ * different roll and play a second ceremony.
+ */
 function stableDetails(raw: RollDiceDetails | DiceFrameVerdict): Record<string, unknown> {
   return {
     path: raw.path,
@@ -315,8 +368,15 @@ export function isRevealHeld(path: string): boolean {
   return holds.has(path) || snapshot?.input.path === path;
 }
 
-export function rollingFace(index: number, tick: number, value: number): number {
-  const ceiling = value > 6 ? 100 : 6;
+/**
+ * A tumbling face for `index` at `tick`. `faces` is the declared die's face
+ * count (docs/command/06 §11.3 candidate B): without it the old `value > 6`
+ * guess made `1d20` tumble through 53 — a face the die cannot show, seconds
+ * before it lands on 12. Callers with only a face value keep the old behaviour,
+ * so the guess survives exactly where nothing better is known.
+ */
+export function rollingFace(index: number, tick: number, value: number, faces?: number): number {
+  const ceiling = faces !== undefined && faces >= 2 ? Math.min(faces, 1000) : value > 6 ? 100 : 6;
   return ((index * 7 + tick * 13) % ceiling) + 1;
 }
 export function stageCeremony(input: DiceCeremonyInput, legacyVerdict?: DiceFrameVerdict): boolean {
@@ -343,6 +403,10 @@ export function stageCeremony(input: DiceCeremonyInput, legacyVerdict?: DiceFram
     crit: input.crit,
     fumble: input.fumble,
     layer: input.layer,
+    // Red line 3 (06 §8.2): this rebuild lists its keys BY HAND, and App mounts
+    // the ceremony through `verdict={ceremony.verdict}` — a `commands` omitted
+    // here disappears silently on the legacy alias path.
+    ...(input.commands === undefined ? {} : { commands: input.commands }),
   };
   snapshot = { input, verdict: frame, key };
   notify();
