@@ -12,7 +12,7 @@ try {
 } catch (err) {
   console.error('jiti/bootstrap unavailable, skipping phantom group:', err?.message ?? err);
 }
-const { register, land, drop, reconcileLanded, getPhantomsSnapshot } = phantom ?? {};
+const { register, land, drop, evict, reconcileLanded, getPhantomsSnapshot } = phantom ?? {};
 const skip = seating && phantom ? false : 'jiti or shared build unavailable';
 const { phantomSeatFor, publishSeatItems } = seating ?? {};
 
@@ -68,4 +68,22 @@ test('landing transfers the path without changing the phantom seat', { skip }, (
   assert.equal(landed?.path, 'world/landed.md');
   reconcileLanded(new Set(['world/landed.md']));
   assert.equal(getPhantomsSnapshot().some((entry) => entry.toolCallId === 'land-seat'), false);
+});
+
+// docs/skeleton/04 §8.7 — ruling L / F-7. A failed `write` gets `tool_end{isError}`
+// (→ evict) followed by the unconditional `chalk_landed` (→ land). Without the
+// phase guard in `land()`, the late `land` resurrects the phantom as 'landed' and
+// the evicted-drop never fires, so the skeleton sticks forever. Non-emptiness:
+// drop the `if (entry.phase === 'evicted') return;` line and this reads 'landed'.
+test('a late land cannot resurrect an evicted phantom', { skip }, () => {
+  const layer = 'phantom-test/evict-land';
+  publishSeatItems(layer, []);
+  const seat = phantomSeatFor({ w: 200, h: 168 }, layer).seat;
+  register('evict-then-land', { kind: 'component', source: 'writer', seat, layer, cardKind: 'note' });
+  evict('evict-then-land');
+  land('evict-then-land', { path: 'world/never-written.md' });
+
+  const entry = getPhantomsSnapshot().find((e) => e.toolCallId === 'evict-then-land');
+  assert.equal(entry?.phase, 'evicted');
+  drop('evict-then-land');
 });

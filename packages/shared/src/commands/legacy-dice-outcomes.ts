@@ -51,7 +51,7 @@ export const INVESTIGATION_OUTCOME_COMMAND_ID = 'investigation-outcome';
 /**
  * The ONE command every expanded card binds to (`08 §4.2`: 1 file per world).
  *
- * Deviates from `08 §4.1`'s verbatim sample in four ways, each forced by code
+ * Deviates from `08 §4.1`'s verbatim sample in five ways, each forced by code
  * that is already frozen on disk — a sample that does not parse executes
  * nothing, so copying it verbatim would ship the exact silent failure this
  * module exists to remove:
@@ -70,6 +70,22 @@ export const INVESTIGATION_OUTCOME_COMMAND_ID = 'investigation-outcome';
  *     SCALAR array (`trigger.ts:485-496`) — an array of mappings resolves to
  *     `undefined`, so the bucket form fails on every band (measured).
  *  4. No `choice` fold — see the module header.
+ *  5. The reward note is stamped with `dice_reward` (`08 §14 冲突 8`). This is
+ *     the projection that makes stage 3 (`08 §D.1` step 3, wiring this expansion
+ *     into the trigger path) POSSIBLE AT ALL: `runDeclaredRoll`'s reward loop
+ *     reads `dice_reward.source` / `.result` off a reward file that already
+ *     exists and fails with `invalid_argument: "A different item occupies the
+ *     reward path"` when it is absent (`declared-actions.ts:461-464`). Measured
+ *     A/B: with this key the wiring lands (`outcomeGrade = 'success'`), without
+ *     it every `/api/dice` call 400s — which is exactly the C19 regression. The
+ *     value is built from three scalars the evaluator already exposes
+ *     (`trigger.path`, `roll.result`, `params.grade`), so no effect, no arg
+ *     form and no frozen type changes.
+ *     NOT here: `choice` + `choice_actions` (`collect-reward-N`), which IS a
+ *     player-visible regression while absent. It is blocked by the frozen
+ *     `InterpolatedValue = Scalar | Scalar[]` (`limits.ts:129`) because
+ *     `{{ trigger.entry.options }}` is an array of MAPPINGS — it needs a design
+ *     gate, not a smaller edit (`08 §14 冲突 8`).
  *
  * Every band in the stock 36 files has exactly one reward, so (3) loses
  * nothing today; the expansion REFUSES a band with a second reward rather than
@@ -97,6 +113,13 @@ export const INVESTIGATION_OUTCOME_COMMAND_YAML = [
   '      path: "{{ params.reward_path }}"',
   '      title: "{{ params.reward_title }}"',
   '      body: "{{ params.reward_body }}"',
+  '      frontmatter:',
+  '        type: note',
+  '        portable: true',
+  '        dice_reward:',
+  '          source: "{{ trigger.path }}"',
+  '          result: "{{ roll.result }}"',
+  '          grade: "{{ params.grade }}"',
   '  - action: edit',
   '    with:',
   '      path: "{{ trigger.path }}"',
