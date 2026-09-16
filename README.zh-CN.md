@@ -5,13 +5,10 @@
 **一款 agent-native 的 AI 角色扮演游戏，全部发生在一张无限画布上。**
 你、你的角色 Agent 和一位作家 Agent 共享同一个世界——而世界随着游玩不断生长。
 
-[![OpenAI × Tokyo AI · 100-Hour Game Challenge](https://img.shields.io/badge/OpenAI%20%C3%97%20Tokyo%20AI-100--Hour%20Game%20Challenge-10a37f?logo=openai&logoColor=white)](https://luma.com/3kj24doy)
-[![Track 1 · AI-Native Game Prototype](https://img.shields.io/badge/Track%201-AI--Native%20Game%20Prototype-blueviolet)](https://luma.com/3kj24doy)
 [![1 分钟短片](https://img.shields.io/badge/YouTube-1%20%E5%88%86%E9%92%9F%E7%9F%AD%E7%89%87-ff0000?logo=youtube&logoColor=white)](https://youtu.be/FnUXFOv74Tg)
 [![7 worlds × 3 languages](https://img.shields.io/badge/worlds-7%20%C3%97%20EN%20%2F%20JA%20%2F%20ZH-899b87)](templates/)
 [![1,180 tests](https://img.shields.io/badge/tests-1%2C180%20passing-brightgreen)](README.md#developing)
 [![GPT Live](https://img.shields.io/badge/GPT%20Live-full--duplex%20character%20calls-10a37f?logo=openai&logoColor=white)](README.md#openai-inside)
-[![Built with Codex + Claude Code](https://img.shields.io/badge/built%20with-Codex%20%2B%20Claude%20Code-000000)](README.md#how-it-was-built)
 
 [English](README.md) · **简体中文**
 

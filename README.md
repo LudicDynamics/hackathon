@@ -5,8 +5,6 @@
 **An agent-native AI roleplay game on one infinite canvas.**
 You, your AI character agents, and a writer agent share the same world — and it keeps growing as you play.
 
-[![OpenAI × Tokyo AI · 100-Hour Game Challenge](https://img.shields.io/badge/OpenAI%20%C3%97%20Tokyo%20AI-100--Hour%20Game%20Challenge-10a37f?logo=openai&logoColor=white)](https://luma.com/3kj24doy)
-[![Track 1 · AI-Native Game Prototype](https://img.shields.io/badge/Track%201-AI--Native%20Game%20Prototype-blueviolet)](https://luma.com/3kj24doy)
 [![Watch the 1-minute film](https://img.shields.io/badge/YouTube-1--minute%20film-ff0000?logo=youtube&logoColor=white)](https://youtu.be/FnUXFOv74Tg)
 
 [![7 worlds × 3 languages](https://img.shields.io/badge/worlds-7%20%C3%97%20EN%20%2F%20JA%20%2F%20ZH-899b87)](#worlds-english--japanese--chinese)
@@ -17,7 +15,6 @@ You, your AI character agents, and a writer agent share the same world — and i
 [![React 19](https://img.shields.io/badge/React-19-20232a?logo=react&logoColor=61dafb)](#developing)
 [![Node ≥ 22](https://img.shields.io/badge/Node-%E2%89%A5%2022-339933?logo=node.js&logoColor=white)](#developing)
 [![pnpm](https://img.shields.io/badge/pnpm-workspace-f69220?logo=pnpm&logoColor=white)](#developing)
-[![Built with Codex + Claude Code](https://img.shields.io/badge/built%20with-Codex%20%2B%20Claude%20Code-000000)](#how-it-was-built)
 
 **English** · [简体中文](README.zh-CN.md)
 
